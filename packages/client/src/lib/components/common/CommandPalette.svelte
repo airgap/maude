@@ -16,28 +16,129 @@
   }
 
   const commands: Command[] = [
-    { id: 'new-chat', label: 'New Conversation', category: 'Chat', shortcut: 'Ctrl+N', action: () => { conversationStore.setActive(null); close(); } },
-    { id: 'toggle-sidebar', label: 'Toggle Sidebar', category: 'View', shortcut: 'Ctrl+/', action: () => { uiStore.toggleSidebar(); close(); } },
-    { id: 'settings', label: 'Open Settings', category: 'Settings', action: () => { uiStore.openModal('settings'); } },
-    { id: 'theme-dark', label: 'Theme: Dark', category: 'Appearance', action: () => { settingsStore.setTheme('dark'); close(); } },
-    { id: 'theme-light', label: 'Theme: Light', category: 'Appearance', action: () => { settingsStore.setTheme('light'); close(); } },
-    { id: 'plan-mode', label: 'Toggle Plan Mode', category: 'Mode', shortcut: 'Shift+Tab x2', action: () => { conversationStore.active && conversationStore.setPlanMode(!conversationStore.active.planMode); close(); } },
-    { id: 'tab-chats', label: 'Show Conversations', category: 'View', action: () => { uiStore.setSidebarTab('conversations'); close(); } },
-    { id: 'tab-files', label: 'Show Files', category: 'View', action: () => { uiStore.setSidebarTab('files'); close(); } },
-    { id: 'tab-tasks', label: 'Show Tasks', category: 'View', action: () => { uiStore.setSidebarTab('tasks'); close(); } },
-    { id: 'tab-memory', label: 'Show Memory', category: 'View', action: () => { uiStore.setSidebarTab('memory'); close(); } },
-    { id: 'tab-agents', label: 'Show Agents', category: 'View', action: () => { uiStore.setSidebarTab('agents'); close(); } },
-    { id: 'mcp', label: 'Manage MCP Servers', category: 'Settings', action: () => { uiStore.openModal('mcp-manager'); } },
+    {
+      id: 'new-chat',
+      label: 'New Conversation',
+      category: 'Chat',
+      shortcut: 'Ctrl+N',
+      action: () => {
+        conversationStore.setActive(null);
+        close();
+      },
+    },
+    {
+      id: 'toggle-sidebar',
+      label: 'Toggle Sidebar',
+      category: 'View',
+      shortcut: 'Ctrl+/',
+      action: () => {
+        uiStore.toggleSidebar();
+        close();
+      },
+    },
+    {
+      id: 'settings',
+      label: 'Open Settings',
+      category: 'Settings',
+      action: () => {
+        uiStore.openModal('settings');
+      },
+    },
+    {
+      id: 'theme-dark',
+      label: 'Theme: Dark',
+      category: 'Appearance',
+      action: () => {
+        settingsStore.setTheme('dark');
+        close();
+      },
+    },
+    {
+      id: 'theme-light',
+      label: 'Theme: Light',
+      category: 'Appearance',
+      action: () => {
+        settingsStore.setTheme('light');
+        close();
+      },
+    },
+    {
+      id: 'plan-mode',
+      label: 'Toggle Plan Mode',
+      category: 'Mode',
+      shortcut: 'Shift+Tab x2',
+      action: () => {
+        conversationStore.active &&
+          conversationStore.setPlanMode(!conversationStore.active.planMode);
+        close();
+      },
+    },
+    {
+      id: 'tab-chats',
+      label: 'Show Conversations',
+      category: 'View',
+      action: () => {
+        uiStore.setSidebarTab('conversations');
+        close();
+      },
+    },
+    {
+      id: 'tab-files',
+      label: 'Show Files',
+      category: 'View',
+      action: () => {
+        uiStore.setSidebarTab('files');
+        close();
+      },
+    },
+    {
+      id: 'tab-tasks',
+      label: 'Show Tasks',
+      category: 'View',
+      action: () => {
+        uiStore.setSidebarTab('tasks');
+        close();
+      },
+    },
+    {
+      id: 'tab-memory',
+      label: 'Show Memory',
+      category: 'View',
+      action: () => {
+        uiStore.setSidebarTab('memory');
+        close();
+      },
+    },
+    {
+      id: 'tab-agents',
+      label: 'Show Agents',
+      category: 'View',
+      action: () => {
+        uiStore.setSidebarTab('agents');
+        close();
+      },
+    },
+    {
+      id: 'mcp',
+      label: 'Manage MCP Servers',
+      category: 'Settings',
+      action: () => {
+        uiStore.openModal('mcp-manager');
+      },
+    },
   ];
 
   let filtered = $derived(
-    commands.filter(c =>
-      c.label.toLowerCase().includes(query.toLowerCase()) ||
-      c.category.toLowerCase().includes(query.toLowerCase())
-    )
+    commands.filter(
+      (c) =>
+        c.label.toLowerCase().includes(query.toLowerCase()) ||
+        c.category.toLowerCase().includes(query.toLowerCase()),
+    ),
   );
 
-  function close() { uiStore.closeModal(); }
+  function close() {
+    uiStore.closeModal();
+  }
 
   function handleKeydown(e: KeyboardEvent) {
     if (e.key === 'ArrowDown') {
@@ -54,7 +155,10 @@
     }
   }
 
-  $effect(() => { query; selectedIndex = 0; });
+  $effect(() => {
+    query;
+    selectedIndex = 0;
+  });
 </script>
 
 <!-- svelte-ignore a11y_no_static_element_interactions -->
@@ -75,7 +179,7 @@
           class="palette-item"
           class:selected={i === selectedIndex}
           onclick={() => cmd.action()}
-          onmouseenter={() => selectedIndex = i}
+          onmouseenter={() => (selectedIndex = i)}
         >
           <span class="cmd-category">{cmd.category}</span>
           <span class="cmd-label">{cmd.label}</span>
@@ -140,7 +244,10 @@
     text-align: left;
     transition: background var(--transition);
   }
-  .palette-item:hover, .palette-item.selected { background: var(--bg-hover); }
+  .palette-item:hover,
+  .palette-item.selected {
+    background: var(--bg-hover);
+  }
 
   .cmd-category {
     font-size: 10px;
@@ -151,7 +258,11 @@
     min-width: 60px;
     text-align: center;
   }
-  .cmd-label { flex: 1; font-size: 13px; color: var(--text-primary); }
+  .cmd-label {
+    flex: 1;
+    font-size: 13px;
+    color: var(--text-primary);
+  }
   .cmd-shortcut {
     font-size: 11px;
     padding: 2px 6px;
@@ -160,5 +271,10 @@
     color: var(--text-tertiary);
     font-family: var(--font-family);
   }
-  .no-results { padding: 16px; text-align: center; color: var(--text-tertiary); font-size: 13px; }
+  .no-results {
+    padding: 16px;
+    text-align: center;
+    color: var(--text-tertiary);
+    font-size: 13px;
+  }
 </style>

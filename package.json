@@ -10,7 +10,9 @@
   "engines": {
     "bun": ">=1.0.0"
   },
-  "workspaces": ["packages/*"],
+  "workspaces": [
+    "packages/*"
+  ],
   "scripts": {
     "dev": "bun run --filter '*' dev",
     "dev:server": "bun run --filter @maude/server dev",
@@ -21,6 +23,12 @@
     "tauri:dev": "cd src-tauri && cargo tauri dev",
     "tauri:build": "cd src-tauri && cargo tauri build",
     "start": "bun run --filter @maude/client build && bun run --filter @maude/server start",
-    "check": "bun run --filter '*' check"
+    "check": "bun run --filter '*' check",
+    "format": "prettier --write .",
+    "format:check": "prettier --check ."
+  },
+  "devDependencies": {
+    "prettier": "^3.8.1",
+    "prettier-plugin-svelte": "^3.4.1"
   }
 }

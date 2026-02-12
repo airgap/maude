@@ -21,11 +21,7 @@ export async function sendAndStream(conversationId: string, content: string): Pr
   });
 
   try {
-    const response = await api.stream.send(
-      conversationId,
-      content,
-      streamStore.sessionId,
-    );
+    const response = await api.stream.send(conversationId, content, streamStore.sessionId);
 
     if (!response.ok) {
       const err = await response.json().catch(() => ({ error: 'Stream failed' }));
@@ -51,7 +47,10 @@ export async function sendAndStream(conversationId: string, content: string): Pr
 
     const reader = response.body?.getReader();
     if (!reader) {
-      streamStore.handleEvent({ type: 'error', error: { type: 'no_body', message: 'No response body' } });
+      streamStore.handleEvent({
+        type: 'error',
+        error: { type: 'no_body', message: 'No response body' },
+      });
       return;
     }
 

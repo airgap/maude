@@ -23,7 +23,7 @@
 
   function getDisplayPath(): string {
     const p = conversationStore.active?.projectPath || settingsStore.projectPath;
-    return (!p || p === '.') ? '~' : p;
+    return !p || p === '.' ? '~' : p;
   }
 
   function getBreadcrumbs(): { name: string; path: string }[] {
@@ -245,70 +245,116 @@
   }
 </script>
 
-<svelte:window onclick={(e) => {
-  if (showDirPicker && dirScopeEl && !dirScopeEl.contains(e.target as Node)) {
-    showDirPicker = false;
-  }
-}} />
+<svelte:window
+  onclick={(e) => {
+    if (showDirPicker && dirScopeEl && !dirScopeEl.contains(e.target as Node)) {
+      showDirPicker = false;
+    }
+  }}
+/>
 
 <div class="chat-input-container">
   {#if showSlashMenu}
-    <SlashCommandMenu query={slashQuery} onSelect={selectSlashCommand} onClose={() => showSlashMenu = false} />
+    <SlashCommandMenu
+      query={slashQuery}
+      onSelect={selectSlashCommand}
+      onClose={() => (showSlashMenu = false)}
+    />
   {/if}
 
   <div class="dir-scope" bind:this={dirScopeEl}>
-      <div class="dir-breadcrumbs">
-        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
-        {#if editingPath}
-          <input
-            class="dir-path-input"
-            bind:this={pathInput}
-            bind:value={pathInputValue}
-            onkeydown={(e) => {
-              if (e.key === 'Enter') { commitPathInput(); }
-              if (e.key === 'Escape') { editingPath = false; }
-            }}
-            onblur={() => commitPathInput()}
-          />
-        {:else}
-          {#each getBreadcrumbs() as crumb, i}
-            {#if i > 0}<span class="breadcrumb-sep">/</span>{/if}
-            <button class="breadcrumb" onclick={() => browseDirectories(crumb.path)}>{crumb.name}</button>
-          {/each}
-          <button class="breadcrumb-edit" onclick={startEditingPath} title="Type a path">
-            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
-          </button>
-        {/if}
-      </div>
-      {#if showDirPicker}
-        <div class="dir-picker">
-          {#if browsedPath !== '/'}
-            <button class="dir-option" onclick={() => {
+    <div class="dir-breadcrumbs">
+      <svg
+        width="13"
+        height="13"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        ><path
+          d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"
+        /></svg
+      >
+      {#if editingPath}
+        <input
+          class="dir-path-input"
+          bind:this={pathInput}
+          bind:value={pathInputValue}
+          onkeydown={(e) => {
+            if (e.key === 'Enter') {
+              commitPathInput();
+            }
+            if (e.key === 'Escape') {
+              editingPath = false;
+            }
+          }}
+          onblur={() => commitPathInput()}
+        />
+      {:else}
+        {#each getBreadcrumbs() as crumb, i}
+          {#if i > 0}<span class="breadcrumb-sep">/</span>{/if}
+          <button class="breadcrumb" onclick={() => browseDirectories(crumb.path)}
+            >{crumb.name}</button
+          >
+        {/each}
+        <button class="breadcrumb-edit" onclick={startEditingPath} title="Type a path">
+          <svg
+            width="11"
+            height="11"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            ><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" /><path
+              d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"
+            /></svg
+          >
+        </button>
+      {/if}
+    </div>
+    {#if showDirPicker}
+      <div class="dir-picker">
+        {#if browsedPath !== '/'}
+          <button
+            class="dir-option"
+            onclick={() => {
               const parent = browsedPath.split('/').slice(0, -1).join('/') || '/';
               browseDirectories(parent);
-            }}>..</button>
-          {/if}
-          <button class="dir-option dir-select" onclick={() => selectDirectory(browsedPath)}>
-            Select this directory
+            }}>..</button
+          >
+        {/if}
+        <button class="dir-option dir-select" onclick={() => selectDirectory(browsedPath)}>
+          Select this directory
+        </button>
+        {#each dirOptions as dir}
+          <button class="dir-option" onclick={() => browseDirectories(dir.path)}>
+            {dir.name}/
           </button>
-          {#each dirOptions as dir}
-            <button class="dir-option" onclick={() => browseDirectories(dir.path)}>
-              {dir.name}/
-            </button>
-          {/each}
-        </div>
-      {/if}
+        {/each}
+      </div>
+    {/if}
   </div>
 
   <!-- svelte-ignore a11y_click_events_have_key_events -->
   <!-- svelte-ignore a11y_no_static_element_interactions -->
-  <div class="input-wrapper" class:plan-active={conversationStore.active?.planMode || localPlanMode} onmousedown={(e) => { if (e.target !== textarea) { e.preventDefault(); textarea?.focus(); } }}>
+  <div
+    class="input-wrapper"
+    class:plan-active={conversationStore.active?.planMode || localPlanMode}
+    onmousedown={(e) => {
+      if (e.target !== textarea) {
+        e.preventDefault();
+        textarea?.focus();
+      }
+    }}
+  >
     <textarea
       bind:this={textarea}
       bind:value={inputText}
       onkeydown={handleKeydown}
       oninput={handleInput}
-      placeholder={(conversationStore.active?.planMode || localPlanMode) ? 'Describe what you want to plan...' : 'Message Claude... (Ctrl+Enter to send, / for commands)'}
+      placeholder={conversationStore.active?.planMode || localPlanMode
+        ? 'Describe what you want to plan...'
+        : 'Message Claude... (Ctrl+Enter to send, / for commands)'}
       rows="1"
       disabled={streamStore.status === 'tool_pending'}
     ></textarea>
@@ -319,14 +365,37 @@
       {/if}
 
       {#if streamStore.isStreaming}
-        <button class="btn-action cancel" onclick={() => conversationStore.activeId && cancelStream(conversationStore.activeId)} title="Cancel (Esc)">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <button
+          class="btn-action cancel"
+          onclick={() => conversationStore.activeId && cancelStream(conversationStore.activeId)}
+          title="Cancel (Esc)"
+        >
+          <svg
+            width="16"
+            height="16"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+          >
             <rect x="3" y="3" width="18" height="18" rx="2" />
           </svg>
         </button>
       {:else}
-        <button class="btn-action send" onclick={send} disabled={!inputText.trim()} title="Send (Ctrl+Enter)">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <button
+          class="btn-action send"
+          onclick={send}
+          disabled={!inputText.trim()}
+          title="Send (Ctrl+Enter)"
+        >
+          <svg
+            width="16"
+            height="16"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+          >
             <path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z" />
           </svg>
         </button>
@@ -357,7 +426,9 @@
     overflow-x: auto;
     scrollbar-width: none;
   }
-  .dir-breadcrumbs::-webkit-scrollbar { display: none; }
+  .dir-breadcrumbs::-webkit-scrollbar {
+    display: none;
+  }
   .breadcrumb {
     color: var(--text-tertiary);
     font-size: 12px;
@@ -366,8 +437,15 @@
     white-space: nowrap;
     transition: all var(--transition);
   }
-  .breadcrumb:hover { color: var(--accent-primary); background: var(--bg-hover); }
-  .breadcrumb-sep { color: var(--text-tertiary); opacity: 0.4; margin: 0 1px; }
+  .breadcrumb:hover {
+    color: var(--accent-primary);
+    background: var(--bg-hover);
+  }
+  .breadcrumb-sep {
+    color: var(--text-tertiary);
+    opacity: 0.4;
+    margin: 0 1px;
+  }
   .breadcrumb-edit {
     color: var(--text-tertiary);
     opacity: 0.4;
@@ -376,7 +454,11 @@
     border-radius: var(--radius-sm);
     transition: all var(--transition);
   }
-  .breadcrumb-edit:hover { opacity: 1; color: var(--accent-primary); background: var(--bg-hover); }
+  .breadcrumb-edit:hover {
+    opacity: 1;
+    color: var(--accent-primary);
+    background: var(--bg-hover);
+  }
   .dir-path-input {
     flex: 1;
     font-size: 12px;
@@ -424,8 +506,14 @@
     border-radius: var(--radius-sm);
     transition: all var(--transition);
   }
-  .dir-option:hover { background: var(--bg-hover); color: var(--text-primary); }
-  .dir-option.dir-select { color: var(--accent-primary); font-weight: 600; }
+  .dir-option:hover {
+    background: var(--bg-hover);
+    color: var(--text-primary);
+  }
+  .dir-option.dir-select {
+    color: var(--accent-primary);
+    font-weight: 600;
+  }
 
   .input-wrapper {
     display: flex;
@@ -468,9 +556,17 @@
     box-shadow: none;
     letter-spacing: 0.3px;
   }
-  textarea:focus { outline: none; box-shadow: none; }
-  textarea::placeholder { color: var(--text-tertiary); letter-spacing: 0.5px; }
-  textarea:disabled { opacity: 0.4; }
+  textarea:focus {
+    outline: none;
+    box-shadow: none;
+  }
+  textarea::placeholder {
+    color: var(--text-tertiary);
+    letter-spacing: 0.5px;
+  }
+  textarea:disabled {
+    opacity: 0.4;
+  }
 
   .input-actions {
     display: flex;
@@ -500,7 +596,10 @@
     border: 1px solid transparent;
     transition: all var(--transition);
   }
-  .btn-action:disabled { opacity: 0.2; cursor: not-allowed; }
+  .btn-action:disabled {
+    opacity: 0.2;
+    cursor: not-allowed;
+  }
 
   .btn-action.send {
     color: var(--text-tertiary);

@@ -34,7 +34,12 @@
   }
 
   async function toggleStatus(taskId: string, currentStatus: string) {
-    const next = currentStatus === 'pending' ? 'in_progress' : currentStatus === 'in_progress' ? 'completed' : 'pending';
+    const next =
+      currentStatus === 'pending'
+        ? 'in_progress'
+        : currentStatus === 'in_progress'
+          ? 'completed'
+          : 'pending';
     await api.tasks.update(taskId, { status: next });
     taskStore.updateTask(taskId, { status: next as any });
   }
@@ -73,7 +78,14 @@
         {#each taskStore.inProgress as task (task.id)}
           <div class="task-item in-progress">
             <button class="status-btn" onclick={() => toggleStatus(task.id, task.status)}>
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <svg
+                width="14"
+                height="14"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+              >
                 <path d={statusIcons[task.status]} />
               </svg>
             </button>
@@ -95,7 +107,14 @@
         {#each taskStore.pending as task (task.id)}
           <div class="task-item pending" class:blocked={taskStore.isBlocked(task.id)}>
             <button class="status-btn" onclick={() => toggleStatus(task.id, task.status)}>
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <svg
+                width="14"
+                height="14"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+              >
                 <path d={statusIcons[task.status]} />
               </svg>
             </button>
@@ -112,7 +131,14 @@
         {#each taskStore.completed as task (task.id)}
           <div class="task-item completed">
             <button class="status-btn" onclick={() => toggleStatus(task.id, task.status)}>
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <svg
+                width="14"
+                height="14"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+              >
                 <path d={statusIcons[task.status]} />
               </svg>
             </button>
@@ -126,7 +152,9 @@
 </div>
 
 <style>
-  .task-panel { padding: 8px; }
+  .task-panel {
+    padding: 8px;
+  }
 
   .task-header {
     display: flex;
@@ -134,7 +162,10 @@
     justify-content: space-between;
     padding: 4px 4px 8px;
   }
-  .task-header h3 { font-size: 13px; font-weight: 600; }
+  .task-header h3 {
+    font-size: 13px;
+    font-weight: 600;
+  }
   .task-count {
     font-size: 11px;
     padding: 1px 6px;
@@ -143,8 +174,14 @@
     color: var(--text-tertiary);
   }
 
-  .add-task { margin-bottom: 8px; }
-  .add-task input { width: 100%; font-size: 12px; padding: 6px 8px; }
+  .add-task {
+    margin-bottom: 8px;
+  }
+  .add-task input {
+    width: 100%;
+    font-size: 12px;
+    padding: 6px 8px;
+  }
 
   .section-label {
     font-size: 10px;
@@ -162,11 +199,21 @@
     border-radius: var(--radius-sm);
     font-size: 12px;
   }
-  .task-item:hover { background: var(--bg-hover); }
+  .task-item:hover {
+    background: var(--bg-hover);
+  }
 
-  .task-subject { flex: 1; color: var(--text-primary); }
-  .completed .task-subject { text-decoration: line-through; color: var(--text-tertiary); }
-  .blocked .task-subject { color: var(--text-tertiary); }
+  .task-subject {
+    flex: 1;
+    color: var(--text-primary);
+  }
+  .completed .task-subject {
+    text-decoration: line-through;
+    color: var(--text-tertiary);
+  }
+  .blocked .task-subject {
+    color: var(--text-tertiary);
+  }
 
   .task-active {
     font-size: 10px;
@@ -174,7 +221,12 @@
     animation: pulse 2s infinite;
   }
 
-  .task-info { flex: 1; display: flex; flex-direction: column; gap: 1px; }
+  .task-info {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+  }
 
   .status-btn {
     display: flex;
@@ -185,8 +237,12 @@
     color: var(--text-tertiary);
     flex-shrink: 0;
   }
-  .in-progress .status-btn { color: var(--accent-primary); }
-  .completed .status-btn { color: var(--accent-secondary); }
+  .in-progress .status-btn {
+    color: var(--accent-primary);
+  }
+  .completed .status-btn {
+    color: var(--accent-secondary);
+  }
 
   .delete-btn {
     display: none;
@@ -198,11 +254,21 @@
     color: var(--text-tertiary);
     border-radius: 3px;
   }
-  .task-item:hover .delete-btn { display: flex; }
-  .delete-btn:hover { background: var(--accent-error); color: var(--text-on-accent); }
+  .task-item:hover .delete-btn {
+    display: flex;
+  }
+  .delete-btn:hover {
+    background: var(--accent-error);
+    color: var(--text-on-accent);
+  }
 
   @keyframes pulse {
-    0%, 100% { opacity: 1; }
-    50% { opacity: 0.5; }
+    0%,
+    100% {
+      opacity: 1;
+    }
+    50% {
+      opacity: 0.5;
+    }
   }
 </style>

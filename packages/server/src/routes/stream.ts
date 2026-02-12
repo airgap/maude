@@ -8,8 +8,12 @@ const app = new Hono();
 function getSessionOpts(conv: any) {
   let allowedTools: string[] | undefined;
   let disallowedTools: string[] | undefined;
-  try { if (conv.allowed_tools) allowedTools = JSON.parse(conv.allowed_tools); } catch {}
-  try { if (conv.disallowed_tools) disallowedTools = JSON.parse(conv.disallowed_tools); } catch {}
+  try {
+    if (conv.allowed_tools) allowedTools = JSON.parse(conv.allowed_tools);
+  } catch {}
+  try {
+    if (conv.disallowed_tools) disallowedTools = JSON.parse(conv.disallowed_tools);
+  } catch {}
 
   return {
     model: conv.model,
@@ -36,10 +40,12 @@ app.post('/:conversationId', async (c) => {
 
   // Save user message to DB
   const userMsgId = nanoid();
-  db.query(`
+  db.query(
+    `
     INSERT INTO messages (id, conversation_id, role, content, timestamp)
     VALUES (?, ?, 'user', ?, ?)
-  `).run(userMsgId, conversationId, JSON.stringify([{ type: 'text', text: content }]), Date.now());
+  `,
+  ).run(userMsgId, conversationId, JSON.stringify([{ type: 'text', text: content }]), Date.now());
 
   let sessionId = c.req.header('x-session-id') || null;
 
@@ -52,7 +58,7 @@ app.post('/:conversationId', async (c) => {
     headers: {
       'Content-Type': 'text/event-stream',
       'Cache-Control': 'no-cache',
-      'Connection': 'keep-alive',
+      Connection: 'keep-alive',
       'X-Session-Id': sessionId,
       'Access-Control-Expose-Headers': 'X-Session-Id',
     },

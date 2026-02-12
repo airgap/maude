@@ -7,11 +7,11 @@ const config = {
   kit: {
     adapter: adapter({ fallback: 'index.html' }),
     alias: {
-      '$lib': './src/lib',
+      $lib: './src/lib',
       '$lib/*': './src/lib/*',
-      '@maude/shared': '../shared/src'
-    }
-  }
+      '@maude/shared': '../shared/src',
+    },
+  },
 };
 
 export default config;

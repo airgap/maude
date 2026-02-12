@@ -37,10 +37,14 @@
 
   function statusColor(status: string): string {
     switch (status) {
-      case 'running': return 'var(--accent-primary)';
-      case 'completed': return 'var(--accent-secondary)';
-      case 'error': return 'var(--accent-error)';
-      default: return 'var(--text-tertiary)';
+      case 'running':
+        return 'var(--accent-primary)';
+      case 'completed':
+        return 'var(--accent-secondary)';
+      case 'error':
+        return 'var(--accent-error)';
+      default:
+        return 'var(--text-tertiary)';
     }
   }
 
@@ -55,7 +59,7 @@
 <div class="agent-panel">
   <div class="agent-header">
     <h3>Agents</h3>
-    <span class="agent-count">{agents.filter(a => a.status === 'running').length} active</span>
+    <span class="agent-count">{agents.filter((a) => a.status === 'running').length} active</span>
   </div>
 
   <div class="agent-list">
@@ -81,12 +85,27 @@
 </div>
 
 <style>
-  .agent-panel { padding: 8px; }
-  .agent-header { display: flex; align-items: center; justify-content: space-between; padding: 4px 4px 8px; }
-  .agent-header h3 { font-size: 13px; font-weight: 600; }
-  .agent-count { font-size: 11px; color: var(--text-tertiary); }
+  .agent-panel {
+    padding: 8px;
+  }
+  .agent-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 4px 4px 8px;
+  }
+  .agent-header h3 {
+    font-size: 13px;
+    font-weight: 600;
+  }
+  .agent-count {
+    font-size: 11px;
+    color: var(--text-tertiary);
+  }
 
-  .agent-list { overflow-y: auto; }
+  .agent-list {
+    overflow-y: auto;
+  }
 
   .agent-item {
     padding: 8px;
@@ -102,11 +121,31 @@
     margin-bottom: 4px;
   }
 
-  .agent-dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
-  .agent-type { font-size: 12px; font-weight: 600; color: var(--text-primary); }
-  .agent-time { font-size: 10px; color: var(--text-tertiary); margin-left: auto; }
-  .agent-desc { font-size: 11px; color: var(--text-secondary); }
-  .agent-error { font-size: 11px; color: var(--accent-error); margin-top: 4px; }
+  .agent-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+  .agent-type {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-primary);
+  }
+  .agent-time {
+    font-size: 10px;
+    color: var(--text-tertiary);
+    margin-left: auto;
+  }
+  .agent-desc {
+    font-size: 11px;
+    color: var(--text-secondary);
+  }
+  .agent-error {
+    font-size: 11px;
+    color: var(--accent-error);
+    margin-top: 4px;
+  }
 
   .cancel-btn {
     font-size: 10px;
@@ -116,5 +155,10 @@
     color: var(--text-on-accent);
   }
 
-  .empty { padding: 20px; text-align: center; color: var(--text-tertiary); font-size: 12px; }
+  .empty {
+    padding: 20px;
+    text-align: center;
+    color: var(--text-tertiary);
+    font-size: 12px;
+  }
 </style>

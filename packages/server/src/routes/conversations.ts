@@ -8,13 +8,17 @@ const app = new Hono();
 // List conversations
 app.get('/', (c) => {
   const db = getDb();
-  const rows = db.query(`
+  const rows = db
+    .query(
+      `
     SELECT id, title, model, project_path, plan_mode, total_tokens, permission_mode, effort,
            created_at, updated_at,
            (SELECT COUNT(*) FROM messages WHERE conversation_id = conversations.id) as message_count
     FROM conversations
     ORDER BY updated_at DESC
-  `).all();
+  `,
+    )
+    .all();
 
   return c.json({
     ok: true,
@@ -38,9 +42,9 @@ app.get('/:id', (c) => {
   const conv = db.query('SELECT * FROM conversations WHERE id = ?').get(c.req.param('id')) as any;
   if (!conv) return c.json({ ok: false, error: 'Not found' }, 404);
 
-  const messages = db.query(
-    'SELECT * FROM messages WHERE conversation_id = ? ORDER BY timestamp ASC'
-  ).all(c.req.param('id'));
+  const messages = db
+    .query('SELECT * FROM messages WHERE conversation_id = ? ORDER BY timestamp ASC')
+    .all(c.req.param('id'));
 
   return c.json({
     ok: true,
@@ -62,7 +66,7 @@ app.get('/:id', (c) => {
       cliSessionId: conv.cli_session_id,
       createdAt: conv.created_at,
       updatedAt: conv.updated_at,
-      messages: (messages as any[]).map(m => ({
+      messages: (messages as any[]).map((m) => ({
         id: m.id,
         role: m.role,
         content: JSON.parse(m.content),
@@ -81,12 +85,14 @@ app.post('/', async (c) => {
   const id = nanoid();
   const now = Date.now();
 
-  db.query(`
+  db.query(
+    `
     INSERT INTO conversations (id, title, model, system_prompt, project_path,
       permission_mode, effort, max_budget_usd, max_turns, allowed_tools, disallowed_tools,
       created_at, updated_at)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(
+  `,
+  ).run(
     id,
     body.title || 'New Conversation',
     body.model || 'claude-sonnet-4-5-20250929',
@@ -114,18 +120,54 @@ app.patch('/:id', async (c) => {
   const updates: string[] = [];
   const values: any[] = [];
 
-  if (body.title !== undefined) { updates.push('title = ?'); values.push(body.title); }
-  if (body.projectPath !== undefined) { updates.push('project_path = ?'); values.push(body.projectPath); }
-  if (body.model !== undefined) { updates.push('model = ?'); values.push(body.model); }
-  if (body.planMode !== undefined) { updates.push('plan_mode = ?'); values.push(body.planMode ? 1 : 0); }
-  if (body.planFile !== undefined) { updates.push('plan_file = ?'); values.push(body.planFile); }
-  if (body.permissionMode !== undefined) { updates.push('permission_mode = ?'); values.push(body.permissionMode); }
-  if (body.effort !== undefined) { updates.push('effort = ?'); values.push(body.effort); }
-  if (body.maxBudgetUsd !== undefined) { updates.push('max_budget_usd = ?'); values.push(body.maxBudgetUsd); }
-  if (body.maxTurns !== undefined) { updates.push('max_turns = ?'); values.push(body.maxTurns); }
-  if (body.allowedTools !== undefined) { updates.push('allowed_tools = ?'); values.push(JSON.stringify(body.allowedTools)); }
-  if (body.disallowedTools !== undefined) { updates.push('disallowed_tools = ?'); values.push(JSON.stringify(body.disallowedTools)); }
-  if (body.cliSessionId !== undefined) { updates.push('cli_session_id = ?'); values.push(body.cliSessionId); }
+  if (body.title !== undefined) {
+    updates.push('title = ?');
+    values.push(body.title);
+  }
+  if (body.projectPath !== undefined) {
+    updates.push('project_path = ?');
+    values.push(body.projectPath);
+  }
+  if (body.model !== undefined) {
+    updates.push('model = ?');
+    values.push(body.model);
+  }
+  if (body.planMode !== undefined) {
+    updates.push('plan_mode = ?');
+    values.push(body.planMode ? 1 : 0);
+  }
+  if (body.planFile !== undefined) {
+    updates.push('plan_file = ?');
+    values.push(body.planFile);
+  }
+  if (body.permissionMode !== undefined) {
+    updates.push('permission_mode = ?');
+    values.push(body.permissionMode);
+  }
+  if (body.effort !== undefined) {
+    updates.push('effort = ?');
+    values.push(body.effort);
+  }
+  if (body.maxBudgetUsd !== undefined) {
+    updates.push('max_budget_usd = ?');
+    values.push(body.maxBudgetUsd);
+  }
+  if (body.maxTurns !== undefined) {
+    updates.push('max_turns = ?');
+    values.push(body.maxTurns);
+  }
+  if (body.allowedTools !== undefined) {
+    updates.push('allowed_tools = ?');
+    values.push(JSON.stringify(body.allowedTools));
+  }
+  if (body.disallowedTools !== undefined) {
+    updates.push('disallowed_tools = ?');
+    values.push(JSON.stringify(body.disallowedTools));
+  }
+  if (body.cliSessionId !== undefined) {
+    updates.push('cli_session_id = ?');
+    values.push(body.cliSessionId);
+  }
 
   updates.push('updated_at = ?');
   values.push(Date.now());
@@ -138,13 +180,15 @@ app.patch('/:id', async (c) => {
 // Get cost information for a conversation
 app.get('/:id/cost', (c) => {
   const db = getDb();
-  const conv = db.query('SELECT model, total_tokens FROM conversations WHERE id = ?').get(c.req.param('id')) as any;
+  const conv = db
+    .query('SELECT model, total_tokens FROM conversations WHERE id = ?')
+    .get(c.req.param('id')) as any;
   if (!conv) return c.json({ ok: false, error: 'Not found' }, 404);
 
   // Get per-message token counts for input/output breakdown
-  const messages = db.query(
-    'SELECT role, token_count FROM messages WHERE conversation_id = ?'
-  ).all(c.req.param('id')) as any[];
+  const messages = db
+    .query('SELECT role, token_count FROM messages WHERE conversation_id = ?')
+    .all(c.req.param('id')) as any[];
 
   let inputTokens = 0;
   let outputTokens = 0;

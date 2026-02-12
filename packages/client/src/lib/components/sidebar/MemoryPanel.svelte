@@ -40,13 +40,13 @@
 
   function typeLabel(type: string): string {
     const labels: Record<string, string> = {
-      'project': 'Project',
+      project: 'Project',
       'project-local': 'Local',
-      'user': 'User',
+      user: 'User',
       'auto-memory': 'Auto Memory',
       'auto-topic': 'Topic',
-      'rules': 'Rule',
-      'skills': 'Skill',
+      rules: 'Rule',
+      skills: 'Skill',
     };
     return labels[type] || type;
   }
@@ -66,7 +66,7 @@
       <div class="edit-header">
         <span class="edit-file truncate">{fileName(editingFile.path)}</span>
         <div class="edit-actions">
-          <button class="btn-sm" onclick={() => editingFile = null}>Cancel</button>
+          <button class="btn-sm" onclick={() => (editingFile = null)}>Cancel</button>
           <button class="btn-sm primary" onclick={save} disabled={saving}>
             {saving ? 'Saving...' : 'Save'}
           </button>
@@ -92,11 +92,23 @@
 </div>
 
 <style>
-  .memory-panel { padding: 8px; display: flex; flex-direction: column; height: 100%; }
-  .memory-header { padding: 4px 4px 8px; }
-  .memory-header h3 { font-size: 13px; font-weight: 600; }
+  .memory-panel {
+    padding: 8px;
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+  }
+  .memory-header {
+    padding: 4px 4px 8px;
+  }
+  .memory-header h3 {
+    font-size: 13px;
+    font-weight: 600;
+  }
 
-  .memory-files { overflow-y: auto; }
+  .memory-files {
+    overflow-y: auto;
+  }
 
   .memory-item {
     display: block;
@@ -107,7 +119,9 @@
     transition: background var(--transition);
     margin-bottom: 2px;
   }
-  .memory-item:hover { background: var(--bg-hover); }
+  .memory-item:hover {
+    background: var(--bg-hover);
+  }
 
   .memory-item-header {
     display: flex;
@@ -125,13 +139,35 @@
     flex-shrink: 0;
   }
 
-  .file-name { font-size: 12px; color: var(--text-primary); }
-  .memory-preview { font-size: 11px; color: var(--text-tertiary); }
+  .file-name {
+    font-size: 12px;
+    color: var(--text-primary);
+  }
+  .memory-preview {
+    font-size: 11px;
+    color: var(--text-tertiary);
+  }
 
-  .edit-view { flex: 1; display: flex; flex-direction: column; gap: 8px; }
-  .edit-header { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
-  .edit-file { font-size: 12px; font-weight: 600; }
-  .edit-actions { display: flex; gap: 4px; }
+  .edit-view {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .edit-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+  }
+  .edit-file {
+    font-size: 12px;
+    font-weight: 600;
+  }
+  .edit-actions {
+    display: flex;
+    gap: 4px;
+  }
   .edit-textarea {
     flex: 1;
     font-family: var(--font-family);
@@ -149,9 +185,21 @@
     color: var(--text-primary);
     transition: all var(--transition);
   }
-  .btn-sm:hover { background: var(--bg-active); }
-  .btn-sm.primary { background: var(--accent-primary); color: var(--text-on-accent); }
-  .btn-sm:disabled { opacity: 0.5; }
+  .btn-sm:hover {
+    background: var(--bg-active);
+  }
+  .btn-sm.primary {
+    background: var(--accent-primary);
+    color: var(--text-on-accent);
+  }
+  .btn-sm:disabled {
+    opacity: 0.5;
+  }
 
-  .empty { padding: 20px; text-align: center; color: var(--text-tertiary); font-size: 12px; }
+  .empty {
+    padding: 20px;
+    text-align: center;
+    color: var(--text-tertiary);
+    font-size: 12px;
+  }
 </style>

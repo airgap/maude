@@ -86,8 +86,8 @@ app.get('/directories', async (c) => {
   try {
     const entries = await readdir(dirPath, { withFileTypes: true });
     const dirs = entries
-      .filter(e => e.isDirectory() && !e.name.startsWith('.'))
-      .map(e => ({
+      .filter((e) => e.isDirectory() && !e.name.startsWith('.'))
+      .map((e) => ({
         name: e.name,
         path: join(dirPath, e.name),
       }))

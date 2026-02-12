@@ -29,7 +29,12 @@ const defaults: SettingsState = {
   permissionMode: 'safe',
   keybindings: [
     { keys: 'Ctrl+Enter', action: 'send', context: 'input', description: 'Send message' },
-    { keys: 'Shift+Tab Shift+Tab', action: 'togglePlanMode', context: 'global', description: 'Toggle plan mode' },
+    {
+      keys: 'Shift+Tab Shift+Tab',
+      action: 'togglePlanMode',
+      context: 'global',
+      description: 'Toggle plan mode',
+    },
     { keys: 'Escape', action: 'cancel', context: 'global', description: 'Cancel/close' },
     { keys: 'Ctrl+k', action: 'commandPalette', context: 'global', description: 'Command palette' },
     { keys: 'Ctrl+/', action: 'toggleSidebar', context: 'global', description: 'Toggle sidebar' },
@@ -76,13 +81,17 @@ function createSettingsStore() {
     }
     if (Object.keys(serverSettings).length === 0) return;
 
-    const BASE_URL = typeof window !== 'undefined' && (window as any).__TAURI__
-      ? 'http://localhost:3002/api' : '/api';
+    const BASE_URL =
+      typeof window !== 'undefined' && (window as any).__TAURI__
+        ? 'http://localhost:3002/api'
+        : '/api';
     fetch(`${BASE_URL}/settings`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ settings: serverSettings }),
-    }).catch(() => { /* best-effort sync */ });
+    }).catch(() => {
+      /* best-effort sync */
+    });
   }
 
   function applyTheme(theme: ThemeId) {
@@ -96,35 +105,80 @@ function createSettingsStore() {
   }
 
   return {
-    get theme() { return state.theme; },
-    get cliProvider() { return state.cliProvider; },
-    get model() { return state.model; },
-    get permissionMode() { return state.permissionMode; },
-    get keybindings() { return state.keybindings; },
-    get autoMemoryEnabled() { return state.autoMemoryEnabled; },
-    get fontSize() { return state.fontSize; },
-    get fontFamily() { return state.fontFamily; },
-    get showThinkingBlocks() { return state.showThinkingBlocks; },
-    get showToolDetails() { return state.showToolDetails; },
-    get autoScroll() { return state.autoScroll; },
-    get streamingEnabled() { return state.streamingEnabled; },
-    get compactMessages() { return state.compactMessages; },
-    get projectPath() { return state.projectPath; },
-    get effort() { return state.effort; },
-    get maxBudgetUsd() { return state.maxBudgetUsd; },
-    get maxTurns() { return state.maxTurns; },
-    get all() { return state; },
+    get theme() {
+      return state.theme;
+    },
+    get cliProvider() {
+      return state.cliProvider;
+    },
+    get model() {
+      return state.model;
+    },
+    get permissionMode() {
+      return state.permissionMode;
+    },
+    get keybindings() {
+      return state.keybindings;
+    },
+    get autoMemoryEnabled() {
+      return state.autoMemoryEnabled;
+    },
+    get fontSize() {
+      return state.fontSize;
+    },
+    get fontFamily() {
+      return state.fontFamily;
+    },
+    get showThinkingBlocks() {
+      return state.showThinkingBlocks;
+    },
+    get showToolDetails() {
+      return state.showToolDetails;
+    },
+    get autoScroll() {
+      return state.autoScroll;
+    },
+    get streamingEnabled() {
+      return state.streamingEnabled;
+    },
+    get compactMessages() {
+      return state.compactMessages;
+    },
+    get projectPath() {
+      return state.projectPath;
+    },
+    get effort() {
+      return state.effort;
+    },
+    get maxBudgetUsd() {
+      return state.maxBudgetUsd;
+    },
+    get maxTurns() {
+      return state.maxTurns;
+    },
+    get all() {
+      return state;
+    },
 
-    setTheme(theme: ThemeId) { state.theme = theme; persist(); },
-    setModel(model: string) { state.model = model; persist(); },
-    setPermissionMode(mode: PermissionMode) { state.permissionMode = mode; persist(); },
+    setTheme(theme: ThemeId) {
+      state.theme = theme;
+      persist();
+    },
+    setModel(model: string) {
+      state.model = model;
+      persist();
+    },
+    setPermissionMode(mode: PermissionMode) {
+      state.permissionMode = mode;
+      persist();
+    },
     update(partial: Partial<SettingsState>) {
       state = { ...state, ...partial };
       persist();
       syncToServer(partial);
     },
     setKeybinding(action: string, keys: string) {
-      const idx = state.keybindings.findIndex(k => k.action === action);
+      const idx = state.keybindings.findIndex((k) => k.action === action);
       if (idx >= 0) state.keybindings[idx].keys = keys;
       persist();
     },

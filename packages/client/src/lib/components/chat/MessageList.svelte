@@ -42,7 +42,14 @@
   {#if !conversationStore.active || conversationStore.active.messages.length === 0}
     <div class="empty-state">
       <div class="empty-icon">
-        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+        <svg
+          width="48"
+          height="48"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="1.5"
+        >
           <path d="M4 4 L12 2 L20 4 L20 14 L12 22 L4 14 Z" />
           <path d="M8 8 L12 6 L16 8 L16 13 L12 17 L8 13 Z" />
         </svg>
@@ -69,8 +76,21 @@
   {/if}
 
   {#if userScrolled}
-    <button class="scroll-bottom" onclick={() => { userScrolled = false; scrollToBottom(); }}>
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+    <button
+      class="scroll-bottom"
+      onclick={() => {
+        userScrolled = false;
+        scrollToBottom();
+      }}
+    >
+      <svg
+        width="16"
+        height="16"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+      >
         <path d="M12 5v14M5 12l7 7 7-7" />
       </svg>
     </button>
@@ -103,7 +123,9 @@
     letter-spacing: 8px;
     text-transform: uppercase;
     color: var(--accent-primary);
-    text-shadow: 0 0 20px rgba(0, 180, 255, 0.4), 0 0 40px rgba(0, 180, 255, 0.1);
+    text-shadow:
+      0 0 20px rgba(0, 180, 255, 0.4),
+      0 0 40px rgba(0, 180, 255, 0.1);
   }
   .empty-state p {
     font-size: 15px;
@@ -116,7 +138,8 @@
   .empty-icon {
     color: var(--accent-primary);
     opacity: 0.5;
-    filter: drop-shadow(0 0 12px rgba(0, 180, 255, 0.6)) drop-shadow(0 0 24px rgba(0, 180, 255, 0.3));
+    filter: drop-shadow(0 0 12px rgba(0, 180, 255, 0.6))
+      drop-shadow(0 0 24px rgba(0, 180, 255, 0.3));
   }
   .shortcuts {
     display: flex;

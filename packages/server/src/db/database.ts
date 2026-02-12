@@ -95,6 +95,10 @@ export function initDatabase(): void {
     `ALTER TABLE conversations ADD COLUMN cli_session_id TEXT`,
   ];
   for (const sql of alterColumns) {
-    try { db.exec(sql); } catch { /* column already exists */ }
+    try {
+      db.exec(sql);
+    } catch {
+      /* column already exists */
+    }
   }
 }

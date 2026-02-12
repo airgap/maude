@@ -5,38 +5,54 @@ function createTaskStore() {
   let loading = $state(false);
 
   return {
-    get tasks() { return tasks; },
-    get loading() { return loading; },
-    get pending() { return tasks.filter(t => t.status === 'pending'); },
-    get inProgress() { return tasks.filter(t => t.status === 'in_progress'); },
-    get completed() { return tasks.filter(t => t.status === 'completed'); },
-    get count() { return tasks.length; },
+    get tasks() {
+      return tasks;
+    },
+    get loading() {
+      return loading;
+    },
+    get pending() {
+      return tasks.filter((t) => t.status === 'pending');
+    },
+    get inProgress() {
+      return tasks.filter((t) => t.status === 'in_progress');
+    },
+    get completed() {
+      return tasks.filter((t) => t.status === 'completed');
+    },
+    get count() {
+      return tasks.length;
+    },
 
-    setTasks(list: Task[]) { tasks = list; },
-    setLoading(v: boolean) { loading = v; },
+    setTasks(list: Task[]) {
+      tasks = list;
+    },
+    setLoading(v: boolean) {
+      loading = v;
+    },
 
     addTask(task: Task) {
       tasks = [...tasks, task];
     },
 
     updateTask(taskId: string, updates: Partial<Task>) {
-      tasks = tasks.map(t => t.id === taskId ? { ...t, ...updates } : t);
+      tasks = tasks.map((t) => (t.id === taskId ? { ...t, ...updates } : t));
     },
 
     removeTask(taskId: string) {
-      tasks = tasks.filter(t => t.id !== taskId);
+      tasks = tasks.filter((t) => t.id !== taskId);
     },
 
     getTask(taskId: string): Task | undefined {
-      return tasks.find(t => t.id === taskId);
+      return tasks.find((t) => t.id === taskId);
     },
 
     // Check if a task is blocked
     isBlocked(taskId: string): boolean {
-      const task = tasks.find(t => t.id === taskId);
+      const task = tasks.find((t) => t.id === taskId);
       if (!task) return false;
-      return task.blockedBy.some(id => {
-        const blocker = tasks.find(t => t.id === id);
+      return task.blockedBy.some((id) => {
+        const blocker = tasks.find((t) => t.id === id);
         return blocker && blocker.status !== 'completed';
       });
     },

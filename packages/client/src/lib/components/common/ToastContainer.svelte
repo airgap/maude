@@ -8,7 +8,14 @@
       <div class="toast toast-{toast.type}">
         <span class="toast-message">{toast.message}</span>
         <button class="toast-dismiss" onclick={() => uiStore.dismissToast(toast.id)}>
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <svg
+            width="14"
+            height="14"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+          >
             <path d="M18 6L6 18M6 6l12 12" />
           </svg>
         </button>
@@ -43,12 +50,22 @@
     animation: slideIn 200ms ease;
   }
 
-  .toast-info { border-left: 3px solid var(--accent-info); }
-  .toast-success { border-left: 3px solid var(--accent-secondary); }
-  .toast-error { border-left: 3px solid var(--accent-error); }
-  .toast-warning { border-left: 3px solid var(--accent-warning); }
+  .toast-info {
+    border-left: 3px solid var(--accent-info);
+  }
+  .toast-success {
+    border-left: 3px solid var(--accent-secondary);
+  }
+  .toast-error {
+    border-left: 3px solid var(--accent-error);
+  }
+  .toast-warning {
+    border-left: 3px solid var(--accent-warning);
+  }
 
-  .toast-message { flex: 1; }
+  .toast-message {
+    flex: 1;
+  }
 
   .toast-dismiss {
     color: var(--text-tertiary);
@@ -56,10 +73,19 @@
     border-radius: 3px;
     flex-shrink: 0;
   }
-  .toast-dismiss:hover { background: var(--bg-hover); color: var(--text-primary); }
+  .toast-dismiss:hover {
+    background: var(--bg-hover);
+    color: var(--text-primary);
+  }
 
   @keyframes slideIn {
-    from { transform: translateX(100%); opacity: 0; }
-    to { transform: translateX(0); opacity: 1; }
+    from {
+      transform: translateX(100%);
+      opacity: 0;
+    }
+    to {
+      transform: translateX(0);
+      opacity: 1;
+    }
   }
 </style>

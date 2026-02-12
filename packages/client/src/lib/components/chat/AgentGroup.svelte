@@ -6,7 +6,11 @@
   import ToolCallBlock from './ToolCallBlock.svelte';
   import { renderMarkdownPartial } from '$lib/utils/markdown';
 
-  let { taskBlock, children, streaming = false } = $props<{
+  let {
+    taskBlock,
+    children,
+    streaming = false,
+  } = $props<{
     taskBlock: MessageContent & { type: 'tool_use' };
     children: MessageContent[];
     streaming?: boolean;
@@ -20,28 +24,49 @@
   }
 
   function childToolCalls() {
-    return children.filter(b => b.type === 'tool_use') as Array<MessageContent & { type: 'tool_use' }>;
+    return children.filter((b) => b.type === 'tool_use') as Array<
+      MessageContent & { type: 'tool_use' }
+    >;
   }
 
   function childTextBlocks() {
-    return children.filter(b => b.type === 'text' && b.text) as Array<MessageContent & { type: 'text' }>;
+    return children.filter((b) => b.type === 'text' && b.text) as Array<
+      MessageContent & { type: 'text' }
+    >;
   }
 </script>
 
 <div class="agent-group" class:expanded>
-  <button class="agent-header" onclick={() => expanded = !expanded}>
-    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-      class:rotated={expanded}>
+  <button class="agent-header" onclick={() => (expanded = !expanded)}>
+    <svg
+      width="12"
+      height="12"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      stroke-width="2"
+      class:rotated={expanded}
+    >
       <path d="M9 18l6-6-6-6" />
     </svg>
-    <svg class="agent-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+    <svg
+      class="agent-icon"
+      width="14"
+      height="14"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      stroke-width="2"
+    >
       <path d="M12 2L2 7l10 5 10-5-10-5z" />
       <path d="M2 17l10 5 10-5" />
       <path d="M2 12l10 5 10-5" />
     </svg>
     <span class="agent-label">Agent</span>
     <span class="agent-desc truncate">{getDescription()}</span>
-    <span class="agent-count">{childToolCalls().length} tool call{childToolCalls().length !== 1 ? 's' : ''}</span>
+    <span class="agent-count"
+      >{childToolCalls().length} tool call{childToolCalls().length !== 1 ? 's' : ''}</span
+    >
     {#if streaming}
       <span class="running-indicator"></span>
     {/if}
@@ -51,7 +76,10 @@
     <div class="agent-body">
       {#each children as block, i}
         {#if block.type === 'thinking' && settingsStore.showThinkingBlocks}
-          <ThinkingBlock content={block.thinking} streaming={streaming && i === children.length - 1} />
+          <ThinkingBlock
+            content={block.thinking}
+            streaming={streaming && i === children.length - 1}
+          />
         {:else if block.type === 'text' && block.text}
           <div class="prose">{@html renderMarkdownPartial(block.text)}</div>
         {:else if block.type === 'tool_use'}
@@ -60,7 +88,12 @@
           <ToolCallBlock
             toolName={block.name}
             input={block.input}
-            result={hasResult ? { content: streamStore.toolResults.get(block.id)!.result, is_error: streamStore.toolResults.get(block.id)!.isError } : undefined}
+            result={hasResult
+              ? {
+                  content: streamStore.toolResults.get(block.id)!.result,
+                  is_error: streamStore.toolResults.get(block.id)!.isError,
+                }
+              : undefined}
             running={!hasResult && isLast}
           />
         {/if}
@@ -88,7 +121,9 @@
     transition: background var(--transition);
     color: var(--text-primary);
   }
-  .agent-header:hover { background: var(--bg-hover); }
+  .agent-header:hover {
+    background: var(--bg-hover);
+  }
 
   .agent-icon {
     color: var(--accent-secondary);
@@ -120,8 +155,12 @@
     white-space: nowrap;
   }
 
-  svg { transition: transform var(--transition); }
-  .rotated { transform: rotate(90deg); }
+  svg {
+    transition: transform var(--transition);
+  }
+  .rotated {
+    transform: rotate(90deg);
+  }
 
   .running-indicator {
     width: 8px;
@@ -149,7 +188,12 @@
   }
 
   @keyframes pulse {
-    0%, 100% { opacity: 1; }
-    50% { opacity: 0.3; }
+    0%,
+    100% {
+      opacity: 1;
+    }
+    50% {
+      opacity: 0.3;
+    }
   }
 </style>

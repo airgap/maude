@@ -15,7 +15,20 @@ export async function renderMarkdown(source: string): Promise<string> {
   const raw = await marked.parse(source);
   return DOMPurify.sanitize(raw, {
     ADD_TAGS: ['svg', 'path', 'line', 'rect', 'circle'],
-    ADD_ATTR: ['viewBox', 'fill', 'stroke', 'stroke-width', 'd', 'x', 'y', 'width', 'height', 'rx', 'data-language', 'data-file-path'],
+    ADD_ATTR: [
+      'viewBox',
+      'fill',
+      'stroke',
+      'stroke-width',
+      'd',
+      'x',
+      'y',
+      'width',
+      'height',
+      'rx',
+      'data-language',
+      'data-file-path',
+    ],
   });
 }
 
@@ -50,7 +63,7 @@ export function renderMarkdownPartial(source: string): string {
   // Links
   html = html.replace(
     /\[([^\]]+)\]\(([^)]+)\)/g,
-    '<a href="$2" target="_blank" rel="noopener">$1</a>'
+    '<a href="$2" target="_blank" rel="noopener">$1</a>',
   );
 
   // Unordered lists

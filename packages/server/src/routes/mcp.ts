@@ -9,7 +9,7 @@ app.get('/servers', (c) => {
   const rows = db.query('SELECT * FROM mcp_servers').all() as any[];
   return c.json({
     ok: true,
-    data: rows.map(r => ({
+    data: rows.map((r) => ({
       name: r.name,
       transport: r.transport,
       command: r.command,
@@ -29,10 +29,12 @@ app.post('/servers', async (c) => {
   const body = await c.req.json();
   const db = getDb();
 
-  db.query(`
+  db.query(
+    `
     INSERT INTO mcp_servers (name, transport, command, args, url, env, scope, status)
     VALUES (?, ?, ?, ?, ?, ?, ?, 'disconnected')
-  `).run(
+  `,
+  ).run(
     body.name,
     body.transport,
     body.command || null,

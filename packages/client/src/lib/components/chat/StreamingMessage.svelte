@@ -31,7 +31,11 @@
     // Collect all agent task block IDs
     const agentIds = new Set<string>();
     for (const b of blocks) {
-      if (b.type === 'tool_use' && b.name === 'Task' && !('parentToolUseId' in b && b.parentToolUseId)) {
+      if (
+        b.type === 'tool_use' &&
+        b.name === 'Task' &&
+        !('parentToolUseId' in b && b.parentToolUseId)
+      ) {
         agentIds.add(b.id);
       }
     }
@@ -41,7 +45,7 @@
     const lastChildIndexMap = new Map<string, number>();
     for (let i = 0; i < blocks.length; i++) {
       const b = blocks[i];
-      const pid = ('parentToolUseId' in b) ? (b as any).parentToolUseId : undefined;
+      const pid = 'parentToolUseId' in b ? (b as any).parentToolUseId : undefined;
       if (pid && agentIds.has(pid)) {
         if (!childrenMap.has(pid)) childrenMap.set(pid, []);
         childrenMap.get(pid)!.push(b);
@@ -52,7 +56,7 @@
     // Build entries
     for (let i = 0; i < blocks.length; i++) {
       const b = blocks[i];
-      const pid = ('parentToolUseId' in b) ? (b as any).parentToolUseId : undefined;
+      const pid = 'parentToolUseId' in b ? (b as any).parentToolUseId : undefined;
       if (pid && agentIds.has(pid)) {
         // Skip — rendered inside agent group
         continue;
@@ -103,7 +107,12 @@
         <ToolCallBlock
           toolName={entry.block.name}
           input={entry.block.input}
-          result={hasResult ? { content: streamStore.toolResults.get(entry.block.id)!.result, is_error: streamStore.toolResults.get(entry.block.id)!.isError } : undefined}
+          result={hasResult
+            ? {
+                content: streamStore.toolResults.get(entry.block.id)!.result,
+                is_error: streamStore.toolResults.get(entry.block.id)!.isError,
+              }
+            : undefined}
           running={!hasResult && isLast}
         />
       {/if}
@@ -179,13 +188,27 @@
     box-shadow: 0 0 4px rgba(0, 180, 255, 0.4);
     animation: hudPulse 1.2s infinite linear;
   }
-  .dot:nth-child(1) { animation-delay: 0s; }
-  .dot:nth-child(2) { animation-delay: 0.2s; }
-  .dot:nth-child(3) { animation-delay: 0.4s; }
+  .dot:nth-child(1) {
+    animation-delay: 0s;
+  }
+  .dot:nth-child(2) {
+    animation-delay: 0.2s;
+  }
+  .dot:nth-child(3) {
+    animation-delay: 0.4s;
+  }
 
   @keyframes hudPulse {
-    0%, 100% { opacity: 0.2; transform: scale(0.8); }
-    50% { opacity: 1; transform: scale(1); box-shadow: 0 0 8px rgba(0, 180, 255, 0.6); }
+    0%,
+    100% {
+      opacity: 0.2;
+      transform: scale(0.8);
+    }
+    50% {
+      opacity: 1;
+      transform: scale(1);
+      box-shadow: 0 0 8px rgba(0, 180, 255, 0.6);
+    }
   }
 
   .message-body {

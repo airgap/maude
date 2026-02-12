@@ -19,7 +19,9 @@
       .join('\n\n');
 
     if (textContent) {
-      renderMarkdown(textContent).then(html => { renderedHtml = html; });
+      renderMarkdown(textContent).then((html) => {
+        renderedHtml = html;
+      });
     }
   });
 
@@ -82,11 +84,15 @@
   });
 </script>
 
-<div class="message" class:user={message.role === 'user'} class:assistant={message.role === 'assistant'}>
+<div
+  class="message"
+  class:user={message.role === 'user'}
+  class:assistant={message.role === 'assistant'}
+>
   <div class="message-header">
     <span class="role-label">{message.role === 'user' ? 'You' : 'Claude'}</span>
     {#if message.model}
-      <span class="model-label">{message.model.split('-').slice(1,3).join(' ')}</span>
+      <span class="model-label">{message.model.split('-').slice(1, 3).join(' ')}</span>
     {/if}
     <span class="timestamp">
       {new Date(message.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
@@ -118,7 +124,9 @@
             <ToolCallBlock
               toolName={entry.block.name}
               input={entry.block.input}
-              result={getToolResults(message.content).find((r: any) => r.tool_use_id === entry.block.id)}
+              result={getToolResults(message.content).find(
+                (r: any) => r.tool_use_id === entry.block.id,
+              )}
             />
           {/if}
         {/if}
@@ -205,7 +213,9 @@
     opacity: 0;
     transition: opacity var(--transition);
   }
-  .message:hover .timestamp { opacity: 1; }
+  .message:hover .timestamp {
+    opacity: 1;
+  }
 
   .message-body {
     display: flex;
@@ -221,20 +231,41 @@
     font-weight: 500;
   }
 
-  .prose :global(p) { margin-bottom: 10px; }
-  .prose :global(p:last-child) { margin-bottom: 0; }
-  .prose :global(ul), .prose :global(ol) { padding-left: 20px; margin-bottom: 10px; }
-  .prose :global(li) { margin-bottom: 4px; }
-  .prose :global(h1), .prose :global(h2), .prose :global(h3) {
+  .prose :global(p) {
+    margin-bottom: 10px;
+  }
+  .prose :global(p:last-child) {
+    margin-bottom: 0;
+  }
+  .prose :global(ul),
+  .prose :global(ol) {
+    padding-left: 20px;
+    margin-bottom: 10px;
+  }
+  .prose :global(li) {
+    margin-bottom: 4px;
+  }
+  .prose :global(h1),
+  .prose :global(h2),
+  .prose :global(h3) {
     margin: 20px 0 10px;
     font-family: var(--font-family-sans);
     color: var(--accent-primary);
     letter-spacing: 1px;
     text-transform: uppercase;
   }
-  .prose :global(h1) { font-size: 1.4em; font-weight: 700; }
-  .prose :global(h2) { font-size: 1.2em; font-weight: 700; }
-  .prose :global(h3) { font-size: 1.05em; font-weight: 600; }
+  .prose :global(h1) {
+    font-size: 1.4em;
+    font-weight: 700;
+  }
+  .prose :global(h2) {
+    font-size: 1.2em;
+    font-weight: 700;
+  }
+  .prose :global(h3) {
+    font-size: 1.05em;
+    font-weight: 600;
+  }
   .prose :global(blockquote) {
     border-left: 2px solid var(--accent-primary);
     padding-left: 14px;
@@ -242,10 +273,34 @@
     margin: 10px 0;
     font-style: normal;
   }
-  .prose :global(table) { border-collapse: collapse; width: 100%; margin: 10px 0; }
-  .prose :global(th), .prose :global(td) { border: 1px solid var(--border-primary); padding: 8px 14px; text-align: left; }
-  .prose :global(th) { background: var(--bg-tertiary); font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; font-size: 12px; }
-  .prose :global(hr) { border: none; border-top: 1px solid var(--border-primary); margin: 20px 0; }
-  .prose :global(strong) { font-weight: 700; color: var(--accent-primary); }
-  .prose :global(em) { color: var(--text-secondary); }
+  .prose :global(table) {
+    border-collapse: collapse;
+    width: 100%;
+    margin: 10px 0;
+  }
+  .prose :global(th),
+  .prose :global(td) {
+    border: 1px solid var(--border-primary);
+    padding: 8px 14px;
+    text-align: left;
+  }
+  .prose :global(th) {
+    background: var(--bg-tertiary);
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    font-size: 12px;
+  }
+  .prose :global(hr) {
+    border: none;
+    border-top: 1px solid var(--border-primary);
+    margin: 20px 0;
+  }
+  .prose :global(strong) {
+    font-weight: 700;
+    color: var(--accent-primary);
+  }
+  .prose :global(em) {
+    color: var(--text-secondary);
+  }
 </style>

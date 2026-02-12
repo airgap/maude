@@ -5,25 +5,28 @@ import { claudeManager } from '../services/claude-process';
 const app = new Hono();
 
 // Agent tracking (in-memory since agents are ephemeral)
-const agents = new Map<string, {
-  id: string;
-  type: string;
-  description: string;
-  status: string;
-  sessionId: string;
-  parentSessionId: string;
-  spawnedAt: number;
-  completedAt?: number;
-  result?: string;
-  error?: string;
-}>();
+const agents = new Map<
+  string,
+  {
+    id: string;
+    type: string;
+    description: string;
+    status: string;
+    sessionId: string;
+    parentSessionId: string;
+    spawnedAt: number;
+    completedAt?: number;
+    result?: string;
+    error?: string;
+  }
+>();
 
 // List agents
 app.get('/', (c) => {
   const parentSession = c.req.query('parentSessionId');
   let list = Array.from(agents.values());
   if (parentSession) {
-    list = list.filter(a => a.parentSessionId === parentSession);
+    list = list.filter((a) => a.parentSessionId === parentSession);
   }
   return c.json({ ok: true, data: list });
 });

@@ -36,7 +36,7 @@ const commands: SlashCommand[] = [
     name: 'help',
     description: 'Show help information',
     execute: () => {
-      const helpText = COMMANDS.map(c => `/${c.name} — ${c.description}`).join('\n');
+      const helpText = COMMANDS.map((c) => `/${c.name} — ${c.description}`).join('\n');
       if (conversationStore.active) {
         conversationStore.addMessage({
           id: crypto.randomUUID(),
@@ -71,13 +71,27 @@ const commands: SlashCommand[] = [
     execute: (ctx) => {
       const name = ctx.args.trim();
       if (name) {
-        const validThemes = ['dark', 'light', 'dark-colorblind', 'light-colorblind', 'dark-ansi', 'light-ansi'];
+        const validThemes = [
+          'dark',
+          'light',
+          'dark-colorblind',
+          'light-colorblind',
+          'dark-ansi',
+          'light-ansi',
+        ];
         if (validThemes.includes(name)) {
           settingsStore.setTheme(name as any);
         }
       } else {
         // Cycle through themes
-        const themes = ['dark', 'light', 'dark-colorblind', 'light-colorblind', 'dark-ansi', 'light-ansi'] as const;
+        const themes = [
+          'dark',
+          'light',
+          'dark-colorblind',
+          'light-colorblind',
+          'dark-ansi',
+          'light-ansi',
+        ] as const;
         const idx = themes.indexOf(settingsStore.theme);
         settingsStore.setTheme(themes[(idx + 1) % themes.length]);
       }
@@ -206,7 +220,11 @@ const commands: SlashCommand[] = [
     name: 'commit',
     description: 'Create a git commit from changes',
     execute: () => {
-      return { handled: true, sendAsMessage: 'Create a git commit for the current changes. Review the diff, write a good commit message, and commit.' };
+      return {
+        handled: true,
+        sendAsMessage:
+          'Create a git commit for the current changes. Review the diff, write a good commit message, and commit.',
+      };
     },
   },
   {
@@ -223,10 +241,10 @@ const commands: SlashCommand[] = [
 ];
 
 // Export for use in SlashCommandMenu
-export const COMMANDS = commands.map(c => ({ name: c.name, description: c.description }));
+export const COMMANDS = commands.map((c) => ({ name: c.name, description: c.description }));
 
 export function executeSlashCommand(name: string, ctx: SlashCommandContext): SlashCommandResult {
-  const cmd = commands.find(c => c.name === name);
+  const cmd = commands.find((c) => c.name === name);
   if (!cmd) return { handled: false };
 
   const result = cmd.execute(ctx);

@@ -38,11 +38,7 @@ export function buildCliCommand(provider: CliProvider, opts: CliSessionOpts): Cl
 }
 
 function buildClaudeCommand(opts: CliSessionOpts): CliCommand {
-  const args = [
-    '--output-format', 'stream-json',
-    '--verbose',
-    '-p', opts.content,
-  ];
+  const args = ['--output-format', 'stream-json', '--verbose', '-p', opts.content];
 
   if (opts.resumeSessionId) args.push('-r', opts.resumeSessionId);
   if (opts.model) args.push('--model', opts.model);
@@ -65,20 +61,23 @@ function buildClaudeCommand(opts: CliSessionOpts): CliCommand {
 }
 
 function buildKiroCommand(opts: CliSessionOpts): CliCommand {
-  const args = [
-    'chat',
-    '--no-interactive',
-    '--output-format', 'stream-json',
-    '--trust-all-tools',
-  ];
+  const args = ['chat', '--no-interactive', '--output-format', 'stream-json', '--trust-all-tools'];
 
   if (opts.resumeSessionId) args.push('--resume');
   if (opts.allowedTools?.length) args.push('--trust-tools', opts.allowedTools.join(','));
 
   // Kiro doesn't support these as CLI flags — they're configured via agent configs.
   // We pass them where possible and log warnings for unsupported options.
-  if (opts.model || opts.systemPrompt || opts.effort || opts.maxTurns != null || opts.maxBudgetUsd != null) {
-    console.warn('[kiro] --model, --system-prompt, --effort, --max-turns, --max-budget-usd are not supported as CLI flags in kiro-cli. Configure these via a Kiro agent config instead.');
+  if (
+    opts.model ||
+    opts.systemPrompt ||
+    opts.effort ||
+    opts.maxTurns != null ||
+    opts.maxBudgetUsd != null
+  ) {
+    console.warn(
+      '[kiro] --model, --system-prompt, --effort, --max-turns, --max-budget-usd are not supported as CLI flags in kiro-cli. Configure these via a Kiro agent config instead.',
+    );
   }
 
   // Prompt goes as positional arg at the end

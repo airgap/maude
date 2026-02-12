@@ -61,7 +61,8 @@
     z-index: 1;
   }
 
-  .statusbar-left, .statusbar-right {
+  .statusbar-left,
+  .statusbar-right {
     display: flex;
     align-items: center;
     gap: 14px;
@@ -79,10 +80,14 @@
     border-radius: 0;
     transition: all var(--transition);
   }
-  .status-dot.idle { background: var(--text-tertiary); }
+  .status-dot.idle {
+    background: var(--text-tertiary);
+  }
   .status-dot.streaming {
     background: var(--accent-secondary);
-    box-shadow: 0 0 6px var(--accent-secondary), 0 0 12px rgba(0, 255, 136, 0.2);
+    box-shadow:
+      0 0 6px var(--accent-secondary),
+      0 0 12px rgba(0, 255, 136, 0.2);
     animation: pulse 1.2s infinite;
   }
   .status-dot.pending {
@@ -121,7 +126,12 @@
   }
 
   @keyframes pulse {
-    0%, 100% { opacity: 1; }
-    50% { opacity: 0.3; }
+    0%,
+    100% {
+      opacity: 1;
+    }
+    50% {
+      opacity: 0.3;
+    }
   }
 </style>

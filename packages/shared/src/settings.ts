@@ -1,7 +1,13 @@
 import type { PermissionMode, PermissionRule } from './tools.js';
 import type { MCPServerConfig } from './mcp.js';
 
-export type ThemeId = 'dark' | 'light' | 'dark-colorblind' | 'light-colorblind' | 'dark-ansi' | 'light-ansi';
+export type ThemeId =
+  | 'dark'
+  | 'light'
+  | 'dark-colorblind'
+  | 'light-colorblind'
+  | 'dark-ansi'
+  | 'light-ansi';
 
 export type CliProvider = 'claude' | 'kiro';
 
@@ -50,12 +56,22 @@ export const DEFAULT_SETTINGS: Settings = {
   permissionRules: [],
   keybindings: [
     { keys: 'Ctrl+Enter', action: 'send', context: 'input', description: 'Send message' },
-    { keys: 'Shift+Tab Shift+Tab', action: 'togglePlanMode', context: 'global', description: 'Toggle plan mode' },
+    {
+      keys: 'Shift+Tab Shift+Tab',
+      action: 'togglePlanMode',
+      context: 'global',
+      description: 'Toggle plan mode',
+    },
     { keys: 'Escape', action: 'cancel', context: 'global', description: 'Cancel/close' },
     { keys: 'Ctrl+k', action: 'commandPalette', context: 'global', description: 'Command palette' },
     { keys: 'Ctrl+/', action: 'toggleSidebar', context: 'global', description: 'Toggle sidebar' },
     { keys: 'Ctrl+l', action: 'clearChat', context: 'global', description: 'Clear chat display' },
-    { keys: 'Ctrl+Shift+p', action: 'commandPalette', context: 'global', description: 'Command palette (alt)' },
+    {
+      keys: 'Ctrl+Shift+p',
+      action: 'commandPalette',
+      context: 'global',
+      description: 'Command palette (alt)',
+    },
   ],
   mcpServers: [],
   autoMemoryEnabled: true,

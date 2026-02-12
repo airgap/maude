@@ -53,15 +53,17 @@ function translateCliEvent(event: any): string[] {
       if (!msg) break;
 
       // Emit message_start
-      events.push(JSON.stringify({
-        type: 'message_start',
-        message: {
-          id: msg.id || nanoid(),
-          role: 'assistant',
-          model: msg.model || 'unknown',
-        },
-        parent_tool_use_id: parentId,
-      }));
+      events.push(
+        JSON.stringify({
+          type: 'message_start',
+          message: {
+            id: msg.id || nanoid(),
+            role: 'assistant',
+            model: msg.model || 'unknown',
+          },
+          parent_tool_use_id: parentId,
+        }),
+      );
 
       // Emit content blocks
       const content = msg.content || [];
@@ -69,66 +71,84 @@ function translateCliEvent(event: any): string[] {
         const block = content[i];
 
         if (block.type === 'text') {
-          events.push(JSON.stringify({
-            type: 'content_block_start',
-            index: i,
-            content_block: { type: 'text', text: '' },
-            parent_tool_use_id: parentId,
-          }));
-          events.push(JSON.stringify({
-            type: 'content_block_delta',
-            index: i,
-            delta: { type: 'text_delta', text: block.text || '' },
-            parent_tool_use_id: parentId,
-          }));
-          events.push(JSON.stringify({
-            type: 'content_block_stop',
-            index: i,
-            parent_tool_use_id: parentId,
-          }));
+          events.push(
+            JSON.stringify({
+              type: 'content_block_start',
+              index: i,
+              content_block: { type: 'text', text: '' },
+              parent_tool_use_id: parentId,
+            }),
+          );
+          events.push(
+            JSON.stringify({
+              type: 'content_block_delta',
+              index: i,
+              delta: { type: 'text_delta', text: block.text || '' },
+              parent_tool_use_id: parentId,
+            }),
+          );
+          events.push(
+            JSON.stringify({
+              type: 'content_block_stop',
+              index: i,
+              parent_tool_use_id: parentId,
+            }),
+          );
         } else if (block.type === 'thinking') {
-          events.push(JSON.stringify({
-            type: 'content_block_start',
-            index: i,
-            content_block: { type: 'thinking', thinking: '' },
-            parent_tool_use_id: parentId,
-          }));
-          events.push(JSON.stringify({
-            type: 'content_block_delta',
-            index: i,
-            delta: { type: 'thinking_delta', thinking: block.thinking || '' },
-            parent_tool_use_id: parentId,
-          }));
-          events.push(JSON.stringify({
-            type: 'content_block_stop',
-            index: i,
-            parent_tool_use_id: parentId,
-          }));
+          events.push(
+            JSON.stringify({
+              type: 'content_block_start',
+              index: i,
+              content_block: { type: 'thinking', thinking: '' },
+              parent_tool_use_id: parentId,
+            }),
+          );
+          events.push(
+            JSON.stringify({
+              type: 'content_block_delta',
+              index: i,
+              delta: { type: 'thinking_delta', thinking: block.thinking || '' },
+              parent_tool_use_id: parentId,
+            }),
+          );
+          events.push(
+            JSON.stringify({
+              type: 'content_block_stop',
+              index: i,
+              parent_tool_use_id: parentId,
+            }),
+          );
         } else if (block.type === 'tool_use') {
-          events.push(JSON.stringify({
-            type: 'content_block_start',
-            index: i,
-            content_block: {
-              type: 'tool_use',
-              id: block.id || nanoid(),
-              name: block.name || 'unknown',
-            },
-            parent_tool_use_id: parentId,
-          }));
-          events.push(JSON.stringify({
-            type: 'content_block_delta',
-            index: i,
-            delta: {
-              type: 'input_json_delta',
-              partial_json: JSON.stringify(block.input || {}),
-            },
-            parent_tool_use_id: parentId,
-          }));
-          events.push(JSON.stringify({
-            type: 'content_block_stop',
-            index: i,
-            parent_tool_use_id: parentId,
-          }));
+          events.push(
+            JSON.stringify({
+              type: 'content_block_start',
+              index: i,
+              content_block: {
+                type: 'tool_use',
+                id: block.id || nanoid(),
+                name: block.name || 'unknown',
+              },
+              parent_tool_use_id: parentId,
+            }),
+          );
+          events.push(
+            JSON.stringify({
+              type: 'content_block_delta',
+              index: i,
+              delta: {
+                type: 'input_json_delta',
+                partial_json: JSON.stringify(block.input || {}),
+              },
+              parent_tool_use_id: parentId,
+            }),
+          );
+          events.push(
+            JSON.stringify({
+              type: 'content_block_stop',
+              index: i,
+              parent_tool_use_id: parentId,
+            }),
+          );
         }
       }
       break;
@@ -137,16 +157,18 @@ function translateCliEvent(event: any): string[] {
     case 'result': {
       // Emit message_delta with usage info
       const usage = event.usage || {};
-      events.push(JSON.stringify({
-        type: 'message_delta',
-        delta: { stop_reason: event.stop_reason || 'end_turn' },
-        usage: {
-          input_tokens: usage.input_tokens || 0,
-          output_tokens: usage.output_tokens || 0,
-          cache_creation_input_tokens: usage.cache_creation_input_tokens || 0,
-          cache_read_input_tokens: usage.cache_read_input_tokens || 0,
-        },
-      }));
+      events.push(
+        JSON.stringify({
+          type: 'message_delta',
+          delta: { stop_reason: event.stop_reason || 'end_turn' },
+          usage: {
+            input_tokens: usage.input_tokens || 0,
+            output_tokens: usage.output_tokens || 0,
+            cache_creation_input_tokens: usage.cache_creation_input_tokens || 0,
+            cache_read_input_tokens: usage.cache_read_input_tokens || 0,
+          },
+        }),
+      );
 
       // Emit message_stop
       events.push(JSON.stringify({ type: 'message_stop' }));
@@ -164,17 +186,20 @@ function translateCliEvent(event: any): string[] {
 class ClaudeProcessManager {
   private sessions = new Map<string, ClaudeSession>();
 
-  async createSession(conversationId: string, opts: {
-    model?: string;
-    systemPrompt?: string;
-    projectPath?: string;
-    effort?: string;
-    maxBudgetUsd?: number;
-    maxTurns?: number;
-    allowedTools?: string[];
-    disallowedTools?: string[];
-    resumeSessionId?: string;
-  } = {}): Promise<string> {
+  async createSession(
+    conversationId: string,
+    opts: {
+      model?: string;
+      systemPrompt?: string;
+      projectPath?: string;
+      effort?: string;
+      maxBudgetUsd?: number;
+      maxTurns?: number;
+      allowedTools?: string[];
+      disallowedTools?: string[];
+      resumeSessionId?: string;
+    } = {},
+  ): Promise<string> {
     const sessionId = nanoid();
 
     const session: ClaudeSession = {
@@ -210,7 +235,9 @@ class ClaudeProcessManager {
       const db = getDb();
       const row = db.query("SELECT value FROM settings WHERE key = 'cliProvider'").get() as any;
       if (row) provider = JSON.parse(row.value) as CliProvider;
-    } catch { /* use default */ }
+    } catch {
+      /* use default */
+    }
 
     const mcpConfigPath = generateMcpConfig();
     const { binary, args } = buildCliCommand(provider, {
@@ -262,9 +289,13 @@ class ClaudeProcessManager {
           clearInterval(pingInterval);
           proc.kill('SIGINT');
           try {
-            controller.enqueue(encoder.encode(`data: {"type":"message_stop","reason":"cancelled"}\n\n`));
+            controller.enqueue(
+              encoder.encode(`data: {"type":"message_stop","reason":"cancelled"}\n\n`),
+            );
             controller.close();
-          } catch { /* already closed */ }
+          } catch {
+            /* already closed */
+          }
           session.status = 'idle';
         });
 
@@ -292,8 +323,10 @@ class ClaudeProcessManager {
                   session.cliSessionId = cliEvent.session_id;
                   try {
                     const db = getDb();
-                    db.query('UPDATE conversations SET cli_session_id = ? WHERE id = ?')
-                      .run(cliEvent.session_id, session.conversationId);
+                    db.query('UPDATE conversations SET cli_session_id = ? WHERE id = ?').run(
+                      cliEvent.session_id,
+                      session.conversationId,
+                    );
                   } catch (e) {
                     console.error('[claude] Failed to persist session ID:', e);
                   }
@@ -313,7 +346,10 @@ class ClaudeProcessManager {
                       const resultEvent = JSON.stringify({
                         type: 'tool_result',
                         toolCallId: block.tool_use_id || '',
-                        result: typeof block.content === 'string' ? block.content : JSON.stringify(block.content),
+                        result:
+                          typeof block.content === 'string'
+                            ? block.content
+                            : JSON.stringify(block.content),
                         isError: Boolean(block.is_error),
                       });
                       controller.enqueue(encoder.encode(`data: ${resultEvent}\n\n`));
@@ -335,8 +371,9 @@ class ClaudeProcessManager {
                     try {
                       const totalTokens = (usage.input_tokens || 0) + (usage.output_tokens || 0);
                       const db = getDb();
-                      db.query('UPDATE conversations SET total_tokens = total_tokens + ? WHERE id = ?')
-                        .run(totalTokens, session.conversationId);
+                      db.query(
+                        'UPDATE conversations SET total_tokens = total_tokens + ? WHERE id = ?',
+                      ).run(totalTokens, session.conversationId);
                     } catch (e) {
                       console.error('[claude] Failed to persist token usage:', e);
                     }
@@ -355,13 +392,23 @@ class ClaudeProcessManager {
             try {
               const db = getDb();
               const msgId = nanoid();
-              db.query(`
+              db.query(
+                `
                 INSERT INTO messages (id, conversation_id, role, content, model, timestamp)
                 VALUES (?, ?, 'assistant', ?, ?, ?)
-              `).run(msgId, session.conversationId, JSON.stringify(assistantContent), assistantModel, Date.now());
+              `,
+              ).run(
+                msgId,
+                session.conversationId,
+                JSON.stringify(assistantContent),
+                assistantModel,
+                Date.now(),
+              );
 
-              db.query('UPDATE conversations SET updated_at = ? WHERE id = ?')
-                .run(Date.now(), session.conversationId);
+              db.query('UPDATE conversations SET updated_at = ? WHERE id = ?').run(
+                Date.now(),
+                session.conversationId,
+              );
             } catch (dbErr) {
               console.error('[claude] Failed to save assistant message:', dbErr);
             }
@@ -378,7 +425,11 @@ class ClaudeProcessManager {
           clearInterval(pingInterval);
           if (!cancelled) {
             const msg = String(err).replace(/"/g, '\\"');
-            controller.enqueue(encoder.encode(`data: {"type":"error","error":{"type":"stream_error","message":"${msg}"}}\n\n`));
+            controller.enqueue(
+              encoder.encode(
+                `data: {"type":"error","error":{"type":"stream_error","message":"${msg}"}}\n\n`,
+              ),
+            );
             controller.close();
           }
           session.status = 'idle';
@@ -408,7 +459,7 @@ class ClaudeProcessManager {
   }
 
   listSessions(): Array<{ id: string; conversationId: string; status: string }> {
-    return Array.from(this.sessions.values()).map(s => ({
+    return Array.from(this.sessions.values()).map((s) => ({
       id: s.id,
       conversationId: s.conversationId,
       status: s.status,

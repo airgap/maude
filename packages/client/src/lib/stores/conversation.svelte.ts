@@ -6,14 +6,28 @@ function createConversationStore() {
   let loading = $state(false);
 
   return {
-    get list() { return conversations; },
-    get active() { return active; },
-    get loading() { return loading; },
-    get activeId() { return active?.id ?? null; },
+    get list() {
+      return conversations;
+    },
+    get active() {
+      return active;
+    },
+    get loading() {
+      return loading;
+    },
+    get activeId() {
+      return active?.id ?? null;
+    },
 
-    setList(list: ConversationSummary[]) { conversations = list; },
-    setActive(conv: Conversation | null) { active = conv; },
-    setLoading(v: boolean) { loading = v; },
+    setList(list: ConversationSummary[]) {
+      conversations = list;
+    },
+    setActive(conv: Conversation | null) {
+      active = conv;
+    },
+    setLoading(v: boolean) {
+      loading = v;
+    },
 
     addMessage(msg: Message) {
       if (!active) return;
@@ -37,12 +51,12 @@ function createConversationStore() {
 
     updateTitle(title: string) {
       if (active) active.title = title;
-      const idx = conversations.findIndex(c => c.id === active?.id);
+      const idx = conversations.findIndex((c) => c.id === active?.id);
       if (idx >= 0) conversations[idx].title = title;
     },
 
     removeConversation(id: string) {
-      conversations = conversations.filter(c => c.id !== id);
+      conversations = conversations.filter((c) => c.id !== id);
       if (active?.id === id) active = null;
     },
 

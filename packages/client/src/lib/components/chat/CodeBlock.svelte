@@ -5,7 +5,9 @@
   async function copy() {
     await navigator.clipboard.writeText(code);
     copied = true;
-    setTimeout(() => { copied = false; }, 2000);
+    setTimeout(() => {
+      copied = false;
+    }, 2000);
   }
 </script>
 
@@ -14,10 +16,27 @@
     <span class="language-label">{language}</span>
     <button class="copy-btn" onclick={copy}>
       {#if copied}
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg>
+        <svg
+          width="14"
+          height="14"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"><path d="M20 6L9 17l-5-5" /></svg
+        >
         Copied
       {:else}
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+        <svg
+          width="14"
+          height="14"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          ><rect x="9" y="9" width="13" height="13" rx="2" /><path
+            d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"
+          /></svg
+        >
         Copy
       {/if}
     </button>

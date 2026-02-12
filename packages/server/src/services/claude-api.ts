@@ -47,13 +47,18 @@ class ClaudeApiClient {
       // Credentials file not found or invalid
     }
 
-    throw new Error('No Anthropic API key found. Set ANTHROPIC_API_KEY or log in with Claude Code.');
+    throw new Error(
+      'No Anthropic API key found. Set ANTHROPIC_API_KEY or log in with Claude Code.',
+    );
   }
 
-  createSession(conversationId: string, opts: {
-    model?: string;
-    systemPrompt?: string;
-  } = {}): string {
+  createSession(
+    conversationId: string,
+    opts: {
+      model?: string;
+      systemPrompt?: string;
+    } = {},
+  ): string {
     const sessionId = nanoid();
     this.sessions.set(sessionId, {
       id: sessionId,
@@ -72,11 +77,11 @@ class ClaudeApiClient {
 
     // Build conversation history from DB
     const db = getDb();
-    const rows = db.query(
-      'SELECT role, content FROM messages WHERE conversation_id = ? ORDER BY timestamp ASC'
-    ).all(session.conversationId) as Array<{ role: string; content: string }>;
+    const rows = db
+      .query('SELECT role, content FROM messages WHERE conversation_id = ? ORDER BY timestamp ASC')
+      .all(session.conversationId) as Array<{ role: string; content: string }>;
 
-    const messages = rows.map(row => ({
+    const messages = rows.map((row) => ({
       role: row.role as 'user' | 'assistant',
       content: JSON.parse(row.content),
     }));
@@ -123,7 +128,10 @@ class ClaudeApiClient {
         start(controller) {
           const errorEvent = {
             type: 'error',
-            error: { type: 'api_error', message: `Anthropic API ${apiResponse.status}: ${errBody}` },
+            error: {
+              type: 'api_error',
+              message: `Anthropic API ${apiResponse.status}: ${errBody}`,
+            },
           };
           controller.enqueue(encoder.encode(`data: ${JSON.stringify(errorEvent)}\n\n`));
           controller.close();
@@ -160,14 +168,24 @@ class ClaudeApiClient {
                 if (assistantContent.length > 0) {
                   const msgId = nanoid();
                   const db = getDb();
-                  db.query(`
+                  db.query(
+                    `
                     INSERT INTO messages (id, conversation_id, role, content, model, timestamp)
                     VALUES (?, ?, 'assistant', ?, ?, ?)
-                  `).run(msgId, session.conversationId, JSON.stringify(assistantContent), session.model, Date.now());
+                  `,
+                  ).run(
+                    msgId,
+                    session.conversationId,
+                    JSON.stringify(assistantContent),
+                    session.model,
+                    Date.now(),
+                  );
 
                   // Update conversation timestamp
-                  db.query('UPDATE conversations SET updated_at = ? WHERE id = ?')
-                    .run(Date.now(), session.conversationId);
+                  db.query('UPDATE conversations SET updated_at = ? WHERE id = ?').run(
+                    Date.now(),
+                    session.conversationId,
+                  );
                 }
                 controller.close();
                 return;
@@ -195,8 +213,12 @@ class ClaudeApiClient {
                     if (block) {
                       if (event.delta.type === 'text_delta' && block.type === 'text') {
                         block.text = ((block.text as string) || '') + (event.delta.text || '');
-                      } else if (event.delta.type === 'thinking_delta' && block.type === 'thinking') {
-                        block.thinking = ((block.thinking as string) || '') + (event.delta.thinking || '');
+                      } else if (
+                        event.delta.type === 'thinking_delta' &&
+                        block.type === 'thinking'
+                      ) {
+                        block.thinking =
+                          ((block.thinking as string) || '') + (event.delta.thinking || '');
                       }
                     }
                   }
@@ -211,7 +233,9 @@ class ClaudeApiClient {
           } catch (err) {
             clearInterval(pingInterval);
             if ((err as Error).name === 'AbortError') {
-              controller.enqueue(encoder.encode(`data: {"type":"message_stop","reason":"cancelled"}\n\n`));
+              controller.enqueue(
+                encoder.encode(`data: {"type":"message_stop","reason":"cancelled"}\n\n`),
+              );
             } else {
               const errorEvent = {
                 type: 'error',
@@ -246,7 +270,7 @@ class ClaudeApiClient {
   }
 
   listSessions(): Array<{ id: string; conversationId: string }> {
-    return Array.from(this.sessions.values()).map(s => ({
+    return Array.from(this.sessions.values()).map((s) => ({
       id: s.id,
       conversationId: s.conversationId,
     }));

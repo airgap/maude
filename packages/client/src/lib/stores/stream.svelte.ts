@@ -1,6 +1,12 @@
 import type { StreamEvent, MessageContent } from '@maude/shared';
 
-export type StreamStatus = 'idle' | 'connecting' | 'streaming' | 'tool_pending' | 'error' | 'cancelled';
+export type StreamStatus =
+  | 'idle'
+  | 'connecting'
+  | 'streaming'
+  | 'tool_pending'
+  | 'error'
+  | 'cancelled';
 
 interface PendingApproval {
   toolCallId: string;
@@ -21,7 +27,9 @@ function createStreamStore() {
   let tokenUsage = $state({ input: 0, output: 0 });
   let error = $state<string | null>(null);
   let abortController = $state<AbortController | null>(null);
-  let toolResults = $state<Map<string, { result: string; isError: boolean; duration?: number }>>(new Map());
+  let toolResults = $state<Map<string, { result: string; isError: boolean; duration?: number }>>(
+    new Map(),
+  );
   // Offset for mapping event indices to contentBlocks array positions.
   // Reset to contentBlocks.length on each message_start so sub-agent
   // events with index=0 map to the correct position in the flat array.
@@ -29,20 +37,46 @@ function createStreamStore() {
   let currentParentId = $state<string | null>(null);
 
   return {
-    get status() { return status; },
-    get sessionId() { return sessionId; },
-    get partialText() { return partialText; },
-    get partialThinking() { return partialThinking; },
-    get contentBlocks() { return contentBlocks; },
-    get pendingApprovals() { return pendingApprovals; },
-    get tokenUsage() { return tokenUsage; },
-    get error() { return error; },
-    get isStreaming() { return status === 'streaming' || status === 'connecting'; },
-    get abortController() { return abortController; },
-    get toolResults() { return toolResults; },
+    get status() {
+      return status;
+    },
+    get sessionId() {
+      return sessionId;
+    },
+    get partialText() {
+      return partialText;
+    },
+    get partialThinking() {
+      return partialThinking;
+    },
+    get contentBlocks() {
+      return contentBlocks;
+    },
+    get pendingApprovals() {
+      return pendingApprovals;
+    },
+    get tokenUsage() {
+      return tokenUsage;
+    },
+    get error() {
+      return error;
+    },
+    get isStreaming() {
+      return status === 'streaming' || status === 'connecting';
+    },
+    get abortController() {
+      return abortController;
+    },
+    get toolResults() {
+      return toolResults;
+    },
 
-    setSessionId(id: string) { sessionId = id; },
-    setAbortController(ctrl: AbortController) { abortController = ctrl; },
+    setSessionId(id: string) {
+      sessionId = id;
+    },
+    setAbortController(ctrl: AbortController) {
+      abortController = ctrl;
+    },
 
     startStream() {
       status = 'connecting';
@@ -71,17 +105,30 @@ function createStreamStore() {
           currentBlockType = event.content_block.type;
           const pid = (event as any).parent_tool_use_id || currentParentId || undefined;
           if (event.content_block.type === 'text') {
-            contentBlocks = [...contentBlocks, { type: 'text', text: event.content_block.text ?? '', parentToolUseId: pid }];
+            contentBlocks = [
+              ...contentBlocks,
+              { type: 'text', text: event.content_block.text ?? '', parentToolUseId: pid },
+            ];
           } else if (event.content_block.type === 'thinking') {
-            contentBlocks = [...contentBlocks, { type: 'thinking', thinking: event.content_block.thinking ?? '', parentToolUseId: pid }];
+            contentBlocks = [
+              ...contentBlocks,
+              {
+                type: 'thinking',
+                thinking: event.content_block.thinking ?? '',
+                parentToolUseId: pid,
+              },
+            ];
           } else if (event.content_block.type === 'tool_use') {
-            contentBlocks = [...contentBlocks, {
-              type: 'tool_use',
-              id: event.content_block.id ?? '',
-              name: event.content_block.name ?? '',
-              input: {},
-              parentToolUseId: pid,
-            }];
+            contentBlocks = [
+              ...contentBlocks,
+              {
+                type: 'tool_use',
+                id: event.content_block.id ?? '',
+                name: event.content_block.name ?? '',
+                input: {},
+                parentToolUseId: pid,
+              },
+            ];
           }
           break;
         }
@@ -132,12 +179,15 @@ function createStreamStore() {
 
         case 'tool_approval_request':
           status = 'tool_pending';
-          pendingApprovals = [...pendingApprovals, {
-            toolCallId: event.toolCallId,
-            toolName: event.toolName,
-            input: event.input,
-            description: event.description,
-          }];
+          pendingApprovals = [
+            ...pendingApprovals,
+            {
+              toolCallId: event.toolCallId,
+              toolName: event.toolName,
+              input: event.input,
+              description: event.description,
+            },
+          ];
           break;
 
         case 'tool_result': {
@@ -151,7 +201,7 @@ function createStreamStore() {
           toolResults = newResults;
 
           // Remove from pending if it was there
-          pendingApprovals = pendingApprovals.filter(a => a.toolCallId !== event.toolCallId);
+          pendingApprovals = pendingApprovals.filter((a) => a.toolCallId !== event.toolCallId);
           if (pendingApprovals.length === 0 && status === 'tool_pending') {
             status = 'streaming';
           }
@@ -169,7 +219,7 @@ function createStreamStore() {
     },
 
     resolveApproval(toolCallId: string) {
-      pendingApprovals = pendingApprovals.filter(a => a.toolCallId !== toolCallId);
+      pendingApprovals = pendingApprovals.filter((a) => a.toolCallId !== toolCallId);
       if (pendingApprovals.length === 0) status = 'streaming';
     },
 

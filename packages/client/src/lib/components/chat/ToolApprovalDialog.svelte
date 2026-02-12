@@ -25,8 +25,17 @@
 
 <div class="approval-dialog" class:high-risk={riskLevel === 'high'}>
   <div class="approval-header">
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-      <path d="M12 9v4M12 17h.01M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+    <svg
+      width="18"
+      height="18"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      stroke-width="2"
+    >
+      <path
+        d="M12 9v4M12 17h.01M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"
+      />
     </svg>
     <span class="approval-title">Tool requires approval</span>
   </div>
@@ -73,7 +82,9 @@
     font-size: 13px;
     font-weight: 600;
   }
-  .high-risk .approval-header { color: var(--accent-error); }
+  .high-risk .approval-header {
+    color: var(--accent-error);
+  }
 
   .approval-body {
     padding: 12px;
@@ -127,17 +138,25 @@
     font-weight: 600;
     transition: all var(--transition);
   }
-  .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+  .btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
 
   .btn-deny {
     background: var(--bg-tertiary);
     color: var(--text-primary);
   }
-  .btn-deny:hover:not(:disabled) { background: var(--accent-error); color: var(--text-on-accent); }
+  .btn-deny:hover:not(:disabled) {
+    background: var(--accent-error);
+    color: var(--text-on-accent);
+  }
 
   .btn-approve {
     background: var(--accent-secondary);
     color: var(--text-on-accent);
   }
-  .btn-approve:hover:not(:disabled) { filter: brightness(1.1); }
+  .btn-approve:hover:not(:disabled) {
+    filter: brightness(1.1);
+  }
 </style>

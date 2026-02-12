@@ -95,7 +95,11 @@
         <label for="nc-path">Project Directory</label>
         <div class="path-row">
           <input id="nc-path" type="text" bind:value={projectPath} placeholder="." />
-          <button class="btn-browse" onclick={() => browseDirectory(projectPath !== '.' ? projectPath : undefined)}>Browse</button>
+          <button
+            class="btn-browse"
+            onclick={() => browseDirectory(projectPath !== '.' ? projectPath : undefined)}
+            >Browse</button
+          >
         </div>
       </div>
 
@@ -103,15 +107,22 @@
         <div class="browse-panel">
           <div class="browse-header">
             <span class="browse-path">{browseParent}</span>
-            <button class="btn-small" onclick={() => browsing = false}>Close</button>
+            <button class="btn-small" onclick={() => (browsing = false)}>Close</button>
           </div>
           <div class="browse-list">
             {#if browseParent !== '/'}
-              <button class="browse-item" onclick={() => browseDirectory(browseParent.split('/').slice(0, -1).join('/') || '/')}>
+              <button
+                class="browse-item"
+                onclick={() =>
+                  browseDirectory(browseParent.split('/').slice(0, -1).join('/') || '/')}
+              >
                 ../
               </button>
             {/if}
-            <button class="browse-item select-current" onclick={() => selectDirectory(browseParent)}>
+            <button
+              class="browse-item select-current"
+              onclick={() => selectDirectory(browseParent)}
+            >
               Select this directory
             </button>
             {#each directories as dir}
@@ -153,16 +164,30 @@
       <div class="field-row">
         <div class="field">
           <label for="nc-budget">Max Budget ($)</label>
-          <input id="nc-budget" type="number" step="0.01" min="0" bind:value={maxBudgetUsd} placeholder="No limit" />
+          <input
+            id="nc-budget"
+            type="number"
+            step="0.01"
+            min="0"
+            bind:value={maxBudgetUsd}
+            placeholder="No limit"
+          />
         </div>
         <div class="field">
           <label for="nc-turns">Max Turns</label>
-          <input id="nc-turns" type="number" step="1" min="1" bind:value={maxTurns} placeholder="No limit" />
+          <input
+            id="nc-turns"
+            type="number"
+            step="1"
+            min="1"
+            bind:value={maxTurns}
+            placeholder="No limit"
+          />
         </div>
       </div>
 
       <div class="dialog-actions">
-        <button class="btn-cancel" onclick={() => open = false}>Cancel</button>
+        <button class="btn-cancel" onclick={() => (open = false)}>Cancel</button>
         <button class="btn-create" onclick={create}>Create</button>
       </div>
     </div>
@@ -207,7 +232,9 @@
     display: flex;
     gap: 12px;
   }
-  .field-row .field { flex: 1; }
+  .field-row .field {
+    flex: 1;
+  }
 
   label {
     display: block;
@@ -219,7 +246,8 @@
     text-transform: uppercase;
   }
 
-  input, select {
+  input,
+  select {
     width: 100%;
     padding: 8px 10px;
     border: 1px solid var(--border-primary);
@@ -229,7 +257,8 @@
     font-size: 13px;
     font-family: inherit;
   }
-  input:focus, select:focus {
+  input:focus,
+  select:focus {
     outline: none;
     border-color: var(--accent-primary);
   }
@@ -238,9 +267,12 @@
     display: flex;
     gap: 8px;
   }
-  .path-row input { flex: 1; }
+  .path-row input {
+    flex: 1;
+  }
 
-  .btn-browse, .btn-small {
+  .btn-browse,
+  .btn-small {
     padding: 8px 12px;
     border: 1px solid var(--border-primary);
     border-radius: var(--radius-sm);
@@ -250,7 +282,8 @@
     cursor: pointer;
     white-space: nowrap;
   }
-  .btn-browse:hover, .btn-small:hover {
+  .btn-browse:hover,
+  .btn-small:hover {
     border-color: var(--accent-primary);
     color: var(--accent-primary);
   }

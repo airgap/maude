@@ -7,9 +7,7 @@
   let search = $state('');
 
   let filtered = $derived(
-    conversationStore.list.filter(c =>
-      c.title.toLowerCase().includes(search.toLowerCase())
-    )
+    conversationStore.list.filter((c) => c.title.toLowerCase().includes(search.toLowerCase())),
   );
 
   onMount(async () => {
@@ -57,9 +55,21 @@
 
 <div class="conv-list">
   <div class="conv-header">
-    <input type="text" bind:value={search} placeholder="Search conversations..." class="search-input" />
+    <input
+      type="text"
+      bind:value={search}
+      placeholder="Search conversations..."
+      class="search-input"
+    />
     <button class="new-btn" onclick={newConversation} title="New conversation">
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <svg
+        width="16"
+        height="16"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+      >
         <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
       </svg>
     </button>
@@ -81,7 +91,14 @@
           <span>{conv.messageCount} msgs</span>
         </div>
         <button class="conv-delete" onclick={(e) => deleteConversation(e, conv.id)} title="Delete">
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <svg
+            width="12"
+            height="12"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+          >
             <path d="M18 6L6 18M6 6l12 12" />
           </svg>
         </button>
@@ -95,7 +112,11 @@
 </div>
 
 <style>
-  .conv-list { display: flex; flex-direction: column; height: 100%; }
+  .conv-list {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+  }
 
   .conv-header {
     display: flex;
@@ -137,7 +158,11 @@
     background: rgba(0, 180, 255, 0.08);
   }
 
-  .conv-items { flex: 1; overflow-y: auto; padding: 4px 6px; }
+  .conv-items {
+    flex: 1;
+    overflow-y: auto;
+    padding: 4px 6px;
+  }
 
   .conv-item {
     display: block;
@@ -196,7 +221,9 @@
     border: 1px solid transparent;
     transition: all var(--transition);
   }
-  .conv-item:hover .conv-delete { display: flex; }
+  .conv-item:hover .conv-delete {
+    display: flex;
+  }
   .conv-delete:hover {
     color: var(--accent-error);
     border-color: var(--accent-error);

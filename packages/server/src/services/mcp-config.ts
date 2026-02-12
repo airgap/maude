@@ -34,7 +34,11 @@ export function generateMcpConfig(): string | null {
     if (server.transport === 'stdio') {
       if (server.command) config.command = server.command;
       if (server.args) {
-        try { config.args = JSON.parse(server.args); } catch { config.args = []; }
+        try {
+          config.args = JSON.parse(server.args);
+        } catch {
+          config.args = [];
+        }
       }
     } else if (server.transport === 'sse' || server.transport === 'http') {
       if (server.url) config.url = server.url;
@@ -42,7 +46,9 @@ export function generateMcpConfig(): string | null {
     }
 
     if (server.env) {
-      try { config.env = JSON.parse(server.env); } catch {}
+      try {
+        config.env = JSON.parse(server.env);
+      } catch {}
     }
 
     mcpServers[server.name] = config;

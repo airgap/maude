@@ -11,7 +11,10 @@ app.get('/', (c) => {
 
   let rows;
   if (conversationId) {
-    rows = db.query('SELECT * FROM tasks WHERE conversation_id = ? AND status != ? ORDER BY created_at ASC')
+    rows = db
+      .query(
+        'SELECT * FROM tasks WHERE conversation_id = ? AND status != ? ORDER BY created_at ASC',
+      )
       .all(conversationId, 'deleted');
   } else {
     rows = db.query('SELECT * FROM tasks WHERE status != ? ORDER BY created_at ASC').all('deleted');
@@ -38,10 +41,12 @@ app.post('/', async (c) => {
   const id = nanoid(8);
   const now = Date.now();
 
-  db.query(`
+  db.query(
+    `
     INSERT INTO tasks (id, conversation_id, subject, description, active_form, status, metadata, created_at, updated_at)
     VALUES (?, ?, ?, ?, ?, 'pending', ?, ?, ?)
-  `).run(
+  `,
+  ).run(
     id,
     body.conversationId || null,
     body.subject,
@@ -67,21 +72,38 @@ app.patch('/:id', async (c) => {
   const updates: string[] = [];
   const values: any[] = [];
 
-  if (body.status !== undefined) { updates.push('status = ?'); values.push(body.status); }
-  if (body.subject !== undefined) { updates.push('subject = ?'); values.push(body.subject); }
-  if (body.description !== undefined) { updates.push('description = ?'); values.push(body.description); }
-  if (body.activeForm !== undefined) { updates.push('active_form = ?'); values.push(body.activeForm); }
-  if (body.owner !== undefined) { updates.push('owner = ?'); values.push(body.owner); }
+  if (body.status !== undefined) {
+    updates.push('status = ?');
+    values.push(body.status);
+  }
+  if (body.subject !== undefined) {
+    updates.push('subject = ?');
+    values.push(body.subject);
+  }
+  if (body.description !== undefined) {
+    updates.push('description = ?');
+    values.push(body.description);
+  }
+  if (body.activeForm !== undefined) {
+    updates.push('active_form = ?');
+    values.push(body.activeForm);
+  }
+  if (body.owner !== undefined) {
+    updates.push('owner = ?');
+    values.push(body.owner);
+  }
 
   if (body.addBlocks) {
     const current = JSON.parse(existing.blocks);
     const merged = [...new Set([...current, ...body.addBlocks])];
-    updates.push('blocks = ?'); values.push(JSON.stringify(merged));
+    updates.push('blocks = ?');
+    values.push(JSON.stringify(merged));
   }
   if (body.addBlockedBy) {
     const current = JSON.parse(existing.blocked_by);
     const merged = [...new Set([...current, ...body.addBlockedBy])];
-    updates.push('blocked_by = ?'); values.push(JSON.stringify(merged));
+    updates.push('blocked_by = ?');
+    values.push(JSON.stringify(merged));
   }
   if (body.metadata) {
     const current = existing.metadata ? JSON.parse(existing.metadata) : {};
@@ -90,7 +112,8 @@ app.patch('/:id', async (c) => {
       if (v === null) delete merged[k];
       else merged[k] = v;
     }
-    updates.push('metadata = ?'); values.push(JSON.stringify(merged));
+    updates.push('metadata = ?');
+    values.push(JSON.stringify(merged));
   }
 
   updates.push('updated_at = ?');
@@ -106,8 +129,10 @@ app.patch('/:id', async (c) => {
 // Delete task
 app.delete('/:id', (c) => {
   const db = getDb();
-  db.query("UPDATE tasks SET status = 'deleted', updated_at = ? WHERE id = ?")
-    .run(Date.now(), c.req.param('id'));
+  db.query("UPDATE tasks SET status = 'deleted', updated_at = ? WHERE id = ?").run(
+    Date.now(),
+    c.req.param('id'),
+  );
   return c.json({ ok: true });
 });
 

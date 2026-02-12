@@ -19,10 +19,13 @@ import { resolve } from 'path';
 const app = new Hono();
 
 // Middleware
-app.use('*', cors({
-  origin: ['http://localhost:5173', 'tauri://localhost', 'https://tauri.localhost'],
-  credentials: true,
-}));
+app.use(
+  '*',
+  cors({
+    origin: ['http://localhost:5173', 'tauri://localhost', 'https://tauri.localhost'],
+    credentials: true,
+  }),
+);
 app.use('*', logger());
 
 // Health check

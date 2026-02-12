@@ -43,7 +43,10 @@
   }
 
   function getIcon(node: TreeNode): string {
-    if (node.type === 'directory') return expandedDirs.has(node.path) ? 'M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z' : 'M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z';
+    if (node.type === 'directory')
+      return expandedDirs.has(node.path)
+        ? 'M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z'
+        : 'M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z';
     return 'M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z';
   }
 </script>
@@ -52,7 +55,9 @@
   <div class="tree-header">
     <h3>Files</h3>
     {#if currentPath && currentPath !== '.'}
-      <span class="tree-path" title={currentPath}>{currentPath.split('/').pop() || currentPath}</span>
+      <span class="tree-path" title={currentPath}
+        >{currentPath.split('/').pop() || currentPath}</span
+      >
     {/if}
   </div>
 
@@ -72,9 +77,16 @@
     class="tree-item"
     class:directory={node.type === 'directory'}
     style:padding-left="{8 + depth * 16}px"
-    onclick={() => node.type === 'directory' ? toggleDir(node.path) : null}
+    onclick={() => (node.type === 'directory' ? toggleDir(node.path) : null)}
   >
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+    <svg
+      width="14"
+      height="14"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      stroke-width="2"
+    >
       <path d={getIcon(node)} />
     </svg>
     <span class="node-name truncate">{node.name}</span>
@@ -88,9 +100,17 @@
 {/snippet}
 
 <style>
-  .file-tree { padding: 8px; }
-  .tree-header { padding: 4px 4px 8px; }
-  .tree-header h3 { font-size: 13px; font-weight: 600; margin: 0; }
+  .file-tree {
+    padding: 8px;
+  }
+  .tree-header {
+    padding: 4px 4px 8px;
+  }
+  .tree-header h3 {
+    font-size: 13px;
+    font-weight: 600;
+    margin: 0;
+  }
   .tree-path {
     display: block;
     font-size: 11px;
@@ -100,7 +120,9 @@
     white-space: nowrap;
   }
 
-  .tree-items { overflow-y: auto; }
+  .tree-items {
+    overflow-y: auto;
+  }
 
   .tree-item {
     display: flex;
@@ -114,10 +136,18 @@
     text-align: left;
     transition: background var(--transition);
   }
-  .tree-item:hover { background: var(--bg-hover); color: var(--text-primary); }
-  .tree-item.directory { color: var(--text-primary); }
+  .tree-item:hover {
+    background: var(--bg-hover);
+    color: var(--text-primary);
+  }
+  .tree-item.directory {
+    color: var(--text-primary);
+  }
 
-  .node-name { flex: 1; min-width: 0; }
+  .node-name {
+    flex: 1;
+    min-width: 0;
+  }
 
   .loading {
     padding: 20px;

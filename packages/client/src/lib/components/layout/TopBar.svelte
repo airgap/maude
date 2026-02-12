@@ -18,8 +18,19 @@
 
 <header class="topbar">
   <div class="topbar-left">
-    <button class="icon-btn" onclick={() => uiStore.toggleSidebar()} title="Toggle sidebar (Ctrl+/)">
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+    <button
+      class="icon-btn"
+      onclick={() => uiStore.toggleSidebar()}
+      title="Toggle sidebar (Ctrl+/)"
+    >
+      <svg
+        width="18"
+        height="18"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+      >
         <rect x="3" y="3" width="18" height="18" rx="2" />
         <line x1="9" y1="3" x2="9" y2="21" />
       </svg>
@@ -44,7 +55,14 @@
       onclick={togglePlanMode}
       title="Toggle plan mode (Shift+Tab x2)"
     >
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <svg
+        width="16"
+        height="16"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+      >
         <path d="M12 20h9" /><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z" />
       </svg>
     </button>
@@ -59,14 +77,32 @@
       {/each}
     </select>
 
-    <div class="context-meter" title="Context usage: {streamStore.tokenUsage.input + streamStore.tokenUsage.output} tokens">
-      <div class="context-meter-fill" style:width="{Math.min(100, ((streamStore.tokenUsage.input + streamStore.tokenUsage.output) / 200000) * 100)}%"></div>
+    <div
+      class="context-meter"
+      title="Context usage: {streamStore.tokenUsage.input + streamStore.tokenUsage.output} tokens"
+    >
+      <div
+        class="context-meter-fill"
+        style:width="{Math.min(
+          100,
+          ((streamStore.tokenUsage.input + streamStore.tokenUsage.output) / 200000) * 100,
+        )}%"
+      ></div>
     </div>
 
     <button class="icon-btn" onclick={() => uiStore.openModal('settings')} title="Settings">
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <svg
+        width="18"
+        height="18"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+      >
         <circle cx="12" cy="12" r="3" />
-        <path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42" />
+        <path
+          d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"
+        />
       </svg>
     </button>
   </div>
@@ -101,7 +137,8 @@
     pointer-events: none;
   }
 
-  .topbar-left, .topbar-right {
+  .topbar-left,
+  .topbar-right {
     display: flex;
     align-items: center;
     gap: 10px;
@@ -119,7 +156,9 @@
     letter-spacing: 3px;
     text-transform: uppercase;
     color: var(--accent-primary);
-    text-shadow: 0 0 10px rgba(0, 180, 255, 0.4), 0 0 20px rgba(0, 180, 255, 0.1);
+    text-shadow:
+      0 0 10px rgba(0, 180, 255, 0.4),
+      0 0 20px rgba(0, 180, 255, 0.1);
   }
 
   .conv-title {
@@ -189,8 +228,16 @@
     border: 1px solid transparent;
     transition: all var(--transition);
   }
-  .plan-toggle:hover { background: var(--bg-hover); color: var(--accent-primary); border-color: var(--border-primary); }
-  .plan-toggle.active { color: var(--accent-warning); background: rgba(255, 154, 0, 0.1); border-color: rgba(255, 154, 0, 0.3); }
+  .plan-toggle:hover {
+    background: var(--bg-hover);
+    color: var(--accent-primary);
+    border-color: var(--border-primary);
+  }
+  .plan-toggle.active {
+    color: var(--accent-warning);
+    background: rgba(255, 154, 0, 0.1);
+    border-color: rgba(255, 154, 0, 0.3);
+  }
 
   .context-meter {
     width: 64px;

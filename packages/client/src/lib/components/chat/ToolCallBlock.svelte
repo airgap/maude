@@ -1,5 +1,10 @@
 <script lang="ts">
-  let { toolName, input, result, running = false } = $props<{
+  let {
+    toolName,
+    input,
+    result,
+    running = false,
+  } = $props<{
     toolName: string;
     input: Record<string, unknown>;
     result?: { content: string; is_error?: boolean };
@@ -44,14 +49,31 @@
 </script>
 
 <div class="tool-block" class:running class:error={result?.is_error}>
-  <button class="tool-header" onclick={() => expanded = !expanded}>
-    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-      class:rotated={expanded}>
+  <button class="tool-header" onclick={() => (expanded = !expanded)}>
+    <svg
+      width="12"
+      height="12"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      stroke-width="2"
+      class:rotated={expanded}
+    >
       <path d="M9 18l6-6-6-6" />
     </svg>
     <span class="tool-icon" style:color={categoryColors[toolName] || 'var(--text-tertiary)'}>
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-        <path d={toolIcons[toolName] || 'M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z'} />
+      <svg
+        width="14"
+        height="14"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+      >
+        <path
+          d={toolIcons[toolName] ||
+            'M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z'}
+        />
       </svg>
     </span>
     <span class="tool-name">{toolName}</span>
@@ -96,7 +118,9 @@
     background: var(--bg-tertiary);
     transition: background var(--transition);
   }
-  .tool-header:hover { background: var(--bg-hover); }
+  .tool-header:hover {
+    background: var(--bg-hover);
+  }
 
   .tool-name {
     font-weight: 600;
@@ -113,10 +137,16 @@
     text-align: left;
   }
 
-  .tool-icon { display: flex; }
+  .tool-icon {
+    display: flex;
+  }
 
-  svg { transition: transform var(--transition); }
-  .rotated { transform: rotate(90deg); }
+  svg {
+    transition: transform var(--transition);
+  }
+  .rotated {
+    transform: rotate(90deg);
+  }
 
   .running-indicator {
     width: 8px;
@@ -168,12 +198,21 @@
     color: var(--text-secondary);
   }
 
-  .error-output { color: var(--accent-error); }
+  .error-output {
+    color: var(--accent-error);
+  }
 
-  .tool-block.error { border-color: var(--accent-error); }
+  .tool-block.error {
+    border-color: var(--accent-error);
+  }
 
   @keyframes pulse {
-    0%, 100% { opacity: 1; }
-    50% { opacity: 0.3; }
+    0%,
+    100% {
+      opacity: 1;
+    }
+    50% {
+      opacity: 0.3;
+    }
   }
 </style>

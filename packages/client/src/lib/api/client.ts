@@ -1,10 +1,9 @@
-const BASE_URL = typeof window !== 'undefined' && (window as any).__TAURI__
-  ? 'http://localhost:3002/api'
-  : '/api';
+const BASE_URL =
+  typeof window !== 'undefined' && (window as any).__TAURI__ ? 'http://localhost:3002/api' : '/api';
 
 async function request<T>(path: string, opts: RequestInit = {}): Promise<T> {
   const res = await fetch(`${BASE_URL}${path}`, {
-    headers: { 'Content-Type': 'application/json', ...opts.headers as Record<string, string> },
+    headers: { 'Content-Type': 'application/json', ...(opts.headers as Record<string, string>) },
     ...opts,
   });
   if (!res.ok) {
@@ -20,17 +19,38 @@ export const api = {
     list: () => request<{ ok: boolean; data: any[] }>('/conversations'),
     get: (id: string) => request<{ ok: boolean; data: any }>(`/conversations/${id}`),
     create: (body: {
-      title?: string; model?: string; systemPrompt?: string; projectPath?: string;
-      permissionMode?: string; effort?: string; maxBudgetUsd?: number; maxTurns?: number;
-      allowedTools?: string[]; disallowedTools?: string[];
+      title?: string;
+      model?: string;
+      systemPrompt?: string;
+      projectPath?: string;
+      permissionMode?: string;
+      effort?: string;
+      maxBudgetUsd?: number;
+      maxTurns?: number;
+      allowedTools?: string[];
+      disallowedTools?: string[];
     }) =>
-      request<{ ok: boolean; data: { id: string } }>('/conversations', { method: 'POST', body: JSON.stringify(body) }),
+      request<{ ok: boolean; data: { id: string } }>('/conversations', {
+        method: 'POST',
+        body: JSON.stringify(body),
+      }),
     update: (id: string, body: Record<string, any>) =>
-      request<{ ok: boolean }>(`/conversations/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
-    delete: (id: string) =>
-      request<{ ok: boolean }>(`/conversations/${id}`, { method: 'DELETE' }),
+      request<{ ok: boolean }>(`/conversations/${id}`, {
+        method: 'PATCH',
+        body: JSON.stringify(body),
+      }),
+    delete: (id: string) => request<{ ok: boolean }>(`/conversations/${id}`, { method: 'DELETE' }),
     cost: (id: string) =>
-      request<{ ok: boolean; data: { model: string; totalTokens: number; inputTokens: number; outputTokens: number; estimatedCostUsd: number } }>(`/conversations/${id}/cost`),
+      request<{
+        ok: boolean;
+        data: {
+          model: string;
+          totalTokens: number;
+          inputTokens: number;
+          outputTokens: number;
+          estimatedCostUsd: number;
+        };
+      }>(`/conversations/${id}/cost`),
   },
 
   // --- Streaming ---
@@ -58,19 +78,32 @@ export const api = {
       return request<{ ok: boolean; data: any[] }>(`/tasks${q}`);
     },
     get: (id: string) => request<{ ok: boolean; data: any }>(`/tasks/${id}`),
-    create: (body: { subject: string; description: string; activeForm?: string; conversationId?: string }) =>
-      request<{ ok: boolean; data: { id: string } }>('/tasks', { method: 'POST', body: JSON.stringify(body) }),
+    create: (body: {
+      subject: string;
+      description: string;
+      activeForm?: string;
+      conversationId?: string;
+    }) =>
+      request<{ ok: boolean; data: { id: string } }>('/tasks', {
+        method: 'POST',
+        body: JSON.stringify(body),
+      }),
     update: (id: string, body: Record<string, any>) =>
-      request<{ ok: boolean; data: any }>(`/tasks/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
-    delete: (id: string) =>
-      request<{ ok: boolean }>(`/tasks/${id}`, { method: 'DELETE' }),
+      request<{ ok: boolean; data: any }>(`/tasks/${id}`, {
+        method: 'PATCH',
+        body: JSON.stringify(body),
+      }),
+    delete: (id: string) => request<{ ok: boolean }>(`/tasks/${id}`, { method: 'DELETE' }),
   },
 
   // --- Settings ---
   settings: {
     get: () => request<{ ok: boolean; data: Record<string, any> }>('/settings'),
     update: (settings: Record<string, any>) =>
-      request<{ ok: boolean }>('/settings', { method: 'PATCH', body: JSON.stringify({ settings }) }),
+      request<{ ok: boolean }>('/settings', {
+        method: 'PATCH',
+        body: JSON.stringify({ settings }),
+      }),
   },
 
   // --- MCP ---
@@ -90,12 +123,18 @@ export const api = {
       return request<{ ok: boolean; data: any[] }>(`/memory${q}`);
     },
     update: (path: string, content: string) =>
-      request<{ ok: boolean }>('/memory', { method: 'PUT', body: JSON.stringify({ path, content }) }),
+      request<{ ok: boolean }>('/memory', {
+        method: 'PUT',
+        body: JSON.stringify({ path, content }),
+      }),
   },
 
   // --- Files ---
   files: {
-    read: (path: string) => request<{ ok: boolean; data: { path: string; content: string } }>(`/files/read?path=${encodeURIComponent(path)}`),
+    read: (path: string) =>
+      request<{ ok: boolean; data: { path: string; content: string } }>(
+        `/files/read?path=${encodeURIComponent(path)}`,
+      ),
     tree: (path?: string, depth?: number) => {
       const params = new URLSearchParams();
       if (path) params.set('path', path);
@@ -105,7 +144,10 @@ export const api = {
     directories: (path?: string) => {
       const params = new URLSearchParams();
       if (path) params.set('path', path);
-      return request<{ ok: boolean; data: { parent: string; directories: { name: string; path: string }[] } }>(`/files/directories?${params}`);
+      return request<{
+        ok: boolean;
+        data: { parent: string; directories: { name: string; path: string }[] };
+      }>(`/files/directories?${params}`);
     },
   },
 
@@ -116,10 +158,12 @@ export const api = {
       return request<{ ok: boolean; data: any[] }>(`/agents${q}`);
     },
     spawn: (body: any) =>
-      request<{ ok: boolean; data: { agentId: string; sessionId: string } }>('/agents', { method: 'POST', body: JSON.stringify(body) }),
+      request<{ ok: boolean; data: { agentId: string; sessionId: string } }>('/agents', {
+        method: 'POST',
+        body: JSON.stringify(body),
+      }),
     get: (id: string) => request<{ ok: boolean; data: any }>(`/agents/${id}`),
-    cancel: (id: string) =>
-      request<{ ok: boolean }>(`/agents/${id}/cancel`, { method: 'POST' }),
+    cancel: (id: string) => request<{ ok: boolean }>(`/agents/${id}/cancel`, { method: 'POST' }),
   },
 
   // --- Tools ---

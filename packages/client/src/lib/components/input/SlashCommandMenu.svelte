@@ -1,7 +1,11 @@
 <script lang="ts">
   import { COMMANDS } from '$lib/commands/slash-commands';
 
-  let { query = '', onSelect, onClose } = $props<{
+  let {
+    query = '',
+    onSelect,
+    onClose,
+  } = $props<{
     query: string;
     onSelect: (command: string) => void;
     onClose: () => void;
@@ -10,10 +14,11 @@
   const commands = COMMANDS;
 
   let filtered = $derived(
-    commands.filter(c =>
-      c.name.toLowerCase().includes(query.toLowerCase()) ||
-      c.description.toLowerCase().includes(query.toLowerCase())
-    )
+    commands.filter(
+      (c) =>
+        c.name.toLowerCase().includes(query.toLowerCase()) ||
+        c.description.toLowerCase().includes(query.toLowerCase()),
+    ),
   );
 
   let selectedIndex = $state(0);
@@ -46,7 +51,7 @@
         class="slash-item"
         class:selected={i === selectedIndex}
         onclick={() => onSelect(cmd.name)}
-        onmouseenter={() => selectedIndex = i}
+        onmouseenter={() => (selectedIndex = i)}
       >
         <span class="cmd-name">/{cmd.name}</span>
         <span class="cmd-desc">{cmd.description}</span>
@@ -81,7 +86,8 @@
     text-align: left;
     transition: background var(--transition);
   }
-  .slash-item:hover, .slash-item.selected {
+  .slash-item:hover,
+  .slash-item.selected {
     background: var(--bg-hover);
   }
 

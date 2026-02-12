@@ -4,9 +4,16 @@
 </script>
 
 <div class="thinking-block" class:streaming>
-  <button class="thinking-header" onclick={() => collapsed = !collapsed}>
-    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-      class:rotated={!collapsed}>
+  <button class="thinking-header" onclick={() => (collapsed = !collapsed)}>
+    <svg
+      width="12"
+      height="12"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      stroke-width="2"
+      class:rotated={!collapsed}
+    >
       <path d="M9 18l6-6-6-6" />
     </svg>
     <span class="thinking-label">
@@ -43,12 +50,20 @@
     background: var(--bg-tertiary);
     transition: background var(--transition);
   }
-  .thinking-header:hover { background: var(--bg-hover); }
+  .thinking-header:hover {
+    background: var(--bg-hover);
+  }
 
-  .thinking-label { font-style: italic; }
+  .thinking-label {
+    font-style: italic;
+  }
 
-  svg { transition: transform var(--transition); }
-  .rotated { transform: rotate(90deg); }
+  svg {
+    transition: transform var(--transition);
+  }
+  .rotated {
+    transform: rotate(90deg);
+  }
 
   .thinking-content {
     padding: 10px;
@@ -80,7 +95,12 @@
   }
 
   @keyframes pulse {
-    0%, 100% { opacity: 1; }
-    50% { opacity: 0.3; }
+    0%,
+    100% {
+      opacity: 1;
+    }
+    50% {
+      opacity: 0.3;
+    }
   }
 </style>
