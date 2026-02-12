@@ -1,0 +1,13 @@
+{
+  "extends": "../../tsconfig.json",
+  "compilerOptions": {
+    "types": ["bun-types"],
+    "paths": {
+      "@maude/shared": ["../shared/src"],
+      "@/*": ["./src/*"]
+    },
+    "outDir": "dist",
+    "rootDir": "src"
+  },
+  "include": ["src/**/*"]
+}

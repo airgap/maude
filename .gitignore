@@ -1,0 +1,33 @@
+# Dependencies
+node_modules/
+
+# Build outputs
+packages/client/build/
+packages/server/dist/
+.svelte-kit/
+
+# Tauri
+src-tauri/target/
+src-tauri/binaries/maude-server*
+!src-tauri/binaries/.gitkeep
+
+# Environment
+.env
+.env.*
+
+# Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Claude Code
+.claude/
+
+# Logs
+*.log

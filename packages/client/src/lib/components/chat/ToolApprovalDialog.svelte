@@ -1,0 +1,143 @@
+<script lang="ts">
+  let { toolCallId, toolName, input, description } = $props<{
+    toolCallId: string;
+    toolName: string;
+    input: Record<string, unknown>;
+    description: string;
+  }>();
+
+  let responding = $state(false);
+
+  // TODO: Wire up our own approval layer (CLI runs with --dangerously-skip-permissions)
+  async function respond(approved: boolean) {
+    if (responding) return;
+    responding = true;
+  }
+
+  function formatInput(): string {
+    if (toolName === 'Bash' && input.command) return String(input.command);
+    if (input.file_path) return String(input.file_path);
+    return JSON.stringify(input, null, 2);
+  }
+
+  const riskLevel = ['Bash', 'Write', 'Edit', 'NotebookEdit'].includes(toolName) ? 'high' : 'low';
+</script>
+
+<div class="approval-dialog" class:high-risk={riskLevel === 'high'}>
+  <div class="approval-header">
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <path d="M12 9v4M12 17h.01M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+    </svg>
+    <span class="approval-title">Tool requires approval</span>
+  </div>
+
+  <div class="approval-body">
+    <div class="tool-info">
+      <span class="tool-badge">{toolName}</span>
+      {#if description}
+        <span class="tool-desc">{description}</span>
+      {/if}
+    </div>
+    <pre class="tool-preview">{formatInput()}</pre>
+  </div>
+
+  <div class="approval-actions">
+    <button class="btn btn-deny" onclick={() => respond(false)} disabled={responding}>
+      Deny
+    </button>
+    <button class="btn btn-approve" onclick={() => respond(true)} disabled={responding}>
+      Allow
+    </button>
+  </div>
+</div>
+
+<style>
+  .approval-dialog {
+    border: 2px solid var(--accent-warning);
+    border-radius: var(--radius);
+    overflow: hidden;
+    background: var(--bg-elevated);
+  }
+
+  .high-risk {
+    border-color: var(--accent-error);
+  }
+
+  .approval-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    background: var(--bg-tertiary);
+    color: var(--accent-warning);
+    font-size: 13px;
+    font-weight: 600;
+  }
+  .high-risk .approval-header { color: var(--accent-error); }
+
+  .approval-body {
+    padding: 12px;
+  }
+
+  .tool-info {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 8px;
+  }
+
+  .tool-badge {
+    font-size: 12px;
+    font-weight: 600;
+    padding: 2px 8px;
+    border-radius: 3px;
+    background: var(--bg-tertiary);
+    color: var(--text-primary);
+  }
+
+  .tool-desc {
+    font-size: 12px;
+    color: var(--text-secondary);
+  }
+
+  .tool-preview {
+    font-size: 12px;
+    line-height: 1.4;
+    padding: 8px;
+    background: var(--bg-code);
+    border-radius: var(--radius-sm);
+    max-height: 200px;
+    overflow-y: auto;
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+
+  .approval-actions {
+    display: flex;
+    gap: 8px;
+    padding: 8px 12px;
+    justify-content: flex-end;
+    border-top: 1px solid var(--border-secondary);
+  }
+
+  .btn {
+    padding: 6px 16px;
+    border-radius: var(--radius-sm);
+    font-size: 13px;
+    font-weight: 600;
+    transition: all var(--transition);
+  }
+  .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+  .btn-deny {
+    background: var(--bg-tertiary);
+    color: var(--text-primary);
+  }
+  .btn-deny:hover:not(:disabled) { background: var(--accent-error); color: var(--text-on-accent); }
+
+  .btn-approve {
+    background: var(--accent-secondary);
+    color: var(--text-on-accent);
+  }
+  .btn-approve:hover:not(:disabled) { filter: brightness(1.1); }
+</style>

@@ -1,0 +1,15 @@
+{
+  "$schema": "https://raw.githubusercontent.com/tauri-apps/tauri/dev/crates/tauri-utils/schema.json",
+  "identifier": "default",
+  "description": "Default capabilities for Maude desktop app",
+  "windows": ["main"],
+  "permissions": [
+    "core:default",
+    "shell:allow-spawn",
+    "shell:allow-execute",
+    "shell:allow-stdin-write",
+    "shell:allow-kill",
+    "process:allow-exit",
+    "process:allow-restart"
+  ]
+}
