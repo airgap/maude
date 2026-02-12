@@ -1,9 +1,10 @@
-import type { ThemeId, Keybinding, PermissionMode } from '@maude/shared';
+import type { ThemeId, CliProvider, Keybinding, PermissionMode } from '@maude/shared';
 
 const STORAGE_KEY = 'maude-settings';
 
 interface SettingsState {
   theme: ThemeId;
+  cliProvider: CliProvider;
   model: string;
   permissionMode: PermissionMode;
   keybindings: Keybinding[];
@@ -23,6 +24,7 @@ interface SettingsState {
 
 const defaults: SettingsState = {
   theme: 'dark',
+  cliProvider: 'claude',
   model: 'claude-sonnet-4-5-20250929',
   permissionMode: 'safe',
   keybindings: [
@@ -58,10 +60,29 @@ function loadFromStorage(): SettingsState {
 function createSettingsStore() {
   let state = $state<SettingsState>(loadFromStorage());
 
+  // Settings the server needs to know about (used for CLI process spawning)
+  const SERVER_SYNCED_KEYS: (keyof SettingsState)[] = ['cliProvider'];
+
   function persist() {
     if (typeof window === 'undefined') return;
     localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
     applyTheme(state.theme);
+  }
+
+  function syncToServer(partial: Partial<SettingsState>) {
+    const serverSettings: Record<string, unknown> = {};
+    for (const key of SERVER_SYNCED_KEYS) {
+      if (key in partial) serverSettings[key] = partial[key];
+    }
+    if (Object.keys(serverSettings).length === 0) return;
+
+    const BASE_URL = typeof window !== 'undefined' && (window as any).__TAURI__
+      ? 'http://localhost:3002/api' : '/api';
+    fetch(`${BASE_URL}/settings`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ settings: serverSettings }),
+    }).catch(() => { /* best-effort sync */ });
   }
 
   function applyTheme(theme: ThemeId) {
@@ -76,6 +97,7 @@ function createSettingsStore() {
 
   return {
     get theme() { return state.theme; },
+    get cliProvider() { return state.cliProvider; },
     get model() { return state.model; },
     get permissionMode() { return state.permissionMode; },
     get keybindings() { return state.keybindings; },
@@ -99,6 +121,7 @@ function createSettingsStore() {
     update(partial: Partial<SettingsState>) {
       state = { ...state, ...partial };
       persist();
+      syncToServer(partial);
     },
     setKeybinding(action: string, keys: string) {
       const idx = state.keybindings.findIndex(k => k.action === action);

@@ -1,7 +1,12 @@
 <script lang="ts">
   import { settingsStore } from '$lib/stores/settings.svelte';
   import { uiStore } from '$lib/stores/ui.svelte';
-  import type { ThemeId } from '@maude/shared';
+  import type { ThemeId, CliProvider } from '@maude/shared';
+
+  const cliProviders: { id: CliProvider; label: string; desc: string }[] = [
+    { id: 'claude', label: 'Claude Code', desc: 'Anthropic Claude CLI' },
+    { id: 'kiro', label: 'Kiro CLI', desc: 'AWS Kiro CLI' },
+  ];
 
   let activeTab = $state<'general' | 'appearance' | 'permissions' | 'mcp' | 'keybindings'>('general');
 
@@ -54,6 +59,21 @@
 
       <div class="settings-content">
         {#if activeTab === 'general'}
+          <div class="setting-group">
+            <label class="setting-label">CLI Provider</label>
+            <div class="provider-options">
+              {#each cliProviders as p}
+                <button
+                  class="provider-option"
+                  class:active={settingsStore.cliProvider === p.id}
+                  onclick={() => settingsStore.update({ cliProvider: p.id })}
+                >
+                  <span class="provider-name">{p.label}</span>
+                  <span class="provider-desc">{p.desc}</span>
+                </button>
+              {/each}
+            </div>
+          </div>
           <div class="setting-group">
             <label class="setting-label">Model</label>
             <select value={settingsStore.model} onchange={(e) => settingsStore.setModel((e.target as HTMLSelectElement).value)}>
@@ -269,6 +289,23 @@
   .tp-body { flex: 1; display: flex; }
   .tp-sidebar { width: 30%; background: var(--bg-secondary); }
   .tp-main { flex: 1; background: var(--bg-primary); }
+
+  /* CLI Provider */
+  .provider-options { display: flex; gap: 8px; }
+  .provider-option {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    padding: 10px 12px;
+    border: 1px solid var(--border-secondary);
+    border-radius: var(--radius-sm);
+    text-align: left;
+    transition: all var(--transition);
+  }
+  .provider-option:hover { border-color: var(--border-primary); }
+  .provider-option.active { border-color: var(--accent-primary); background: var(--bg-active); }
+  .provider-name { font-size: 13px; font-weight: 600; }
+  .provider-desc { font-size: 11px; color: var(--text-tertiary); }
 
   /* Permission modes */
   .perm-options { display: flex; flex-direction: column; gap: 6px; }

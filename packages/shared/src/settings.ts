@@ -3,8 +3,11 @@ import type { MCPServerConfig } from './mcp.js';
 
 export type ThemeId = 'dark' | 'light' | 'dark-colorblind' | 'light-colorblind' | 'dark-ansi' | 'light-ansi';
 
+export type CliProvider = 'claude' | 'kiro';
+
 export interface Settings {
   theme: ThemeId;
+  cliProvider: CliProvider;
   model: string;
   permissionMode: PermissionMode;
   permissionRules: PermissionRule[];
@@ -41,6 +44,7 @@ export interface ServerOnlySettings {
 
 export const DEFAULT_SETTINGS: Settings = {
   theme: 'dark',
+  cliProvider: 'claude',
   model: 'claude-sonnet-4-5-20250929',
   permissionMode: 'safe',
   permissionRules: [],

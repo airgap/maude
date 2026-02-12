@@ -62,6 +62,7 @@ export type {
 
 export type {
   ThemeId,
+  CliProvider,
   Settings,
   Keybinding,
   ServerOnlySettings,

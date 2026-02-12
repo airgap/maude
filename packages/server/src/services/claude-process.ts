@@ -3,6 +3,8 @@ import { nanoid } from 'nanoid';
 import { EventEmitter } from 'events';
 import { getDb } from '../db/database';
 import { generateMcpConfig } from './mcp-config';
+import { buildCliCommand } from './cli-provider';
+import type { CliProvider } from '@maude/shared';
 
 interface ClaudeSession {
   id: string;
@@ -202,56 +204,31 @@ class ClaudeProcessManager {
 
     session.status = 'running';
 
-    // Spawn CLI in print mode
-    const args = [
-      'claude',
-      '--output-format', 'stream-json',
-      '--verbose',
-      '-p', content,
-    ];
+    // Resolve CLI provider from settings
+    let provider: CliProvider = 'claude';
+    try {
+      const db = getDb();
+      const row = db.query("SELECT value FROM settings WHERE key = 'cliProvider'").get() as any;
+      if (row) provider = JSON.parse(row.value) as CliProvider;
+    } catch { /* use default */ }
 
-    if (session.cliSessionId) {
-      args.push('-r', session.cliSessionId);
-    }
-    if (session.model) {
-      args.push('--model', session.model);
-    }
-    if (session.systemPrompt) {
-      args.push('--system-prompt', session.systemPrompt);
-    }
-
-    // Always skip CLI permissions — we implement our own approval layer
-    args.push('--dangerously-skip-permissions');
-
-    if (session.effort) {
-      args.push('--effort', session.effort);
-    }
-    if (session.maxBudgetUsd !== undefined && session.maxBudgetUsd !== null) {
-      args.push('--max-budget-usd', String(session.maxBudgetUsd));
-    }
-    if (session.maxTurns !== undefined && session.maxTurns !== null) {
-      args.push('--max-turns', String(session.maxTurns));
-    }
-    if (session.allowedTools?.length) {
-      for (const tool of session.allowedTools) {
-        args.push('--allowedTools', tool);
-      }
-    }
-    if (session.disallowedTools?.length) {
-      for (const tool of session.disallowedTools) {
-        args.push('--disallowedTools', tool);
-      }
-    }
-
-    // MCP config
     const mcpConfigPath = generateMcpConfig();
-    if (mcpConfigPath) {
-      args.push('--mcp-config', mcpConfigPath);
-    }
+    const { binary, args } = buildCliCommand(provider, {
+      content,
+      resumeSessionId: session.cliSessionId,
+      model: session.model,
+      systemPrompt: session.systemPrompt,
+      effort: session.effort,
+      maxBudgetUsd: session.maxBudgetUsd,
+      maxTurns: session.maxTurns,
+      allowedTools: session.allowedTools,
+      disallowedTools: session.disallowedTools,
+      mcpConfigPath: mcpConfigPath || undefined,
+    });
 
-    console.log(`[claude] Spawning: ${args.join(' ').slice(0, 120)}...`);
+    console.log(`[${provider}] Spawning: ${binary} ${args.join(' ').slice(0, 120)}...`);
 
-    const proc = Bun.spawn(args, {
+    const proc = Bun.spawn([binary, ...args], {
       cwd: session.projectPath || process.cwd(),
       stdout: 'pipe',
       stderr: 'pipe',
