@@ -6,10 +6,16 @@ packages/client/build/
 packages/server/dist/
 .svelte-kit/
 
+# Coverage
+coverage/
+**/coverage/
+
 # Tauri
 src-tauri/target/
 src-tauri/binaries/maude-server*
 !src-tauri/binaries/.gitkeep
+src-tauri/gen/
+src-tauri/icons/
 
 # Environment
 .env
