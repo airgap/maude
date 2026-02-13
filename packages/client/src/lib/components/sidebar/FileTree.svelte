@@ -2,6 +2,9 @@
   import { api } from '$lib/api/client';
   import { conversationStore } from '$lib/stores/conversation.svelte';
   import { settingsStore } from '$lib/stores/settings.svelte';
+  import { projectStore } from '$lib/stores/projects.svelte';
+  import { editorStore } from '$lib/stores/editor.svelte';
+  import { gitStore } from '$lib/stores/git.svelte';
 
   interface TreeNode {
     name: string;
@@ -15,12 +18,17 @@
   let loading = $state(false);
   let currentPath = $state('');
 
-  // Reactively reload when active conversation changes
+  // Reactively reload when active conversation or project changes
   $effect(() => {
-    const path = conversationStore.active?.projectPath || settingsStore.projectPath || '.';
+    const path =
+      projectStore.activeProject?.path ||
+      conversationStore.active?.projectPath ||
+      settingsStore.projectPath ||
+      '.';
     if (path !== currentPath) {
       currentPath = path;
       loadTree(path);
+      gitStore.startPolling(path);
     }
   });
 
@@ -77,7 +85,18 @@
     class="tree-item"
     class:directory={node.type === 'directory'}
     style:padding-left="{8 + depth * 16}px"
-    onclick={() => (node.type === 'directory' ? toggleDir(node.path) : null)}
+    onclick={() => {
+      if (node.type === 'directory') {
+        toggleDir(node.path);
+      } else {
+        editorStore.openFile(node.path, true);
+      }
+    }}
+    ondblclick={() => {
+      if (node.type === 'file') {
+        editorStore.openFile(node.path, false);
+      }
+    }}
   >
     <svg
       width="14"
@@ -90,6 +109,12 @@
       <path d={getIcon(node)} />
     </svg>
     <span class="node-name truncate">{node.name}</span>
+    {#if node.type === 'file'}
+      {@const gitStatus = gitStore.getStatus(node.path)}
+      {#if gitStatus}
+        <span class="git-badge git-{gitStatus.toLowerCase()}">{gitStatus}</span>
+      {/if}
+    {/if}
   </button>
 
   {#if node.type === 'directory' && expandedDirs.has(node.path) && node.children}
@@ -147,6 +172,32 @@
   .node-name {
     flex: 1;
     min-width: 0;
+  }
+
+  .git-badge {
+    flex-shrink: 0;
+    font-size: 9px;
+    font-weight: 700;
+    width: 14px;
+    text-align: center;
+    line-height: 14px;
+    border-radius: 2px;
+    font-family: var(--font-family-mono, monospace);
+  }
+  .git-m {
+    color: #e2b93d;
+  }
+  .git-a {
+    color: #73c991;
+  }
+  .git-d {
+    color: #f44747;
+  }
+  .git-u {
+    color: #888;
+  }
+  .git-r {
+    color: #73c991;
   }
 
   .loading {

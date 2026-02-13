@@ -3,6 +3,7 @@
   import { conversationStore } from '$lib/stores/conversation.svelte';
   import { streamStore } from '$lib/stores/stream.svelte';
   import { uiStore } from '$lib/stores/ui.svelte';
+  import WorkspaceTabBar from './WorkspaceTabBar.svelte';
 
   const models = [
     { id: 'claude-opus-4-6', label: 'Opus 4.6' },
@@ -36,6 +37,7 @@
       </svg>
     </button>
     <span class="brand">Maude</span>
+    <WorkspaceTabBar />
   </div>
 
   <div class="topbar-center">

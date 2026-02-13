@@ -80,7 +80,15 @@ function insertMessage(overrides: Record<string, any> = {}) {
       `INSERT INTO messages (id, conversation_id, role, content, model, token_count, timestamp)
       VALUES (?, ?, ?, ?, ?, ?, ?)`,
     )
-    .run(row.id, row.conversation_id, row.role, row.content, row.model, row.token_count, row.timestamp);
+    .run(
+      row.id,
+      row.conversation_id,
+      row.role,
+      row.content,
+      row.model,
+      row.token_count,
+      row.timestamp,
+    );
 }
 
 describe('Conversation Routes', () => {
@@ -336,7 +344,9 @@ describe('Conversation Routes', () => {
         body: JSON.stringify({ projectPath: '/new/path' }),
         headers: { 'Content-Type': 'application/json' },
       });
-      const row = testDb.query('SELECT project_path FROM conversations WHERE id = ?').get('conv-1') as any;
+      const row = testDb
+        .query('SELECT project_path FROM conversations WHERE id = ?')
+        .get('conv-1') as any;
       expect(row.project_path).toBe('/new/path');
     });
 
@@ -347,7 +357,9 @@ describe('Conversation Routes', () => {
         body: JSON.stringify({ planMode: true }),
         headers: { 'Content-Type': 'application/json' },
       });
-      const row = testDb.query('SELECT plan_mode FROM conversations WHERE id = ?').get('conv-1') as any;
+      const row = testDb
+        .query('SELECT plan_mode FROM conversations WHERE id = ?')
+        .get('conv-1') as any;
       expect(row.plan_mode).toBe(1);
     });
 
@@ -358,7 +370,9 @@ describe('Conversation Routes', () => {
         body: JSON.stringify({ planFile: '/tmp/plan.md' }),
         headers: { 'Content-Type': 'application/json' },
       });
-      const row = testDb.query('SELECT plan_file FROM conversations WHERE id = ?').get('conv-1') as any;
+      const row = testDb
+        .query('SELECT plan_file FROM conversations WHERE id = ?')
+        .get('conv-1') as any;
       expect(row.plan_file).toBe('/tmp/plan.md');
     });
 
@@ -369,7 +383,9 @@ describe('Conversation Routes', () => {
         body: JSON.stringify({ permissionMode: 'trusted' }),
         headers: { 'Content-Type': 'application/json' },
       });
-      const row = testDb.query('SELECT permission_mode FROM conversations WHERE id = ?').get('conv-1') as any;
+      const row = testDb
+        .query('SELECT permission_mode FROM conversations WHERE id = ?')
+        .get('conv-1') as any;
       expect(row.permission_mode).toBe('trusted');
     });
 
@@ -380,7 +396,9 @@ describe('Conversation Routes', () => {
         body: JSON.stringify({ effort: 'low' }),
         headers: { 'Content-Type': 'application/json' },
       });
-      const row = testDb.query('SELECT effort FROM conversations WHERE id = ?').get('conv-1') as any;
+      const row = testDb
+        .query('SELECT effort FROM conversations WHERE id = ?')
+        .get('conv-1') as any;
       expect(row.effort).toBe('low');
     });
 
@@ -391,7 +409,9 @@ describe('Conversation Routes', () => {
         body: JSON.stringify({ maxBudgetUsd: 10.5, maxTurns: 25 }),
         headers: { 'Content-Type': 'application/json' },
       });
-      const row = testDb.query('SELECT max_budget_usd, max_turns FROM conversations WHERE id = ?').get('conv-1') as any;
+      const row = testDb
+        .query('SELECT max_budget_usd, max_turns FROM conversations WHERE id = ?')
+        .get('conv-1') as any;
       expect(row.max_budget_usd).toBe(10.5);
       expect(row.max_turns).toBe(25);
     });
@@ -403,7 +423,9 @@ describe('Conversation Routes', () => {
         body: JSON.stringify({ allowedTools: ['Read'], disallowedTools: ['Bash'] }),
         headers: { 'Content-Type': 'application/json' },
       });
-      const row = testDb.query('SELECT allowed_tools, disallowed_tools FROM conversations WHERE id = ?').get('conv-1') as any;
+      const row = testDb
+        .query('SELECT allowed_tools, disallowed_tools FROM conversations WHERE id = ?')
+        .get('conv-1') as any;
       expect(JSON.parse(row.allowed_tools)).toEqual(['Read']);
       expect(JSON.parse(row.disallowed_tools)).toEqual(['Bash']);
     });
@@ -415,7 +437,9 @@ describe('Conversation Routes', () => {
         body: JSON.stringify({ cliSessionId: 'session-abc' }),
         headers: { 'Content-Type': 'application/json' },
       });
-      const row = testDb.query('SELECT cli_session_id FROM conversations WHERE id = ?').get('conv-1') as any;
+      const row = testDb
+        .query('SELECT cli_session_id FROM conversations WHERE id = ?')
+        .get('conv-1') as any;
       expect(row.cli_session_id).toBe('session-abc');
     });
 
@@ -426,7 +450,9 @@ describe('Conversation Routes', () => {
         body: JSON.stringify({ title: 'Changed' }),
         headers: { 'Content-Type': 'application/json' },
       });
-      const row = testDb.query('SELECT updated_at FROM conversations WHERE id = ?').get('conv-1') as any;
+      const row = testDb
+        .query('SELECT updated_at FROM conversations WHERE id = ?')
+        .get('conv-1') as any;
       expect(row.updated_at).toBeGreaterThan(1000);
     });
 
@@ -437,7 +463,9 @@ describe('Conversation Routes', () => {
         body: JSON.stringify({ title: 'Updated', model: 'claude-opus-4-6', effort: 'low' }),
         headers: { 'Content-Type': 'application/json' },
       });
-      const row = testDb.query('SELECT title, model, effort FROM conversations WHERE id = ?').get('conv-1') as any;
+      const row = testDb
+        .query('SELECT title, model, effort FROM conversations WHERE id = ?')
+        .get('conv-1') as any;
       expect(row.title).toBe('Updated');
       expect(row.model).toBe('claude-opus-4-6');
       expect(row.effort).toBe('low');
@@ -495,7 +523,11 @@ describe('Conversation Routes', () => {
     });
 
     test('falls back to 30/70 split when no per-message data', async () => {
-      insertConversation({ id: 'conv-1', model: 'claude-sonnet-4-5-20250929', total_tokens: 10000 });
+      insertConversation({
+        id: 'conv-1',
+        model: 'claude-sonnet-4-5-20250929',
+        total_tokens: 10000,
+      });
 
       const res = await app.request('/conv-1/cost');
       const json = await res.json();
@@ -592,7 +624,9 @@ describe('Conversation Routes', () => {
 
       await app.request('/conv-1', { method: 'DELETE' });
 
-      const messages = testDb.query('SELECT * FROM messages WHERE conversation_id = ?').all('conv-1');
+      const messages = testDb
+        .query('SELECT * FROM messages WHERE conversation_id = ?')
+        .all('conv-1');
       expect(messages).toHaveLength(0);
     });
   });

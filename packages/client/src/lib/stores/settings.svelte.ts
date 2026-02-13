@@ -1,4 +1,6 @@
 import type { ThemeId, CliProvider, Keybinding, PermissionMode } from '@maude/shared';
+import { convertVsCodeSnippets, type ConvertedSnippet } from '$lib/utils/vscode-snippet-converter';
+import { convertVsCodeTheme, type ConvertedTheme } from '$lib/utils/vscode-theme-converter';
 
 const STORAGE_KEY = 'maude-settings';
 
@@ -20,6 +22,11 @@ interface SettingsState {
   effort: string;
   maxBudgetUsd: number | null;
   maxTurns: number | null;
+  customSnippets: Record<string, ConvertedSnippet[]>;
+  customThemes: Record<
+    string,
+    { name: string; type: 'dark' | 'light'; cssVars: Record<string, string> }
+  >;
 }
 
 const defaults: SettingsState = {
@@ -51,6 +58,8 @@ const defaults: SettingsState = {
   effort: 'high',
   maxBudgetUsd: null,
   maxTurns: null,
+  customSnippets: {},
+  customThemes: {},
 };
 
 function loadFromStorage(): SettingsState {
@@ -96,7 +105,24 @@ function createSettingsStore() {
 
   function applyTheme(theme: ThemeId) {
     if (typeof document === 'undefined') return;
-    document.documentElement.setAttribute('data-theme', theme);
+
+    // Clear any previously applied custom CSS vars
+    const root = document.documentElement;
+    for (const key of Array.from(root.style)) {
+      if (key.startsWith('--')) root.style.removeProperty(key);
+    }
+
+    if (theme.startsWith('custom-') && state.customThemes[theme]) {
+      const ct = state.customThemes[theme];
+      // Apply the base dark/light theme first for fallback vars
+      root.setAttribute('data-theme', ct.type);
+      // Then override with custom CSS vars
+      for (const [varName, value] of Object.entries(ct.cssVars)) {
+        root.style.setProperty(varName, value);
+      }
+    } else {
+      root.setAttribute('data-theme', theme);
+    }
   }
 
   // Apply theme on load
@@ -180,6 +206,49 @@ function createSettingsStore() {
     setKeybinding(action: string, keys: string) {
       const idx = state.keybindings.findIndex((k) => k.action === action);
       if (idx >= 0) state.keybindings[idx].keys = keys;
+      persist();
+    },
+
+    // --- Custom snippets ---
+    get customSnippets() {
+      return state.customSnippets;
+    },
+    importSnippets(json: Record<string, any>, language: string) {
+      const converted = convertVsCodeSnippets(json);
+      const existing = state.customSnippets[language] || [];
+      state.customSnippets = {
+        ...state.customSnippets,
+        [language]: [...existing, ...converted],
+      };
+      persist();
+      return converted.length;
+    },
+    clearSnippets(language: string) {
+      const { [language]: _, ...rest } = state.customSnippets;
+      state.customSnippets = rest;
+      persist();
+    },
+
+    // --- Custom themes ---
+    get customThemes() {
+      return state.customThemes;
+    },
+    importTheme(json: Record<string, any>): string {
+      const theme = convertVsCodeTheme(json as any);
+      state.customThemes = {
+        ...state.customThemes,
+        [theme.id]: { name: theme.name, type: theme.type, cssVars: theme.cssVars },
+      };
+      persist();
+      return theme.id;
+    },
+    deleteCustomTheme(id: string) {
+      const { [id]: _, ...rest } = state.customThemes;
+      state.customThemes = rest;
+      // If current theme was deleted, switch to dark
+      if (state.theme === id) {
+        state.theme = 'dark';
+      }
       persist();
     },
   };

@@ -12,6 +12,12 @@ import { memoryRoutes } from './routes/memory';
 import { agentRoutes } from './routes/agents';
 import { fileRoutes } from './routes/files';
 import { commandRoutes } from './routes/commands';
+import { projectRoutes } from './routes/projects';
+import { searchRoutes } from './routes/search';
+import { gitRoutes } from './routes/git';
+import { terminalRoutes } from './routes/terminal';
+import { lspRoutes } from './routes/lsp';
+import { websocket } from './ws';
 import { initDatabase } from './db/database';
 import { existsSync } from 'fs';
 import { resolve } from 'path';
@@ -42,6 +48,11 @@ app.route('/api/memory', memoryRoutes);
 app.route('/api/agents', agentRoutes);
 app.route('/api/files', fileRoutes);
 app.route('/api/commands', commandRoutes);
+app.route('/api/projects', projectRoutes);
+app.route('/api/search', searchRoutes);
+app.route('/api/git', gitRoutes);
+app.route('/api/terminal', terminalRoutes);
+app.route('/api/lsp', lspRoutes);
 
 // Initialize database
 initDatabase();
@@ -64,5 +75,6 @@ console.log(`Maude server running on http://localhost:${port}`);
 export default {
   port,
   fetch: app.fetch,
+  websocket,
   idleTimeout: 120, // SSE streams need long-lived connections
 };

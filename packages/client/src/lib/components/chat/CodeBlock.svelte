@@ -1,5 +1,15 @@
 <script lang="ts">
-  let { code, language = 'text' } = $props<{ code: string; language?: string }>();
+  import { editorStore } from '$lib/stores/editor.svelte';
+
+  let {
+    code,
+    language = 'text',
+    filePath = '',
+  } = $props<{
+    code: string;
+    language?: string;
+    filePath?: string;
+  }>();
   let copied = $state(false);
 
   async function copy() {
@@ -9,37 +19,64 @@
       copied = false;
     }, 2000);
   }
+
+  function openInEditor() {
+    if (filePath) {
+      editorStore.openFile(filePath, false);
+    }
+  }
 </script>
 
 <div class="code-block" data-language={language}>
   <div class="code-header">
     <span class="language-label">{language}</span>
-    <button class="copy-btn" onclick={copy}>
-      {#if copied}
-        <svg
-          width="14"
-          height="14"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="2"><path d="M20 6L9 17l-5-5" /></svg
-        >
-        Copied
-      {:else}
-        <svg
-          width="14"
-          height="14"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="2"
-          ><rect x="9" y="9" width="13" height="13" rx="2" /><path
-            d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"
-          /></svg
-        >
-        Copy
+    <div class="code-actions">
+      {#if filePath}
+        <button class="code-action-btn" onclick={openInEditor} title="Open in editor">
+          <svg
+            width="14"
+            height="14"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+          >
+            <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+            <polyline points="15 3 21 3 21 9" />
+            <line x1="10" y1="14" x2="21" y2="3" />
+          </svg>
+          Open
+        </button>
       {/if}
-    </button>
+      <button class="code-action-btn" onclick={copy}>
+        {#if copied}
+          <svg
+            width="14"
+            height="14"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+          >
+            <path d="M20 6L9 17l-5-5" />
+          </svg>
+          Copied
+        {:else}
+          <svg
+            width="14"
+            height="14"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+          >
+            <rect x="9" y="9" width="13" height="13" rx="2" />
+            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+          </svg>
+          Copy
+        {/if}
+      </button>
+    </div>
   </div>
   <pre><code>{code}</code></pre>
 </div>
@@ -68,7 +105,13 @@
     letter-spacing: 0.5px;
   }
 
-  .copy-btn {
+  .code-actions {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+
+  .code-action-btn {
     display: flex;
     align-items: center;
     gap: 4px;
@@ -78,7 +121,7 @@
     border-radius: var(--radius-sm);
     transition: all var(--transition);
   }
-  .copy-btn:hover {
+  .code-action-btn:hover {
     background: var(--bg-hover);
     color: var(--text-primary);
   }

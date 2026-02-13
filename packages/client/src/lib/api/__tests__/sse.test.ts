@@ -93,9 +93,7 @@ describe('sendAndStream', () => {
   });
 
   test('captures session ID from response header', async () => {
-    mockSend.mockResolvedValue(
-      createMockResponse('', true, { 'X-Session-Id': 'new-session' }),
-    );
+    mockSend.mockResolvedValue(createMockResponse('', true, { 'X-Session-Id': 'new-session' }));
 
     await sendAndStream('conv-1', 'Hello');
 

@@ -122,9 +122,7 @@ describe('executeSlashCommand', () => {
     expect(conversationStore.addMessage).toHaveBeenCalledWith(
       expect.objectContaining({
         role: 'system',
-        content: expect.arrayContaining([
-          expect.objectContaining({ type: 'text' }),
-        ]),
+        content: expect.arrayContaining([expect.objectContaining({ type: 'text' })]),
       }),
     );
   });

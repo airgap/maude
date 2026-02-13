@@ -156,9 +156,7 @@ describe('Tool Routes', () => {
       const res = await app.request('/');
       const json = await res.json();
 
-      const noApproval = json.data
-        .filter((t: any) => !t.requiresApproval)
-        .map((t: any) => t.name);
+      const noApproval = json.data.filter((t: any) => !t.requiresApproval).map((t: any) => t.name);
 
       expect(noApproval).toContain('Read');
       expect(noApproval).toContain('Glob');

@@ -1,4 +1,5 @@
 import type { StreamEvent, MessageContent } from '@maude/shared';
+import { editorStore } from './editor.svelte';
 
 export type StreamStatus =
   | 'idle'
@@ -13,6 +14,21 @@ interface PendingApproval {
   toolName: string;
   input: Record<string, unknown>;
   description: string;
+}
+
+export interface StreamSnapshot {
+  status: StreamStatus;
+  sessionId: string | null;
+  partialText: string;
+  partialThinking: string;
+  contentBlocks: MessageContent[];
+  pendingApprovals: PendingApproval[];
+  tokenUsage: { input: number; output: number };
+  error: string | null;
+  abortController: AbortController | null;
+  toolResults: Map<string, { result: string; isError: boolean; duration?: number }>;
+  indexOffset: number;
+  currentParentId: string | null;
 }
 
 function createStreamStore() {
@@ -200,6 +216,21 @@ function createStreamStore() {
           });
           toolResults = newResults;
 
+          // Refresh editor tabs when file-writing tools complete
+          if (!event.isError && event.toolName) {
+            const fileWriteTools = [
+              'write_file',
+              'edit_file',
+              'create_file',
+              'str_replace_editor',
+              'Write',
+              'Edit',
+            ];
+            if (fileWriteTools.includes(event.toolName) && event.filePath) {
+              editorStore.refreshFile(event.filePath);
+            }
+          }
+
           // Remove from pending if it was there
           pendingApprovals = pendingApprovals.filter((a) => a.toolCallId !== event.toolCallId);
           if (pendingApprovals.length === 0 && status === 'tool_pending') {
@@ -245,6 +276,44 @@ function createStreamStore() {
       abortController = null;
       indexOffset = 0;
       currentParentId = null;
+    },
+
+    captureState(): StreamSnapshot {
+      return {
+        status,
+        sessionId,
+        partialText,
+        partialThinking,
+        contentBlocks: [...contentBlocks],
+        pendingApprovals: [...pendingApprovals],
+        tokenUsage: { ...tokenUsage },
+        error,
+        abortController,
+        toolResults: new Map(toolResults),
+        indexOffset,
+        currentParentId,
+      };
+    },
+
+    restoreState(snapshot: StreamSnapshot | null) {
+      if (!snapshot) {
+        this.reset();
+        return;
+      }
+      status = snapshot.status;
+      sessionId = snapshot.sessionId;
+      partialText = snapshot.partialText;
+      partialThinking = snapshot.partialThinking;
+      contentBlocks = snapshot.contentBlocks;
+      currentBlockIndex = -1;
+      currentBlockType = '';
+      pendingApprovals = snapshot.pendingApprovals;
+      tokenUsage = snapshot.tokenUsage;
+      error = snapshot.error;
+      abortController = snapshot.abortController;
+      toolResults = snapshot.toolResults;
+      indexOffset = snapshot.indexOffset;
+      currentParentId = snapshot.currentParentId;
     },
   };
 }

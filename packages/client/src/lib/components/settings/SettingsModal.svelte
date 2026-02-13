@@ -8,9 +8,70 @@
     { id: 'kiro', label: 'Kiro CLI', desc: 'AWS Kiro CLI' },
   ];
 
-  let activeTab = $state<'general' | 'appearance' | 'permissions' | 'mcp' | 'keybindings'>(
-    'general',
-  );
+  let activeTab = $state<
+    'general' | 'appearance' | 'editor' | 'permissions' | 'mcp' | 'keybindings'
+  >('general');
+
+  // --- Snippet import state ---
+  let snippetLanguage = $state('javascript');
+  let snippetFileInput: HTMLInputElement;
+
+  const supportedLanguages = [
+    'javascript',
+    'typescript',
+    'python',
+    'rust',
+    'go',
+    'java',
+    'cpp',
+    'css',
+    'html',
+    'json',
+    'markdown',
+    'sql',
+    'shell',
+    'xml',
+  ];
+
+  function handleSnippetImport(event: Event) {
+    const input = event.target as HTMLInputElement;
+    const file = input.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        const json = JSON.parse(reader.result as string);
+        const count = settingsStore.importSnippets(json, snippetLanguage);
+        uiStore.toast(`Imported ${count} snippets for ${snippetLanguage}`, 'success');
+      } catch {
+        uiStore.toast('Invalid snippet JSON file', 'error');
+      }
+      input.value = '';
+    };
+    reader.readAsText(file);
+  }
+
+  // --- Theme import state ---
+  let themeFileInput: HTMLInputElement;
+
+  function handleThemeImport(event: Event) {
+    const input = event.target as HTMLInputElement;
+    const file = input.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        const json = JSON.parse(reader.result as string);
+        const id = settingsStore.importTheme(json);
+        settingsStore.setTheme(id);
+        uiStore.toast('Theme imported and applied', 'success');
+      } catch {
+        uiStore.toast('Invalid theme JSON file', 'error');
+      }
+      input.value = '';
+    };
+    reader.readAsText(file);
+  }
 
   const themes: { id: ThemeId; label: string }[] = [
     { id: 'dark', label: 'Dark' },
@@ -61,7 +122,7 @@
 
     <div class="modal-body">
       <nav class="settings-tabs">
-        {#each ['general', 'appearance', 'permissions', 'mcp', 'keybindings'] as tab}
+        {#each ['general', 'appearance', 'editor', 'permissions', 'mcp', 'keybindings'] as tab}
           <button
             class="settings-tab"
             class:active={activeTab === tab}
@@ -167,6 +228,60 @@
               {/each}
             </div>
           </div>
+
+          <!-- Custom imported themes -->
+          {#if Object.keys(settingsStore.customThemes).length > 0}
+            <div class="setting-group">
+              <label class="setting-label">Imported Themes</label>
+              <div class="theme-grid">
+                {#each Object.entries(settingsStore.customThemes) as [id, ct]}
+                  <!-- svelte-ignore a11y_no_static_element_interactions -->
+                  <!-- svelte-ignore a11y_click_events_have_key_events -->
+                  <div
+                    class="theme-option"
+                    class:active={settingsStore.theme === id}
+                    onclick={() => settingsStore.setTheme(id)}
+                    role="button"
+                    tabindex="0"
+                  >
+                    <div class="theme-swatch">
+                      <div
+                        class="swatch-half"
+                        style="background: {ct.cssVars['--bg-primary'] || '#1e1e1e'}"
+                      ></div>
+                      <div
+                        class="swatch-half"
+                        style="background: {ct.cssVars['--accent-primary'] || '#007acc'}"
+                      ></div>
+                    </div>
+                    <span>{ct.name}</span>
+                    <button
+                      class="delete-theme-btn"
+                      onclick={(e) => {
+                        e.stopPropagation();
+                        settingsStore.deleteCustomTheme(id);
+                      }}
+                      title="Delete theme">x</button
+                    >
+                  </div>
+                {/each}
+              </div>
+            </div>
+          {/if}
+
+          <div class="setting-group">
+            <input
+              type="file"
+              accept=".json"
+              style="display:none"
+              bind:this={themeFileInput}
+              onchange={handleThemeImport}
+            />
+            <button class="btn-secondary" onclick={() => themeFileInput.click()}>
+              Import VS Code Theme
+            </button>
+          </div>
+
           <div class="setting-group">
             <label class="setting-label">Font size: {settingsStore.fontSize}px</label>
             <input
@@ -190,6 +305,47 @@
               <span class="toggle-slider"></span>
             </label>
           </div>
+        {:else if activeTab === 'editor'}
+          <div class="setting-group">
+            <label class="setting-label">Import VS Code Snippets</label>
+            <p class="setting-desc">Import snippet JSON files from VS Code to use in the editor.</p>
+            <div class="snippet-import-row">
+              <select bind:value={snippetLanguage}>
+                {#each supportedLanguages as lang}
+                  <option value={lang}>{lang}</option>
+                {/each}
+              </select>
+              <input
+                type="file"
+                accept=".json"
+                style="display:none"
+                bind:this={snippetFileInput}
+                onchange={handleSnippetImport}
+              />
+              <button class="btn-secondary" onclick={() => snippetFileInput.click()}>
+                Import Snippets
+              </button>
+            </div>
+          </div>
+
+          {#if Object.keys(settingsStore.customSnippets).length > 0}
+            <div class="setting-group">
+              <label class="setting-label">Imported Snippets</label>
+              <div class="snippet-list">
+                {#each Object.entries(settingsStore.customSnippets) as [lang, snippets]}
+                  <div class="snippet-row">
+                    <span class="snippet-lang">{lang}</span>
+                    <span class="snippet-count"
+                      >{snippets.length} snippet{snippets.length !== 1 ? 's' : ''}</span
+                    >
+                    <button class="btn-danger-sm" onclick={() => settingsStore.clearSnippets(lang)}>
+                      Clear
+                    </button>
+                  </div>
+                {/each}
+              </div>
+            </div>
+          {/if}
         {:else if activeTab === 'permissions'}
           <div class="setting-group">
             <label class="setting-label">Permission mode</label>
@@ -511,5 +667,121 @@
     background: var(--bg-tertiary);
     border-radius: var(--radius-sm);
     font-family: var(--font-family);
+  }
+
+  /* Snippets */
+  .setting-desc {
+    font-size: 12px;
+    color: var(--text-tertiary);
+    margin-bottom: 10px;
+  }
+  .snippet-import-row {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+  }
+  .snippet-import-row select {
+    flex: 1;
+    padding: 6px 8px;
+    font-size: 13px;
+    background: var(--bg-input);
+    border: 1px solid var(--border-secondary);
+    border-radius: var(--radius-sm);
+    color: var(--text-primary);
+  }
+  .snippet-list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .snippet-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 6px 8px;
+    background: var(--bg-tertiary);
+    border-radius: var(--radius-sm);
+  }
+  .snippet-lang {
+    font-size: 13px;
+    font-weight: 600;
+    text-transform: uppercase;
+    color: var(--text-primary);
+    min-width: 90px;
+  }
+  .snippet-count {
+    font-size: 12px;
+    color: var(--text-secondary);
+    flex: 1;
+  }
+  .btn-secondary {
+    padding: 6px 14px;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-secondary);
+    color: var(--text-primary);
+    border-radius: var(--radius-sm);
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all var(--transition);
+  }
+  .btn-secondary:hover {
+    border-color: var(--accent-primary);
+    color: var(--accent-primary);
+  }
+  .btn-danger-sm {
+    padding: 3px 10px;
+    background: transparent;
+    border: 1px solid var(--accent-error);
+    color: var(--accent-error);
+    border-radius: var(--radius-sm);
+    font-size: 11px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  .btn-danger-sm:hover {
+    background: var(--accent-error);
+    color: var(--bg-primary);
+  }
+
+  /* Custom theme swatches */
+  .theme-swatch {
+    width: 100%;
+    height: 48px;
+    border-radius: var(--radius-sm);
+    overflow: hidden;
+    display: flex;
+  }
+  .swatch-half {
+    flex: 1;
+  }
+  .delete-theme-btn {
+    position: absolute;
+    top: 4px;
+    right: 4px;
+    width: 18px;
+    height: 18px;
+    font-size: 11px;
+    line-height: 18px;
+    text-align: center;
+    padding: 0;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-secondary);
+    border-radius: var(--radius-sm);
+    color: var(--text-tertiary);
+    cursor: pointer;
+    opacity: 0;
+    transition: opacity var(--transition);
+  }
+  .theme-option {
+    position: relative;
+  }
+  .theme-option:hover .delete-theme-btn {
+    opacity: 1;
+  }
+  .delete-theme-btn:hover {
+    background: var(--accent-error);
+    color: white;
+    border-color: var(--accent-error);
   }
 </style>

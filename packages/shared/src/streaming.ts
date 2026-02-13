@@ -87,6 +87,8 @@ export interface StreamToolResult {
   result: string;
   isError: boolean;
   duration?: number;
+  toolName?: string;
+  filePath?: string;
 }
 
 export interface StreamToolApprovalRequest {

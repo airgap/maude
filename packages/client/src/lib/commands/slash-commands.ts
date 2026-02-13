@@ -92,8 +92,8 @@ const commands: SlashCommand[] = [
           'dark-ansi',
           'light-ansi',
         ] as const;
-        const idx = themes.indexOf(settingsStore.theme);
-        settingsStore.setTheme(themes[(idx + 1) % themes.length]);
+        const idx = themes.indexOf(settingsStore.theme as (typeof themes)[number]);
+        settingsStore.setTheme(themes[(idx < 0 ? 0 : idx + 1) % themes.length]);
       }
       return { handled: true };
     },

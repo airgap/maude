@@ -30,8 +30,7 @@
 
   function findResult(toolId: string) {
     return toolResults.find(
-      (r: { tool_use_id: string; content: string; is_error?: boolean }) =>
-        r.tool_use_id === toolId,
+      (r: { tool_use_id: string; content: string; is_error?: boolean }) => r.tool_use_id === toolId,
     );
   }
 </script>

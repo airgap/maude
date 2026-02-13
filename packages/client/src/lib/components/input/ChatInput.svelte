@@ -2,6 +2,8 @@
   import { conversationStore } from '$lib/stores/conversation.svelte';
   import { streamStore } from '$lib/stores/stream.svelte';
   import { settingsStore } from '$lib/stores/settings.svelte';
+  import { projectStore } from '$lib/stores/projects.svelte';
+  import { editorStore } from '$lib/stores/editor.svelte';
   import { sendAndStream, cancelStream } from '$lib/api/sse';
   import { api } from '$lib/api/client';
   import { executeSlashCommand, type SlashCommandContext } from '$lib/commands/slash-commands';
@@ -20,6 +22,26 @@
   let editingPath = $state(false);
   let pathInputValue = $state('');
   let pathInput: HTMLInputElement;
+  let contextFiles = $state<Set<string>>(new Set());
+
+  function toggleContextFile(tabId: string) {
+    const next = new Set(contextFiles);
+    if (next.has(tabId)) next.delete(tabId);
+    else next.add(tabId);
+    contextFiles = next;
+  }
+
+  function buildContextPrefix(): string {
+    if (contextFiles.size === 0) return '';
+    const parts: string[] = [];
+    for (const tabId of contextFiles) {
+      const tab = editorStore.tabs.find((t) => t.id === tabId);
+      if (tab) {
+        parts.push(`<file path="${tab.filePath}">\n${tab.content}\n</file>`);
+      }
+    }
+    return parts.length > 0 ? parts.join('\n') + '\n\n' : '';
+  }
 
   function getDisplayPath(): string {
     const p = conversationStore.active?.projectPath || settingsStore.projectPath;
@@ -141,16 +163,22 @@
       await createConversation(text);
     }
 
+    const contextPrefix = buildContextPrefix();
     inputText = '';
     resizeTextarea();
-    await sendAndStream(conversationStore.activeId!, text);
+    contextFiles = new Set();
+    await sendAndStream(conversationStore.activeId!, contextPrefix + text);
   }
 
   async function createConversation(text: string) {
+    // Use active project path if available, otherwise fall back to settings
+    const projectPath =
+      projectStore.activeProject?.path ||
+      (settingsStore.projectPath !== '.' ? settingsStore.projectPath : undefined);
     const res = await api.conversations.create({
       title: text.slice(0, 60),
       model: settingsStore.model,
-      projectPath: settingsStore.projectPath !== '.' ? settingsStore.projectPath : undefined,
+      projectPath,
       permissionMode: settingsStore.permissionMode,
       effort: settingsStore.effort,
       maxBudgetUsd: settingsStore.maxBudgetUsd ?? undefined,
@@ -335,6 +363,21 @@
     {/if}
   </div>
 
+  {#if editorStore.tabs.length > 0}
+    <div class="context-chips">
+      {#each editorStore.tabs as tab}
+        <button
+          class="context-chip"
+          class:active={contextFiles.has(tab.id)}
+          onclick={() => toggleContextFile(tab.id)}
+          title={tab.filePath}
+        >
+          {tab.fileName}
+        </button>
+      {/each}
+    </div>
+  {/if}
+
   <!-- svelte-ignore a11y_click_events_have_key_events -->
   <!-- svelte-ignore a11y_no_static_element_interactions -->
   <div
@@ -511,6 +554,35 @@
     color: var(--text-primary);
   }
   .dir-option.dir-select {
+    color: var(--accent-primary);
+    font-weight: 600;
+  }
+
+  .context-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin-bottom: 6px;
+    padding: 0 4px;
+  }
+  .context-chip {
+    font-size: 11px;
+    padding: 2px 10px;
+    border-radius: 999px;
+    border: 1px solid var(--border-secondary);
+    background: var(--bg-tertiary);
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: all var(--transition);
+    white-space: nowrap;
+  }
+  .context-chip:hover {
+    border-color: var(--accent-primary);
+    color: var(--text-primary);
+  }
+  .context-chip.active {
+    background: rgba(0, 180, 255, 0.15);
+    border-color: var(--accent-primary);
     color: var(--accent-primary);
     font-weight: 600;
   }

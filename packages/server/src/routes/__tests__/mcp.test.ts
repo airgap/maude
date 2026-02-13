@@ -155,7 +155,9 @@ describe('MCP Routes', () => {
       });
       expect(res.status).toBe(201);
 
-      const row = testDb.query('SELECT * FROM mcp_servers WHERE name = ?').get('remote-server') as any;
+      const row = testDb
+        .query('SELECT * FROM mcp_servers WHERE name = ?')
+        .get('remote-server') as any;
       expect(row.transport).toBe('sse');
       expect(row.url).toBe('http://remote:9090/sse');
       expect(row.command).toBeNull();
@@ -173,7 +175,9 @@ describe('MCP Routes', () => {
         headers: { 'Content-Type': 'application/json' },
       });
 
-      const row = testDb.query('SELECT env FROM mcp_servers WHERE name = ?').get('env-server') as any;
+      const row = testDb
+        .query('SELECT env FROM mcp_servers WHERE name = ?')
+        .get('env-server') as any;
       expect(JSON.parse(row.env)).toEqual({ DB_HOST: 'localhost', DB_PORT: '5432' });
     });
 
@@ -188,7 +192,9 @@ describe('MCP Routes', () => {
         headers: { 'Content-Type': 'application/json' },
       });
 
-      const row = testDb.query('SELECT scope FROM mcp_servers WHERE name = ?').get('scoped-server') as any;
+      const row = testDb
+        .query('SELECT scope FROM mcp_servers WHERE name = ?')
+        .get('scoped-server') as any;
       expect(row.scope).toBe('local');
     });
 
@@ -204,7 +210,9 @@ describe('MCP Routes', () => {
         headers: { 'Content-Type': 'application/json' },
       });
 
-      const row = testDb.query('SELECT scope FROM mcp_servers WHERE name = ?').get('global-server') as any;
+      const row = testDb
+        .query('SELECT scope FROM mcp_servers WHERE name = ?')
+        .get('global-server') as any;
       expect(row.scope).toBe('global');
     });
 
@@ -219,7 +227,9 @@ describe('MCP Routes', () => {
         headers: { 'Content-Type': 'application/json' },
       });
 
-      const row = testDb.query('SELECT status FROM mcp_servers WHERE name = ?').get('status-server') as any;
+      const row = testDb
+        .query('SELECT status FROM mcp_servers WHERE name = ?')
+        .get('status-server') as any;
       expect(row.status).toBe('disconnected');
     });
 
@@ -233,7 +243,9 @@ describe('MCP Routes', () => {
         headers: { 'Content-Type': 'application/json' },
       });
 
-      const row = testDb.query('SELECT * FROM mcp_servers WHERE name = ?').get('minimal-server') as any;
+      const row = testDb
+        .query('SELECT * FROM mcp_servers WHERE name = ?')
+        .get('minimal-server') as any;
       expect(row.command).toBeNull();
       expect(row.args).toBeNull();
       expect(row.url).toBeNull();

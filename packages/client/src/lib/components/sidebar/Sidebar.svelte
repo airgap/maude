@@ -5,6 +5,8 @@
   import FileTree from './FileTree.svelte';
   import MemoryPanel from './MemoryPanel.svelte';
   import AgentPanel from './AgentPanel.svelte';
+  import SearchPanel from './SearchPanel.svelte';
+  import SymbolOutline from '../editor/SymbolOutline.svelte';
 
   const tabs = [
     {
@@ -16,6 +18,16 @@
       id: 'files' as const,
       label: 'Files',
       icon: 'M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z',
+    },
+    {
+      id: 'search' as const,
+      label: 'Search',
+      icon: 'M11 3a8 8 0 1 0 0 16 8 8 0 0 0 0-16zM21 21l-4.35-4.35',
+    },
+    {
+      id: 'symbols' as const,
+      label: 'Symbols',
+      icon: 'M4 7h16M4 12h10M4 17h6',
     },
     {
       id: 'tasks' as const,
@@ -63,6 +75,10 @@
       <ConversationList />
     {:else if uiStore.sidebarTab === 'files'}
       <FileTree />
+    {:else if uiStore.sidebarTab === 'search'}
+      <SearchPanel />
+    {:else if uiStore.sidebarTab === 'symbols'}
+      <SymbolOutline />
     {:else if uiStore.sidebarTab === 'tasks'}
       <TaskPanel />
     {:else if uiStore.sidebarTab === 'memory'}

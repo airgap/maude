@@ -5,7 +5,7 @@
   "identifier": "com.maude.app",
   "build": {
     "frontendDist": "../packages/client/build",
-    "beforeDevCommand": "bun run build:desktop",
+    "beforeDevCommand": "bun run --filter @maude/client build",
     "beforeBuildCommand": "bun run build:desktop"
   },
   "bundle": {
@@ -21,6 +21,7 @@
     "externalBin": ["binaries/maude-server"]
   },
   "app": {
+    "withGlobalTauri": true,
     "windows": [
       {
         "title": "Maude",

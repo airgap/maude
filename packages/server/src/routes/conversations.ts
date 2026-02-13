@@ -11,7 +11,7 @@ app.get('/', (c) => {
   const rows = db
     .query(
       `
-    SELECT id, title, model, project_path, plan_mode, total_tokens, permission_mode, effort,
+    SELECT id, title, model, project_path, project_id, plan_mode, total_tokens, permission_mode, effort,
            created_at, updated_at,
            (SELECT COUNT(*) FROM messages WHERE conversation_id = conversations.id) as message_count
     FROM conversations
@@ -27,6 +27,7 @@ app.get('/', (c) => {
       title: r.title,
       model: r.model,
       projectPath: r.project_path,
+      projectId: r.project_id || undefined,
       permissionMode: r.permission_mode,
       effort: r.effort,
       messageCount: r.message_count,
@@ -54,6 +55,7 @@ app.get('/:id', (c) => {
       model: conv.model,
       systemPrompt: conv.system_prompt,
       projectPath: conv.project_path,
+      projectId: conv.project_id || undefined,
       planMode: Boolean(conv.plan_mode),
       planFile: conv.plan_file,
       totalTokens: conv.total_tokens,

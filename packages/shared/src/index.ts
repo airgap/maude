@@ -56,6 +56,10 @@ export { DEFAULT_SETTINGS } from './settings.js';
 
 export type { MemoryFile, MemoryFileType, Skill, MemoryState } from './memory.js';
 
+export type { Project, ProjectSettings, ProjectSummary } from './projects.js';
+
+export type { EditorConfigProps } from './editorconfig.js';
+
 export type {
   CreateConversationRequest,
   SendMessageRequest,

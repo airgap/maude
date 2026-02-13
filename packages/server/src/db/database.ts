@@ -79,9 +79,19 @@ export function initDatabase(): void {
       status TEXT NOT NULL DEFAULT 'disconnected'
     );
 
+    CREATE TABLE IF NOT EXISTS projects (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      path TEXT NOT NULL UNIQUE,
+      last_opened INTEGER NOT NULL,
+      settings TEXT,
+      created_at INTEGER NOT NULL
+    );
+
     CREATE INDEX IF NOT EXISTS idx_messages_conversation ON messages(conversation_id, timestamp);
     CREATE INDEX IF NOT EXISTS idx_tasks_conversation ON tasks(conversation_id);
     CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status);
+    CREATE INDEX IF NOT EXISTS idx_projects_last_opened ON projects(last_opened DESC);
   `);
 
   // Migrate: add new conversation columns (safe ALTER TABLE — no-ops if already exist)
@@ -93,6 +103,7 @@ export function initDatabase(): void {
     `ALTER TABLE conversations ADD COLUMN allowed_tools TEXT`,
     `ALTER TABLE conversations ADD COLUMN disallowed_tools TEXT`,
     `ALTER TABLE conversations ADD COLUMN cli_session_id TEXT`,
+    `ALTER TABLE conversations ADD COLUMN project_id TEXT REFERENCES projects(id)`,
   ];
   for (const sql of alterColumns) {
     try {

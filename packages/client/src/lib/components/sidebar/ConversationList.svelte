@@ -1,13 +1,26 @@
 <script lang="ts">
   import { conversationStore } from '$lib/stores/conversation.svelte';
   import { streamStore } from '$lib/stores/stream.svelte';
+  import { projectStore } from '$lib/stores/projects.svelte';
   import { api } from '$lib/api/client';
   import { onMount } from 'svelte';
 
   let search = $state('');
+  let showAllProjects = $state(false);
 
   let filtered = $derived(
-    conversationStore.list.filter((c) => c.title.toLowerCase().includes(search.toLowerCase())),
+    conversationStore.list
+      .filter((c) => {
+        // Filter by active project unless "All Projects" is toggled
+        if (!showAllProjects && projectStore.activeProject) {
+          return (
+            c.projectId === projectStore.activeProjectId ||
+            c.projectPath === projectStore.activeProject.path
+          );
+        }
+        return true;
+      })
+      .filter((c) => c.title.toLowerCase().includes(search.toLowerCase())),
   );
 
   onMount(async () => {
@@ -74,6 +87,24 @@
       </svg>
     </button>
   </div>
+  {#if projectStore.activeProject}
+    <div class="project-filter">
+      <button
+        class="filter-toggle"
+        class:active={!showAllProjects}
+        onclick={() => (showAllProjects = false)}
+      >
+        {projectStore.activeProject.name}
+      </button>
+      <button
+        class="filter-toggle"
+        class:active={showAllProjects}
+        onclick={() => (showAllProjects = true)}
+      >
+        All
+      </button>
+    </div>
+  {/if}
 
   <div class="conv-items">
     {#each filtered as conv (conv.id)}
@@ -238,5 +269,33 @@
     letter-spacing: 0.5px;
     font-weight: 600;
     text-transform: uppercase;
+  }
+
+  .project-filter {
+    display: flex;
+    gap: 2px;
+    padding: 0 10px 8px;
+  }
+  .filter-toggle {
+    flex: 1;
+    padding: 4px 8px;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--text-tertiary);
+    border-radius: var(--radius-sm);
+    transition: all var(--transition);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .filter-toggle:hover {
+    background: var(--bg-hover);
+    color: var(--text-secondary);
+  }
+  .filter-toggle.active {
+    background: var(--bg-active);
+    color: var(--accent-primary);
   }
 </style>

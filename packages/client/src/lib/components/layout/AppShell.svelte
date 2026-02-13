@@ -1,13 +1,24 @@
 <script lang="ts">
   import { uiStore } from '$lib/stores/ui.svelte';
+  import { editorStore } from '$lib/stores/editor.svelte';
+  import { terminalStore } from '$lib/stores/terminal.svelte';
+  import { workspaceStore } from '$lib/stores/workspace.svelte';
   import TopBar from './TopBar.svelte';
   import StatusBar from './StatusBar.svelte';
+  import MainContent from './MainContent.svelte';
   import Sidebar from '../sidebar/Sidebar.svelte';
   import SettingsModal from '../settings/SettingsModal.svelte';
   import CommandPalette from '../common/CommandPalette.svelte';
   import ToastContainer from '../common/ToastContainer.svelte';
+  import QuickOpen from '../editor/QuickOpen.svelte';
+  import ProjectSetup from '../common/ProjectSetup.svelte';
+  import { onMount } from 'svelte';
 
-  let { children } = $props<{ children: any }>();
+  let { children: appChildren } = $props<{ children: any }>();
+
+  onMount(() => {
+    workspaceStore.init();
+  });
 
   let resizing = $state(false);
   let startX = 0;
@@ -39,10 +50,87 @@
       e.preventDefault();
       uiStore.openModal('command-palette');
     }
+    // Ctrl+Shift+F: Search across files
+    if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === 'F') {
+      e.preventDefault();
+      uiStore.setSidebarTab('search');
+    }
+    // Ctrl+P: Quick open file
+    if ((e.ctrlKey || e.metaKey) && e.key === 'p' && !e.shiftKey) {
+      e.preventDefault();
+      uiStore.openModal('quick-open');
+    }
     // Ctrl+/: Toggle sidebar
     if ((e.ctrlKey || e.metaKey) && e.key === '/') {
       e.preventDefault();
       uiStore.toggleSidebar();
+    }
+    // Ctrl+\: Toggle split pane
+    if ((e.ctrlKey || e.metaKey) && e.key === '\\') {
+      e.preventDefault();
+      if (editorStore.layoutMode === 'chat-only') {
+        editorStore.setLayoutMode('split-horizontal');
+      } else if (editorStore.layoutMode === 'split-horizontal') {
+        editorStore.setLayoutMode('chat-only');
+      } else if (editorStore.layoutMode === 'editor-only') {
+        editorStore.setLayoutMode('split-horizontal');
+      } else {
+        editorStore.setLayoutMode('chat-only');
+      }
+    }
+    // Ctrl+W: Close active tab
+    if ((e.ctrlKey || e.metaKey) && e.key === 'w') {
+      if (editorStore.activeTabId && uiStore.focusedPane === 'editor') {
+        e.preventDefault();
+        editorStore.closeTab(editorStore.activeTabId);
+      }
+    }
+    // Ctrl+Tab / Ctrl+Shift+Tab: Cycle tabs
+    if ((e.ctrlKey || e.metaKey) && e.key === 'Tab') {
+      if (editorStore.hasOpenTabs) {
+        e.preventDefault();
+        editorStore.cycleTab(e.shiftKey ? -1 : 1);
+      }
+    }
+    // Ctrl+1..9: Switch to nth tab
+    if ((e.ctrlKey || e.metaKey) && e.key >= '1' && e.key <= '9') {
+      const idx = parseInt(e.key) - 1;
+      if (idx < editorStore.tabs.length) {
+        e.preventDefault();
+        editorStore.activateTabByIndex(idx);
+      }
+    }
+    // Ctrl+`: Toggle terminal
+    if ((e.ctrlKey || e.metaKey) && e.key === '`') {
+      e.preventDefault();
+      terminalStore.toggle();
+    }
+    // Ctrl+Alt+Left: Previous workspace
+    if ((e.ctrlKey || e.metaKey) && e.altKey && e.key === 'ArrowLeft') {
+      e.preventDefault();
+      const ws = workspaceStore.workspaces;
+      if (ws.length > 1 && workspaceStore.activeWorkspaceId) {
+        const idx = ws.findIndex((w) => w.projectId === workspaceStore.activeWorkspaceId);
+        const prev = (idx - 1 + ws.length) % ws.length;
+        workspaceStore.switchWorkspace(ws[prev].projectId);
+      }
+    }
+    // Ctrl+Alt+Right: Next workspace
+    if ((e.ctrlKey || e.metaKey) && e.altKey && e.key === 'ArrowRight') {
+      e.preventDefault();
+      const ws = workspaceStore.workspaces;
+      if (ws.length > 1 && workspaceStore.activeWorkspaceId) {
+        const idx = ws.findIndex((w) => w.projectId === workspaceStore.activeWorkspaceId);
+        const next = (idx + 1) % ws.length;
+        workspaceStore.switchWorkspace(ws[next].projectId);
+      }
+    }
+    // Ctrl+Alt+W: Close active workspace
+    if ((e.ctrlKey || e.metaKey) && e.altKey && e.key === 'w') {
+      e.preventDefault();
+      if (workspaceStore.activeWorkspaceId) {
+        workspaceStore.closeWorkspace(workspaceStore.activeWorkspaceId);
+      }
     }
     // Escape: Close modal
     if (e.key === 'Escape' && uiStore.activeModal) {
@@ -67,7 +155,11 @@
     {/if}
 
     <main class="main-content">
-      {@render children()}
+      <MainContent>
+        {#snippet children()}
+          {@render appChildren()}
+        {/snippet}
+      </MainContent>
     </main>
   </div>
 
@@ -80,6 +172,9 @@
   {#if uiStore.activeModal === 'command-palette'}
     <CommandPalette />
   {/if}
+
+  <QuickOpen />
+  <ProjectSetup />
 
   <ToastContainer />
 </div>

@@ -1,5 +1,13 @@
-type SidebarTab = 'conversations' | 'files' | 'tasks' | 'memory' | 'agents';
-type ModalId = 'settings' | 'command-palette' | 'mcp-manager' | 'keybindings' | null;
+export type SidebarTab = 'conversations' | 'files' | 'search' | 'tasks' | 'memory' | 'agents' | 'symbols';
+type ModalId =
+  | 'settings'
+  | 'command-palette'
+  | 'mcp-manager'
+  | 'keybindings'
+  | 'quick-open'
+  | 'project-setup'
+  | null;
+type FocusedPane = 'chat' | 'editor';
 
 function createUIStore() {
   let sidebarOpen = $state(true);
@@ -16,6 +24,7 @@ function createUIStore() {
   >([]);
   let commandPaletteQuery = $state('');
   let contextMenuPos = $state<{ x: number; y: number } | null>(null);
+  let focusedPane = $state<FocusedPane>('chat');
 
   return {
     get sidebarOpen() {
@@ -35,6 +44,9 @@ function createUIStore() {
     },
     get commandPaletteQuery() {
       return commandPaletteQuery;
+    },
+    get focusedPane() {
+      return focusedPane;
     },
 
     toggleSidebar() {
@@ -85,6 +97,15 @@ function createUIStore() {
 
     setCommandPaletteQuery(q: string) {
       commandPaletteQuery = q;
+    },
+
+    setFocusedPane(pane: FocusedPane) {
+      focusedPane = pane;
+    },
+
+    restoreState(state: { sidebarTab: SidebarTab; sidebarOpen: boolean }) {
+      sidebarTab = state.sidebarTab;
+      sidebarOpen = state.sidebarOpen;
     },
   };
 }

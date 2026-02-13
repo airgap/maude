@@ -7,7 +7,8 @@ export type ThemeId =
   | 'dark-colorblind'
   | 'light-colorblind'
   | 'dark-ansi'
-  | 'light-ansi';
+  | 'light-ansi'
+  | (string & {});
 
 export type CliProvider = 'claude' | 'kiro';
 

@@ -14,9 +14,11 @@
     "test:coverage": "bun test --coverage"
   },
   "dependencies": {
-    "hono": "^4.7.0",
     "@maude/shared": "workspace:*",
+    "editorconfig": "^3.0.1",
+    "hono": "^4.7.0",
     "nanoid": "^5.0.0",
+    "node-pty": "^1.1.0",
     "zod": "^3.24.0"
   },
   "devDependencies": {

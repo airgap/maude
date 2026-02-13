@@ -247,7 +247,9 @@ describe('Task Routes', () => {
         headers: { 'Content-Type': 'application/json' },
       });
       const json = await res.json();
-      const row = testDb.query('SELECT conversation_id FROM tasks WHERE id = ?').get(json.data.id) as any;
+      const row = testDb
+        .query('SELECT conversation_id FROM tasks WHERE id = ?')
+        .get(json.data.id) as any;
       expect(row.conversation_id).toBeNull();
     });
 

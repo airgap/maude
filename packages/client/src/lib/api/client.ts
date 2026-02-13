@@ -2,10 +2,25 @@ const BASE_URL =
   typeof window !== 'undefined' && (window as any).__TAURI__ ? 'http://localhost:3002/api' : '/api';
 
 async function request<T>(path: string, opts: RequestInit = {}): Promise<T> {
-  const res = await fetch(`${BASE_URL}${path}`, {
-    headers: { 'Content-Type': 'application/json', ...(opts.headers as Record<string, string>) },
-    ...opts,
-  });
+  let res: Response;
+  try {
+    res = await fetch(`${BASE_URL}${path}`, {
+      headers: { 'Content-Type': 'application/json', ...(opts.headers as Record<string, string>) },
+      ...opts,
+    });
+  } catch (err) {
+    throw new Error('Cannot connect to server. Is the backend running?');
+  }
+
+  const contentType = res.headers.get('content-type') || '';
+  if (!contentType.includes('application/json')) {
+    throw new Error(
+      res.ok
+        ? 'Server returned non-JSON response. Is the backend running?'
+        : `HTTP ${res.status}: ${res.statusText}`,
+    );
+  }
+
   if (!res.ok) {
     const body = await res.json().catch(() => ({ error: res.statusText }));
     throw new Error(body.error || `HTTP ${res.status}`);
@@ -136,12 +151,35 @@ export const api = {
       request<{ ok: boolean; data: { path: string; content: string } }>(
         `/files/read?path=${encodeURIComponent(path)}`,
       ),
+    write: (path: string, content: string) =>
+      request<{ ok: boolean }>('/files/write', {
+        method: 'PUT',
+        body: JSON.stringify({ path, content }),
+      }),
+    create: (path: string, content = '') =>
+      request<{ ok: boolean }>('/files/create', {
+        method: 'POST',
+        body: JSON.stringify({ path, content }),
+      }),
+    delete: (path: string) =>
+      request<{ ok: boolean }>(`/files/delete?path=${encodeURIComponent(path)}`, {
+        method: 'DELETE',
+      }),
+    rename: (oldPath: string, newPath: string) =>
+      request<{ ok: boolean }>('/files/rename', {
+        method: 'POST',
+        body: JSON.stringify({ oldPath, newPath }),
+      }),
     tree: (path?: string, depth?: number) => {
       const params = new URLSearchParams();
       if (path) params.set('path', path);
       if (depth) params.set('depth', String(depth));
       return request<{ ok: boolean; data: any[] }>(`/files/tree?${params}`);
     },
+    editorConfig: (path: string) =>
+      request<{ ok: boolean; data: import('@maude/shared').EditorConfigProps }>(
+        `/files/editorconfig?path=${encodeURIComponent(path)}`,
+      ),
     directories: (path?: string) => {
       const params = new URLSearchParams();
       if (path) params.set('path', path);
@@ -150,6 +188,24 @@ export const api = {
         data: { parent: string; directories: { name: string; path: string }[] };
       }>(`/files/directories?${params}`);
     },
+  },
+
+  // --- Projects ---
+  projects: {
+    list: () => request<{ ok: boolean; data: any[] }>('/projects'),
+    get: (id: string) => request<{ ok: boolean; data: any }>(`/projects/${id}`),
+    create: (body: { name: string; path: string; settings?: any }) =>
+      request<{ ok: boolean; data: { id: string } }>('/projects', {
+        method: 'POST',
+        body: JSON.stringify(body),
+      }),
+    update: (id: string, body: Record<string, any>) =>
+      request<{ ok: boolean }>(`/projects/${id}`, {
+        method: 'PATCH',
+        body: JSON.stringify(body),
+      }),
+    delete: (id: string) => request<{ ok: boolean }>(`/projects/${id}`, { method: 'DELETE' }),
+    open: (id: string) => request<{ ok: boolean }>(`/projects/${id}/open`, { method: 'POST' }),
   },
 
   // --- Agents ---
@@ -170,5 +226,67 @@ export const api = {
   // --- Tools ---
   tools: {
     list: () => request<{ ok: boolean; data: any[] }>('/tools'),
+  },
+
+  // --- Search ---
+  search: {
+    query: (q: string, path: string, regex = false, limit = 500) => {
+      const params = new URLSearchParams({ q, path, regex: String(regex), limit: String(limit) });
+      return request<{
+        ok: boolean;
+        data: {
+          results: Array<{
+            file: string;
+            relativePath: string;
+            line: number;
+            column: number;
+            content: string;
+            matchStart: number;
+            matchEnd: number;
+          }>;
+          totalMatches: number;
+          fileCount: number;
+          truncated: boolean;
+        };
+      }>(`/search?${params}`);
+    },
+  },
+
+  // --- LSP ---
+  lsp: {
+    servers: () =>
+      request<{
+        ok: boolean;
+        data: Array<{
+          language: string;
+          command: string;
+          args: string[];
+          available: boolean;
+          installable: boolean;
+          npmPackage?: string;
+          systemInstallHint?: string;
+        }>;
+      }>('/lsp/servers'),
+    install: (language: string) =>
+      request<{ ok: boolean; error?: string }>('/lsp/install', {
+        method: 'POST',
+        body: JSON.stringify({ language }),
+      }),
+  },
+
+  // --- Git ---
+  git: {
+    status: (path: string) =>
+      request<{
+        ok: boolean;
+        data: {
+          isRepo: boolean;
+          files: Array<{ path: string; status: string; staged: boolean }>;
+        };
+      }>(`/git/status?path=${encodeURIComponent(path)}`),
+    branch: (path: string) =>
+      request<{ ok: boolean; data: { branch: string } }>(
+        `/git/branch?path=${encodeURIComponent(path)}`,
+      ),
   },
 };

@@ -25,7 +25,12 @@ describe('api.conversations', () => {
 
     const result = await api.conversations.list();
     expect(result).toEqual(responseData);
-    expect(mockFetch).toHaveBeenCalledWith('/api/conversations', expect.objectContaining({ headers: expect.objectContaining({ 'Content-Type': 'application/json' }) }));
+    expect(mockFetch).toHaveBeenCalledWith(
+      '/api/conversations',
+      expect.objectContaining({
+        headers: expect.objectContaining({ 'Content-Type': 'application/json' }),
+      }),
+    );
   });
 
   test('get calls GET /api/conversations/:id', async () => {
@@ -76,7 +81,13 @@ describe('api.conversations', () => {
   test('cost calls GET /api/conversations/:id/cost', async () => {
     const responseData = {
       ok: true,
-      data: { model: 'sonnet', totalTokens: 100, inputTokens: 30, outputTokens: 70, estimatedCostUsd: 0.01 },
+      data: {
+        model: 'sonnet',
+        totalTokens: 100,
+        inputTokens: 30,
+        outputTokens: 70,
+        estimatedCostUsd: 0.01,
+      },
     };
     mockFetch.mockResolvedValue(mockJsonResponse(responseData));
 
@@ -216,12 +227,11 @@ describe('api.memory', () => {
 
 describe('api.files', () => {
   test('read calls GET /api/files/read with encoded path', async () => {
-    mockFetch.mockResolvedValue(mockJsonResponse({ ok: true, data: { path: '/a/b', content: 'hi' } }));
-    await api.files.read('/a/b');
-    expect(mockFetch).toHaveBeenCalledWith(
-      '/api/files/read?path=%2Fa%2Fb',
-      expect.any(Object),
+    mockFetch.mockResolvedValue(
+      mockJsonResponse({ ok: true, data: { path: '/a/b', content: 'hi' } }),
     );
+    await api.files.read('/a/b');
+    expect(mockFetch).toHaveBeenCalledWith('/api/files/read?path=%2Fa%2Fb', expect.any(Object));
   });
 
   test('tree calls GET /api/files/tree with params', async () => {
@@ -252,11 +262,16 @@ describe('api.agents', () => {
   test('list with parentSessionId includes query param', async () => {
     mockFetch.mockResolvedValue(mockJsonResponse({ ok: true, data: [] }));
     await api.agents.list('session-1');
-    expect(mockFetch).toHaveBeenCalledWith('/api/agents?parentSessionId=session-1', expect.any(Object));
+    expect(mockFetch).toHaveBeenCalledWith(
+      '/api/agents?parentSessionId=session-1',
+      expect.any(Object),
+    );
   });
 
   test('spawn calls POST /api/agents', async () => {
-    mockFetch.mockResolvedValue(mockJsonResponse({ ok: true, data: { agentId: 'a1', sessionId: 's1' } }));
+    mockFetch.mockResolvedValue(
+      mockJsonResponse({ ok: true, data: { agentId: 'a1', sessionId: 's1' } }),
+    );
     await api.agents.spawn({ type: 'explore', prompt: 'test' });
     expect(mockFetch).toHaveBeenCalledWith(
       '/api/agents',
