@@ -264,6 +264,7 @@ export const api = {
           available: boolean;
           installable: boolean;
           npmPackage?: string;
+          binaryDownload?: Record<string, string>;
           systemInstallHint?: string;
         }>;
       }>('/lsp/servers'),

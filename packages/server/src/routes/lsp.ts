@@ -2,9 +2,10 @@ import { Hono } from 'hono';
 import { upgradeWebSocket } from '../ws';
 import { getLspCommand, getAvailableServers, getInstallInfo } from '../services/lsp-registry';
 import type { Subprocess } from 'bun';
-import { existsSync, mkdirSync, writeFileSync } from 'fs';
+import { existsSync, mkdirSync, writeFileSync, chmodSync } from 'fs';
 import { join } from 'path';
 import { homedir } from 'os';
+import type { BinaryDownloadInfo } from '../services/lsp-registry';
 
 export const lspRoutes = new Hono();
 
@@ -16,54 +17,132 @@ lspRoutes.get('/servers', async (c) => {
   return c.json({ ok: true, data: servers });
 });
 
-// POST: install an npm-based language server into ~/.maude/lsp/
+/**
+ * Resolve the binary download URL for the current platform.
+ */
+function resolveBinaryUrl(download: BinaryDownloadInfo): string | null {
+  const platform = process.platform;
+  const arch = process.arch;
+
+  if (platform === 'linux') return download.linux ?? null;
+  if (platform === 'win32') return download.win32 ?? null;
+  if (platform === 'darwin') {
+    return arch === 'arm64'
+      ? download['darwin-arm64'] ?? null
+      : download['darwin-x64'] ?? null;
+  }
+  return null;
+}
+
+/**
+ * Download a zip, extract, and place the binary in ~/.maude/lsp/bin/.
+ */
+async function installBinaryFromZip(url: string, commandName: string): Promise<void> {
+  const binDir = join(LSP_DIR, 'bin');
+  mkdirSync(binDir, { recursive: true });
+
+  // Download to temp file
+  const tmpZip = join(LSP_DIR, `_tmp_${commandName}.zip`);
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`Download failed: HTTP ${res.status}`);
+  const arrayBuf = await res.arrayBuffer();
+  await Bun.write(tmpZip, arrayBuf);
+
+  // Extract using unzip
+  const proc = Bun.spawn(['unzip', '-o', tmpZip, '-d', binDir], {
+    stdout: 'pipe',
+    stderr: 'pipe',
+  });
+  const exitCode = await proc.exited;
+
+  // Clean up zip
+  try {
+    const { unlinkSync } = await import('fs');
+    unlinkSync(tmpZip);
+  } catch {}
+
+  if (exitCode !== 0) {
+    const stderr = proc.stderr ? await new Response(proc.stderr).text() : '';
+    throw new Error(`unzip failed (exit ${exitCode}): ${stderr.trim()}`);
+  }
+
+  // Make binary executable
+  const binPath = join(binDir, commandName);
+  if (existsSync(binPath)) {
+    chmodSync(binPath, 0o755);
+  }
+}
+
+// POST: install a language server into ~/.maude/lsp/
 lspRoutes.post('/install', async (c) => {
   const body = await c.req.json<{ language: string }>();
   const { language } = body;
 
   const info = getInstallInfo(language);
-  if (!info?.npmPackage) {
-    return c.json({ ok: false, error: `No npm package available for language: ${language}` }, 404);
+  if (!info) {
+    return c.json({ ok: false, error: `Unknown language: ${language}` }, 404);
   }
 
-  // Ensure ~/.maude/lsp/ exists with a package.json
-  mkdirSync(LSP_DIR, { recursive: true });
-  const pkgJsonPath = join(LSP_DIR, 'package.json');
-  if (!existsSync(pkgJsonPath)) {
-    writeFileSync(pkgJsonPath, JSON.stringify({ private: true }, null, 2));
-  }
-
-  const packages = info.npmPackage.split(' ');
-
-  try {
-    const proc = Bun.spawn(['npm', 'install', '--prefix', LSP_DIR, ...packages], {
-      cwd: LSP_DIR,
-      stdout: 'pipe',
-      stderr: 'pipe',
-    });
-
-    const exitCode = await proc.exited;
-
-    if (exitCode === 0) {
-      return c.json({ ok: true });
+  // Binary download path
+  if (info.binaryDownload) {
+    const url = resolveBinaryUrl(info.binaryDownload);
+    if (!url) {
+      return c.json({ ok: false, error: `No binary available for this platform` }, 404);
     }
 
-    const stderr = proc.stderr ? await new Response(proc.stderr).text() : '';
-    return c.json({ ok: false, error: `npm install failed (exit ${exitCode}): ${stderr.trim()}` }, 500);
-  } catch (err) {
-    return c.json({ ok: false, error: `Failed to run npm install: ${err}` }, 500);
+    try {
+      await installBinaryFromZip(url, info.command);
+      return c.json({ ok: true });
+    } catch (err) {
+      return c.json({ ok: false, error: `Binary install failed: ${err}` }, 500);
+    }
   }
+
+  // npm install path
+  if (info.npmPackage) {
+    mkdirSync(LSP_DIR, { recursive: true });
+    const pkgJsonPath = join(LSP_DIR, 'package.json');
+    if (!existsSync(pkgJsonPath)) {
+      writeFileSync(pkgJsonPath, JSON.stringify({ private: true }, null, 2));
+    }
+
+    const packages = info.npmPackage.split(' ');
+
+    try {
+      const proc = Bun.spawn(['npm', 'install', '--prefix', LSP_DIR, ...packages], {
+        cwd: LSP_DIR,
+        stdout: 'pipe',
+        stderr: 'pipe',
+      });
+
+      const exitCode = await proc.exited;
+
+      if (exitCode === 0) {
+        return c.json({ ok: true });
+      }
+
+      const stderr = proc.stderr ? await new Response(proc.stderr).text() : '';
+      return c.json({ ok: false, error: `npm install failed (exit ${exitCode}): ${stderr.trim()}` }, 500);
+    } catch (err) {
+      return c.json({ ok: false, error: `Failed to run npm install: ${err}` }, 500);
+    }
+  }
+
+  return c.json({ ok: false, error: `No install method available for language: ${language}` }, 404);
 });
 
 // GET: check which languages have managed installs in ~/.maude/lsp/
 lspRoutes.get('/install-status', async (c) => {
   const servers = await getAvailableServers();
-  const binDir = join(LSP_DIR, 'node_modules', '.bin');
+  const npmBinDir = join(LSP_DIR, 'node_modules', '.bin');
+  const binDir = join(LSP_DIR, 'bin');
 
   const installed: Record<string, boolean> = {};
   for (const server of servers) {
     if (server.installable) {
-      installed[server.language] = existsSync(join(binDir, server.command));
+      installed[server.language] =
+        existsSync(join(npmBinDir, server.command)) ||
+        existsSync(join(binDir, server.command));
     }
   }
 

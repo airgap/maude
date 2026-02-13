@@ -6,6 +6,13 @@ import { existsSync } from 'fs';
 import { join } from 'path';
 import { homedir } from 'os';
 
+export interface BinaryDownloadInfo {
+  linux?: string;
+  'darwin-arm64'?: string;
+  'darwin-x64'?: string;
+  win32?: string;
+}
+
 export interface LspServerEntry {
   language: string;
   command: string;
@@ -13,6 +20,7 @@ export interface LspServerEntry {
   available: boolean;
   installable: boolean;
   npmPackage?: string;
+  binaryDownload?: BinaryDownloadInfo;
   systemInstallHint?: string;
 }
 
@@ -20,6 +28,7 @@ interface LspRegistryEntry {
   command: string;
   args: string[];
   npmPackage?: string;
+  binaryDownload?: BinaryDownloadInfo;
   systemInstallHint?: string;
 }
 
@@ -79,6 +88,19 @@ const REGISTRY: Record<string, LspRegistryEntry> = {
     args: ['--stdio'],
     npmPackage: 'yaml-language-server',
   },
+  xml: {
+    command: 'lemminx',
+    args: [],
+    binaryDownload: {
+      linux: 'https://github.com/redhat-developer/vscode-xml/releases/download/0.29.0/lemminx-linux.zip',
+      'darwin-arm64':
+        'https://github.com/redhat-developer/vscode-xml/releases/download/0.29.0/lemminx-osx-aarch_64.zip',
+      'darwin-x64':
+        'https://github.com/redhat-developer/vscode-xml/releases/download/0.29.0/lemminx-osx-x86_64.zip',
+      win32:
+        'https://github.com/redhat-developer/vscode-xml/releases/download/0.29.0/lemminx-win32.zip',
+    },
+  },
 };
 
 /** Base directory for managed LSP installs */
@@ -92,8 +114,14 @@ export function getLspCommand(language: string): { command: string; args: string
   const entry = REGISTRY[language];
   if (!entry) return null;
 
-  // Try managed install first
-  const managedBin = join(LSP_DIR, 'node_modules', '.bin', entry.command);
+  // Try managed npm install
+  const managedNpmBin = join(LSP_DIR, 'node_modules', '.bin', entry.command);
+  if (existsSync(managedNpmBin)) {
+    return { command: managedNpmBin, args: entry.args };
+  }
+
+  // Try managed binary download
+  const managedBin = join(LSP_DIR, 'bin', entry.command);
   if (existsSync(managedBin)) {
     return { command: managedBin, args: entry.args };
   }
@@ -127,9 +155,13 @@ export async function getAvailableServers(): Promise<LspServerEntry[]> {
     if (seen.has(key)) {
       available = results.find((r) => r.command === key)?.available ?? false;
     } else {
-      // Check managed install first, then system PATH
-      const managedBin = join(LSP_DIR, 'node_modules', '.bin', entry.command);
-      available = existsSync(managedBin) || Bun.which(entry.command) !== null;
+      // Check managed npm install, managed binary, then system PATH
+      const managedNpmBin = join(LSP_DIR, 'node_modules', '.bin', entry.command);
+      const managedBin = join(LSP_DIR, 'bin', entry.command);
+      available =
+        existsSync(managedNpmBin) ||
+        existsSync(managedBin) ||
+        Bun.which(entry.command) !== null;
     }
     seen.add(key);
 
@@ -138,8 +170,9 @@ export async function getAvailableServers(): Promise<LspServerEntry[]> {
       command: entry.command,
       args: entry.args,
       available,
-      installable: !!entry.npmPackage,
+      installable: !!(entry.npmPackage || entry.binaryDownload),
       npmPackage: entry.npmPackage,
+      binaryDownload: entry.binaryDownload,
       systemInstallHint: entry.systemInstallHint,
     });
   }
