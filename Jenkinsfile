@@ -35,7 +35,7 @@ pipeline {
                             sudo apt-get install -y \
                                 libwebkit2gtk-4.1-dev \
                                 libsoup-3.0-dev \
-                                libappindicator3-dev \
+                                libayatana-appindicator3-dev \
                                 librsvg2-dev \
                                 patchelf \
                                 libgtk-3-dev \
