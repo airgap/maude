@@ -43,7 +43,6 @@ pipeline {
                         '''
                         sh '''
                             export PATH="$HOME/.bun/bin:$HOME/.cargo/bin:$PATH"
-                            export APPIMAGE_EXTRACT_AND_RUN=1
 
                             if ! command -v bun &>/dev/null; then
                                 curl -fsSL https://bun.sh/install | bash
@@ -58,10 +57,9 @@ pipeline {
                             fi
 
                             bun install --frozen-lockfile
-                            cargo tauri build --target x86_64-unknown-linux-gnu
+                            cargo tauri build --target x86_64-unknown-linux-gnu --bundles deb
                         '''
                         stash includes: 'src-tauri/target/x86_64-unknown-linux-gnu/release/bundle/deb/*.deb', name: 'linux-deb'
-                        stash includes: 'src-tauri/target/x86_64-unknown-linux-gnu/release/bundle/appimage/*.AppImage', name: 'linux-appimage'
                     }
                 }
 
@@ -100,11 +98,9 @@ pipeline {
             steps {
                 sh 'rm -rf release-artifacts && mkdir release-artifacts'
                 unstash 'linux-deb'
-                unstash 'linux-appimage'
                 unstash 'macos-dmg'
                 sh '''
                     find src-tauri/target -name '*.deb' -exec cp {} release-artifacts/ \\;
-                    find src-tauri/target -name '*.AppImage' -exec cp {} release-artifacts/ \\;
                     find src-tauri/target -name '*.dmg' -exec cp {} release-artifacts/ \\;
                 '''
                 withCredentials([usernamePassword(credentialsId: 'github-pat', usernameVariable: 'GH_USER', passwordVariable: 'GITHUB_TOKEN')]) {
