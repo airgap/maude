@@ -19,7 +19,12 @@ pipeline {
         }
 
         stage('Build') {
-            when { buildingTag() }
+            when {
+                anyOf {
+                    branch 'main'
+                    buildingTag()
+                }
+            }
             parallel {
                 stage('Linux') {
                     agent { label 'linux' }
