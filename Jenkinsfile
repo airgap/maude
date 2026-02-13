@@ -57,9 +57,10 @@ pipeline {
                             fi
 
                             bun install --frozen-lockfile
-                            cargo tauri build --target x86_64-unknown-linux-gnu --bundles deb
+                            cargo tauri build --target x86_64-unknown-linux-gnu --bundles deb,rpm
                         '''
                         stash includes: 'src-tauri/target/x86_64-unknown-linux-gnu/release/bundle/deb/*.deb', name: 'linux-deb'
+                        stash includes: 'src-tauri/target/x86_64-unknown-linux-gnu/release/bundle/rpm/*.rpm', name: 'linux-rpm'
                     }
                 }
 
@@ -98,9 +99,11 @@ pipeline {
             steps {
                 sh 'rm -rf release-artifacts && mkdir release-artifacts'
                 unstash 'linux-deb'
+                unstash 'linux-rpm'
                 unstash 'macos-dmg'
                 sh '''
                     find src-tauri/target -name '*.deb' -exec cp {} release-artifacts/ \\;
+                    find src-tauri/target -name '*.rpm' -exec cp {} release-artifacts/ \\;
                     find src-tauri/target -name '*.dmg' -exec cp {} release-artifacts/ \\;
                 '''
                 withCredentials([usernamePassword(credentialsId: 'github-pat', usernameVariable: 'GH_USER', passwordVariable: 'GITHUB_TOKEN')]) {
