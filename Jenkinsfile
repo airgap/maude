@@ -43,6 +43,7 @@ pipeline {
                         '''
                         sh '''
                             export PATH="$HOME/.bun/bin:$HOME/.cargo/bin:$PATH"
+                            export APPIMAGE_EXTRACT_AND_RUN=1
 
                             if ! command -v bun &>/dev/null; then
                                 curl -fsSL https://bun.sh/install | bash
