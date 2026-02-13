@@ -9,7 +9,9 @@
     "start": "bun run src/index.ts",
     "build": "bun build src/index.ts --outdir dist --target bun",
     "build:binary": "bun build src/index.ts --compile --outfile ../../src-tauri/binaries/maude-server",
-    "check": "tsc --noEmit"
+    "check": "tsc --noEmit",
+    "test": "bun test",
+    "test:coverage": "bun test --coverage"
   },
   "dependencies": {
     "hono": "^4.7.0",

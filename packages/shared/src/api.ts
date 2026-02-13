@@ -13,6 +13,7 @@ export interface CreateConversationRequest {
   maxTurns?: number;
   allowedTools?: string[];
   disallowedTools?: string[];
+  planMode?: boolean;
 }
 
 export interface SendMessageRequest {

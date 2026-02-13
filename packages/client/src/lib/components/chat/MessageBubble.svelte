@@ -121,11 +121,12 @@
           <ThinkingBlock content={entry.block.thinking} />
         {:else if entry.block.type === 'tool_use'}
           {#if settingsStore.showToolDetails}
+            {@const toolBlock = entry.block as import('@maude/shared').ToolUseContent}
             <ToolCallBlock
-              toolName={entry.block.name}
-              input={entry.block.input}
+              toolName={toolBlock.name}
+              input={toolBlock.input}
               result={getToolResults(message.content).find(
-                (r: any) => r.tool_use_id === entry.block.id,
+                (r: any) => r.tool_use_id === toolBlock.id,
               )}
             />
           {/if}

@@ -23,13 +23,16 @@
   }
 
   function childToolCalls() {
-    return children.filter((b) => b.type === 'tool_use') as Array<
+    return children.filter((b: MessageContent) => b.type === 'tool_use') as Array<
       MessageContent & { type: 'tool_use' }
     >;
   }
 
   function findResult(toolId: string) {
-    return toolResults.find((r) => r.tool_use_id === toolId);
+    return toolResults.find(
+      (r: { tool_use_id: string; content: string; is_error?: boolean }) =>
+        r.tool_use_id === toolId,
+    );
   }
 </script>
 

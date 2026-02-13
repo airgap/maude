@@ -1,13 +1,12 @@
 {
   "extends": "../../tsconfig.json",
   "compilerOptions": {
-    "types": ["bun-types"],
+    "noEmit": true,
+    "types": ["bun"],
     "paths": {
       "@maude/shared": ["../shared/src"],
       "@/*": ["./src/*"]
-    },
-    "outDir": "dist",
-    "rootDir": "src"
+    }
   },
   "include": ["src/**/*"]
 }

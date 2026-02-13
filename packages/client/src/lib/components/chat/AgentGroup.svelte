@@ -24,13 +24,13 @@
   }
 
   function childToolCalls() {
-    return children.filter((b) => b.type === 'tool_use') as Array<
+    return children.filter((b: MessageContent) => b.type === 'tool_use') as Array<
       MessageContent & { type: 'tool_use' }
     >;
   }
 
   function childTextBlocks() {
-    return children.filter((b) => b.type === 'text' && b.text) as Array<
+    return children.filter((b: MessageContent) => b.type === 'text' && b.text) as Array<
       MessageContent & { type: 'text' }
     >;
   }

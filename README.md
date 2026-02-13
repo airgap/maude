@@ -38,9 +38,24 @@ src-tauri/   Tauri desktop shell
 scripts/     Build helpers
 ```
 
-## Desktop App
+## Desktop App (Tauri)
 
-Build and run the native desktop app:
+The desktop build wraps Maude in a native window using Tauri v2. This section is **only needed if you want to build/run the desktop app** — the web UI works without any of this.
+
+### Additional Prerequisites
+
+- [Rust](https://rustup.rs) toolchain (`rustup`, `cargo`, `rustc`)
+- Tauri CLI v2:
+  ```sh
+  cargo install tauri-cli --version "^2"
+  ```
+- System dependencies (Linux only):
+  ```sh
+  # Debian/Ubuntu
+  sudo apt install libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
+  ```
+
+### Build & Run
 
 ```sh
 # Development

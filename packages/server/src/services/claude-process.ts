@@ -39,7 +39,7 @@ interface ClaudeSession {
  *   {"type":"message_delta","delta":{"stop_reason":"end_turn"},"usage":{...}}
  *   {"type":"message_stop"}
  */
-function translateCliEvent(event: any): string[] {
+export function translateCliEvent(event: any): string[] {
   const events: string[] = [];
   const parentId = event.parent_tool_use_id || null;
 
@@ -306,8 +306,8 @@ class ClaudeProcessManager {
           let assistantContent: any[] | null = null;
           let assistantModel: string | null = null;
 
-          // Read stdout using async iteration
-          for await (const chunk of proc.stdout) {
+          // Read stdout using async iteration (stdout is always a ReadableStream when spawned with 'pipe')
+          for await (const chunk of proc.stdout as ReadableStream<Uint8Array>) {
             if (cancelled) break;
             buffer += decoder.decode(chunk, { stream: true });
             const lines = buffer.split('\n');
@@ -470,7 +470,7 @@ class ClaudeProcessManager {
     if (!session.process) return;
     const decoder = new TextDecoder();
     try {
-      for await (const chunk of session.process.stderr) {
+      for await (const chunk of session.process.stderr as ReadableStream<Uint8Array>) {
         console.error(`[claude:${session.id}]`, decoder.decode(chunk));
       }
     } catch {

@@ -29,6 +29,7 @@ export const api = {
       maxTurns?: number;
       allowedTools?: string[];
       disallowedTools?: string[];
+      planMode?: boolean;
     }) =>
       request<{ ok: boolean; data: { id: string } }>('/conversations', {
         method: 'POST',

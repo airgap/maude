@@ -70,8 +70,9 @@ class ClaudeApiClient {
   }
 
   async sendMessage(sessionId: string, content: string): Promise<ReadableStream> {
-    const session = this.sessions.get(sessionId);
-    if (!session) throw new Error(`Session ${sessionId} not found`);
+    const sessionOrUndef = this.sessions.get(sessionId);
+    if (!sessionOrUndef) throw new Error(`Session ${sessionId} not found`);
+    const session = sessionOrUndef;
 
     const auth = this.getAuth();
 

@@ -5,6 +5,7 @@
   "identifier": "com.maude.app",
   "build": {
     "frontendDist": "../packages/client/build",
+    "beforeDevCommand": "bun run build:desktop",
     "beforeBuildCommand": "bun run build:desktop"
   },
   "bundle": {

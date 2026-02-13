@@ -1,12 +1,11 @@
 // Prevents additional console window on Windows in release
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
-use tauri::Manager;
+use tauri::{Emitter, Manager};
 use tauri_plugin_shell::ShellExt;
 use std::time::Duration;
 
-#[tokio::main]
-async fn main() {
+fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_process::init())
@@ -26,7 +25,6 @@ async fn main() {
             });
 
             // Log sidecar output in a background task
-            let app_handle = app.handle().clone();
             tauri::async_runtime::spawn(async move {
                 use tauri_plugin_shell::process::CommandEvent;
                 while let Some(event) = rx.recv().await {

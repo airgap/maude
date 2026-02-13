@@ -52,7 +52,7 @@ app.post('/', async (c) => {
     body.subject,
     body.description,
     body.activeForm || null,
-    body.metadata ? JSON.stringify(body.metadata) : null,
+    body.metadata ? JSON.stringify(body.metadata) : '{}',
     now,
     now,
   );
