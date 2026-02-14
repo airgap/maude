@@ -1,4 +1,4 @@
-import type { PRD, LoopState, IterationLogEntry, StreamLoopEvent, LoopConfig, PlanMode, EditMode, GeneratedStory, RefinementQuestion, RefineStoryResponse, DependencyGraph, SprintValidation, SprintValidationWarning, ValidateACResponse, ACOverride, StoryEstimate, EstimatePrdResponse, SprintPlanResponse, PRDCompletenessAnalysis, StoryTemplate, StoryTemplateCategory } from '@maude/shared';
+import type { PRD, LoopState, IterationLogEntry, StreamLoopEvent, LoopConfig, PlanMode, EditMode, GeneratedStory, RefinementQuestion, RefineStoryResponse, DependencyGraph, SprintValidation, SprintValidationWarning, ValidateACResponse, ACOverride, StoryEstimate, EstimatePrdResponse, SprintPlanResponse, PRDCompletenessAnalysis, StoryTemplate, StoryTemplateCategory, PriorityRecommendation, PriorityRecommendationBulkResponse } from '@maude/shared';
 import { api, getBaseUrl, getAuthToken } from '../api/client';
 
 function createLoopStore() {
@@ -72,6 +72,14 @@ function createLoopStore() {
   let templatesError = $state<string | null>(null);
   let selectedTemplateId = $state<string | null>(null);
   let templateFilterCategory = $state<StoryTemplateCategory | null>(null);
+
+  // Priority recommendation state
+  let recommendingPriorityStoryId = $state<string | null>(null);
+  let recommendingPriority = $state(false);
+  let priorityRecommendationResult = $state<PriorityRecommendation | null>(null);
+  let priorityRecommendationError = $state<string | null>(null);
+  let recommendingAllPriorities = $state(false);
+  let bulkPriorityResult = $state<PriorityRecommendationBulkResponse | null>(null);
 
   return {
     get activeLoop() {
@@ -260,6 +268,24 @@ function createLoopStore() {
     },
     get templateFilterCategory() {
       return templateFilterCategory;
+    },
+    get recommendingPriorityStoryId() {
+      return recommendingPriorityStoryId;
+    },
+    get recommendingPriority() {
+      return recommendingPriority;
+    },
+    get priorityRecommendationResult() {
+      return priorityRecommendationResult;
+    },
+    get priorityRecommendationError() {
+      return priorityRecommendationError;
+    },
+    get recommendingAllPriorities() {
+      return recommendingAllPriorities;
+    },
+    get bulkPriorityResult() {
+      return bulkPriorityResult;
     },
 
     // --- Setters ---
@@ -1179,6 +1205,88 @@ function createLoopStore() {
         return { ok: false, error: (res as any).error || 'Failed to create story from template' };
       } catch (err) {
         return { ok: false, error: String(err) };
+      }
+    },
+
+    // --- Priority Recommendations ---
+
+    setRecommendingPriorityStoryId(id: string | null) {
+      recommendingPriorityStoryId = id;
+    },
+
+    clearPriorityRecommendation() {
+      recommendingPriorityStoryId = null;
+      recommendingPriority = false;
+      priorityRecommendationResult = null;
+      priorityRecommendationError = null;
+    },
+
+    clearBulkPriorityResult() {
+      recommendingAllPriorities = false;
+      bulkPriorityResult = null;
+    },
+
+    async recommendPriority(
+      prdId: string,
+      storyId: string,
+    ): Promise<{ ok: boolean; error?: string }> {
+      recommendingPriority = true;
+      priorityRecommendationError = null;
+      priorityRecommendationResult = null;
+      recommendingPriorityStoryId = storyId;
+      try {
+        const res = await api.prds.recommendPriority(prdId, storyId);
+        if (res.ok) {
+          priorityRecommendationResult = res.data.recommendation;
+          // Reload PRD to reflect the persisted recommendation
+          await this.loadPrd(prdId);
+          return { ok: true };
+        }
+        priorityRecommendationError = (res as any).error || 'Priority recommendation failed';
+        return { ok: false, error: priorityRecommendationError ?? undefined };
+      } catch (err) {
+        priorityRecommendationError = String(err);
+        return { ok: false, error: priorityRecommendationError ?? undefined };
+      } finally {
+        recommendingPriority = false;
+      }
+    },
+
+    async acceptPriority(
+      prdId: string,
+      storyId: string,
+      priority: string,
+      accept: boolean,
+    ): Promise<{ ok: boolean; error?: string }> {
+      try {
+        const res = await api.prds.acceptPriority(prdId, storyId, priority, accept);
+        if (res.ok) {
+          await this.loadPrd(prdId);
+          return { ok: true };
+        }
+        return { ok: false, error: (res as any).error || 'Failed to update priority' };
+      } catch (err) {
+        return { ok: false, error: String(err) };
+      }
+    },
+
+    async recommendAllPriorities(
+      prdId: string,
+    ): Promise<{ ok: boolean; error?: string }> {
+      recommendingAllPriorities = true;
+      bulkPriorityResult = null;
+      try {
+        const res = await api.prds.recommendAllPriorities(prdId);
+        if (res.ok) {
+          bulkPriorityResult = res.data;
+          await this.loadPrd(prdId);
+          return { ok: true };
+        }
+        return { ok: false, error: (res as any).error || 'Bulk priority recommendation failed' };
+      } catch (err) {
+        return { ok: false, error: String(err) };
+      } finally {
+        recommendingAllPriorities = false;
       }
     },
 

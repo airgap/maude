@@ -215,7 +215,35 @@
     uiStore.openModal('template-library');
   }
 
+  function openPriorityModal(storyId: string) {
+    loopStore.clearPriorityRecommendation();
+    loopStore.setRecommendingPriorityStoryId(storyId);
+    uiStore.openModal('priority-recommendation');
+  }
+
   let estimatingAll = $state(false);
+  let recommendingAllPriorities = $state(false);
+
+  async function recommendAllPriorities() {
+    const prdId = loopStore.selectedPrdId;
+    if (!prdId || recommendingAllPriorities) return;
+    recommendingAllPriorities = true;
+    try {
+      const result = await loopStore.recommendAllPriorities(prdId);
+      if (result.ok) {
+        const summary = loopStore.bulkPriorityResult?.summary;
+        if (summary) {
+          uiStore.toast(`Priority recommendations: ${summary.changedCount} changes suggested (${summary.criticalCount}C/${summary.highCount}H/${summary.mediumCount}M/${summary.lowCount}L)`, 'success');
+        } else {
+          uiStore.toast('All priorities analyzed', 'success');
+        }
+      } else {
+        uiStore.toast(result.error || 'Priority recommendation failed', 'error');
+      }
+    } finally {
+      recommendingAllPriorities = false;
+    }
+  }
 
   async function estimateAllStories() {
     const prdId = loopStore.selectedPrdId;
@@ -405,6 +433,9 @@
           <button class="icon-btn" title="Estimate all stories" onclick={estimateAllStories} disabled={estimatingAll}>
             {#if estimatingAll}<span class="spinner-sm"></span>{:else}📊{/if}
           </button>
+          <button class="icon-btn" title="Recommend priorities for all stories" onclick={recommendAllPriorities} disabled={recommendingAllPriorities}>
+            {#if recommendingAllPriorities}<span class="spinner-sm"></span>{:else}🎯{/if}
+          </button>
           <button class="icon-btn" title="Sprint plan recommendations" onclick={openSprintPlanModal}>📅</button>
           <button class="icon-btn" title="PRD completeness analysis" onclick={openCompletenessModal}>🔍</button>
           <button class="icon-btn" title="Story templates" onclick={openTemplateLibrary}>📄</button>
@@ -445,6 +476,7 @@
                   <button class="validate-btn" title="Validate acceptance criteria" onclick={() => openValidateModal(story.id)}>✓</button>
                   <button class="refine-btn" title="Refine story" onclick={() => openRefineModal(story.id)}>⚡</button>
                   <button class="estimate-btn" title="Estimate complexity" onclick={() => openEstimateModal(story.id)}>📊</button>
+                  <button class="priority-btn" title="Recommend priority" onclick={() => openPriorityModal(story.id)}>🎯</button>
                   <button class="delete-btn" onclick={() => handleDeleteStory(story.id)}>×</button>
                 {/if}
               </div>
@@ -452,6 +484,11 @@
                 {#if story.estimate}
                   <span class="estimate-badge" style:background={estimateSizeColor(story.estimate.size)} title="{story.estimate.size} · {story.estimate.storyPoints} points · Confidence: {story.estimate.confidence}{story.estimate.isManualOverride ? ' (manual)' : ''}">
                     {estimateSizeLabel(story.estimate.size)}{story.estimate.storyPoints}
+                  </span>
+                {/if}
+                {#if story.priorityRecommendation && story.priorityRecommendation.suggestedPriority !== story.priority && !story.priorityRecommendation.isManualOverride}
+                  <span class="priority-rec-badge" title="AI suggests: {story.priorityRecommendation.suggestedPriority}">
+                    🎯{story.priorityRecommendation.suggestedPriority[0].toUpperCase()}
                   </span>
                 {/if}
                 {#if story.dependsOn?.length > 0}
@@ -701,6 +738,7 @@
   .validate-btn,
   .refine-btn,
   .estimate-btn,
+  .priority-btn,
   .delete-btn {
     font-size: 12px;
     padding: 0 4px;
@@ -711,6 +749,7 @@
   .story-item:hover .validate-btn,
   .story-item:hover .refine-btn,
   .story-item:hover .estimate-btn,
+  .story-item:hover .priority-btn,
   .story-item:hover .delete-btn {
     opacity: 1;
   }
@@ -722,6 +761,9 @@
   }
   .estimate-btn:hover {
     color: var(--accent-warning, #e6a817);
+  }
+  .priority-btn:hover {
+    color: var(--accent-primary);
   }
   .delete-btn:hover {
     color: var(--accent-error);
@@ -759,6 +801,16 @@
     border-top-color: var(--accent-primary);
     border-radius: 50%;
     animation: spin 0.6s linear infinite;
+  }
+
+  .priority-rec-badge {
+    font-size: 8px;
+    padding: 0 3px;
+    border-radius: 2px;
+    background: rgba(59, 130, 246, 0.15);
+    color: var(--accent-primary);
+    font-weight: 700;
+    flex-shrink: 0;
   }
 
   .dep-badge {

@@ -17,6 +17,7 @@
   import SprintPlanModal from '../settings/SprintPlanModal.svelte';
   import PrdCompletenessModal from '../settings/PrdCompletenessModal.svelte';
   import TemplateLibraryModal from '../settings/TemplateLibraryModal.svelte';
+  import PriorityRecommendationModal from '../settings/PriorityRecommendationModal.svelte';
   import CommandPalette from '../common/CommandPalette.svelte';
   import ToastContainer from '../common/ToastContainer.svelte';
   import QuickOpen from '../editor/QuickOpen.svelte';
@@ -224,6 +225,10 @@
 
   {#if uiStore.activeModal === 'template-library'}
     <TemplateLibraryModal />
+  {/if}
+
+  {#if uiStore.activeModal === 'priority-recommendation'}
+    <PriorityRecommendationModal />
   {/if}
 
   {#if uiStore.activeModal === 'command-palette'}

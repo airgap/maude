@@ -216,6 +216,7 @@ export function initDatabase(): void {
     `ALTER TABLE conversations ADD COLUMN user_id TEXT`,
     `ALTER TABLE prd_stories ADD COLUMN estimate TEXT`,
     `ALTER TABLE prd_stories ADD COLUMN dependency_reasons TEXT NOT NULL DEFAULT '{}'`,
+    `ALTER TABLE prd_stories ADD COLUMN priority_recommendation TEXT`,
   ];
   for (const sql of alterColumns) {
     try {

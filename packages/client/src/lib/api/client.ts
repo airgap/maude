@@ -702,6 +702,28 @@ export const api = {
         method: 'POST',
         body: JSON.stringify({ templateId, variables }),
       }),
+    // --- Priority Recommendations ---
+    recommendPriority: (prdId: string, storyId: string) =>
+      request<{
+        ok: boolean;
+        data: import('@maude/shared').PriorityRecommendationResponse;
+      }>(`/prds/${prdId}/stories/${storyId}/priority`, {
+        method: 'POST',
+        body: JSON.stringify({ storyId }),
+      }),
+    acceptPriority: (prdId: string, storyId: string, priority: string, accept: boolean) =>
+      request<{ ok: boolean }>(`/prds/${prdId}/stories/${storyId}/priority`, {
+        method: 'PUT',
+        body: JSON.stringify({ priority, accept }),
+      }),
+    recommendAllPriorities: (prdId: string) =>
+      request<{
+        ok: boolean;
+        data: import('@maude/shared').PriorityRecommendationBulkResponse;
+      }>(`/prds/${prdId}/priorities`, {
+        method: 'POST',
+        body: JSON.stringify({}),
+      }),
   },
 
   // --- Loops ---

@@ -146,4 +146,8 @@ export type {
   CreateTemplateRequest,
   CreateStoryFromTemplateRequest,
   CreateStoryFromTemplateResponse,
+  PriorityFactor,
+  PriorityRecommendation,
+  PriorityRecommendationResponse,
+  PriorityRecommendationBulkResponse,
 } from './prd.js';

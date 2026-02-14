@@ -46,6 +46,10 @@ import type {
   CreateTemplateRequest,
   CreateStoryFromTemplateRequest,
   CreateStoryFromTemplateResponse,
+  PriorityRecommendation,
+  PriorityFactor,
+  PriorityRecommendationResponse,
+  PriorityRecommendationBulkResponse,
 } from '@maude/shared';
 import { readFileSync } from 'fs';
 import { join } from 'path';
@@ -1125,6 +1129,9 @@ app.post('/:id/dependencies', async (c) => {
   if (changed) {
     db.query('UPDATE prd_stories SET depends_on = ?, dependency_reasons = ?, updated_at = ? WHERE id = ?')
       .run(JSON.stringify(dependsOn), JSON.stringify(reasons), now, fromStoryId);
+    // Invalidate priority recommendations for affected stories when dependencies change
+    db.query('UPDATE prd_stories SET priority_recommendation = NULL, updated_at = ? WHERE id = ? OR id = ?')
+      .run(now, fromStoryId, toStoryId);
     db.query('UPDATE prds SET updated_at = ? WHERE id = ?').run(now, prdId);
   }
 
@@ -1164,6 +1171,9 @@ app.delete('/:id/dependencies', async (c) => {
     const now = Date.now();
     db.query('UPDATE prd_stories SET depends_on = ?, dependency_reasons = ?, updated_at = ? WHERE id = ?')
       .run(JSON.stringify(filtered), JSON.stringify(reasons), now, fromStoryId);
+    // Invalidate priority recommendations for affected stories when dependencies change
+    db.query('UPDATE prd_stories SET priority_recommendation = NULL, updated_at = ? WHERE id = ? OR id = ?')
+      .run(now, fromStoryId, toStoryId);
     db.query('UPDATE prds SET updated_at = ? WHERE id = ?').run(now, prdId);
   }
 
@@ -1428,6 +1438,9 @@ Which stories must be completed before others can start? Return the dependency l
       if (depsChanged || reasonsChanged) {
         db.query('UPDATE prd_stories SET depends_on = ?, dependency_reasons = ?, updated_at = ? WHERE id = ?')
           .run(JSON.stringify(newDeps), JSON.stringify(newReasons), now, storyId);
+        // Invalidate priority recommendations when dependencies change
+        db.query('UPDATE prd_stories SET priority_recommendation = NULL, updated_at = ? WHERE id = ?')
+          .run(now, storyId);
       }
     }
 
@@ -3435,6 +3448,557 @@ app.post('/:id/stories/from-template', async (c) => {
   }, 201);
 });
 
+// --- Priority Recommendation ---
+
+// Recommend priority for a single story using AI
+app.post('/:prdId/stories/:storyId/priority', async (c) => {
+  const db = getDb();
+  const prdId = c.req.param('prdId');
+  const storyId = c.req.param('storyId');
+
+  const prdRow = db.query('SELECT * FROM prds WHERE id = ?').get(prdId) as any;
+  if (!prdRow) return c.json({ ok: false, error: 'PRD not found' }, 404);
+
+  const storyRow = db.query('SELECT * FROM prd_stories WHERE id = ? AND prd_id = ?').get(storyId, prdId) as any;
+  if (!storyRow) return c.json({ ok: false, error: 'Story not found' }, 404);
+
+  const story = storyFromRow(storyRow);
+
+  // Build context: all stories in the PRD for dependency and scope analysis
+  const allStories = db
+    .query('SELECT * FROM prd_stories WHERE prd_id = ? ORDER BY sort_order ASC')
+    .all(prdId) as any[];
+  const mappedStories = allStories.map(storyFromRow);
+
+  // Build project memory context
+  let memoryContext = '';
+  try {
+    const memRows = db
+      .query(
+        `SELECT * FROM project_memories WHERE project_path = ? AND confidence >= 0.3 ORDER BY category, times_seen DESC LIMIT 20`,
+      )
+      .all(prdRow.project_path) as any[];
+    if (memRows.length > 0) {
+      const grouped: Record<string, string[]> = {};
+      for (const m of memRows) {
+        if (!grouped[m.category]) grouped[m.category] = [];
+        grouped[m.category].push(`- ${m.key}: ${m.content}`);
+      }
+      const labels: Record<string, string> = {
+        convention: 'Coding Conventions',
+        decision: 'Architecture Decisions',
+        preference: 'User Preferences',
+        pattern: 'Common Patterns',
+        context: 'Project Context',
+      };
+      memoryContext = '\n\n## Project Memory\n';
+      for (const [cat, items] of Object.entries(grouped)) {
+        memoryContext += `\n### ${labels[cat] || cat}\n${items.join('\n')}\n`;
+      }
+    }
+  } catch { /* no project memory */ }
+
+  // Build dependency context
+  let dependencyContext = '';
+  const blocksStories = mappedStories.filter((s) =>
+    s.dependsOn?.includes(storyId)
+  );
+  const blockedByStories = (story.dependsOn || [])
+    .map((depId: string) => mappedStories.find((s) => s.id === depId))
+    .filter(Boolean);
+
+  if (blocksStories.length > 0 || blockedByStories.length > 0) {
+    dependencyContext = '\n\n## Dependency Information\n';
+    if (blocksStories.length > 0) {
+      dependencyContext += `This story BLOCKS ${blocksStories.length} other story(ies):\n`;
+      for (const s of blocksStories) {
+        dependencyContext += `- "${s.title}" (${s.status})\n`;
+      }
+    }
+    if (blockedByStories.length > 0) {
+      dependencyContext += `This story is BLOCKED BY ${blockedByStories.length} other story(ies):\n`;
+      for (const s of blockedByStories) {
+        dependencyContext += `- "${s.title}" (${s.status})\n`;
+      }
+    }
+  }
+
+  // Build sibling stories context
+  let siblingContext = '\n\n## Other Stories in this PRD\n';
+  const otherStories = mappedStories.filter((s) => s.id !== storyId);
+  for (const s of otherStories) {
+    const acCount = s.acceptanceCriteria?.length || 0;
+    const depsCount = s.dependsOn?.length || 0;
+    const blocksCount = mappedStories.filter((ms) => ms.dependsOn?.includes(s.id)).length;
+    siblingContext += `- ${s.title} (priority: ${s.priority}, status: ${s.status}, ${acCount} criteria, blocks: ${blocksCount}, blocked by: ${depsCount})\n`;
+  }
+
+  const criteriaText = story.acceptanceCriteria
+    .map((ac: any) => `- ${ac.description}`)
+    .join('\n');
+
+  const systemPrompt = `You are an expert product manager specializing in story prioritization. Your task is to recommend a priority level for a user story based on business value, risk factors, dependencies, and user impact.
+
+PRIORITY LEVELS:
+- **critical**: Must be done immediately. Blocks critical functionality, security vulnerabilities, data loss risks, or is a prerequisite for many other stories.
+- **high**: Important and should be scheduled soon. Significant user impact, blocks other stories, addresses key business requirements, or has substantial risk.
+- **medium**: Standard priority. Normal feature work, moderate user impact, few dependencies.
+- **low**: Nice to have. Minor improvements, cosmetic changes, tech debt that doesn't block other work, low user impact.
+
+FACTORS TO EVALUATE:
+
+1. **Blocking Dependencies** (category: dependency)
+   - How many stories does this story block? (more blocks = higher priority)
+   - Is this story on the critical path?
+   - Are there circular dependency risks?
+
+2. **Risk Keywords** (category: risk)
+   - Look for risk indicators: "security", "performance", "data loss", "migration", "breaking change", "deadline", "compliance", "authentication", "authorization"
+   - Infrastructure/foundation stories that other work depends on
+   - Stories with unclear requirements or high uncertainty
+
+3. **Scope** (category: scope)
+   - Number of acceptance criteria (more criteria may indicate larger scope)
+   - Complexity of the story description
+   - Whether the story involves cross-cutting concerns
+   - Estimated effort (if available)
+
+4. **User Impact** (category: user_impact)
+   - Does this affect core user workflows?
+   - How many users would be affected?
+   - Is this user-facing or internal/infrastructure?
+   - Does this address user pain points or feature requests?
+
+You MUST respond with ONLY a valid JSON object. No markdown, no explanation, no code fences.
+
+{
+  "suggestedPriority": "critical" | "high" | "medium" | "low",
+  "confidence": <number 0-100>,
+  "factors": [
+    {
+      "factor": "<description of the factor>",
+      "category": "dependency" | "risk" | "scope" | "user_impact",
+      "impact": "increases" | "decreases" | "neutral",
+      "weight": "minor" | "moderate" | "major"
+    }
+  ],
+  "explanation": "<2-3 sentence explanation of why this priority was recommended>"
+}
+
+IMPORTANT:
+- Provide 3-6 factors that influenced your recommendation
+- Be specific in factor descriptions (reference actual story details)
+- Consider the full context: PRD description, dependencies, other stories' priorities
+- A story that blocks many others should generally be higher priority
+- Security and data-related stories should lean toward higher priority
+- Confidence should reflect how clearly the priority can be determined from the available information${memoryContext}`;
+
+  const userPrompt = `Recommend a priority level for this user story:
+
+## PRD: ${prdRow.name}
+${prdRow.description || '(No description)'}
+
+## Story to Prioritize
+Title: ${story.title}
+Description: ${story.description}
+Current Priority: ${story.priority}
+Status: ${story.status}
+Acceptance Criteria:
+${criteriaText || '(No criteria defined)'}
+${story.estimate ? `Estimate: ${story.estimate.size} (${story.estimate.storyPoints} points)` : 'No estimate yet'}
+${dependencyContext}${siblingContext}
+
+Recommend a priority level with explanation and supporting factors.`;
+
+  try {
+    const auth = getAnthropicAuth();
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+      'anthropic-version': '2023-06-01',
+    };
+    if (auth.type === 'oauth') {
+      headers['Authorization'] = `Bearer ${auth.token}`;
+    } else {
+      headers['x-api-key'] = auth.token;
+    }
+
+    const apiResponse = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-5-20250929',
+        max_tokens: 2048,
+        system: systemPrompt,
+        messages: [{ role: 'user', content: userPrompt }],
+      }),
+    });
+
+    if (!apiResponse.ok) {
+      const errBody = await apiResponse.text().catch(() => 'Unknown error');
+      return c.json(
+        { ok: false, error: `AI priority recommendation failed (${apiResponse.status}): ${errBody}` },
+        502,
+      );
+    }
+
+    const result = await apiResponse.json() as any;
+    const textContent = result.content?.find((ct: any) => ct.type === 'text');
+    if (!textContent?.text) {
+      return c.json({ ok: false, error: 'AI returned no text content' }, 502);
+    }
+
+    // Parse JSON response
+    let rawText = textContent.text.trim();
+    if (rawText.startsWith('```')) {
+      rawText = rawText.replace(/^```(?:json)?\s*\n?/, '').replace(/\n?```\s*$/, '');
+    }
+
+    let parsed: any;
+    try {
+      parsed = JSON.parse(rawText);
+    } catch {
+      return c.json(
+        { ok: false, error: 'Failed to parse AI priority response as JSON. Try again.' },
+        502,
+      );
+    }
+
+    // Validate and normalize
+    const validPriorities: StoryPriority[] = ['critical', 'high', 'medium', 'low'];
+    const validCategories = ['dependency', 'risk', 'scope', 'user_impact'];
+
+    const suggestedPriority: StoryPriority = validPriorities.includes(parsed.suggestedPriority)
+      ? parsed.suggestedPriority
+      : 'medium';
+    const confidence = typeof parsed.confidence === 'number'
+      ? Math.max(0, Math.min(100, Math.round(parsed.confidence)))
+      : 60;
+
+    const factors: PriorityFactor[] = (parsed.factors || [])
+      .filter((f: any) => f.factor && typeof f.factor === 'string')
+      .slice(0, 6)
+      .map((f: any) => ({
+        factor: f.factor.trim(),
+        category: validCategories.includes(f.category) ? f.category : 'scope',
+        impact: ['increases', 'decreases', 'neutral'].includes(f.impact) ? f.impact : 'neutral',
+        weight: ['minor', 'moderate', 'major'].includes(f.weight) ? f.weight : 'moderate',
+      }));
+
+    const recommendation: PriorityRecommendation = {
+      storyId,
+      suggestedPriority,
+      currentPriority: story.priority as StoryPriority,
+      confidence,
+      factors,
+      explanation: (parsed.explanation || 'Priority recommendation based on story analysis.').trim(),
+      isManualOverride: false,
+    };
+
+    // Persist recommendation to database
+    const now = Date.now();
+    db.query('UPDATE prd_stories SET priority_recommendation = ?, updated_at = ? WHERE id = ?')
+      .run(JSON.stringify(recommendation), now, storyId);
+    db.query('UPDATE prds SET updated_at = ? WHERE id = ?').run(now, prdId);
+
+    return c.json({
+      ok: true,
+      data: { storyId, recommendation } as PriorityRecommendationResponse,
+    });
+  } catch (err) {
+    return c.json(
+      { ok: false, error: `Priority recommendation failed: ${(err as Error).message}` },
+      500,
+    );
+  }
+});
+
+// Accept/override a priority recommendation
+app.put('/:prdId/stories/:storyId/priority', async (c) => {
+  const db = getDb();
+  const prdId = c.req.param('prdId');
+  const storyId = c.req.param('storyId');
+  const body = await c.req.json();
+
+  const storyRow = db.query('SELECT * FROM prd_stories WHERE id = ? AND prd_id = ?').get(storyId, prdId) as any;
+  if (!storyRow) return c.json({ ok: false, error: 'Story not found' }, 404);
+
+  const { priority, accept } = body;
+  const validPriorities: StoryPriority[] = ['critical', 'high', 'medium', 'low'];
+
+  if (!validPriorities.includes(priority)) {
+    return c.json({ ok: false, error: 'Invalid priority. Must be: critical, high, medium, or low' }, 400);
+  }
+
+  const now = Date.now();
+  const story = storyFromRow(storyRow);
+
+  // Update the story priority
+  db.query('UPDATE prd_stories SET priority = ?, updated_at = ? WHERE id = ?')
+    .run(priority, now, storyId);
+
+  // Update the recommendation to note the override (if one exists)
+  if (story.priorityRecommendation) {
+    const updatedRec: PriorityRecommendation = {
+      ...story.priorityRecommendation,
+      isManualOverride: !accept, // If accepting AI suggestion, it's not an override
+      currentPriority: priority,
+    };
+    db.query('UPDATE prd_stories SET priority_recommendation = ?, updated_at = ? WHERE id = ?')
+      .run(JSON.stringify(updatedRec), now, storyId);
+  }
+
+  db.query('UPDATE prds SET updated_at = ? WHERE id = ?').run(now, prdId);
+
+  return c.json({ ok: true });
+});
+
+// Recommend priorities for all stories in a PRD
+app.post('/:id/priorities', async (c) => {
+  const db = getDb();
+  const prdId = c.req.param('id');
+
+  const prdRow = db.query('SELECT * FROM prds WHERE id = ?').get(prdId) as any;
+  if (!prdRow) return c.json({ ok: false, error: 'PRD not found' }, 404);
+
+  const allStories = db
+    .query('SELECT * FROM prd_stories WHERE prd_id = ? ORDER BY sort_order ASC')
+    .all(prdId) as any[];
+
+  if (allStories.length === 0) {
+    return c.json({ ok: false, error: 'No stories in this PRD' }, 400);
+  }
+
+  const mappedStories = allStories.map(storyFromRow);
+
+  // Build dependency map
+  const blocksMap: Record<string, string[]> = {};
+  for (const s of mappedStories) {
+    for (const depId of (s.dependsOn || [])) {
+      if (!blocksMap[depId]) blocksMap[depId] = [];
+      blocksMap[depId].push(s.id);
+    }
+  }
+
+  // Build context for AI
+  let storiesContext = '';
+  for (const s of mappedStories) {
+    const acCount = s.acceptanceCriteria?.length || 0;
+    const criteriaText = s.acceptanceCriteria
+      .map((ac: any) => `  - ${ac.description}`)
+      .join('\n');
+    const blocksCount = blocksMap[s.id]?.length || 0;
+    const blockedByCount = s.dependsOn?.length || 0;
+    const blocksTitles = (blocksMap[s.id] || [])
+      .map((id: string) => mappedStories.find((ms) => ms.id === id)?.title || id)
+      .join(', ');
+
+    storiesContext += `
+### Story: ${s.title}
+- ID: ${s.id}
+- Current Priority: ${s.priority}
+- Status: ${s.status}
+- Description: ${s.description || '(No description)'}
+- Acceptance Criteria (${acCount}):
+${criteriaText || '  (None)'}
+- Blocks: ${blocksCount > 0 ? `${blocksCount} stories (${blocksTitles})` : 'None'}
+- Blocked By: ${blockedByCount > 0 ? `${blockedByCount} stories` : 'None'}
+${s.estimate ? `- Estimate: ${s.estimate.size} (${s.estimate.storyPoints} points)` : '- No estimate yet'}
+`;
+  }
+
+  // Get project memory for context
+  let memoryContext = '';
+  try {
+    const memories = db
+      .query('SELECT category, key, content FROM project_memories WHERE project_path = ? ORDER BY category, key')
+      .all(prdRow.project_path) as any[];
+    if (memories.length > 0) {
+      memoryContext = '\n\n## Project Context\n';
+      for (const m of memories.slice(0, 10)) {
+        memoryContext += `- [${m.category}] ${m.key}: ${m.content}\n`;
+      }
+    }
+  } catch { /* no project memory */ }
+
+  const systemPrompt = `You are an expert product manager specializing in story prioritization. Recommend priority levels for ALL stories in this PRD.
+
+PRIORITY LEVELS:
+- **critical**: Must be done immediately. Blocks critical functionality, security issues, data loss, prerequisite for many stories.
+- **high**: Important, schedule soon. Significant user impact, blocks other stories, key business requirements.
+- **medium**: Standard priority. Normal feature work, moderate impact, few dependencies.
+- **low**: Nice to have. Minor improvements, cosmetic changes, non-blocking tech debt.
+
+EVALUATION CRITERIA:
+1. **Blocking Dependencies**: Stories that block many others should be higher priority
+2. **Risk Keywords**: Look for "security", "performance", "data loss", "migration", "breaking change", "compliance", "auth"
+3. **Scope**: Number of criteria, cross-cutting concerns, complexity
+4. **User Impact**: Core workflows, user-facing vs internal, pain points
+
+You MUST respond with ONLY a valid JSON object. No markdown, no explanation, no code fences.
+
+{
+  "recommendations": [
+    {
+      "storyId": "<story ID>",
+      "suggestedPriority": "critical" | "high" | "medium" | "low",
+      "confidence": <number 0-100>,
+      "factors": [
+        {
+          "factor": "<factor description>",
+          "category": "dependency" | "risk" | "scope" | "user_impact",
+          "impact": "increases" | "decreases" | "neutral",
+          "weight": "minor" | "moderate" | "major"
+        }
+      ],
+      "explanation": "<1-2 sentence explanation>"
+    }
+  ],
+  "summary": "<Overall prioritization rationale>"
+}
+
+IMPORTANT:
+- Include ALL story IDs from the input
+- Provide 2-4 factors per story
+- Be specific in factor descriptions
+- Consider relative priorities: not every story should be critical or high
+- Stories blocking many others should generally rank higher
+- Consider the overall PRD goals when prioritizing${memoryContext}`;
+
+  const userPrompt = `Recommend priority levels for all ${mappedStories.length} stories in this PRD:
+
+## PRD: ${prdRow.name}
+${prdRow.description || '(No description)'}
+
+## Stories
+${storiesContext}
+
+Prioritize all stories considering dependencies, risks, scope, and user impact.`;
+
+  try {
+    const auth = getAnthropicAuth();
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+      'anthropic-version': '2023-06-01',
+    };
+    if (auth.type === 'oauth') {
+      headers['Authorization'] = `Bearer ${auth.token}`;
+    } else {
+      headers['x-api-key'] = auth.token;
+    }
+
+    const apiResponse = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-5-20250929',
+        max_tokens: 4096,
+        system: systemPrompt,
+        messages: [{ role: 'user', content: userPrompt }],
+      }),
+    });
+
+    if (!apiResponse.ok) {
+      const errBody = await apiResponse.text().catch(() => 'Unknown error');
+      return c.json(
+        { ok: false, error: `AI priority recommendation failed (${apiResponse.status}): ${errBody}` },
+        502,
+      );
+    }
+
+    const result = (await apiResponse.json()) as any;
+    const textContent = result.content?.find((ct: any) => ct.type === 'text');
+    if (!textContent?.text) {
+      return c.json({ ok: false, error: 'AI returned no text content' }, 502);
+    }
+
+    // Parse JSON response
+    let rawText = textContent.text.trim();
+    if (rawText.startsWith('```')) {
+      rawText = rawText.replace(/^```(?:json)?\s*\n?/, '').replace(/\n?```\s*$/, '');
+    }
+
+    let parsed: any;
+    try {
+      parsed = JSON.parse(rawText);
+    } catch {
+      return c.json(
+        { ok: false, error: 'Failed to parse AI priority response as JSON. Try again.' },
+        502,
+      );
+    }
+
+    // Validate and build recommendations
+    const validPriorities: StoryPriority[] = ['critical', 'high', 'medium', 'low'];
+    const validCategories = ['dependency', 'risk', 'scope', 'user_impact'];
+
+    const recommendations: PriorityRecommendation[] = [];
+    const now = Date.now();
+
+    for (const rec of (parsed.recommendations || [])) {
+      const matchedStory = mappedStories.find((s) => s.id === rec.storyId);
+      if (!matchedStory) continue;
+
+      const suggestedPriority: StoryPriority = validPriorities.includes(rec.suggestedPriority)
+        ? rec.suggestedPriority
+        : 'medium';
+      const confidence = typeof rec.confidence === 'number'
+        ? Math.max(0, Math.min(100, Math.round(rec.confidence)))
+        : 60;
+
+      const factors: PriorityFactor[] = (rec.factors || [])
+        .filter((f: any) => f.factor && typeof f.factor === 'string')
+        .slice(0, 6)
+        .map((f: any) => ({
+          factor: f.factor.trim(),
+          category: validCategories.includes(f.category) ? f.category : 'scope',
+          impact: ['increases', 'decreases', 'neutral'].includes(f.impact) ? f.impact : 'neutral',
+          weight: ['minor', 'moderate', 'major'].includes(f.weight) ? f.weight : 'moderate',
+        }));
+
+      const recommendation: PriorityRecommendation = {
+        storyId: matchedStory.id,
+        suggestedPriority,
+        currentPriority: matchedStory.priority as StoryPriority,
+        confidence,
+        factors,
+        explanation: (rec.explanation || 'Priority based on story analysis.').trim(),
+        isManualOverride: false,
+      };
+
+      recommendations.push(recommendation);
+
+      // Persist to database
+      db.query('UPDATE prd_stories SET priority_recommendation = ?, updated_at = ? WHERE id = ?')
+        .run(JSON.stringify(recommendation), now, matchedStory.id);
+    }
+
+    db.query('UPDATE prds SET updated_at = ? WHERE id = ?').run(now, prdId);
+
+    // Build summary
+    const summary: PriorityRecommendationBulkResponse['summary'] = {
+      criticalCount: recommendations.filter((r) => r.suggestedPriority === 'critical').length,
+      highCount: recommendations.filter((r) => r.suggestedPriority === 'high').length,
+      mediumCount: recommendations.filter((r) => r.suggestedPriority === 'medium').length,
+      lowCount: recommendations.filter((r) => r.suggestedPriority === 'low').length,
+      changedCount: recommendations.filter((r) => r.suggestedPriority !== r.currentPriority).length,
+    };
+
+    return c.json({
+      ok: true,
+      data: {
+        prdId,
+        recommendations,
+        summary,
+      } as PriorityRecommendationBulkResponse,
+    });
+  } catch (err) {
+    return c.json(
+      { ok: false, error: `Bulk priority recommendation failed: ${(err as Error).message}` },
+      500,
+    );
+  }
+});
+
 // --- Row mappers ---
 
 function prdFromRow(row: any) {
@@ -3469,6 +4033,7 @@ function storyFromRow(row: any) {
     maxAttempts: row.max_attempts,
     learnings: JSON.parse(row.learnings || '[]'),
     estimate: row.estimate ? JSON.parse(row.estimate) : undefined,
+    priorityRecommendation: row.priority_recommendation ? JSON.parse(row.priority_recommendation) : undefined,
     sortOrder: row.sort_order,
     createdAt: row.created_at,
     updatedAt: row.updated_at,

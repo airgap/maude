@@ -24,6 +24,7 @@ type ModalId =
   | 'sprint-plan'
   | 'prd-completeness'
   | 'template-library'
+  | 'priority-recommendation'
   | null;
 type FocusedPane = 'chat' | 'editor';
 

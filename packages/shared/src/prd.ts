@@ -28,6 +28,7 @@ export interface UserStory {
   maxAttempts: number; // configurable per-story retry limit
   learnings: string[]; // accumulated learnings from attempts
   estimate?: StoryEstimate; // AI or manual complexity/effort estimate
+  priorityRecommendation?: PriorityRecommendation; // AI-suggested priority with explanation
   sortOrder: number;
   createdAt: number;
   updatedAt: number;
@@ -539,6 +540,46 @@ export interface CreateStoryFromTemplateResponse {
     description: string;
     acceptanceCriteria: string[];
     priority: StoryPriority;
+  };
+}
+
+// --- Priority Recommendation Types ---
+
+/** A single factor that influenced the priority recommendation */
+export interface PriorityFactor {
+  factor: string;           // e.g. "Blocks 3 other stories"
+  category: 'dependency' | 'risk' | 'scope' | 'user_impact';
+  impact: 'increases' | 'decreases' | 'neutral';
+  weight: 'minor' | 'moderate' | 'major';
+}
+
+/** The full priority recommendation for a story */
+export interface PriorityRecommendation {
+  storyId: string;
+  suggestedPriority: StoryPriority;
+  currentPriority: StoryPriority;
+  confidence: number;            // 0-100
+  factors: PriorityFactor[];
+  explanation: string;           // Human-readable explanation for the priority
+  isManualOverride: boolean;     // Whether the user overrode the AI recommendation
+}
+
+/** Response from priority recommendation for a single story */
+export interface PriorityRecommendationResponse {
+  storyId: string;
+  recommendation: PriorityRecommendation;
+}
+
+/** Response from bulk priority recommendation for all stories in a PRD */
+export interface PriorityRecommendationBulkResponse {
+  prdId: string;
+  recommendations: PriorityRecommendation[];
+  summary: {
+    criticalCount: number;
+    highCount: number;
+    mediumCount: number;
+    lowCount: number;
+    changedCount: number;       // How many stories had their priority changed from current
   };
 }
 
