@@ -238,6 +238,24 @@ const commands: SlashCommand[] = [
       return { handled: true, sendAsMessage: msg };
     },
   },
+  {
+    name: 'loop',
+    description: 'Open autonomous loop panel',
+    execute: (ctx) => {
+      uiStore.setSidebarTab('loop');
+      uiStore.setSidebarOpen(true);
+      return { handled: true };
+    },
+  },
+  {
+    name: 'prd',
+    description: 'Open PRD / autonomous loop panel',
+    execute: () => {
+      uiStore.setSidebarTab('loop');
+      uiStore.setSidebarOpen(true);
+      return { handled: true };
+    },
+  },
 ];
 
 // Export for use in SlashCommandMenu

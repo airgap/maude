@@ -139,6 +139,8 @@
           />
         {/each}
       </div>
+
+      <div class="rainbow-throbber" aria-hidden="true"></div>
     </div>
   {/snippet}
 </MessageAnimation>
@@ -237,6 +239,34 @@
     font-family: var(--font-family-sans);
     font-size: 14px;
     font-weight: 500;
+  }
+
+  .rainbow-throbber {
+    width: 100%;
+    height: 3px;
+    margin-top: 8px;
+    border-radius: 0;
+    background: linear-gradient(
+      in oklab 90deg,
+      oklch(var(--rainbow-l) 0.2 0),
+      oklch(var(--rainbow-l) 0.2 60),
+      oklch(var(--rainbow-l) 0.2 120),
+      oklch(var(--rainbow-l) 0.2 180),
+      oklch(var(--rainbow-l) 0.2 240),
+      oklch(var(--rainbow-l) 0.2 300),
+      oklch(var(--rainbow-l) 0.2 360)
+    );
+    background-size: 200% 100%;
+    animation: rainbowSlide 2s linear infinite;
+  }
+
+  @keyframes rainbowSlide {
+    0% {
+      background-position: 0% 0%;
+    }
+    100% {
+      background-position: 200% 0%;
+    }
   }
 
   @keyframes shieldCharge {

@@ -9,18 +9,29 @@
   import Sidebar from '../sidebar/Sidebar.svelte';
   import SettingsModal from '../settings/SettingsModal.svelte';
   import SnapshotModal from '../settings/SnapshotModal.svelte';
+  import LoopConfigModal from '../settings/LoopConfigModal.svelte';
+  import StoryGenerateModal from '../settings/StoryGenerateModal.svelte';
   import CommandPalette from '../common/CommandPalette.svelte';
   import ToastContainer from '../common/ToastContainer.svelte';
   import QuickOpen from '../editor/QuickOpen.svelte';
   import ProjectSetup from '../common/ProjectSetup.svelte';
   import { waitForServer } from '$lib/api/client';
+  import { reconnectActiveStream } from '$lib/api/sse';
   import { onMount } from 'svelte';
 
   let { children: appChildren } = $props<{ children: any }>();
 
   onMount(() => {
-    waitForServer().then(() => {
+    waitForServer().then(async () => {
       workspaceStore.init();
+
+      // Check for in-flight streaming sessions and reconnect if found.
+      // This handles page reloads during active Claude responses.
+      try {
+        await reconnectActiveStream();
+      } catch {
+        // Non-critical — user can manually reload
+      }
     });
   });
 
@@ -175,6 +186,14 @@
 
   {#if uiStore.activeModal === 'snapshots'}
     <SnapshotModal />
+  {/if}
+
+  {#if uiStore.activeModal === 'loop-config'}
+    <LoopConfigModal />
+  {/if}
+
+  {#if uiStore.activeModal === 'story-generate'}
+    <StoryGenerateModal />
   {/if}
 
   {#if uiStore.activeModal === 'command-palette'}

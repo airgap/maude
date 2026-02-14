@@ -24,6 +24,7 @@
 /* ---- DARK (default) ---- */
 [data-theme='dark'],
 :root {
+  --rainbow-l: 0.55;
   --bg-primary: #040810;
   --bg-secondary: #070d14;
   --bg-tertiary: #0c1520;
@@ -75,6 +76,7 @@
 
 /* ---- LIGHT ---- */
 [data-theme='light'] {
+  --rainbow-l: 0.65;
   --bg-primary: #e8eef2;
   --bg-secondary: #dce4ea;
   --bg-tertiary: #c8d4dc;
@@ -175,6 +177,7 @@
 
 /* ---- LIGHT COLORBLIND ---- */
 [data-theme='light-colorblind'] {
+  --rainbow-l: 0.65;
   --bg-primary: #e8eef2;
   --bg-secondary: #dce4ea;
   --bg-tertiary: #c8d4dc;
@@ -275,6 +278,7 @@
 
 /* ---- LIGHT ANSI ---- */
 [data-theme='light-ansi'] {
+  --rainbow-l: 0.65;
   --bg-primary: #f0f0f0;
   --bg-secondary: #e4e4e4;
   --bg-tertiary: #d0d0d0;
@@ -525,6 +529,7 @@
 
 /* ---- GRUVBOX LIGHT ---- */
 [data-theme='gruvbox-light'] {
+  --rainbow-l: 0.65;
   --bg-primary: #fbf1c7;
   --bg-secondary: #f2e5bc;
   --bg-tertiary: #e8d8a8;
@@ -625,6 +630,7 @@
 
 /* ---- SOLARIZED LIGHT ---- */
 [data-theme='solarized-light'] {
+  --rainbow-l: 0.65;
   --bg-primary: #fdf6e3;
   --bg-secondary: #f5efdc;
   --bg-tertiary: #eee8d5;
@@ -725,6 +731,7 @@
 
 /* ---- CATPPUCCIN LATTE ---- */
 [data-theme='catppuccin-latte'] {
+  --rainbow-l: 0.65;
   --bg-primary: #eff1f5;
   --bg-secondary: #e6e9ef;
   --bg-tertiary: #ccd0da;
@@ -875,6 +882,7 @@
 
 /* ---- ROSÉ PINE DAWN ---- */
 [data-theme='rose-pine-dawn'] {
+  --rainbow-l: 0.65;
   --bg-primary: #faf4ed;
   --bg-secondary: #f2e9de;
   --bg-tertiary: #dfdad9;
@@ -1025,6 +1033,7 @@
 
 /* ---- GITHUB LIGHT ---- */
 [data-theme='github-light'] {
+  --rainbow-l: 0.65;
   --bg-primary: #ffffff;
   --bg-secondary: #f6f8fa;
   --bg-tertiary: #e1e4e8;

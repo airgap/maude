@@ -6,7 +6,8 @@ export type SidebarTab =
   | 'memory'
   | 'agents'
   | 'symbols'
-  | 'mcp';
+  | 'mcp'
+  | 'loop';
 type ModalId =
   | 'settings'
   | 'command-palette'
@@ -15,6 +16,8 @@ type ModalId =
   | 'quick-open'
   | 'project-setup'
   | 'snapshots'
+  | 'loop-config'
+  | 'story-generate'
   | null;
 type FocusedPane = 'chat' | 'editor';
 

@@ -151,6 +151,125 @@ export async function sendAndStream(conversationId: string, content: string): Pr
   }
 }
 
+/**
+ * Check for active streaming sessions and reconnect if found.
+ * Called on page load to resume displaying in-progress streams.
+ * Returns the conversation ID of the reconnected session, or null.
+ */
+export async function reconnectActiveStream(): Promise<string | null> {
+  // Signal reconnection intent synchronously BEFORE any awaits so concurrent
+  // code (e.g. ConversationList auto-restore) knows not to call
+  // streamStore.reset() and wipe out state we're about to rebuild.
+  streamStore.setReconnecting(true);
+
+  try {
+    const sessionsRes = await api.stream.sessions();
+    if (!sessionsRes.ok || !sessionsRes.data.length) {
+      streamStore.setReconnecting(false);
+      return null;
+    }
+
+    // Find a session that's still running or just completed with buffered events
+    const active = sessionsRes.data.find(
+      (s) => s.status === 'running' || (s.bufferedEvents > 0 && !s.streamComplete),
+    );
+    // Also check for sessions that just completed but haven't been consumed
+    const justCompleted = sessionsRes.data.find(
+      (s) => s.streamComplete && s.bufferedEvents > 0,
+    );
+
+    const target = active || justCompleted;
+    if (!target) {
+      streamStore.setReconnecting(false);
+      return null;
+    }
+
+    console.log(
+      '[sse] Reconnecting to session:',
+      target.id,
+      'for conversation:',
+      target.conversationId,
+    );
+
+    streamStore.startStream();
+    streamStore.setSessionId(target.id);
+
+    // Load the conversation so the UI can display it
+    const convRes = await api.conversations.get(target.conversationId);
+    if (convRes.ok && convRes.data) {
+      conversationStore.setActive(convRes.data);
+    }
+
+    const response = await api.stream.reconnect(target.id);
+    if (!response.ok || !response.body) {
+      streamStore.handleEvent({ type: 'message_stop' } as any);
+      streamStore.setReconnecting(false);
+      return null;
+    }
+
+    // Add empty assistant message placeholder that we'll build up from replayed events
+    conversationStore.addMessage({
+      id: crypto.randomUUID(),
+      role: 'assistant',
+      content: [],
+      timestamp: Date.now(),
+      model: conversationStore.active?.model,
+    });
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop() ?? '';
+
+      for (const line of lines) {
+        if (!line.startsWith('data: ')) continue;
+        const data = line.slice(6).trim();
+        if (!data) continue;
+
+        try {
+          const event: StreamEvent = JSON.parse(data);
+          streamStore.handleEvent(event);
+          conversationStore.updateLastAssistantMessage([...streamStore.contentBlocks]);
+        } catch {
+          // Non-JSON line
+        }
+      }
+    }
+
+    // Final sync
+    if (streamStore.contentBlocks.length > 0) {
+      conversationStore.updateLastAssistantMessage([...streamStore.contentBlocks]);
+    }
+
+    // Ensure streaming state is cleared when the SSE connection closes.
+    if (streamStore.status === 'streaming' || streamStore.status === 'connecting') {
+      streamStore.handleEvent({ type: 'message_stop' } as any);
+    }
+
+    // Reload conversation from DB for the authoritative server-saved version.
+    // By this point the stream has completed and the server has persisted the
+    // assistant message, so the DB version will include it.
+    await conversationStore.reload();
+    streamStore.setReconnecting(false);
+
+    return target.conversationId;
+  } catch (err) {
+    console.error('[sse] Reconnection failed:', err);
+    if (streamStore.status === 'streaming' || streamStore.status === 'connecting') {
+      streamStore.handleEvent({ type: 'message_stop' } as any);
+    }
+    streamStore.setReconnecting(false);
+    return null;
+  }
+}
+
 export async function cancelStream(conversationId: string): Promise<void> {
   streamStore.cancel();
   if (streamStore.sessionId) {

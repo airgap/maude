@@ -1,4 +1,5 @@
 import type { Task } from './tasks.js';
+import type { StreamLoopEvent } from './prd.js';
 
 // SSE event types matching Claude's stream-json format
 export type StreamEvent =
@@ -15,7 +16,8 @@ export type StreamEvent =
   | StreamPing
   | StreamTaskUpdate
   | StreamAgentEvent
-  | StreamVerificationResult;
+  | StreamVerificationResult
+  | StreamLoopEvent;
 
 export interface StreamMessageStart {
   type: 'message_start';

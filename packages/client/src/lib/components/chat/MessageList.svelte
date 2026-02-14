@@ -3,8 +3,18 @@
   import { settingsStore } from '$lib/stores/settings.svelte';
   import MessageBubble from './MessageBubble.svelte';
   import StreamingMessage from './StreamingMessage.svelte';
+  import StoryActionCards from './StoryActionCards.svelte';
   import { streamStore } from '$lib/stores/stream.svelte';
+  import { loopStore } from '$lib/stores/loop.svelte';
+  import { hasStoryActions } from '$lib/utils/story-parser';
   import { tick } from 'svelte';
+
+  // Check if the current conversation is a planning conversation with edits enabled
+  let isPlanningWithEdits = $derived(
+    loopStore.allowEdits &&
+    loopStore.planConversationId === conversationStore.activeId &&
+    conversationStore.active?.title?.startsWith('[Plan]'),
+  );
 
   let scrollContainer: HTMLDivElement;
   let userScrolled = $state(false);
@@ -67,6 +77,9 @@
     {#each msgs as message, i (message.id)}
       {#if !(streamStore.isStreaming && i === msgs.length - 1 && message.role === 'assistant')}
         <MessageBubble {message} />
+        {#if isPlanningWithEdits && message.role === 'assistant'}
+          <StoryActionCards {message} />
+        {/if}
       {/if}
     {/each}
 

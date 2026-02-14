@@ -19,6 +19,8 @@ import { terminalRoutes } from './routes/terminal';
 import { lspRoutes } from './routes/lsp';
 import { authRoutes } from './routes/auth';
 import { projectMemoryRoutes } from './routes/project-memory';
+import { prdRoutes } from './routes/prd';
+import { loopRoutes } from './routes/loop';
 import { authMiddleware } from './middleware/auth';
 import { websocket } from './ws';
 import { initDatabase } from './db/database';
@@ -67,6 +69,8 @@ app.route('/api/terminal', terminalRoutes);
 app.route('/api/lsp', lspRoutes);
 app.route('/api/auth', authRoutes);
 app.route('/api/project-memory', projectMemoryRoutes);
+app.route('/api/prds', prdRoutes);
+app.route('/api/loops', loopRoutes);
 
 // Initialize database
 initDatabase();

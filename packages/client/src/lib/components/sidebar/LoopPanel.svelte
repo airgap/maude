@@ -1,0 +1,749 @@
+<script lang="ts">
+  import { loopStore } from '$lib/stores/loop.svelte';
+  import { conversationStore } from '$lib/stores/conversation.svelte';
+  import { streamStore } from '$lib/stores/stream.svelte';
+  import { settingsStore } from '$lib/stores/settings.svelte';
+  import { uiStore } from '$lib/stores/ui.svelte';
+  import { api } from '$lib/api/client';
+  import { sendAndStream } from '$lib/api/sse';
+  import { onMount } from 'svelte';
+  import type { PlanMode } from '@maude/shared';
+
+  let projectPath = $derived(settingsStore.projectPath || '');
+  let importJson = $state('');
+  let showImport = $state(false);
+  let showCreate = $state(false);
+  let showAddStory = $state(false);
+  let newPrdName = $state('');
+  let newPrdDesc = $state('');
+  let newStoryTitle = $state('');
+  let newStoryDesc = $state('');
+  let newStoryCriteria = $state('');
+  let logEl = $state<HTMLDivElement>();
+
+  onMount(() => {
+    if (projectPath) {
+      loopStore.loadPrds(projectPath);
+    }
+    loopStore.loadActiveLoop();
+  });
+
+  // Auto-scroll log
+  $effect(() => {
+    if (logEl && loopStore.log.length) {
+      logEl.scrollTop = logEl.scrollHeight;
+    }
+  });
+
+  function statusIcon(status: string): string {
+    switch (status) {
+      case 'completed': return '✓';
+      case 'in_progress': return '●';
+      case 'failed': return '✗';
+      case 'skipped': return '⊘';
+      default: return '○';
+    }
+  }
+
+  function statusColor(status: string): string {
+    switch (status) {
+      case 'completed': return 'var(--accent-secondary)';
+      case 'in_progress': return 'var(--accent-primary)';
+      case 'failed': return 'var(--accent-error)';
+      default: return 'var(--text-tertiary)';
+    }
+  }
+
+  function priorityLabel(p: string): string {
+    return p === 'critical' ? '!!!' : p === 'high' ? '!!' : p === 'medium' ? '!' : '';
+  }
+
+  async function handleCreate() {
+    if (!newPrdName.trim() || !projectPath) return;
+    try {
+      const res = await api.prds.create({
+        projectPath,
+        name: newPrdName.trim(),
+        description: newPrdDesc.trim(),
+        stories: [],
+      });
+      if (res.ok) {
+        loopStore.setSelectedPrdId(res.data.id);
+        await loopStore.loadPrds(projectPath);
+        await loopStore.loadPrd(res.data.id);
+        showCreate = false;
+        newPrdName = '';
+        newPrdDesc = '';
+        uiStore.toast(`Created PRD: ${newPrdName}`, 'success');
+      }
+    } catch (err) {
+      uiStore.toast(`Create failed: ${err}`, 'error');
+    }
+  }
+
+  async function handleImport() {
+    if (!importJson.trim() || !projectPath) return;
+    try {
+      const parsed = JSON.parse(importJson);
+      const res = await api.prds.import(projectPath, parsed);
+      if (res.ok) {
+        loopStore.setSelectedPrdId(res.data.id);
+        await loopStore.loadPrds(projectPath);
+        await loopStore.loadPrd(res.data.id);
+        showImport = false;
+        importJson = '';
+        uiStore.toast(`Imported ${res.data.imported} stories`, 'success');
+      }
+    } catch (err) {
+      uiStore.toast(`Import failed: ${err}`, 'error');
+    }
+  }
+
+  async function handleAddStory() {
+    const prdId = loopStore.selectedPrdId;
+    if (!prdId || !newStoryTitle.trim()) return;
+    try {
+      const criteria = newStoryCriteria.split('\n').filter(l => l.trim());
+      await api.prds.addStory(prdId, {
+        title: newStoryTitle,
+        description: newStoryDesc,
+        acceptanceCriteria: criteria,
+        priority: 'medium',
+      });
+      await loopStore.loadPrd(prdId);
+      newStoryTitle = '';
+      newStoryDesc = '';
+      newStoryCriteria = '';
+      showAddStory = false;
+    } catch (err) {
+      uiStore.toast(`Failed to add story: ${err}`, 'error');
+    }
+  }
+
+  async function handleDeleteStory(storyId: string) {
+    const prdId = loopStore.selectedPrdId;
+    if (!prdId) return;
+    await api.prds.deleteStory(prdId, storyId);
+    await loopStore.loadPrd(prdId);
+  }
+
+  async function handleDeletePrd() {
+    const prdId = loopStore.selectedPrdId;
+    if (!prdId) return;
+    if (!confirm('Delete this PRD and all its stories?')) return;
+    await api.prds.delete(prdId);
+    loopStore.setSelectedPrdId(null);
+    await loopStore.loadPrds(projectPath);
+  }
+
+  function openLoopConfig() {
+    uiStore.openModal('loop-config');
+  }
+
+  function actionLabel(action: string): string {
+    const map: Record<string, string> = {
+      started: '▶',
+      passed: '✓',
+      failed: '✗',
+      committed: '⟨⟩',
+      quality_check: '⚙',
+      learning: '💡',
+      skipped: '⊘',
+    };
+    return map[action] || action;
+  }
+
+  function actionColor(action: string): string {
+    switch (action) {
+      case 'passed': case 'committed': return 'var(--accent-secondary)';
+      case 'failed': return 'var(--accent-error)';
+      case 'started': return 'var(--accent-primary)';
+      default: return 'var(--text-tertiary)';
+    }
+  }
+
+  function formatTime(ts: number): string {
+    return new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  }
+
+  let planning = $state(false);
+
+  function openGenerateModal() {
+    uiStore.openModal('story-generate');
+  }
+
+  async function startPlanning(mode: PlanMode) {
+    if (!loopStore.selectedPrdId || planning) return;
+
+    // For 'generate' mode, open the dedicated modal instead
+    if (mode === 'generate') {
+      openGenerateModal();
+      return;
+    }
+
+    planning = true;
+    try {
+      const result = await loopStore.startPlanning(loopStore.selectedPrdId, projectPath, mode);
+      if (!result) {
+        uiStore.toast('Failed to start planning session', 'error');
+        return;
+      }
+
+      // Load the conversation into the main chat pane
+      const convRes = await api.conversations.get(result.conversationId);
+      conversationStore.setActive(convRes.data);
+      streamStore.reset();
+
+      // For chat-generate mode, send the first message immediately
+      if (mode === 'chat-generate') {
+        await sendAndStream(
+          result.conversationId,
+          'Let\'s plan this sprint. Review the PRD description and any existing stories, then suggest what we should build. Ask me clarifying questions if needed.',
+        );
+      }
+
+      uiStore.toast(`Planning session started`, 'success');
+    } catch (err) {
+      uiStore.toast(`Planning failed: ${err}`, 'error');
+    } finally {
+      planning = false;
+    }
+  }
+</script>
+
+<div class="loop-panel">
+  <!-- Header -->
+  <div class="section-header">
+    <h3>Autonomous Loop</h3>
+    {#if loopStore.isActive}
+      <span class="loop-badge" class:running={loopStore.isRunning} class:paused={loopStore.isPaused}>
+        {loopStore.isRunning ? 'Running' : 'Paused'}
+      </span>
+    {/if}
+  </div>
+
+  <!-- PRD Selection -->
+  <div class="prd-section">
+    <div class="prd-select-row">
+      <select
+        value={loopStore.selectedPrdId || ''}
+        onchange={(e) => {
+          const val = (e.target as HTMLSelectElement).value;
+          loopStore.setSelectedPrdId(val || null);
+          if (val) loopStore.loadPrd(val);
+        }}
+      >
+        <option value="">Select a PRD...</option>
+        {#each loopStore.prds as prd}
+          <option value={prd.id}>{prd.name}</option>
+        {/each}
+      </select>
+      <button class="icon-btn" title="New PRD" onclick={() => { showCreate = !showCreate; showImport = false; }}>
+        +
+      </button>
+      <button class="icon-btn" title="Import prd.json" onclick={() => { showImport = !showImport; showCreate = false; }}>
+        ↓
+      </button>
+    </div>
+
+    {#if showCreate}
+      <div class="create-form">
+        <input bind:value={newPrdName} placeholder="PRD name" />
+        <textarea bind:value={newPrdDesc} placeholder="Description (optional)" rows="2"></textarea>
+        <div class="import-actions">
+          <button class="btn-sm btn-primary" onclick={handleCreate}>Create</button>
+          <button class="btn-sm btn-ghost" onclick={() => { showCreate = false; newPrdName = ''; newPrdDesc = ''; }}>Cancel</button>
+        </div>
+      </div>
+    {/if}
+
+    {#if showImport}
+      <div class="import-area">
+        <textarea
+          bind:value={importJson}
+          placeholder='Paste prd.json content here...'
+          rows="5"
+        ></textarea>
+        <div class="import-actions">
+          <button class="btn-sm" onclick={handleImport}>Import</button>
+          <button class="btn-sm btn-ghost" onclick={() => { showImport = false; importJson = ''; }}>Cancel</button>
+        </div>
+      </div>
+    {/if}
+  </div>
+
+  <!-- Sprint Planning -->
+  {#if loopStore.selectedPrdId && !loopStore.isActive}
+    <div class="plan-section">
+      <div class="plan-row">
+        <button class="btn-sm btn-plan" onclick={() => startPlanning('chat')}
+          disabled={planning}
+          title="Open a planning conversation with Claude">
+          Plan
+        </button>
+        <button class="btn-sm btn-plan" onclick={() => startPlanning('generate')}
+          disabled={planning}
+          title="AI-generate stories from PRD description with review">
+          Generate
+        </button>
+        <button class="btn-sm btn-plan" onclick={() => startPlanning('chat-generate')}
+          disabled={planning}
+          title="Chat to refine scope, then generate stories">
+          Plan + Gen
+        </button>
+      </div>
+      <button class="edit-lock" onclick={() => {
+          const next = loopStore.editMode === 'locked' ? 'propose'
+            : loopStore.editMode === 'propose' ? 'unlocked' : 'locked';
+          loopStore.setEditMode(next);
+        }}
+        title={loopStore.editMode === 'locked'
+          ? 'Claude will discuss stories in plain text only'
+          : loopStore.editMode === 'propose'
+            ? 'Claude will propose structured edits for your approval'
+            : 'Claude will apply edits automatically'}>
+        <span class="lock-icon">{loopStore.editMode === 'locked' ? '🔒' : loopStore.editMode === 'propose' ? '📋' : '🔓'}</span>
+        <span class="lock-label">{loopStore.editMode === 'locked' ? 'Locked' : loopStore.editMode === 'propose' ? 'Propose' : 'Unlocked'}</span>
+      </button>
+    </div>
+  {/if}
+
+  <!-- Stories List -->
+  {#if loopStore.selectedPrd}
+    <div class="stories-section">
+      <div class="section-header">
+        <h4>Stories ({loopStore.selectedPrd.stories?.length || 0})</h4>
+        <div class="header-actions">
+          <button class="icon-btn" title="Add story" onclick={() => showAddStory = !showAddStory}>+</button>
+          <button class="icon-btn" title="Delete PRD" onclick={handleDeletePrd}>🗑</button>
+        </div>
+      </div>
+
+      {#if showAddStory}
+        <div class="add-story-form">
+          <input bind:value={newStoryTitle} placeholder="Story title" />
+          <textarea bind:value={newStoryDesc} placeholder="Description" rows="2"></textarea>
+          <textarea bind:value={newStoryCriteria} placeholder="Acceptance criteria (one per line)" rows="3"></textarea>
+          <div class="import-actions">
+            <button class="btn-sm" onclick={handleAddStory}>Add</button>
+            <button class="btn-sm btn-ghost" onclick={() => showAddStory = false}>Cancel</button>
+          </div>
+        </div>
+      {/if}
+
+      <div class="story-list">
+        {#if (loopStore.selectedPrd.stories || []).length === 0}
+          <div class="empty-stories">
+            <span class="empty-hint">No stories yet. Click + to add one.</span>
+          </div>
+        {:else}
+          {#each (loopStore.selectedPrd.stories || []) as story (story.id)}
+            <div class="story-item" class:active={loopStore.activeLoop?.currentStoryId === story.id}>
+              <div class="story-header">
+                <span class="story-status" style:color={statusColor(story.status)}>
+                  {statusIcon(story.status)}
+                </span>
+                <span class="story-title">{story.title}</span>
+                {#if priorityLabel(story.priority)}
+                  <span class="priority-badge">{priorityLabel(story.priority)}</span>
+                {/if}
+                {#if !loopStore.isActive}
+                  <button class="delete-btn" onclick={() => handleDeleteStory(story.id)}>×</button>
+                {/if}
+              </div>
+              {#if story.attempts > 0}
+                <span class="attempts-badge">
+                  {story.attempts}/{story.maxAttempts} attempts
+                </span>
+              {/if}
+            </div>
+          {/each}
+        {/if}
+      </div>
+    </div>
+  {/if}
+
+  <!-- Loop Controls -->
+  <div class="controls-section">
+    {#if loopStore.isActive}
+      <div class="progress-info">
+        <div class="progress-bar-container">
+          <div class="progress-bar" style:width="{loopStore.progress}%"></div>
+        </div>
+        <span class="progress-text">
+          {loopStore.completedStories}/{loopStore.totalStories} stories • Iteration {loopStore.activeLoop?.currentIteration || 0}
+        </span>
+      </div>
+
+      <div class="control-buttons">
+        {#if loopStore.isRunning}
+          <button class="btn-sm btn-warning" onclick={() => loopStore.pauseLoop()}>⏸ Pause</button>
+        {:else if loopStore.isPaused}
+          <button class="btn-sm btn-primary" onclick={() => loopStore.resumeLoop()}>▶ Resume</button>
+        {/if}
+        <button class="btn-sm btn-danger" onclick={() => {
+          if (confirm('Cancel the autonomous loop?')) loopStore.cancelLoop();
+        }}>⏹ Cancel</button>
+      </div>
+    {:else}
+      <button
+        class="btn-sm btn-primary full-width"
+        disabled={!loopStore.selectedPrdId}
+        onclick={openLoopConfig}
+      >
+        ▶ Start Loop
+      </button>
+    {/if}
+  </div>
+
+  <!-- Activity Log -->
+  {#if loopStore.log.length > 0}
+    <div class="log-section">
+      <div class="section-header">
+        <h4>Activity Log</h4>
+        <span class="log-count">{loopStore.log.length}</span>
+      </div>
+      <div class="log-list" bind:this={logEl}>
+        {#each loopStore.log as entry}
+          <div class="log-entry">
+            <span class="log-time">{formatTime(entry.timestamp)}</span>
+            <span class="log-action" style:color={actionColor(entry.action)}>
+              {actionLabel(entry.action)}
+            </span>
+            <span class="log-detail">{entry.detail}</span>
+          </div>
+        {/each}
+      </div>
+    </div>
+  {/if}
+</div>
+
+<style>
+  .loop-panel {
+    padding: 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    height: 100%;
+  }
+
+  .section-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 4px 4px 4px;
+  }
+  .section-header h3 {
+    font-size: 13px;
+    font-weight: 600;
+  }
+  .section-header h4 {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-secondary);
+  }
+
+  .header-actions {
+    display: flex;
+    gap: 4px;
+  }
+
+  .loop-badge {
+    font-size: 10px;
+    padding: 1px 6px;
+    border-radius: 3px;
+    font-weight: 600;
+  }
+  .loop-badge.running {
+    background: var(--accent-primary);
+    color: var(--text-on-accent);
+    animation: pulse 2s infinite;
+  }
+  .loop-badge.paused {
+    background: var(--accent-warning, #e6a817);
+    color: #000;
+  }
+
+  .prd-section select {
+    width: 100%;
+    padding: 6px 8px;
+    font-size: 12px;
+    background: var(--bg-tertiary);
+    color: var(--text-primary);
+    border: 1px solid var(--border-primary);
+    border-radius: var(--radius-sm);
+  }
+
+  .prd-select-row {
+    display: flex;
+    gap: 4px;
+  }
+  .prd-select-row select {
+    flex: 1;
+  }
+
+  .icon-btn {
+    padding: 4px 8px;
+    font-size: 14px;
+    border-radius: var(--radius-sm);
+    background: var(--bg-tertiary);
+    color: var(--text-secondary);
+    border: 1px solid var(--border-primary);
+  }
+  .icon-btn:hover {
+    background: var(--bg-hover);
+    color: var(--text-primary);
+  }
+
+  .create-form, .import-area, .add-story-form {
+    margin-top: 6px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .create-form input, .create-form textarea,
+  .import-area textarea, .add-story-form textarea, .add-story-form input {
+    width: 100%;
+    padding: 6px 8px;
+    font-size: 11px;
+    font-family: var(--font-mono);
+    background: var(--bg-tertiary);
+    color: var(--text-primary);
+    border: 1px solid var(--border-primary);
+    border-radius: var(--radius-sm);
+    resize: vertical;
+  }
+  .import-actions {
+    display: flex;
+    gap: 4px;
+    justify-content: flex-end;
+  }
+
+  .story-list {
+    overflow-y: auto;
+    max-height: 200px;
+  }
+
+  .empty-stories {
+    padding: 16px 8px;
+    text-align: center;
+  }
+  .empty-hint {
+    font-size: 11px;
+    color: var(--text-tertiary);
+  }
+
+  .story-item {
+    padding: 6px 8px;
+    border-radius: var(--radius-sm);
+    margin-bottom: 2px;
+    background: var(--bg-tertiary);
+    transition: background var(--transition);
+  }
+  .story-item.active {
+    background: var(--bg-active);
+    border-left: 2px solid var(--accent-primary);
+  }
+  .story-header {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .story-status {
+    font-size: 12px;
+    flex-shrink: 0;
+    width: 14px;
+    text-align: center;
+  }
+  .story-title {
+    font-size: 11px;
+    color: var(--text-primary);
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .priority-badge {
+    font-size: 9px;
+    color: var(--accent-warning, #e6a817);
+    font-weight: bold;
+  }
+  .delete-btn {
+    font-size: 12px;
+    padding: 0 4px;
+    color: var(--text-tertiary);
+    opacity: 0;
+    transition: opacity var(--transition);
+  }
+  .story-item:hover .delete-btn {
+    opacity: 1;
+  }
+  .delete-btn:hover {
+    color: var(--accent-error);
+  }
+
+  .attempts-badge {
+    font-size: 9px;
+    color: var(--text-tertiary);
+    margin-left: 20px;
+  }
+
+  .controls-section {
+    padding: 4px 0;
+  }
+
+  .progress-info {
+    margin-bottom: 8px;
+  }
+  .progress-bar-container {
+    height: 4px;
+    background: var(--bg-tertiary);
+    border-radius: 2px;
+    overflow: hidden;
+    margin-bottom: 4px;
+  }
+  .progress-bar {
+    height: 100%;
+    background: var(--accent-primary);
+    border-radius: 2px;
+    transition: width 0.3s ease;
+  }
+  .progress-text {
+    font-size: 10px;
+    color: var(--text-tertiary);
+  }
+
+  .control-buttons {
+    display: flex;
+    gap: 4px;
+  }
+
+  .btn-sm {
+    padding: 4px 10px;
+    font-size: 11px;
+    border-radius: var(--radius-sm);
+    font-weight: 600;
+    cursor: pointer;
+  }
+  .btn-primary {
+    background: var(--accent-primary);
+    color: var(--text-on-accent);
+  }
+  .btn-warning {
+    background: var(--accent-warning, #e6a817);
+    color: #000;
+  }
+  .btn-danger {
+    background: var(--accent-error);
+    color: var(--text-on-accent);
+  }
+  .btn-ghost {
+    background: transparent;
+    color: var(--text-secondary);
+    border: 1px solid var(--border-primary);
+  }
+  .btn-sm:hover {
+    opacity: 0.9;
+  }
+  .btn-sm:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+  }
+  .full-width {
+    width: 100%;
+  }
+
+  .log-section {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+  }
+  .log-count {
+    font-size: 10px;
+    color: var(--text-tertiary);
+  }
+  .log-list {
+    overflow-y: auto;
+    flex: 1;
+    min-height: 80px;
+    max-height: 200px;
+  }
+  .log-entry {
+    display: flex;
+    align-items: baseline;
+    gap: 6px;
+    padding: 2px 4px;
+    font-size: 10px;
+  }
+  .log-time {
+    color: var(--text-tertiary);
+    font-family: var(--font-mono);
+    flex-shrink: 0;
+  }
+  .log-action {
+    font-weight: 700;
+    flex-shrink: 0;
+    width: 16px;
+    text-align: center;
+  }
+  .log-detail {
+    color: var(--text-secondary);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .plan-section {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .plan-row {
+    display: flex;
+    gap: 4px;
+  }
+  .btn-plan {
+    flex: 1;
+    background: var(--bg-tertiary);
+    color: var(--text-secondary);
+    border: 1px solid var(--border-primary);
+    text-align: center;
+  }
+  .btn-plan:hover:not(:disabled) {
+    background: var(--bg-hover);
+    color: var(--accent-primary);
+    border-color: var(--accent-primary);
+  }
+  .edit-lock {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 3px 8px;
+    border-radius: var(--radius-sm);
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    transition: all var(--transition);
+    width: 100%;
+    text-align: left;
+  }
+  .edit-lock:hover {
+    background: var(--bg-hover);
+  }
+  .lock-icon {
+    font-size: 12px;
+    flex-shrink: 0;
+  }
+  .lock-label {
+    font-size: 10px;
+    color: var(--text-tertiary);
+    font-weight: 600;
+    letter-spacing: 0.3px;
+  }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.7; }
+  }
+</style>

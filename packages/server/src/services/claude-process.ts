@@ -23,6 +23,10 @@ interface ClaudeSession {
   disallowedTools?: string[];
   status: 'running' | 'idle' | 'terminated';
   emitter: EventEmitter;
+  /** Buffer of all SSE events sent during this stream, for reconnection. */
+  eventBuffer: string[];
+  /** Whether the stream has finished (events fully read from CLI). */
+  streamComplete: boolean;
 }
 
 /**
@@ -218,6 +222,8 @@ class ClaudeProcessManager {
       disallowedTools: opts.disallowedTools,
       status: 'idle',
       emitter: new EventEmitter(),
+      eventBuffer: [],
+      streamComplete: false,
     };
 
     this.sessions.set(sessionId, session);
@@ -311,6 +317,22 @@ class ClaudeProcessManager {
     const encoder = new TextEncoder();
     const proc = session.process!;
     let cancelled = false;
+
+    // Reset event buffer for this stream
+    session.eventBuffer = [];
+    session.streamComplete = false;
+
+    /** Enqueue an SSE event string to both the HTTP stream and the replay buffer. */
+    const enqueueEvent = (controller: ReadableStreamDefaultController, sseData: string) => {
+      // Always buffer, even if the client disconnected
+      session.eventBuffer.push(sseData);
+      try {
+        controller.enqueue(encoder.encode(sseData));
+      } catch {
+        // Client disconnected — event is still in the buffer for reconnection
+      }
+    };
+
     // Accumulate stderr for error reporting
     const stderrChunks: string[] = [];
     const stderrDecoder = new TextDecoder();
@@ -372,10 +394,9 @@ class ClaudeProcessManager {
             }
           }
 
+          enqueueEvent(controller, `data: {"type":"message_stop","reason":"cancelled"}\n\n`);
+          session.streamComplete = true;
           try {
-            controller.enqueue(
-              encoder.encode(`data: {"type":"message_stop","reason":"cancelled"}\n\n`),
-            );
             controller.close();
           } catch {
             /* already closed */
@@ -437,12 +458,8 @@ class ClaudeProcessManager {
                           model: session.model || 'unknown',
                         },
                       });
-                      try {
-                        console.log('[stream] Enqueuing message_start event');
-                        controller.enqueue(encoder.encode(`data: ${messageStartEvent}\n\n`));
-                      } catch {
-                        /* stream may be closed */
-                      }
+                      console.log('[stream] Enqueuing message_start event');
+                      enqueueEvent(controller, `data: ${messageStartEvent}\n\n`);
                     }
                   }
 
@@ -504,11 +521,7 @@ class ClaudeProcessManager {
                           input: block.input || {},
                           description: desc,
                         });
-                        try {
-                          controller.enqueue(encoder.encode(`data: ${approvalEvent}\n\n`));
-                        } catch {
-                          /* stream may be closed */
-                        }
+                        enqueueEvent(controller, `data: ${approvalEvent}\n\n`);
                       }
 
                       if (block.type === 'tool_use' && fileWriteTools.includes(block.name)) {
@@ -530,11 +543,7 @@ class ClaudeProcessManager {
                                 tool: result.tool,
                                 duration: result.duration,
                               });
-                              try {
-                                controller.enqueue(encoder.encode(`data: ${verifyEvent}\n\n`));
-                              } catch {
-                                /* stream may be closed */
-                              }
+                              enqueueEvent(controller, `data: ${verifyEvent}\n\n`);
                             } catch {
                               /* verification failed silently */
                             }
@@ -566,11 +575,7 @@ class ClaudeProcessManager {
                               : JSON.stringify(block.content),
                           isError: Boolean(block.is_error),
                         });
-                        try {
-                          controller.enqueue(encoder.encode(`data: ${resultEvent}\n\n`));
-                        } catch {
-                          /* client disconnected */
-                        }
+                        enqueueEvent(controller, `data: ${resultEvent}\n\n`);
                       }
                     }
                   }
@@ -583,12 +588,7 @@ class ClaudeProcessManager {
                   const apiEvents = translateCliEvent(cliEvent);
                   for (const evt of apiEvents) {
                     console.log('[stream] Enqueuing event:', evt.slice(0, 100));
-                    try {
-                      controller.enqueue(encoder.encode(`data: ${evt}\n\n`));
-                    } catch {
-                      // Client disconnected — continue processing CLI events
-                      // so assistantContent is fully accumulated for DB persistence
-                    }
+                    enqueueEvent(controller, `data: ${evt}\n\n`);
                   }
 
                   // Persist token usage on result
@@ -629,11 +629,7 @@ class ClaudeProcessManager {
                 type: 'error',
                 error: { type: 'cli_error', message: errMsg },
               });
-              try {
-                controller.enqueue(encoder.encode(`data: ${errEvt}\n\n`));
-              } catch {
-                /* client disconnected */
-              }
+              enqueueEvent(controller, `data: ${errEvt}\n\n`);
             }
 
             // Save assistant message to DB (skip if cancel handler already saved it)
@@ -664,12 +660,9 @@ class ClaudeProcessManager {
             }
 
             if (!cancelled && !sentStop) {
-              try {
-                controller.enqueue(encoder.encode(`data: {"type":"message_stop"}\n\n`));
-              } catch {
-                /* client disconnected */
-              }
+              enqueueEvent(controller, `data: {"type":"message_stop"}\n\n`);
             }
+            session.streamComplete = true;
             if (!cancelled) {
               try {
                 controller.close();
@@ -709,13 +702,13 @@ class ClaudeProcessManager {
             }
 
             if (!cancelled) {
+              const msg = String(err).replace(/"/g, '\\"');
+              enqueueEvent(
+                controller,
+                `data: {"type":"error","error":{"type":"stream_error","message":"${msg}"}}\n\n`,
+              );
+              session.streamComplete = true;
               try {
-                const msg = String(err).replace(/"/g, '\\"');
-                controller.enqueue(
-                  encoder.encode(
-                    `data: {"type":"error","error":{"type":"stream_error","message":"${msg}"}}\n\n`,
-                  ),
-                );
                 controller.close();
               } catch {
                 /* controller already closed */
@@ -748,12 +741,102 @@ class ClaudeProcessManager {
     return this.sessions.get(sessionId);
   }
 
-  listSessions(): Array<{ id: string; conversationId: string; status: string }> {
+  listSessions(): Array<{
+    id: string;
+    conversationId: string;
+    status: string;
+    streamComplete: boolean;
+    bufferedEvents: number;
+  }> {
     return Array.from(this.sessions.values()).map((s) => ({
       id: s.id,
       conversationId: s.conversationId,
       status: s.status,
+      streamComplete: s.streamComplete,
+      bufferedEvents: s.eventBuffer.length,
     }));
+  }
+
+  /**
+   * Create a reconnection stream that replays all buffered SSE events
+   * from an in-flight (or just-completed) session. If the stream is
+   * still running, the returned stream stays open and receives new
+   * events via the session's emitter until completion.
+   */
+  reconnectStream(sessionId: string): ReadableStream | null {
+    const session = this.sessions.get(sessionId);
+    if (!session) return null;
+    if (session.eventBuffer.length === 0) return null;
+
+    const encoder = new TextEncoder();
+    const buffer = session.eventBuffer;
+    const isComplete = session.streamComplete;
+
+    return new ReadableStream({
+      start(controller) {
+        // 1. Replay all buffered events immediately
+        for (const sseData of buffer) {
+          try {
+            controller.enqueue(encoder.encode(sseData));
+          } catch {
+            return; // client gone
+          }
+        }
+
+        // 2. If stream already finished, close immediately
+        if (isComplete) {
+          try {
+            controller.close();
+          } catch { /* already closed */ }
+          return;
+        }
+
+        // 3. Stream is still running — listen for new events
+        //    We record the current buffer length so we only forward
+        //    events that arrive AFTER the replay.
+        let cursor = buffer.length;
+
+        const pingInterval = setInterval(() => {
+          try {
+            controller.enqueue(encoder.encode(`data: {"type":"ping"}\n\n`));
+          } catch {
+            clearInterval(pingInterval);
+          }
+        }, 15000);
+
+        const pollInterval = setInterval(() => {
+          // Forward any new events that were buffered since our last check
+          while (cursor < session.eventBuffer.length) {
+            try {
+              controller.enqueue(encoder.encode(session.eventBuffer[cursor]));
+            } catch {
+              clearInterval(pollInterval);
+              clearInterval(pingInterval);
+              return;
+            }
+            cursor++;
+          }
+
+          // If stream is done, close
+          if (session.streamComplete) {
+            clearInterval(pollInterval);
+            clearInterval(pingInterval);
+            try {
+              controller.close();
+            } catch { /* already closed */ }
+          }
+        }, 100); // Poll every 100ms for new events
+
+        // Clean up if client disconnects
+        session.emitter.once('reconnect_close', () => {
+          clearInterval(pollInterval);
+          clearInterval(pingInterval);
+        });
+      },
+      cancel() {
+        session.emitter.emit('reconnect_close');
+      },
+    });
   }
 }
 

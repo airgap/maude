@@ -8,6 +8,7 @@
   import SearchPanel from './SearchPanel.svelte';
   import SymbolOutline from '../editor/SymbolOutline.svelte';
   import McpPanel from './McpPanel.svelte';
+  import LoopPanel from './LoopPanel.svelte';
 
   const tabs = [
     {
@@ -49,6 +50,11 @@
       id: 'mcp' as const,
       label: 'MCP',
       icon: 'M4 4h16v4H4zM4 10h16v4H4zM4 16h16v4H4z',
+    },
+    {
+      id: 'loop' as const,
+      label: 'Loop',
+      icon: 'M17 1l4 4-4 4M3 11V9a4 4 0 0 1 4-4h14M7 23l-4-4 4-4M21 13v2a4 4 0 0 1-4 4H3',
     },
   ];
 </script>
@@ -93,6 +99,8 @@
       <AgentPanel />
     {:else if uiStore.sidebarTab === 'mcp'}
       <McpPanel />
+    {:else if uiStore.sidebarTab === 'loop'}
+      <LoopPanel />
     {/if}
   </div>
 </div>
@@ -117,12 +125,13 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    padding: 10px;
+    padding: 6px 4px;
     color: var(--text-tertiary);
     border-radius: 0;
     transition: all var(--transition);
     position: relative;
     border: 1px solid transparent;
+    min-width: 0;
   }
   .tab-btn:hover {
     color: var(--accent-primary);

@@ -80,3 +80,27 @@ export type {
   PlanApprovalRequest,
   APIResponse,
 } from './api.js';
+
+export type {
+  StoryStatus,
+  StoryPriority,
+  AcceptanceCriterion,
+  UserStory,
+  PRD,
+  PRDCreateInput,
+  QualityCheckType,
+  QualityCheckConfig,
+  QualityCheckResult,
+  LoopStatus,
+  LoopConfig,
+  LoopState,
+  IterationLogEntry,
+  StreamLoopEvent,
+  PlanMode,
+  EditMode,
+  PlanSprintRequest,
+  PlanSprintResponse,
+  GenerateStoriesRequest,
+  GeneratedStory,
+  GenerateStoriesResponse,
+} from './prd.js';

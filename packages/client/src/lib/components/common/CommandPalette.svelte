@@ -134,6 +134,24 @@
         uiStore.openModal('snapshots');
       },
     },
+    {
+      id: 'tab-loop',
+      label: 'Show Autonomous Loop',
+      category: 'View',
+      action: () => {
+        uiStore.setSidebarTab('loop');
+        close();
+      },
+    },
+    {
+      id: 'loop-start',
+      label: 'Start Autonomous Loop',
+      category: 'Loop',
+      action: () => {
+        uiStore.setSidebarTab('loop');
+        uiStore.openModal('loop-config');
+      },
+    },
   ];
 
   let filtered = $derived(

@@ -124,6 +124,23 @@ export const api = {
         method: 'POST',
         headers: { 'X-Session-Id': sessionId },
       }),
+    sessions: () =>
+      request<{
+        ok: boolean;
+        data: Array<{
+          id: string;
+          conversationId: string;
+          status: string;
+          streamComplete: boolean;
+          bufferedEvents: number;
+        }>;
+      }>('/stream/sessions'),
+    reconnect: (sessionId: string) => {
+      const headers: Record<string, string> = {};
+      const token = getAuthToken();
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+      return fetch(`${getBaseUrl()}/stream/reconnect/${sessionId}`, { headers });
+    },
   },
 
   // --- Tasks ---
@@ -450,6 +467,91 @@ export const api = {
         `/project-memory/context?${params}`,
       );
     },
+  },
+
+  // --- PRDs ---
+  prds: {
+    list: (projectPath?: string) => {
+      const q = projectPath ? `?projectPath=${encodeURIComponent(projectPath)}` : '';
+      return request<{ ok: boolean; data: any[] }>(`/prds${q}`);
+    },
+    get: (id: string) => request<{ ok: boolean; data: any }>(`/prds/${id}`),
+    create: (body: any) =>
+      request<{ ok: boolean; data: { id: string; storyIds: string[] } }>('/prds', {
+        method: 'POST',
+        body: JSON.stringify(body),
+      }),
+    update: (id: string, body: Record<string, any>) =>
+      request<{ ok: boolean }>(`/prds/${id}`, {
+        method: 'PATCH',
+        body: JSON.stringify(body),
+      }),
+    delete: (id: string) => request<{ ok: boolean }>(`/prds/${id}`, { method: 'DELETE' }),
+    addStory: (prdId: string, body: any) =>
+      request<{ ok: boolean; data: { id: string } }>(`/prds/${prdId}/stories`, {
+        method: 'POST',
+        body: JSON.stringify(body),
+      }),
+    updateStory: (prdId: string, storyId: string, body: Record<string, any>) =>
+      request<{ ok: boolean; data: any }>(`/prds/${prdId}/stories/${storyId}`, {
+        method: 'PATCH',
+        body: JSON.stringify(body),
+      }),
+    deleteStory: (prdId: string, storyId: string) =>
+      request<{ ok: boolean }>(`/prds/${prdId}/stories/${storyId}`, { method: 'DELETE' }),
+    import: (projectPath: string, prdJson: any) =>
+      request<{ ok: boolean; data: { id: string; storyIds: string[]; imported: number } }>(
+        '/prds/import',
+        {
+          method: 'POST',
+          body: JSON.stringify({ projectPath, prdJson }),
+        },
+      ),
+    export: (id: string) => request<{ ok: boolean; data: any }>(`/prds/${id}/export`),
+    plan: (prdId: string, body: { mode: string; editMode: string; userPrompt?: string; model?: string }) =>
+      request<{ ok: boolean; data: { conversationId: string; prdId: string; mode: string; editMode: string } }>(
+        `/prds/${prdId}/plan`,
+        { method: 'POST', body: JSON.stringify(body) },
+      ),
+    generate: (prdId: string, body: { description: string; context?: string; count?: number }) =>
+      request<{
+        ok: boolean;
+        data: {
+          stories: Array<{
+            title: string;
+            description: string;
+            acceptanceCriteria: string[];
+            priority: 'critical' | 'high' | 'medium' | 'low';
+          }>;
+          prdId: string;
+        };
+      }>(`/prds/${prdId}/generate`, {
+        method: 'POST',
+        body: JSON.stringify(body),
+      }),
+    acceptGenerated: (prdId: string, stories: Array<{ title: string; description: string; acceptanceCriteria: string[]; priority: 'critical' | 'high' | 'medium' | 'low' }>) =>
+      request<{ ok: boolean; data: { storyIds: string[]; accepted: number } }>(
+        `/prds/${prdId}/generate/accept`,
+        { method: 'POST', body: JSON.stringify({ stories }) },
+      ),
+  },
+
+  // --- Loops ---
+  loops: {
+    start: (body: { prdId: string; projectPath: string; config: any }) =>
+      request<{ ok: boolean; data: { loopId: string } }>('/loops/start', {
+        method: 'POST',
+        body: JSON.stringify(body),
+      }),
+    pause: (id: string) => request<{ ok: boolean }>(`/loops/${id}/pause`, { method: 'POST' }),
+    resume: (id: string) => request<{ ok: boolean }>(`/loops/${id}/resume`, { method: 'POST' }),
+    cancel: (id: string) => request<{ ok: boolean }>(`/loops/${id}/cancel`, { method: 'POST' }),
+    get: (id: string) => request<{ ok: boolean; data: any }>(`/loops/${id}`),
+    list: (status?: string) => {
+      const q = status ? `?status=${status}` : '';
+      return request<{ ok: boolean; data: any[] }>(`/loops${q}`);
+    },
+    log: (id: string) => request<{ ok: boolean; data: any[] }>(`/loops/${id}/log`),
   },
 
   // --- Auth ---

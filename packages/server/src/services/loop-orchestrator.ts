@@ -1,0 +1,884 @@
+import { EventEmitter } from 'events';
+import { nanoid } from 'nanoid';
+import { getDb } from '../db/database';
+import { claudeManager } from './claude-process';
+import { runAllQualityChecks } from './quality-checker';
+import type {
+  LoopConfig,
+  LoopState,
+  LoopStatus,
+  IterationLogEntry,
+  QualityCheckResult,
+  UserStory,
+  StreamLoopEvent,
+  StoryPriority,
+} from '@maude/shared';
+
+// Priority ordering for story selection
+const PRIORITY_ORDER: Record<StoryPriority, number> = {
+  critical: 0,
+  high: 1,
+  medium: 2,
+  low: 3,
+};
+
+/**
+ * Manages the autonomous loop lifecycle. Singleton, like claudeManager.
+ * Each loop run creates real Maude conversations and tasks for traceability.
+ */
+class LoopOrchestrator {
+  private runners = new Map<string, LoopRunner>();
+  readonly events = new EventEmitter();
+
+  async startLoop(prdId: string, projectPath: string, config: LoopConfig): Promise<string> {
+    const db = getDb();
+    const prd = db.query('SELECT * FROM prds WHERE id = ?').get(prdId) as any;
+    if (!prd) throw new Error(`PRD ${prdId} not found`);
+
+    // Validate that the PRD has at least one pending story
+    const storyCount = db
+      .query("SELECT COUNT(*) as count FROM prd_stories WHERE prd_id = ? AND status IN ('pending', 'in_progress')")
+      .get(prdId) as any;
+    if (!storyCount || storyCount.count === 0) {
+      throw new Error('Cannot start loop: PRD has no pending stories. Add at least one story first.');
+    }
+
+    const loopId = nanoid(12);
+    const now = Date.now();
+
+    // Persist loop to DB
+    db.query(
+      `INSERT INTO loops (id, prd_id, project_path, status, config, current_iteration, started_at, total_stories_completed, total_stories_failed, total_iterations, iteration_log)
+       VALUES (?, ?, ?, 'running', ?, 0, ?, 0, 0, 0, '[]')`,
+    ).run(loopId, prdId, projectPath, JSON.stringify(config), now);
+
+    const runner = new LoopRunner(loopId, prdId, projectPath, config, this.events);
+    this.runners.set(loopId, runner);
+
+    // Start the loop asynchronously
+    runner.run().catch((err) => {
+      console.error(`[loop:${loopId}] Unhandled error:`, err);
+      this.emitEvent(loopId, 'cancelled', { message: String(err) });
+    });
+
+    this.emitEvent(loopId, 'started', { message: `Loop started for PRD: ${prd.name}` });
+
+    return loopId;
+  }
+
+  async pauseLoop(loopId: string): Promise<void> {
+    const runner = this.runners.get(loopId);
+    if (!runner) throw new Error(`Loop ${loopId} not found`);
+    runner.pause();
+    this.updateStatus(loopId, 'paused');
+    this.emitEvent(loopId, 'paused', { message: 'Loop paused' });
+  }
+
+  async resumeLoop(loopId: string): Promise<void> {
+    const runner = this.runners.get(loopId);
+    if (!runner) throw new Error(`Loop ${loopId} not found`);
+    runner.resume();
+    this.updateStatus(loopId, 'running');
+    this.emitEvent(loopId, 'resumed', { message: 'Loop resumed' });
+  }
+
+  async cancelLoop(loopId: string): Promise<void> {
+    const runner = this.runners.get(loopId);
+    if (!runner) throw new Error(`Loop ${loopId} not found`);
+    runner.cancel();
+    this.updateStatus(loopId, 'cancelled');
+    this.emitEvent(loopId, 'cancelled', { message: 'Loop cancelled by user' });
+  }
+
+  getLoopState(loopId: string): LoopState | null {
+    const db = getDb();
+    const row = db.query('SELECT * FROM loops WHERE id = ?').get(loopId) as any;
+    if (!row) return null;
+    return loopFromRow(row);
+  }
+
+  listLoops(status?: string): LoopState[] {
+    const db = getDb();
+    let rows: any[];
+    if (status) {
+      rows = db
+        .query('SELECT * FROM loops WHERE status = ? ORDER BY started_at DESC')
+        .all(status);
+    } else {
+      rows = db.query('SELECT * FROM loops ORDER BY started_at DESC LIMIT 50').all();
+    }
+    return rows.map(loopFromRow);
+  }
+
+  private updateStatus(loopId: string, status: LoopStatus): void {
+    const db = getDb();
+    const updates: string[] = ['status = ?'];
+    const values: any[] = [status];
+
+    if (status === 'paused') {
+      updates.push('paused_at = ?');
+      values.push(Date.now());
+    }
+    if (status === 'completed' || status === 'failed' || status === 'cancelled') {
+      updates.push('completed_at = ?');
+      values.push(Date.now());
+    }
+
+    values.push(loopId);
+    db.query(`UPDATE loops SET ${updates.join(', ')} WHERE id = ?`).run(...values);
+  }
+
+  private emitEvent(
+    loopId: string,
+    event: StreamLoopEvent['event'],
+    data: StreamLoopEvent['data'],
+  ): void {
+    const evt: StreamLoopEvent = { type: 'loop_event', loopId, event, data };
+    this.events.emit('loop_event', evt);
+  }
+}
+
+/**
+ * Drives a single loop execution. Manages the iteration cycle, story selection,
+ * agent spawning, quality checks, and progress tracking.
+ */
+class LoopRunner {
+  private cancelled = false;
+  private pauseGate: { promise: Promise<void>; resolve: () => void } | null = null;
+
+  constructor(
+    private loopId: string,
+    private prdId: string,
+    private projectPath: string,
+    private config: LoopConfig,
+    private events: EventEmitter,
+  ) {}
+
+  async run(): Promise<void> {
+    const db = getDb();
+    let iteration = 0;
+
+    while (iteration < this.config.maxIterations && !this.cancelled) {
+      // Check pause gate
+      await this.checkPauseGate();
+      if (this.cancelled) break;
+
+      // Select next story
+      const story = this.selectNextStory();
+      if (!story) {
+        // Check if all done or all failed
+        const stories = this.getAllStories();
+        const allCompleted = stories.every((s) => s.status === 'completed' || s.status === 'skipped');
+
+        if (allCompleted) {
+          this.updateLoopDb({ status: 'completed', completed_at: Date.now() });
+          this.emitEvent('completed', { message: 'All stories completed!' });
+          return;
+        }
+
+        // No eligible stories left (all failed/maxed out)
+        this.updateLoopDb({ status: 'failed', completed_at: Date.now() });
+        this.emitEvent('completed', {
+          message: 'No more eligible stories. Some stories could not be completed.',
+        });
+        return;
+      }
+
+      iteration++;
+      this.updateLoopDb({
+        current_iteration: iteration,
+        current_story_id: story.id,
+        total_iterations: iteration,
+      });
+
+      this.emitEvent('iteration_start', {
+        storyId: story.id,
+        storyTitle: story.title,
+        iteration,
+      });
+
+      this.addLogEntry({
+        iteration,
+        storyId: story.id,
+        storyTitle: story.title,
+        action: 'started',
+        detail: `Starting story: ${story.title} (attempt ${story.attempts + 1}/${story.maxAttempts})`,
+        timestamp: Date.now(),
+      });
+
+      // Mark story as in_progress
+      this.updateStory(story.id, { status: 'in_progress', attempts: story.attempts + 1 });
+      this.emitEvent('story_started', { storyId: story.id, storyTitle: story.title, iteration });
+
+      // Create git snapshot if configured
+      if (this.config.autoSnapshot) {
+        try {
+          await this.createGitSnapshot(story.id);
+        } catch (err) {
+          console.error(`[loop:${this.loopId}] Git snapshot failed:`, err);
+        }
+      }
+
+      // Create a Maude conversation for this story
+      const conversationId = nanoid();
+      const now = Date.now();
+      db.query(
+        `INSERT INTO conversations (id, title, model, system_prompt, project_path, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      ).run(
+        conversationId,
+        `[Loop] ${story.title}`,
+        this.config.model,
+        this.config.systemPromptOverride || null,
+        this.projectPath,
+        now,
+        now,
+      );
+
+      this.updateStory(story.id, { conversationId });
+
+      // Create a Maude task linked to this story
+      const taskId = nanoid(8);
+      db.query(
+        `INSERT INTO tasks (id, subject, description, active_form, status, owner, metadata, created_at, updated_at)
+         VALUES (?, ?, ?, ?, 'in_progress', ?, ?, ?, ?)`,
+      ).run(
+        taskId,
+        story.title,
+        story.description,
+        `Implementing: ${story.title}`,
+        `loop:${this.loopId}`,
+        JSON.stringify({ prdId: this.prdId, storyId: story.id, loopId: this.loopId, iteration }),
+        now,
+        now,
+      );
+      this.updateStory(story.id, { taskId });
+
+      // Build the prompt
+      const prompt = this.buildStoryPrompt(story);
+
+      // Add user message to conversation
+      db.query(
+        `INSERT INTO messages (id, conversation_id, role, content, timestamp)
+         VALUES (?, ?, 'user', ?, ?)`,
+      ).run(nanoid(), conversationId, JSON.stringify([{ type: 'text', text: prompt }]), now);
+
+      // Spawn Claude session
+      let agentResult = '';
+      let agentError: string | null = null;
+      try {
+        const sessionId = await claudeManager.createSession(conversationId, {
+          model: this.config.model,
+          projectPath: this.projectPath,
+          effort: this.config.effort,
+          systemPrompt: this.buildSystemPrompt(),
+        });
+
+        this.updateStory(story.id, { agentId: sessionId });
+        this.updateLoopDb({ current_agent_id: sessionId });
+
+        // Read the stream to completion
+        const stream = await claudeManager.sendMessage(sessionId, prompt);
+        const reader = stream.getReader();
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          agentResult += new TextDecoder().decode(value);
+        }
+      } catch (err) {
+        agentError = String(err);
+        console.error(`[loop:${this.loopId}] Agent error for story ${story.id}:`, err);
+      }
+
+      if (this.cancelled) break;
+
+      // Run quality checks
+      let qualityResults: QualityCheckResult[] = [];
+      const checksToRun = this.config.qualityChecks.length > 0
+        ? this.config.qualityChecks
+        : [];
+
+      if (checksToRun.length > 0) {
+        qualityResults = await runAllQualityChecks(checksToRun, this.projectPath);
+
+        for (const qr of qualityResults) {
+          this.emitEvent('quality_check', {
+            storyId: story.id,
+            storyTitle: story.title,
+            qualityResult: qr,
+          });
+          this.addLogEntry({
+            iteration,
+            storyId: story.id,
+            storyTitle: story.title,
+            action: 'quality_check',
+            detail: `${qr.checkName}: ${qr.passed ? 'PASSED' : 'FAILED'} (${qr.duration}ms)`,
+            timestamp: Date.now(),
+            qualityResults: [qr],
+          });
+        }
+      }
+
+      // Determine success
+      const requiredChecksFailed = qualityResults.some((qr) => {
+        const checkConfig = checksToRun.find((c) => c.id === qr.checkId);
+        return checkConfig?.required && !qr.passed;
+      });
+      const hasAgentError = !!agentError;
+      const passed = !hasAgentError && !requiredChecksFailed;
+
+      if (passed) {
+        // Story succeeded!
+        this.updateStory(story.id, { status: 'completed' });
+        db.query("UPDATE tasks SET status = 'completed', active_form = NULL, updated_at = ? WHERE id = ?").run(
+          Date.now(),
+          taskId,
+        );
+
+        // Increment completed counter
+        const loop = db.query('SELECT * FROM loops WHERE id = ?').get(this.loopId) as any;
+        this.updateLoopDb({ total_stories_completed: (loop?.total_stories_completed || 0) + 1 });
+
+        // Git commit if configured
+        if (this.config.autoCommit) {
+          try {
+            const sha = await this.gitCommit(story);
+            if (sha) {
+              this.updateStory(story.id, { commitSha: sha });
+              this.addLogEntry({
+                iteration,
+                storyId: story.id,
+                storyTitle: story.title,
+                action: 'committed',
+                detail: `Committed: ${sha.slice(0, 8)}`,
+                timestamp: Date.now(),
+              });
+            }
+          } catch (err) {
+            console.error(`[loop:${this.loopId}] Git commit failed:`, err);
+          }
+        }
+
+        this.emitEvent('story_completed', { storyId: story.id, storyTitle: story.title, iteration });
+        this.addLogEntry({
+          iteration,
+          storyId: story.id,
+          storyTitle: story.title,
+          action: 'passed',
+          detail: 'Story completed successfully',
+          timestamp: Date.now(),
+        });
+
+        // Record learnings from success
+        this.recordLearning(story, 'Completed successfully', qualityResults);
+      } else {
+        // Story failed
+        const failReason = hasAgentError
+          ? `Agent error: ${agentError}`
+          : `Quality checks failed: ${qualityResults.filter((qr) => !qr.passed).map((qr) => qr.checkName).join(', ')}`;
+
+        // Record learning
+        this.recordLearning(story, failReason, qualityResults);
+
+        // Check if retries exhausted
+        const updatedStory = this.getStory(story.id);
+        if (updatedStory && updatedStory.attempts >= updatedStory.maxAttempts) {
+          this.updateStory(story.id, { status: 'failed' });
+          db.query("UPDATE tasks SET status = 'pending', active_form = NULL, updated_at = ? WHERE id = ?").run(
+            Date.now(),
+            taskId,
+          );
+
+          const loop = db.query('SELECT * FROM loops WHERE id = ?').get(this.loopId) as any;
+          this.updateLoopDb({ total_stories_failed: (loop?.total_stories_failed || 0) + 1 });
+        } else {
+          // Reset to pending for retry
+          this.updateStory(story.id, { status: 'pending' });
+          db.query("UPDATE tasks SET status = 'pending', active_form = NULL, updated_at = ? WHERE id = ?").run(
+            Date.now(),
+            taskId,
+          );
+        }
+
+        this.emitEvent('story_failed', {
+          storyId: story.id,
+          storyTitle: story.title,
+          iteration,
+          message: failReason,
+        });
+        this.addLogEntry({
+          iteration,
+          storyId: story.id,
+          storyTitle: story.title,
+          action: 'failed',
+          detail: failReason,
+          timestamp: Date.now(),
+          qualityResults,
+        });
+
+        // Pause on failure if configured
+        if (this.config.pauseOnFailure) {
+          this.pause();
+          this.updateLoopDb({ status: 'paused', paused_at: Date.now() });
+          this.emitEvent('paused', { message: `Paused: story "${story.title}" failed` });
+          await this.checkPauseGate();
+          if (this.cancelled) break;
+          this.updateLoopDb({ status: 'running' });
+        }
+      }
+
+      this.emitEvent('iteration_end', { storyId: story.id, storyTitle: story.title, iteration });
+
+      // Small delay between iterations
+      await new Promise((r) => setTimeout(r, 2000));
+    }
+
+    if (this.cancelled) {
+      this.updateLoopDb({ status: 'cancelled', completed_at: Date.now() });
+      return;
+    }
+
+    // Max iterations reached — check final state
+    const finalStories = this.getAllStories();
+    const allDone = finalStories.every((s) => s.status === 'completed' || s.status === 'skipped');
+
+    if (allDone) {
+      this.updateLoopDb({ status: 'completed', completed_at: Date.now() });
+      this.emitEvent('completed', { message: 'All stories completed!' });
+    } else {
+      this.updateLoopDb({ status: 'failed', completed_at: Date.now() });
+      this.emitEvent('completed', {
+        message: `Max iterations (${this.config.maxIterations}) reached. Some stories remain incomplete.`,
+      });
+    }
+
+    // Clean up
+    this.events.emit('loop_done', this.loopId);
+  }
+
+  // --- Story selection ---
+
+  private selectNextStory(): UserStory | null {
+    const stories = this.getAllStories();
+    const completedIds = new Set(
+      stories.filter((s) => s.status === 'completed').map((s) => s.id),
+    );
+
+    const eligible = stories.filter((s) => {
+      if (s.status !== 'pending') return false;
+      if (s.attempts >= s.maxAttempts) return false;
+      // Check dependencies resolved
+      const deps = s.dependsOn || [];
+      return deps.every((depId) => completedIds.has(depId));
+    });
+
+    if (eligible.length === 0) return null;
+
+    // Sort by priority
+    eligible.sort((a, b) => {
+      const pa = PRIORITY_ORDER[a.priority] ?? 2;
+      const pb = PRIORITY_ORDER[b.priority] ?? 2;
+      if (pa !== pb) return pa - pb;
+      return a.sortOrder - b.sortOrder;
+    });
+
+    return eligible[0];
+  }
+
+  // --- Prompt building ---
+
+  private buildSystemPrompt(): string {
+    let prompt = `You are an autonomous AI agent implementing user stories for a software project.
+
+## Instructions
+1. Read the user story carefully, including all acceptance criteria
+2. Implement the story completely — make all necessary code changes
+3. Ensure every acceptance criterion is met
+4. Follow existing project conventions and patterns
+5. Write clean, well-structured code
+6. Do NOT ask questions — make reasonable decisions and document them
+7. After implementation, the system will automatically run quality checks`;
+
+    // Add project memory context
+    try {
+      const db = getDb();
+      const memories = db
+        .query(
+          `SELECT * FROM project_memories WHERE project_path = ? AND confidence >= 0.3 ORDER BY category, times_seen DESC LIMIT 50`,
+        )
+        .all(this.projectPath) as any[];
+
+      if (memories.length > 0) {
+        const grouped: Record<string, string[]> = {};
+        for (const m of memories) {
+          if (!grouped[m.category]) grouped[m.category] = [];
+          grouped[m.category].push(`- ${m.key}: ${m.content}`);
+        }
+
+        prompt += '\n\n## Project Memory\n';
+        const labels: Record<string, string> = {
+          convention: 'Coding Conventions',
+          decision: 'Architecture Decisions',
+          preference: 'User Preferences',
+          pattern: 'Common Patterns',
+          context: 'Project Context',
+        };
+        for (const [cat, items] of Object.entries(grouped)) {
+          prompt += `\n### ${labels[cat] || cat}\n${items.join('\n')}\n`;
+        }
+      }
+    } catch {
+      /* no project memory available */
+    }
+
+    return prompt;
+  }
+
+  private buildStoryPrompt(story: UserStory): string {
+    const criteria = story.acceptanceCriteria
+      .map((ac, i) => `${i + 1}. ${ac.description}`)
+      .join('\n');
+
+    let prompt = `## User Story: ${story.title}
+
+${story.description}
+
+## Acceptance Criteria
+${criteria}
+
+## Attempt ${story.attempts + 1} of ${story.maxAttempts}`;
+
+    // Add learnings from previous attempts
+    if (story.learnings.length > 0) {
+      prompt += '\n\n## Learnings from Previous Attempts\n';
+      for (const learning of story.learnings) {
+        prompt += `- ${learning}\n`;
+      }
+      prompt +=
+        '\nPlease address these issues in this attempt. Do not repeat the same mistakes.';
+    }
+
+    // Add progress context
+    const stories = this.getAllStories();
+    const completed = stories.filter((s) => s.status === 'completed');
+    const remaining = stories.filter((s) => s.status === 'pending' || s.status === 'in_progress');
+
+    prompt += `\n\n## Project Progress
+- Completed: ${completed.length} of ${stories.length} stories
+- Remaining: ${remaining.length} stories (including this one)`;
+
+    if (completed.length > 0) {
+      prompt += '\n\nAlready completed:';
+      for (const cs of completed) {
+        prompt += `\n- ✅ ${cs.title}`;
+      }
+    }
+
+    return prompt;
+  }
+
+  // --- Helpers ---
+
+  private getAllStories(): UserStory[] {
+    const db = getDb();
+    const rows = db
+      .query('SELECT * FROM prd_stories WHERE prd_id = ? ORDER BY sort_order ASC')
+      .all(this.prdId) as any[];
+    return rows.map(storyFromRow);
+  }
+
+  private getStory(storyId: string): UserStory | null {
+    const db = getDb();
+    const row = db.query('SELECT * FROM prd_stories WHERE id = ?').get(storyId) as any;
+    return row ? storyFromRow(row) : null;
+  }
+
+  private updateStory(storyId: string, updates: Record<string, any>): void {
+    const db = getDb();
+    const fieldMap: Record<string, string> = {
+      status: 'status',
+      taskId: 'task_id',
+      agentId: 'agent_id',
+      conversationId: 'conversation_id',
+      commitSha: 'commit_sha',
+      attempts: 'attempts',
+    };
+
+    const setClauses: string[] = [];
+    const values: any[] = [];
+
+    for (const [key, value] of Object.entries(updates)) {
+      const col = fieldMap[key] || key;
+      setClauses.push(`${col} = ?`);
+      values.push(value);
+    }
+
+    setClauses.push('updated_at = ?');
+    values.push(Date.now());
+    values.push(storyId);
+
+    db.query(`UPDATE prd_stories SET ${setClauses.join(', ')} WHERE id = ?`).run(...values);
+  }
+
+  private updateLoopDb(updates: Record<string, any>): void {
+    const db = getDb();
+    const setClauses: string[] = [];
+    const values: any[] = [];
+
+    for (const [key, value] of Object.entries(updates)) {
+      setClauses.push(`${key} = ?`);
+      values.push(value);
+    }
+
+    values.push(this.loopId);
+    db.query(`UPDATE loops SET ${setClauses.join(', ')} WHERE id = ?`).run(...values);
+  }
+
+  private addLogEntry(entry: IterationLogEntry): void {
+    const db = getDb();
+    const row = db.query('SELECT iteration_log FROM loops WHERE id = ?').get(this.loopId) as any;
+    const log: IterationLogEntry[] = JSON.parse(row?.iteration_log || '[]');
+    log.push(entry);
+    db.query('UPDATE loops SET iteration_log = ? WHERE id = ?').run(
+      JSON.stringify(log),
+      this.loopId,
+    );
+  }
+
+  private recordLearning(
+    story: UserStory,
+    summary: string,
+    qualityResults: QualityCheckResult[],
+  ): void {
+    const failedChecks = qualityResults.filter((qr) => !qr.passed);
+    let learning = summary;
+    if (failedChecks.length > 0) {
+      learning += `. Failed checks: ${failedChecks.map((qr) => `${qr.checkName} (${qr.output.slice(0, 200)})`).join('; ')}`;
+    }
+
+    // Append to story learnings
+    const db = getDb();
+    const row = db.query('SELECT learnings FROM prd_stories WHERE id = ?').get(story.id) as any;
+    const learnings: string[] = JSON.parse(row?.learnings || '[]');
+    learnings.push(learning);
+    db.query('UPDATE prd_stories SET learnings = ?, updated_at = ? WHERE id = ?').run(
+      JSON.stringify(learnings),
+      Date.now(),
+      story.id,
+    );
+
+    // Also store in project memory for cross-loop persistence
+    try {
+      const memKey = `loop-learning:${story.title.slice(0, 60)}`;
+      const existing = db
+        .query('SELECT * FROM project_memories WHERE project_path = ? AND key = ?')
+        .get(this.projectPath, memKey) as any;
+
+      if (existing) {
+        db.query(
+          'UPDATE project_memories SET content = ?, times_seen = times_seen + 1, updated_at = ? WHERE id = ?',
+        ).run(learning.slice(0, 500), Date.now(), existing.id);
+      } else {
+        db.query(
+          `INSERT INTO project_memories (id, project_path, category, key, content, source, confidence, times_seen, created_at, updated_at)
+           VALUES (?, ?, 'context', ?, ?, 'auto', 0.6, 1, ?, ?)`,
+        ).run(nanoid(), this.projectPath, memKey, learning.slice(0, 500), Date.now(), Date.now());
+      }
+    } catch {
+      /* non-critical */
+    }
+
+    this.emitEvent('learning', {
+      storyId: story.id,
+      storyTitle: story.title,
+      learning,
+    });
+  }
+
+  // --- Git operations ---
+
+  private async createGitSnapshot(storyId: string): Promise<void> {
+    try {
+      const checkProc = Bun.spawn(['git', 'rev-parse', '--is-inside-work-tree'], {
+        cwd: this.projectPath,
+        stdout: 'pipe',
+        stderr: 'pipe',
+      });
+      const isRepo = (await new Response(checkProc.stdout).text()).trim() === 'true';
+      if (!isRepo) return;
+
+      const headProc = Bun.spawn(['git', 'rev-parse', 'HEAD'], {
+        cwd: this.projectPath,
+        stdout: 'pipe',
+        stderr: 'pipe',
+      });
+      const headSha = (await new Response(headProc.stdout).text()).trim();
+      if ((await headProc.exited) !== 0) return;
+
+      const statusProc = Bun.spawn(['git', 'status', '--porcelain'], {
+        cwd: this.projectPath,
+        stdout: 'pipe',
+        stderr: 'pipe',
+      });
+      const statusOutput = (await new Response(statusProc.stdout).text()).trim();
+      const hasChanges = statusOutput.length > 0;
+
+      let stashSha: string | null = null;
+      if (hasChanges) {
+        const stashProc = Bun.spawn(['git', 'stash', 'create'], {
+          cwd: this.projectPath,
+          stdout: 'pipe',
+          stderr: 'pipe',
+        });
+        stashSha = (await new Response(stashProc.stdout).text()).trim() || null;
+      }
+
+      const db = getDb();
+      db.query(
+        `INSERT INTO git_snapshots (id, project_path, head_sha, stash_sha, reason, has_changes, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      ).run(
+        nanoid(),
+        this.projectPath,
+        headSha,
+        stashSha,
+        `loop:${this.loopId}:story:${storyId}`,
+        hasChanges ? 1 : 0,
+        Date.now(),
+      );
+    } catch (err) {
+      console.error(`[loop:${this.loopId}] Git snapshot failed:`, err);
+    }
+  }
+
+  private async gitCommit(story: UserStory): Promise<string | null> {
+    try {
+      // Stage all changes
+      const addProc = Bun.spawn(['git', 'add', '-A'], {
+        cwd: this.projectPath,
+        stdout: 'pipe',
+        stderr: 'pipe',
+      });
+      await addProc.exited;
+
+      // Check if there are staged changes
+      const diffProc = Bun.spawn(['git', 'diff', '--cached', '--quiet'], {
+        cwd: this.projectPath,
+        stdout: 'pipe',
+        stderr: 'pipe',
+      });
+      const diffExit = await diffProc.exited;
+      if (diffExit === 0) return null; // No changes to commit
+
+      // Commit
+      const msg = `[loop] ${story.title}\n\nImplemented by Maude autonomous loop.\nPRD: ${this.prdId}\nStory: ${story.id}`;
+      const commitProc = Bun.spawn(['git', 'commit', '-m', msg], {
+        cwd: this.projectPath,
+        stdout: 'pipe',
+        stderr: 'pipe',
+      });
+      await commitProc.exited;
+
+      // Get commit SHA
+      const shaProc = Bun.spawn(['git', 'rev-parse', 'HEAD'], {
+        cwd: this.projectPath,
+        stdout: 'pipe',
+        stderr: 'pipe',
+      });
+      const sha = (await new Response(shaProc.stdout).text()).trim();
+
+      return sha;
+    } catch (err) {
+      console.error(`[loop:${this.loopId}] Git commit failed:`, err);
+      return null;
+    }
+  }
+
+  // --- Pause/Resume/Cancel ---
+
+  pause(): void {
+    let resolve: () => void;
+    const promise = new Promise<void>((r) => {
+      resolve = r;
+    });
+    this.pauseGate = { promise, resolve: resolve! };
+  }
+
+  resume(): void {
+    if (this.pauseGate) {
+      this.pauseGate.resolve();
+      this.pauseGate = null;
+    }
+  }
+
+  cancel(): void {
+    this.cancelled = true;
+    // Also resolve pause gate if paused
+    if (this.pauseGate) {
+      this.pauseGate.resolve();
+      this.pauseGate = null;
+    }
+  }
+
+  private async checkPauseGate(): Promise<void> {
+    if (this.pauseGate) {
+      await this.pauseGate.promise;
+    }
+  }
+
+  private emitEvent(
+    event: StreamLoopEvent['event'],
+    data: StreamLoopEvent['data'],
+  ): void {
+    const evt: StreamLoopEvent = { type: 'loop_event', loopId: this.loopId, event, data };
+    this.events.emit('loop_event', evt);
+  }
+}
+
+// --- Row mappers ---
+
+function storyFromRow(row: any): UserStory {
+  return {
+    id: row.id,
+    prdId: row.prd_id,
+    title: row.title,
+    description: row.description,
+    acceptanceCriteria: JSON.parse(row.acceptance_criteria || '[]'),
+    priority: row.priority,
+    dependsOn: JSON.parse(row.depends_on || '[]'),
+    status: row.status,
+    taskId: row.task_id,
+    agentId: row.agent_id,
+    conversationId: row.conversation_id,
+    commitSha: row.commit_sha,
+    attempts: row.attempts,
+    maxAttempts: row.max_attempts,
+    learnings: JSON.parse(row.learnings || '[]'),
+    sortOrder: row.sort_order,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+function loopFromRow(row: any): LoopState {
+  return {
+    id: row.id,
+    prdId: row.prd_id,
+    projectPath: row.project_path,
+    status: row.status,
+    config: JSON.parse(row.config || '{}'),
+    currentIteration: row.current_iteration,
+    currentStoryId: row.current_story_id,
+    currentAgentId: row.current_agent_id,
+    startedAt: row.started_at,
+    pausedAt: row.paused_at,
+    completedAt: row.completed_at,
+    totalStoriesCompleted: row.total_stories_completed,
+    totalStoriesFailed: row.total_stories_failed,
+    totalIterations: row.total_iterations,
+    iterationLog: JSON.parse(row.iteration_log || '[]'),
+  };
+}
+
+export const loopOrchestrator = new LoopOrchestrator();

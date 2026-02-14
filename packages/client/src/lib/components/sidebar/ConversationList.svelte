@@ -29,8 +29,11 @@
       const res = await api.conversations.list();
       conversationStore.setList(res.data);
 
-      // Auto-restore the previously active conversation after page reload
-      if (!conversationStore.active) {
+      // Auto-restore the previously active conversation after page reload,
+      // but skip if a stream reconnection is already in progress (it handles
+      // loading the conversation itself and calling streamStore.reset() here
+      // would destroy its state).
+      if (!conversationStore.active && !streamStore.isStreaming) {
         const savedId = workspaceStore.activeWorkspace?.snapshot.activeConversationId;
         if (savedId && res.data.some((c: any) => c.id === savedId)) {
           conversationStore.setLoading(true);

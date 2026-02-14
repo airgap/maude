@@ -145,4 +145,24 @@ app.get('/sessions', (c) => {
   return c.json({ ok: true, data: claudeManager.listSessions() });
 });
 
+// Reconnect to an in-flight or just-completed stream.
+// Replays all buffered SSE events and continues streaming if still active.
+app.get('/reconnect/:sessionId', (c) => {
+  const sessionId = c.req.param('sessionId');
+  const stream = claudeManager.reconnectStream(sessionId);
+  if (!stream) {
+    return c.json({ ok: false, error: 'No active or recent stream for this session' }, 404);
+  }
+
+  return new Response(stream, {
+    headers: {
+      'Content-Type': 'text/event-stream',
+      'Cache-Control': 'no-cache',
+      Connection: 'keep-alive',
+      'X-Session-Id': sessionId,
+      'Access-Control-Expose-Headers': 'X-Session-Id',
+    },
+  });
+});
+
 export { app as streamRoutes };

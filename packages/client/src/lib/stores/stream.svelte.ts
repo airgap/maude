@@ -36,6 +36,9 @@ export interface StreamSnapshot {
 
 function createStreamStore() {
   let status = $state<StreamStatus>('idle');
+  /** True while reconnectActiveStream() is running — prevents other code from
+   *  calling reset() and wiping out state being rebuilt from replayed events. */
+  let reconnecting = $state(false);
   let sessionId = $state<string | null>(null);
   let partialText = $state('');
   let partialThinking = $state('');
@@ -49,6 +52,9 @@ function createStreamStore() {
   let toolResults = $state<Map<string, { result: string; isError: boolean; duration?: number }>>(
     new Map(),
   );
+  let verifications = $state<
+    Map<string, { passed: boolean; issues: Array<{ severity: string; line?: number; message: string; rule?: string }> }>
+  >(new Map());
   // Offset for mapping event indices to contentBlocks array positions.
   // Reset to contentBlocks.length on each message_start so sub-agent
   // events with index=0 map to the correct position in the flat array.
@@ -81,13 +87,22 @@ function createStreamStore() {
       return error;
     },
     get isStreaming() {
-      return status === 'streaming' || status === 'connecting';
+      return status === 'streaming' || status === 'connecting' || reconnecting;
+    },
+    get isReconnecting() {
+      return reconnecting;
+    },
+    setReconnecting(v: boolean) {
+      reconnecting = v;
     },
     get abortController() {
       return abortController;
     },
     get toolResults() {
       return toolResults;
+    },
+    get verifications() {
+      return verifications;
     },
 
     setSessionId(id: string) {
@@ -257,6 +272,16 @@ function createStreamStore() {
           error = event.error.message;
           break;
 
+        case 'verification_result': {
+          const newVerifications = new Map(verifications);
+          newVerifications.set(event.filePath, {
+            passed: event.passed,
+            issues: event.issues,
+          });
+          verifications = newVerifications;
+          break;
+        }
+
         case 'ping':
           break;
       }
@@ -285,6 +310,7 @@ function createStreamStore() {
       currentBlockIndex = -1;
       pendingApprovals = [];
       toolResults = new Map();
+      verifications = new Map();
       error = null;
       abortController = null;
       indexOffset = 0;
