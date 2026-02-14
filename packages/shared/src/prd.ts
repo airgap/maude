@@ -178,6 +178,35 @@ export interface GenerateStoriesResponse {
   prdId: string;
 }
 
+// --- Story Refinement Types ---
+
+export interface RefinementQuestion {
+  id: string;
+  question: string;
+  context: string; // why this question matters
+  suggestedAnswers?: string[]; // optional suggestions
+}
+
+export interface RefineStoryRequest {
+  storyId: string;
+  answers?: Array<{ questionId: string; answer: string }>; // answers to previous questions
+}
+
+export interface RefineStoryResponse {
+  storyId: string;
+  questions: RefinementQuestion[]; // 2-5 clarifying questions
+  qualityScore: number; // 0-100, how well-defined the story is
+  qualityExplanation: string; // what was unclear
+  meetsThreshold: boolean; // true if quality >= 80
+  updatedStory?: {
+    title: string;
+    description: string;
+    acceptanceCriteria: string[];
+    priority: StoryPriority;
+  };
+  improvements?: string[]; // list of what was improved and how
+}
+
 // --- Stream Events for Loop ---
 
 export interface StreamLoopEvent {

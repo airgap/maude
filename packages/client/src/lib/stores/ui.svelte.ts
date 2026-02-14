@@ -18,6 +18,7 @@ type ModalId =
   | 'snapshots'
   | 'loop-config'
   | 'story-generate'
+  | 'story-refine'
   | null;
 type FocusedPane = 'chat' | 'editor';
 

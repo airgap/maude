@@ -8,6 +8,8 @@ import type {
   PlanSprintResponse,
   GenerateStoriesRequest,
   GeneratedStory,
+  RefineStoryRequest,
+  RefinementQuestion,
 } from '@maude/shared';
 import { readFileSync } from 'fs';
 import { join } from 'path';
@@ -610,6 +612,279 @@ app.post('/:id/generate/accept', async (c) => {
   db.query('UPDATE prds SET updated_at = ? WHERE id = ?').run(now, prdId);
 
   return c.json({ ok: true, data: { storyIds, accepted: stories.length } }, 201);
+});
+
+// --- Story Refinement ---
+
+// Refine a story by generating clarifying questions and incorporating answers
+app.post('/:prdId/stories/:storyId/refine', async (c) => {
+  const db = getDb();
+  const prdId = c.req.param('prdId');
+  const storyId = c.req.param('storyId');
+  const body = (await c.req.json()) as RefineStoryRequest;
+
+  const prdRow = db.query('SELECT * FROM prds WHERE id = ?').get(prdId) as any;
+  if (!prdRow) return c.json({ ok: false, error: 'PRD not found' }, 404);
+
+  const storyRow = db.query('SELECT * FROM prd_stories WHERE id = ? AND prd_id = ?').get(storyId, prdId) as any;
+  if (!storyRow) return c.json({ ok: false, error: 'Story not found' }, 404);
+
+  const story = storyFromRow(storyRow);
+
+  // Build project memory context
+  let memoryContext = '';
+  try {
+    const memRows = db
+      .query(
+        `SELECT * FROM project_memories WHERE project_path = ? AND confidence >= 0.3 ORDER BY category, times_seen DESC LIMIT 30`,
+      )
+      .all(prdRow.project_path) as any[];
+    if (memRows.length > 0) {
+      const grouped: Record<string, string[]> = {};
+      for (const m of memRows) {
+        if (!grouped[m.category]) grouped[m.category] = [];
+        grouped[m.category].push(`- ${m.key}: ${m.content}`);
+      }
+      const labels: Record<string, string> = {
+        convention: 'Coding Conventions',
+        decision: 'Architecture Decisions',
+        preference: 'User Preferences',
+        pattern: 'Common Patterns',
+        context: 'Project Context',
+      };
+      memoryContext = '\n\n## Project Memory\n';
+      for (const [cat, items] of Object.entries(grouped)) {
+        memoryContext += `\n### ${labels[cat] || cat}\n${items.join('\n')}\n`;
+      }
+    }
+  } catch { /* no project memory */ }
+
+  // Build context about existing stories for reference
+  const existingStories = db
+    .query('SELECT title, description FROM prd_stories WHERE prd_id = ? AND id != ?')
+    .all(prdId, storyId) as any[];
+  let siblingContext = '';
+  if (existingStories.length > 0) {
+    siblingContext = '\n\n## Other Stories in this PRD\n';
+    for (const s of existingStories) {
+      siblingContext += `- ${s.title}: ${s.description}\n`;
+    }
+  }
+
+  const hasAnswers = body.answers && body.answers.length > 0;
+
+  // Build the prompt based on whether we have answers or this is the initial analysis
+  let userPrompt: string;
+  if (hasAnswers) {
+    const answersText = body.answers!.map((a) => `Q: ${a.questionId}\nA: ${a.answer}`).join('\n\n');
+    userPrompt = `The user has answered clarifying questions about this story. Use their answers to refine the story.
+
+## Current Story
+Title: ${story.title}
+Description: ${story.description}
+Priority: ${story.priority}
+Acceptance Criteria:
+${story.acceptanceCriteria.map((ac: any) => `- ${ac.description}`).join('\n')}
+
+## User's Answers
+${answersText}
+
+Based on the answers, please:
+1. Assess the story's quality (0-100 score)
+2. Generate 2-5 NEW follow-up clarifying questions if quality is still below 80, OR generate 0 questions if the story is now well-defined
+3. Provide an updated version of the story incorporating the user's answers
+4. Explain what was unclear and how it was improved`;
+  } else {
+    userPrompt = `Analyze this user story and assess whether it has sufficient detail and clarity for implementation.
+
+## PRD: ${prdRow.name}
+${prdRow.description || '(No description)'}
+
+## Story to Refine
+Title: ${story.title}
+Description: ${story.description}
+Priority: ${story.priority}
+Acceptance Criteria:
+${story.acceptanceCriteria.map((ac: any) => `- ${ac.description}`).join('\n')}
+
+Please:
+1. Assess the story's quality (0-100 score). Consider: clarity, specificity, testability of criteria, scope appropriateness, missing details.
+2. Generate 2-5 targeted clarifying questions to improve the story
+3. For each question, explain why it matters (context)
+4. Optionally suggest likely answers for each question
+5. Explain what aspects are unclear or could be improved`;
+  }
+
+  const systemPrompt = `You are an expert agile coach and technical product manager. Your job is to help refine user stories until they are clear, specific, and implementable.
+
+A well-defined story should:
+- Have a clear, specific title that describes the outcome
+- Have a description that explains WHAT needs to be done, WHY it matters, and any important context
+- Have acceptance criteria that are specific, testable, and complete
+- Be appropriately scoped for a single implementation session (a few hours)
+- Not have ambiguous terms or undefined behavior
+- Consider edge cases and error scenarios
+
+Quality scoring guide:
+- 90-100: Excellent — ready for implementation with no ambiguity
+- 70-89: Good — minor clarifications might help but story is implementable
+- 50-69: Fair — some important details missing, would benefit from refinement
+- 30-49: Needs work — multiple areas of ambiguity
+- 0-29: Very vague — major details missing, significant refinement needed
+
+You MUST respond with ONLY a valid JSON object. No markdown, no explanation, no code fences. Just the raw JSON.
+
+The JSON must have this exact shape:
+{
+  "qualityScore": <number 0-100>,
+  "qualityExplanation": "<string explaining what is unclear or could be improved>",
+  "meetsThreshold": <boolean, true if qualityScore >= 80>,
+  "questions": [
+    {
+      "id": "<unique short id>",
+      "question": "<the clarifying question>",
+      "context": "<why this question matters for implementation>",
+      "suggestedAnswers": ["<optional suggestion 1>", "<optional suggestion 2>"]
+    }
+  ],
+  "improvements": ["<description of improvement 1>", "<description of improvement 2>"],
+  "updatedStory": {
+    "title": "<refined title>",
+    "description": "<refined description>",
+    "acceptanceCriteria": ["<criterion 1>", "<criterion 2>", ...],
+    "priority": "critical" | "high" | "medium" | "low"
+  }
+}
+
+IMPORTANT:
+- Generate 2-5 questions when the story needs refinement (quality < 80)
+- Generate 0 questions when the story meets the quality threshold (quality >= 80)
+- The "improvements" array should list specific changes made (only when updatedStory is provided with answers)
+- Always provide updatedStory when answers are given
+- Questions should be targeted and specific, not generic${memoryContext}${siblingContext}`;
+
+  try {
+    const auth = getAnthropicAuth();
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+      'anthropic-version': '2023-06-01',
+    };
+    if (auth.type === 'oauth') {
+      headers['Authorization'] = `Bearer ${auth.token}`;
+    } else {
+      headers['x-api-key'] = auth.token;
+    }
+
+    const apiResponse = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-5-20250929',
+        max_tokens: 4096,
+        system: systemPrompt,
+        messages: [{ role: 'user', content: userPrompt }],
+      }),
+    });
+
+    if (!apiResponse.ok) {
+      const errBody = await apiResponse.text().catch(() => 'Unknown error');
+      return c.json(
+        { ok: false, error: `AI refinement failed (${apiResponse.status}): ${errBody}` },
+        502,
+      );
+    }
+
+    const result = await apiResponse.json() as any;
+    const textContent = result.content?.find((ct: any) => ct.type === 'text');
+    if (!textContent?.text) {
+      return c.json({ ok: false, error: 'AI returned no text content' }, 502);
+    }
+
+    // Parse the JSON response
+    let rawText = textContent.text.trim();
+    if (rawText.startsWith('```')) {
+      rawText = rawText.replace(/^```(?:json)?\s*\n?/, '').replace(/\n?```\s*$/, '');
+    }
+
+    let parsed: any;
+    try {
+      parsed = JSON.parse(rawText);
+    } catch {
+      return c.json(
+        { ok: false, error: 'Failed to parse AI refinement response as JSON. Try again.' },
+        502,
+      );
+    }
+
+    // Validate and shape the response
+    const validPriorities = ['critical', 'high', 'medium', 'low'];
+    const questions: RefinementQuestion[] = (parsed.questions || [])
+      .filter((q: any) => q.question && typeof q.question === 'string')
+      .slice(0, 5)
+      .map((q: any) => ({
+        id: q.id || nanoid(8),
+        question: q.question.trim(),
+        context: (q.context || '').trim(),
+        suggestedAnswers: Array.isArray(q.suggestedAnswers)
+          ? q.suggestedAnswers.filter((s: any) => typeof s === 'string' && s.trim())
+          : undefined,
+      }));
+
+    const qualityScore = typeof parsed.qualityScore === 'number'
+      ? Math.max(0, Math.min(100, Math.round(parsed.qualityScore)))
+      : 50;
+
+    const response: any = {
+      storyId,
+      questions,
+      qualityScore,
+      qualityExplanation: parsed.qualityExplanation || 'No explanation provided.',
+      meetsThreshold: qualityScore >= 80,
+    };
+
+    if (parsed.updatedStory) {
+      response.updatedStory = {
+        title: (parsed.updatedStory.title || story.title).trim(),
+        description: (parsed.updatedStory.description || story.description).trim(),
+        acceptanceCriteria: Array.isArray(parsed.updatedStory.acceptanceCriteria)
+          ? parsed.updatedStory.acceptanceCriteria.filter((ac: any) => typeof ac === 'string' && ac.trim()).map((ac: string) => ac.trim())
+          : story.acceptanceCriteria.map((ac: any) => ac.description),
+        priority: validPriorities.includes(parsed.updatedStory.priority)
+          ? parsed.updatedStory.priority
+          : story.priority,
+      };
+    }
+
+    if (Array.isArray(parsed.improvements)) {
+      response.improvements = parsed.improvements
+        .filter((imp: any) => typeof imp === 'string' && imp.trim())
+        .map((imp: string) => imp.trim());
+    }
+
+    // If answers were provided and there's an updated story, auto-apply the refinement
+    if (hasAnswers && response.updatedStory) {
+      const updated = response.updatedStory;
+      const now = Date.now();
+      const criteria = updated.acceptanceCriteria.map((desc: string) => ({
+        id: nanoid(8),
+        description: desc,
+        passed: false,
+      }));
+
+      db.query(
+        `UPDATE prd_stories SET title = ?, description = ?, acceptance_criteria = ?, priority = ?, updated_at = ? WHERE id = ?`,
+      ).run(updated.title, updated.description, JSON.stringify(criteria), updated.priority, now, storyId);
+
+      db.query('UPDATE prds SET updated_at = ? WHERE id = ?').run(now, prdId);
+    }
+
+    return c.json({ ok: true, data: response });
+  } catch (err) {
+    return c.json(
+      { ok: false, error: `Story refinement failed: ${(err as Error).message}` },
+      500,
+    );
+  }
 });
 
 // --- Sprint Planning ---

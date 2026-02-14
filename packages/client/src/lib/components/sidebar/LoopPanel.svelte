@@ -172,6 +172,12 @@
     uiStore.openModal('story-generate');
   }
 
+  function openRefineModal(storyId: string) {
+    loopStore.clearRefinement();
+    loopStore.setRefiningStoryId(storyId);
+    uiStore.openModal('story-refine');
+  }
+
   async function startPlanning(mode: PlanMode) {
     if (!loopStore.selectedPrdId || planning) return;
 
@@ -348,6 +354,7 @@
                   <span class="priority-badge">{priorityLabel(story.priority)}</span>
                 {/if}
                 {#if !loopStore.isActive}
+                  <button class="refine-btn" title="Refine story" onclick={() => openRefineModal(story.id)}>⚡</button>
                   <button class="delete-btn" onclick={() => handleDeleteStory(story.id)}>×</button>
                 {/if}
               </div>
@@ -568,6 +575,7 @@
     color: var(--accent-warning, #e6a817);
     font-weight: bold;
   }
+  .refine-btn,
   .delete-btn {
     font-size: 12px;
     padding: 0 4px;
@@ -575,8 +583,12 @@
     opacity: 0;
     transition: opacity var(--transition);
   }
+  .story-item:hover .refine-btn,
   .story-item:hover .delete-btn {
     opacity: 1;
+  }
+  .refine-btn:hover {
+    color: var(--accent-primary);
   }
   .delete-btn:hover {
     color: var(--accent-error);

@@ -534,6 +534,32 @@ export const api = {
         `/prds/${prdId}/generate/accept`,
         { method: 'POST', body: JSON.stringify({ stories }) },
       ),
+    refineStory: (prdId: string, storyId: string, answers?: Array<{ questionId: string; answer: string }>) =>
+      request<{
+        ok: boolean;
+        data: {
+          storyId: string;
+          questions: Array<{
+            id: string;
+            question: string;
+            context: string;
+            suggestedAnswers?: string[];
+          }>;
+          qualityScore: number;
+          qualityExplanation: string;
+          meetsThreshold: boolean;
+          updatedStory?: {
+            title: string;
+            description: string;
+            acceptanceCriteria: string[];
+            priority: 'critical' | 'high' | 'medium' | 'low';
+          };
+          improvements?: string[];
+        };
+      }>(`/prds/${prdId}/stories/${storyId}/refine`, {
+        method: 'POST',
+        body: JSON.stringify({ storyId, answers }),
+      }),
   },
 
   // --- Loops ---

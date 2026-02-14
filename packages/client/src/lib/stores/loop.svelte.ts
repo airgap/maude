@@ -1,4 +1,4 @@
-import type { PRD, LoopState, IterationLogEntry, StreamLoopEvent, LoopConfig, PlanMode, EditMode, GeneratedStory } from '@maude/shared';
+import type { PRD, LoopState, IterationLogEntry, StreamLoopEvent, LoopConfig, PlanMode, EditMode, GeneratedStory, RefinementQuestion, RefineStoryResponse } from '@maude/shared';
 import { api, getBaseUrl, getAuthToken } from '../api/client';
 
 function createLoopStore() {
@@ -19,6 +19,18 @@ function createLoopStore() {
   let generatedStories = $state<GeneratedStory[]>([]);
   let generating = $state(false);
   let generateError = $state<string | null>(null);
+
+  // Story refinement state
+  let refiningStoryId = $state<string | null>(null);
+  let refining = $state(false);
+  let refineError = $state<string | null>(null);
+  let refinementQuestions = $state<RefinementQuestion[]>([]);
+  let refinementQualityScore = $state<number | null>(null);
+  let refinementQualityExplanation = $state<string | null>(null);
+  let refinementMeetsThreshold = $state(false);
+  let refinementImprovements = $state<string[]>([]);
+  let refinementUpdatedStory = $state<RefineStoryResponse['updatedStory'] | null>(null);
+  let refinementRound = $state(0);
 
   return {
     get activeLoop() {
@@ -80,6 +92,36 @@ function createLoopStore() {
     },
     get generateError() {
       return generateError;
+    },
+    get refiningStoryId() {
+      return refiningStoryId;
+    },
+    get refining() {
+      return refining;
+    },
+    get refineError() {
+      return refineError;
+    },
+    get refinementQuestions() {
+      return refinementQuestions;
+    },
+    get refinementQualityScore() {
+      return refinementQualityScore;
+    },
+    get refinementQualityExplanation() {
+      return refinementQualityExplanation;
+    },
+    get refinementMeetsThreshold() {
+      return refinementMeetsThreshold;
+    },
+    get refinementImprovements() {
+      return refinementImprovements;
+    },
+    get refinementUpdatedStory() {
+      return refinementUpdatedStory;
+    },
+    get refinementRound() {
+      return refinementRound;
     },
 
     // --- Setters ---
@@ -408,6 +450,61 @@ function createLoopStore() {
 
     removeGeneratedStory(index: number) {
       generatedStories = generatedStories.filter((_, i) => i !== index);
+    },
+
+    // --- Story refinement ---
+
+    setRefiningStoryId(id: string | null) {
+      refiningStoryId = id;
+    },
+
+    clearRefinement() {
+      refiningStoryId = null;
+      refining = false;
+      refineError = null;
+      refinementQuestions = [];
+      refinementQualityScore = null;
+      refinementQualityExplanation = null;
+      refinementMeetsThreshold = false;
+      refinementImprovements = [];
+      refinementUpdatedStory = null;
+      refinementRound = 0;
+    },
+
+    async refineStory(
+      prdId: string,
+      storyId: string,
+      answers?: Array<{ questionId: string; answer: string }>,
+    ): Promise<{ ok: boolean; error?: string }> {
+      refining = true;
+      refineError = null;
+      refiningStoryId = storyId;
+      try {
+        const res = await api.prds.refineStory(prdId, storyId, answers);
+        if (res.ok) {
+          refinementQuestions = res.data.questions as RefinementQuestion[];
+          refinementQualityScore = res.data.qualityScore;
+          refinementQualityExplanation = res.data.qualityExplanation;
+          refinementMeetsThreshold = res.data.meetsThreshold;
+          refinementImprovements = res.data.improvements || [];
+          refinementUpdatedStory = res.data.updatedStory || null;
+          refinementRound += 1;
+
+          // If answers were provided and story was updated, reload the PRD to reflect changes
+          if (answers && answers.length > 0 && res.data.updatedStory) {
+            await this.loadPrd(prdId);
+          }
+
+          return { ok: true };
+        }
+        refineError = (res as any).error || 'Refinement failed';
+        return { ok: false, error: refineError ?? undefined };
+      } catch (err) {
+        refineError = String(err);
+        return { ok: false, error: refineError ?? undefined };
+      } finally {
+        refining = false;
+      }
     },
 
     // --- Sprint planning ---

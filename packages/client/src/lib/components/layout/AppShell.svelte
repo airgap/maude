@@ -11,6 +11,7 @@
   import SnapshotModal from '../settings/SnapshotModal.svelte';
   import LoopConfigModal from '../settings/LoopConfigModal.svelte';
   import StoryGenerateModal from '../settings/StoryGenerateModal.svelte';
+  import StoryRefineModal from '../settings/StoryRefineModal.svelte';
   import CommandPalette from '../common/CommandPalette.svelte';
   import ToastContainer from '../common/ToastContainer.svelte';
   import QuickOpen from '../editor/QuickOpen.svelte';
@@ -194,6 +195,10 @@
 
   {#if uiStore.activeModal === 'story-generate'}
     <StoryGenerateModal />
+  {/if}
+
+  {#if uiStore.activeModal === 'story-refine'}
+    <StoryRefineModal />
   {/if}
 
   {#if uiStore.activeModal === 'command-palette'}

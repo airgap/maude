@@ -103,4 +103,7 @@ export type {
   GenerateStoriesRequest,
   GeneratedStory,
   GenerateStoriesResponse,
+  RefinementQuestion,
+  RefineStoryRequest,
+  RefineStoryResponse,
 } from './prd.js';
