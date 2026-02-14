@@ -35,6 +35,12 @@ import type {
   SprintPlanResponse,
   SprintRecommendation,
   SprintStoryAssignment,
+  PRDCompletenessAnalysis,
+  PRDSectionAnalysis,
+  PRDSectionName,
+  PRDSectionSeverity,
+  AnalyzePrdCompletenessRequest,
+  AnalyzePrdCompletenessResponse,
 } from '@maude/shared';
 import { readFileSync } from 'fs';
 import { join } from 'path';
@@ -2438,6 +2444,257 @@ Provide relative complexity estimates for all stories that need estimation.`;
   } catch (err) {
     return c.json(
       { ok: false, error: `Bulk estimation failed: ${(err as Error).message}` },
+      500,
+    );
+  }
+});
+
+// --- PRD Completeness Analysis ---
+
+// Analyze PRD content for completeness, missing sections, and gaps
+app.post('/:id/completeness', async (c) => {
+  const db = getDb();
+  const prdId = c.req.param('id');
+  const body = (await c.req.json().catch(() => ({}))) as AnalyzePrdCompletenessRequest;
+
+  const prdRow = db.query('SELECT * FROM prds WHERE id = ?').get(prdId) as any;
+  if (!prdRow) return c.json({ ok: false, error: 'PRD not found' }, 404);
+
+  const stories = db
+    .query('SELECT * FROM prd_stories WHERE prd_id = ? ORDER BY sort_order ASC, created_at ASC')
+    .all(prdId) as any[];
+
+  const mappedStories = stories.map(storyFromRow);
+
+  // Build a comprehensive view of the PRD for AI analysis
+  let storiesContext = '';
+  if (mappedStories.length > 0) {
+    storiesContext = '\n## Existing Stories\n';
+    for (const s of mappedStories) {
+      const criteria = s.acceptanceCriteria
+        .map((ac: any) => `  - ${ac.description}`)
+        .join('\n');
+      storiesContext += `\n### ${s.title}\n`;
+      if (s.description) storiesContext += `Description: ${s.description}\n`;
+      if (criteria) storiesContext += `Acceptance Criteria:\n${criteria}\n`;
+      storiesContext += `Priority: ${s.priority}\n`;
+      if (s.estimate) storiesContext += `Estimate: ${s.estimate.size} (${s.estimate.storyPoints}pts)\n`;
+    }
+  }
+
+  // Get project memory for additional context
+  let memoryContext = '';
+  try {
+    const memories = db
+      .query('SELECT category, key, content FROM project_memories WHERE project_path = ? ORDER BY category, key')
+      .all(prdRow.project_path) as any[];
+    if (memories.length > 0) {
+      memoryContext = '\n\n## Project Memory\n';
+      for (const m of memories.slice(0, 10)) {
+        memoryContext += `- [${m.category}] ${m.key}: ${m.content}\n`;
+      }
+    }
+  } catch { /* no project memory */ }
+
+  const standardSections: Array<{ name: PRDSectionName; label: string; severity: PRDSectionSeverity }> = [
+    { name: 'goals', label: 'Goals & Objectives', severity: 'critical' },
+    { name: 'scope', label: 'Scope & Boundaries', severity: 'critical' },
+    { name: 'success_metrics', label: 'Success Metrics & KPIs', severity: 'critical' },
+    { name: 'constraints', label: 'Constraints & Limitations', severity: 'warning' },
+    { name: 'user_personas', label: 'User Personas & Target Audience', severity: 'warning' },
+    { name: 'requirements', label: 'Functional Requirements', severity: 'critical' },
+    { name: 'assumptions', label: 'Assumptions', severity: 'info' },
+    { name: 'risks', label: 'Risks & Mitigations', severity: 'warning' },
+    { name: 'timeline', label: 'Timeline & Milestones', severity: 'info' },
+    { name: 'dependencies', label: 'External Dependencies', severity: 'info' },
+  ];
+
+  // Filter to only requested sections if specified
+  const sectionsToAnalyze = body.sections
+    ? standardSections.filter((s) => body.sections!.includes(s.name))
+    : standardSections;
+
+  const sectionsListStr = sectionsToAnalyze
+    .map((s) => `- "${s.name}" (label: "${s.label}", default_severity: "${s.severity}")`)
+    .join('\n');
+
+  const systemPrompt = `You are a PRD (Product Requirements Document) analysis expert. Your job is to evaluate the completeness and quality of a PRD by checking for standard sections, identifying gaps, and suggesting improvements.
+
+## PRD to Analyze
+
+### Title: ${prdRow.name}
+### Description:
+${prdRow.description || '(No description provided)'}
+${storiesContext}
+${memoryContext}
+
+## Standard PRD Sections to Check
+${sectionsListStr}
+
+## Your Task
+Analyze the PRD content above and evaluate each section. For each section:
+1. Determine if it is present (even if not explicitly labeled, content may cover the section)
+2. Score its quality from 0-100 (0 = completely missing, 100 = thorough and well-defined)
+3. Provide specific feedback about what's missing or could be improved
+4. Suggest 1-3 specific questions that would help fill any gaps
+
+Also provide:
+- An overall completeness score (0-100) weighted by section severity
+- A brief summary assessment
+- Top 3-5 critical questions that would most improve the PRD
+
+You MUST respond with ONLY a valid JSON object. No markdown, no explanation, no code fences.
+
+{
+  "overallScore": 75,
+  "overallLabel": "Good",
+  "summary": "Brief assessment of the PRD's overall completeness",
+  "sections": [
+    {
+      "section": "goals",
+      "label": "Goals & Objectives",
+      "present": true,
+      "severity": "critical",
+      "score": 80,
+      "feedback": "What's good and what's missing",
+      "questions": ["Specific question to improve this section"]
+    }
+  ],
+  "suggestedQuestions": ["Top priority question 1", "Top priority question 2"]
+}
+
+IMPORTANT:
+- Be thorough but fair — content may implicitly address a section without a formal heading
+- The overallLabel should be: "Excellent" (90+), "Good" (70-89), "Fair" (50-69), "Needs Work" (30-49), or "Incomplete" (<30)
+- Weight critical sections more heavily in the overall score
+- Questions should be specific and actionable, not generic
+- Every section from the list MUST appear in the output
+- Score 0 only if a section is completely absent with no related content`;
+
+  const userPrompt = `Analyze this PRD for completeness. Check all ${sectionsToAnalyze.length} standard sections and identify any gaps, weak areas, or missing details that could cause problems during implementation.`;
+
+  try {
+    const auth = getAnthropicAuth();
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+      'anthropic-version': '2023-06-01',
+    };
+    if (auth.type === 'oauth') {
+      headers['Authorization'] = `Bearer ${auth.token}`;
+    } else {
+      headers['x-api-key'] = auth.token;
+    }
+
+    const apiResponse = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-5-20250929',
+        max_tokens: 4096,
+        system: systemPrompt,
+        messages: [{ role: 'user', content: userPrompt }],
+      }),
+    });
+
+    if (!apiResponse.ok) {
+      const errBody = await apiResponse.text().catch(() => 'Unknown error');
+      return c.json(
+        { ok: false, error: `AI completeness analysis failed (${apiResponse.status}): ${errBody}` },
+        502,
+      );
+    }
+
+    const result = (await apiResponse.json()) as any;
+    const textContent = result.content?.find((ct: any) => ct.type === 'text');
+    if (!textContent?.text) {
+      return c.json({ ok: false, error: 'AI returned no text content' }, 502);
+    }
+
+    // Parse JSON response
+    let rawText = textContent.text.trim();
+    if (rawText.startsWith('```')) {
+      rawText = rawText.replace(/^```(?:json)?\s*\n?/, '').replace(/\n?```\s*$/, '');
+    }
+
+    let parsed: any;
+    try {
+      parsed = JSON.parse(rawText);
+    } catch {
+      return c.json(
+        { ok: false, error: 'Failed to parse AI completeness analysis as JSON. Try again.' },
+        502,
+      );
+    }
+
+    // Validate and build the response
+    const overallScore = typeof parsed.overallScore === 'number'
+      ? Math.max(0, Math.min(100, Math.round(parsed.overallScore)))
+      : 0;
+
+    const overallLabel = typeof parsed.overallLabel === 'string'
+      ? parsed.overallLabel
+      : overallScore >= 90 ? 'Excellent'
+      : overallScore >= 70 ? 'Good'
+      : overallScore >= 50 ? 'Fair'
+      : overallScore >= 30 ? 'Needs Work'
+      : 'Incomplete';
+
+    const sections: PRDSectionAnalysis[] = [];
+    const parsedSections = Array.isArray(parsed.sections) ? parsed.sections : [];
+
+    // Ensure all requested sections are represented
+    for (const standardSection of sectionsToAnalyze) {
+      const found = parsedSections.find((ps: any) => ps.section === standardSection.name);
+      if (found) {
+        sections.push({
+          section: standardSection.name,
+          label: standardSection.label,
+          present: !!found.present,
+          severity: standardSection.severity,
+          score: typeof found.score === 'number' ? Math.max(0, Math.min(100, Math.round(found.score))) : 0,
+          feedback: typeof found.feedback === 'string' ? found.feedback : 'No analysis available',
+          questions: Array.isArray(found.questions) ? found.questions.filter((q: any) => typeof q === 'string') : [],
+        });
+      } else {
+        // Section was not analyzed by AI — mark as missing
+        sections.push({
+          section: standardSection.name,
+          label: standardSection.label,
+          present: false,
+          severity: standardSection.severity,
+          score: 0,
+          feedback: 'This section was not found in the PRD.',
+          questions: [`What are the ${standardSection.label.toLowerCase()} for this project?`],
+        });
+      }
+    }
+
+    const suggestedQuestions = Array.isArray(parsed.suggestedQuestions)
+      ? parsed.suggestedQuestions.filter((q: any) => typeof q === 'string')
+      : sections
+          .filter((s) => !s.present || s.score < 50)
+          .flatMap((s) => s.questions)
+          .slice(0, 5);
+
+    const analysis: PRDCompletenessAnalysis = {
+      prdId,
+      overallScore,
+      overallLabel,
+      sections,
+      summary: typeof parsed.summary === 'string' ? parsed.summary : `PRD completeness: ${overallScore}%`,
+      suggestedQuestions,
+      analyzedAt: Date.now(),
+    };
+
+    const response: AnalyzePrdCompletenessResponse = {
+      prdId,
+      analysis,
+    };
+
+    return c.json({ ok: true, data: response });
+  } catch (err) {
+    return c.json(
+      { ok: false, error: `PRD completeness analysis failed: ${(err as Error).message}` },
       500,
     );
   }

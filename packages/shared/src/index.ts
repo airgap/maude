@@ -135,4 +135,10 @@ export type {
   SprintStoryAssignment,
   SprintPlanRequest,
   SprintPlanResponse,
+  PRDSectionSeverity,
+  PRDSectionName,
+  PRDSectionAnalysis,
+  PRDCompletenessAnalysis,
+  AnalyzePrdCompletenessRequest,
+  AnalyzePrdCompletenessResponse,
 } from './prd.js';

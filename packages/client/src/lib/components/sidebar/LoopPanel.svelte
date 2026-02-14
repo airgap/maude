@@ -205,6 +205,11 @@
     uiStore.openModal('sprint-plan');
   }
 
+  function openCompletenessModal() {
+    loopStore.clearCompleteness();
+    uiStore.openModal('prd-completeness');
+  }
+
   let estimatingAll = $state(false);
 
   async function estimateAllStories() {
@@ -396,6 +401,7 @@
             {#if estimatingAll}<span class="spinner-sm"></span>{:else}📊{/if}
           </button>
           <button class="icon-btn" title="Sprint plan recommendations" onclick={openSprintPlanModal}>📅</button>
+          <button class="icon-btn" title="PRD completeness analysis" onclick={openCompletenessModal}>🔍</button>
           <button class="icon-btn" class:active-btn={showDependencies} title="Dependencies" onclick={() => showDependencies = !showDependencies}>🔗</button>
           <button class="icon-btn" title="Delete PRD" onclick={handleDeletePrd}>🗑</button>
         </div>

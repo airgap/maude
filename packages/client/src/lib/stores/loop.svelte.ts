@@ -1,4 +1,4 @@
-import type { PRD, LoopState, IterationLogEntry, StreamLoopEvent, LoopConfig, PlanMode, EditMode, GeneratedStory, RefinementQuestion, RefineStoryResponse, DependencyGraph, SprintValidation, SprintValidationWarning, ValidateACResponse, ACOverride, StoryEstimate, EstimatePrdResponse, SprintPlanResponse } from '@maude/shared';
+import type { PRD, LoopState, IterationLogEntry, StreamLoopEvent, LoopConfig, PlanMode, EditMode, GeneratedStory, RefinementQuestion, RefineStoryResponse, DependencyGraph, SprintValidation, SprintValidationWarning, ValidateACResponse, ACOverride, StoryEstimate, EstimatePrdResponse, SprintPlanResponse, PRDCompletenessAnalysis } from '@maude/shared';
 import { api, getBaseUrl, getAuthToken } from '../api/client';
 
 function createLoopStore() {
@@ -60,6 +60,11 @@ function createLoopStore() {
   let sprintPlanError = $state<string | null>(null);
   let sprintPlanCapacity = $state<number>(20);
   let sprintPlanCapacityMode = $state<'points' | 'count'>('points');
+
+  // PRD completeness analysis state
+  let analyzingCompleteness = $state(false);
+  let completenessResult = $state<PRDCompletenessAnalysis | null>(null);
+  let completenessError = $state<string | null>(null);
 
   return {
     get activeLoop() {
@@ -221,6 +226,15 @@ function createLoopStore() {
     },
     get sprintPlanCapacityMode() {
       return sprintPlanCapacityMode;
+    },
+    get analyzingCompleteness() {
+      return analyzingCompleteness;
+    },
+    get completenessResult() {
+      return completenessResult;
+    },
+    get completenessError() {
+      return completenessError;
     },
 
     // --- Setters ---
@@ -1008,6 +1022,36 @@ function createLoopStore() {
         return { ok: false, error: (res as any).error || 'Failed to save adjusted plan' };
       } catch (err) {
         return { ok: false, error: String(err) };
+      }
+    },
+
+    // --- PRD Completeness Analysis ---
+
+    clearCompleteness() {
+      analyzingCompleteness = false;
+      completenessResult = null;
+      completenessError = null;
+    },
+
+    async analyzeCompleteness(
+      prdId: string,
+    ): Promise<{ ok: boolean; error?: string }> {
+      analyzingCompleteness = true;
+      completenessError = null;
+      completenessResult = null;
+      try {
+        const res = await api.prds.analyzeCompleteness(prdId);
+        if (res.ok) {
+          completenessResult = res.data.analysis;
+          return { ok: true };
+        }
+        completenessError = (res as any).error || 'Completeness analysis failed';
+        return { ok: false, error: completenessError ?? undefined };
+      } catch (err) {
+        completenessError = String(err);
+        return { ok: false, error: completenessError ?? undefined };
+      } finally {
+        analyzingCompleteness = false;
       }
     },
 

@@ -637,6 +637,15 @@ export const api = {
         method: 'POST',
         body: JSON.stringify({ reEstimate }),
       }),
+    // --- PRD Completeness Analysis ---
+    analyzeCompleteness: (prdId: string, sections?: string[]) =>
+      request<{
+        ok: boolean;
+        data: import('@maude/shared').AnalyzePrdCompletenessResponse;
+      }>(`/prds/${prdId}/completeness`, {
+        method: 'POST',
+        body: JSON.stringify({ sections }),
+      }),
     // --- Sprint Plan Recommendations ---
     generateSprintPlan: (prdId: string, capacity: number, capacityMode?: 'points' | 'count') =>
       request<{

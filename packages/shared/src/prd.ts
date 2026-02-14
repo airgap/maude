@@ -439,6 +439,58 @@ export interface SprintPlanResponse {
   summary: string; // Overall rationale for the plan
 }
 
+// --- PRD Completeness Analysis Types ---
+
+/** Severity of a missing/weak section in a PRD */
+export type PRDSectionSeverity = 'critical' | 'warning' | 'info';
+
+/** Standard PRD sections that should be present */
+export type PRDSectionName =
+  | 'goals'
+  | 'scope'
+  | 'success_metrics'
+  | 'constraints'
+  | 'user_personas'
+  | 'requirements'
+  | 'assumptions'
+  | 'risks'
+  | 'timeline'
+  | 'dependencies';
+
+/** Analysis of a single PRD section */
+export interface PRDSectionAnalysis {
+  section: PRDSectionName;
+  label: string;              // Human-readable section name
+  present: boolean;           // Whether the section is detected
+  severity: PRDSectionSeverity; // How critical the missing/weak section is
+  score: number;              // 0-100 score for this section's quality
+  feedback: string;           // Explanation of what's missing or weak
+  questions: string[];        // Suggested questions to fill gaps
+}
+
+/** Full PRD completeness analysis result */
+export interface PRDCompletenessAnalysis {
+  prdId: string;
+  overallScore: number;       // 0-100 percentage completeness
+  overallLabel: string;       // e.g. "Excellent", "Good", "Needs Work"
+  sections: PRDSectionAnalysis[];
+  summary: string;            // Brief overall assessment
+  suggestedQuestions: string[]; // Top questions to fill critical gaps
+  analyzedAt: number;         // Timestamp of analysis
+}
+
+/** Request to analyze PRD completeness */
+export interface AnalyzePrdCompletenessRequest {
+  /** If provided, only analyze specific sections */
+  sections?: PRDSectionName[];
+}
+
+/** Response from PRD completeness analysis */
+export interface AnalyzePrdCompletenessResponse {
+  prdId: string;
+  analysis: PRDCompletenessAnalysis;
+}
+
 // --- Stream Events for Loop ---
 
 export interface StreamLoopEvent {
