@@ -3,7 +3,11 @@
   import AppShell from '$lib/components/layout/AppShell.svelte';
   import LoginPage from '$lib/components/auth/LoginPage.svelte';
   import { api, getAuthToken } from '$lib/api/client';
-  import { onMount } from 'svelte';
+  import { streamStore, STREAM_CONTEXT_KEY } from '$lib/stores/stream.svelte';
+  import { onMount, setContext } from 'svelte';
+  
+  // Set stream store in context for proper Svelte 5 reactivity tracking
+  setContext(STREAM_CONTEXT_KEY, streamStore);
 
   let { children } = $props();
 

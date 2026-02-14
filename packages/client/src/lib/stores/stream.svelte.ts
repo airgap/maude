@@ -1,6 +1,9 @@
 import type { StreamEvent, MessageContent } from '@maude/shared';
 import { editorStore } from './editor.svelte';
 
+// Context key for Svelte 5 context API - ensures proper reactivity tracking
+export const STREAM_CONTEXT_KEY = Symbol('streamStore');
+
 export type StreamStatus =
   | 'idle'
   | 'connecting'

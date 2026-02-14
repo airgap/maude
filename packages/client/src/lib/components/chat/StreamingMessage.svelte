@@ -1,8 +1,9 @@
 <script lang="ts">
   import type { MessageContent } from '@maude/shared';
-  import { streamStore } from '$lib/stores/stream.svelte';
+  import { STREAM_CONTEXT_KEY } from '$lib/stores/stream.svelte';
   import { settingsStore } from '$lib/stores/settings.svelte';
   import { renderMarkdownPartial } from '$lib/utils/markdown';
+  import { getContext } from 'svelte';
   import ThinkingBlock from './ThinkingBlock.svelte';
   import ToolCallBlock from './ToolCallBlock.svelte';
   import ToolApprovalDialog from './ToolApprovalDialog.svelte';
@@ -10,6 +11,9 @@
   import StreamingText from './StreamingText.svelte';
   import MessageAnimation from './MessageAnimation.svelte';
   import ToolCallTracker from './ToolCallTracker.svelte';
+  
+  // Get stream store from context for proper Svelte 5 reactivity tracking
+  const streamStore = getContext(STREAM_CONTEXT_KEY);
 
   // Build a grouped view: top-level blocks + agent groups.
   // A "Task" tool_use block becomes an agent header, and all blocks
@@ -28,6 +32,8 @@
   type GroupedEntry = GroupedItem | GroupedAgent;
 
   let grouped = $derived.by(() => {
+    // CRITICAL: Read from streamStore context (obtained via getContext)
+    // Svelte 5 properly tracks context-provided stores in $derived
     const blocks = streamStore.contentBlocks;
     console.log('[StreamingMessage] $derived recalculating, blocks.length:', blocks.length);
     const entries: GroupedEntry[] = [];
