@@ -23,6 +23,14 @@ import type {
   ValidateACResponse,
   ACCriterionValidation,
   ACValidationIssue,
+  EstimateStoryRequest,
+  EstimateStoryResponse,
+  EstimatePrdRequest,
+  EstimatePrdResponse,
+  StoryEstimate,
+  StorySize,
+  EstimateConfidence,
+  EstimationFactor,
 } from '@maude/shared';
 import { readFileSync } from 'fs';
 import { join } from 'path';
@@ -259,6 +267,10 @@ app.patch('/:prdId/stories/:storyId', async (c) => {
   if (body.learnings !== undefined) {
     updates.push('learnings = ?');
     values.push(JSON.stringify(body.learnings));
+  }
+  if (body.estimate !== undefined) {
+    updates.push('estimate = ?');
+    values.push(body.estimate ? JSON.stringify(body.estimate) : null);
   }
   // Append a single learning without replacing
   if (body.addLearning) {
@@ -1796,6 +1808,569 @@ Analyze each criterion and identify any issues with specificity, measurability, 
   }
 });
 
+// --- Story Estimation ---
+
+// Estimate complexity for a single story
+app.post('/:prdId/stories/:storyId/estimate', async (c) => {
+  const db = getDb();
+  const prdId = c.req.param('prdId');
+  const storyId = c.req.param('storyId');
+  const body = (await c.req.json()) as EstimateStoryRequest;
+
+  const prdRow = db.query('SELECT * FROM prds WHERE id = ?').get(prdId) as any;
+  if (!prdRow) return c.json({ ok: false, error: 'PRD not found' }, 404);
+
+  const storyRow = db.query('SELECT * FROM prd_stories WHERE id = ? AND prd_id = ?').get(storyId, prdId) as any;
+  if (!storyRow) return c.json({ ok: false, error: 'Story not found' }, 404);
+
+  const story = storyFromRow(storyRow);
+
+  // Build context: all stories in the PRD for relative sizing
+  const allStories = db
+    .query('SELECT * FROM prd_stories WHERE prd_id = ? ORDER BY sort_order ASC')
+    .all(prdId) as any[];
+  const mappedStories = allStories.map(storyFromRow);
+
+  // Build project memory context
+  let memoryContext = '';
+  try {
+    const memRows = db
+      .query(
+        `SELECT * FROM project_memories WHERE project_path = ? AND confidence >= 0.3 ORDER BY category, times_seen DESC LIMIT 30`,
+      )
+      .all(prdRow.project_path) as any[];
+    if (memRows.length > 0) {
+      const grouped: Record<string, string[]> = {};
+      for (const m of memRows) {
+        if (!grouped[m.category]) grouped[m.category] = [];
+        grouped[m.category].push(`- ${m.key}: ${m.content}`);
+      }
+      const labels: Record<string, string> = {
+        convention: 'Coding Conventions',
+        decision: 'Architecture Decisions',
+        preference: 'User Preferences',
+        pattern: 'Common Patterns',
+        context: 'Project Context',
+      };
+      memoryContext = '\n\n## Project Memory\n';
+      for (const [cat, items] of Object.entries(grouped)) {
+        memoryContext += `\n### ${labels[cat] || cat}\n${items.join('\n')}\n`;
+      }
+    }
+  } catch { /* no project memory */ }
+
+  // Build sibling stories context for relative sizing
+  let siblingContext = '';
+  const otherStories = mappedStories.filter((s) => s.id !== storyId);
+  if (otherStories.length > 0) {
+    siblingContext = '\n\n## Other Stories in this PRD (for relative sizing)\n';
+    for (const s of otherStories) {
+      const acCount = s.acceptanceCriteria?.length || 0;
+      const existingEstimate = s.estimate
+        ? ` [Estimated: ${s.estimate.size}, ${s.estimate.storyPoints}pts]`
+        : '';
+      siblingContext += `- ${s.title}: ${s.description} (${acCount} criteria)${existingEstimate}\n`;
+    }
+  }
+
+  const criteriaText = story.acceptanceCriteria
+    .map((ac: any) => `- ${ac.description}`)
+    .join('\n');
+
+  const depsCount = story.dependsOn?.length || 0;
+
+  const systemPrompt = `You are an expert software project estimator. Your task is to provide complexity and effort estimates for user stories based on their content, acceptance criteria, and context.
+
+ESTIMATION FRAMEWORK:
+Use a combination of story points (Fibonacci: 1, 2, 3, 5, 8, 13) and t-shirt sizes (small, medium, large).
+
+Mapping guide:
+- **small** (1-2 points): Simple, well-understood tasks. Single file changes, minor UI tweaks, simple config, clear patterns to follow.
+- **medium** (3-5 points): Moderate complexity. Multiple files, new components, API endpoints with some logic, database changes, moderate testing.
+- **large** (8-13 points): Complex tasks. Cross-cutting concerns, new architectures, multiple integration points, significant testing, unknowns.
+
+CONFIDENCE LEVELS:
+- **high** (80-100): Story is well-defined, acceptance criteria are specific and testable, scope is clear.
+- **medium** (50-79): Story is mostly clear but some ambiguity exists, some criteria could be more specific.
+- **low** (0-49): Story is vague, criteria are unclear, significant unknowns or ambiguity.
+
+FACTORS TO CONSIDER:
+1. Number and complexity of acceptance criteria
+2. Whether the story requires new architecture or follows existing patterns
+3. Number of integration points (APIs, databases, external services)
+4. UI complexity (forms, validation, state management)
+5. Testing requirements (unit, integration, E2E)
+6. Dependencies on other stories
+7. Clarity and specificity of requirements
+8. Potential for scope creep or hidden complexity
+9. Whether similar work has been done before in the project
+
+You MUST respond with ONLY a valid JSON object. No markdown, no explanation, no code fences.
+
+{
+  "size": "small" | "medium" | "large",
+  "storyPoints": <1 | 2 | 3 | 5 | 8 | 13>,
+  "confidence": "low" | "medium" | "high",
+  "confidenceScore": <number 0-100>,
+  "factors": [
+    {
+      "factor": "<description of the factor>",
+      "impact": "increases" | "decreases" | "neutral",
+      "weight": "minor" | "moderate" | "major"
+    }
+  ],
+  "reasoning": "<2-3 sentence explanation of the estimate>",
+  "suggestedBreakdown": ["<sub-task 1>", "<sub-task 2>"] // only for large stories (8+ points)
+}
+
+IMPORTANT:
+- Provide 3-6 factors that influenced your estimate
+- Be specific in factor descriptions (not generic)
+- suggestedBreakdown is ONLY for stories estimated at 8+ points
+- Confidence should reflect story clarity, NOT your confidence in your own estimate
+- Consider the project context and existing patterns when estimating${memoryContext}${siblingContext}`;
+
+  const userPrompt = `Estimate the complexity of this user story:
+
+## PRD: ${prdRow.name}
+${prdRow.description || '(No description)'}
+
+## Story to Estimate
+Title: ${story.title}
+Description: ${story.description}
+Priority: ${story.priority}
+Dependencies: ${depsCount > 0 ? `Depends on ${depsCount} other story(ies)` : 'None'}
+Acceptance Criteria:
+${criteriaText || '(No criteria defined)'}
+
+Provide a complexity estimate with story points, confidence level, and key factors.`;
+
+  try {
+    const auth = getAnthropicAuth();
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+      'anthropic-version': '2023-06-01',
+    };
+    if (auth.type === 'oauth') {
+      headers['Authorization'] = `Bearer ${auth.token}`;
+    } else {
+      headers['x-api-key'] = auth.token;
+    }
+
+    const apiResponse = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-5-20250929',
+        max_tokens: 2048,
+        system: systemPrompt,
+        messages: [{ role: 'user', content: userPrompt }],
+      }),
+    });
+
+    if (!apiResponse.ok) {
+      const errBody = await apiResponse.text().catch(() => 'Unknown error');
+      return c.json(
+        { ok: false, error: `AI estimation failed (${apiResponse.status}): ${errBody}` },
+        502,
+      );
+    }
+
+    const result = await apiResponse.json() as any;
+    const textContent = result.content?.find((ct: any) => ct.type === 'text');
+    if (!textContent?.text) {
+      return c.json({ ok: false, error: 'AI returned no text content' }, 502);
+    }
+
+    // Parse JSON response
+    let rawText = textContent.text.trim();
+    if (rawText.startsWith('```')) {
+      rawText = rawText.replace(/^```(?:json)?\s*\n?/, '').replace(/\n?```\s*$/, '');
+    }
+
+    let parsed: any;
+    try {
+      parsed = JSON.parse(rawText);
+    } catch {
+      return c.json(
+        { ok: false, error: 'Failed to parse AI estimation response as JSON. Try again.' },
+        502,
+      );
+    }
+
+    // Validate and normalize
+    const validSizes: StorySize[] = ['small', 'medium', 'large'];
+    const validPoints = [1, 2, 3, 5, 8, 13];
+    const validConfidences: EstimateConfidence[] = ['low', 'medium', 'high'];
+
+    const size: StorySize = validSizes.includes(parsed.size) ? parsed.size : 'medium';
+    const storyPoints = validPoints.includes(parsed.storyPoints)
+      ? parsed.storyPoints
+      : size === 'small' ? 2 : size === 'medium' ? 5 : 8;
+    const confidence: EstimateConfidence = validConfidences.includes(parsed.confidence)
+      ? parsed.confidence
+      : 'medium';
+    const confidenceScore = typeof parsed.confidenceScore === 'number'
+      ? Math.max(0, Math.min(100, Math.round(parsed.confidenceScore)))
+      : confidence === 'high' ? 85 : confidence === 'medium' ? 60 : 30;
+
+    const factors: EstimationFactor[] = (parsed.factors || [])
+      .filter((f: any) => f.factor && typeof f.factor === 'string')
+      .slice(0, 6)
+      .map((f: any) => ({
+        factor: f.factor.trim(),
+        impact: ['increases', 'decreases', 'neutral'].includes(f.impact) ? f.impact : 'neutral',
+        weight: ['minor', 'moderate', 'major'].includes(f.weight) ? f.weight : 'moderate',
+      }));
+
+    const estimate: StoryEstimate = {
+      storyId,
+      size,
+      storyPoints,
+      confidence,
+      confidenceScore,
+      factors,
+      reasoning: (parsed.reasoning || 'Estimate based on story content analysis.').trim(),
+      suggestedBreakdown: storyPoints >= 8 && Array.isArray(parsed.suggestedBreakdown)
+        ? parsed.suggestedBreakdown.filter((s: any) => typeof s === 'string' && s.trim()).map((s: string) => s.trim())
+        : undefined,
+      isManualOverride: false,
+    };
+
+    // Persist estimate to database
+    const now = Date.now();
+    db.query('UPDATE prd_stories SET estimate = ?, updated_at = ? WHERE id = ?')
+      .run(JSON.stringify(estimate), now, storyId);
+    db.query('UPDATE prds SET updated_at = ? WHERE id = ?').run(now, prdId);
+
+    return c.json({
+      ok: true,
+      data: { storyId, estimate },
+    });
+  } catch (err) {
+    return c.json(
+      { ok: false, error: `Story estimation failed: ${(err as Error).message}` },
+      500,
+    );
+  }
+});
+
+// Save a manual estimate override for a story
+app.put('/:prdId/stories/:storyId/estimate', async (c) => {
+  const db = getDb();
+  const prdId = c.req.param('prdId');
+  const storyId = c.req.param('storyId');
+  const body = await c.req.json();
+
+  const storyRow = db.query('SELECT * FROM prd_stories WHERE id = ? AND prd_id = ?').get(storyId, prdId) as any;
+  if (!storyRow) return c.json({ ok: false, error: 'Story not found' }, 404);
+
+  const validSizes: StorySize[] = ['small', 'medium', 'large'];
+  const validPoints = [1, 2, 3, 5, 8, 13];
+
+  if (!validSizes.includes(body.size)) {
+    return c.json({ ok: false, error: 'Invalid size. Must be small, medium, or large.' }, 400);
+  }
+  if (!validPoints.includes(body.storyPoints)) {
+    return c.json({ ok: false, error: 'Invalid story points. Must be 1, 2, 3, 5, 8, or 13.' }, 400);
+  }
+
+  // Build the manual estimate, preserving any existing AI factors
+  const existingEstimate = storyRow.estimate ? JSON.parse(storyRow.estimate) : {};
+
+  const estimate: StoryEstimate = {
+    storyId,
+    size: body.size,
+    storyPoints: body.storyPoints,
+    confidence: existingEstimate.confidence || 'high',
+    confidenceScore: existingEstimate.confidenceScore || 90,
+    factors: existingEstimate.factors || [],
+    reasoning: body.reasoning || existingEstimate.reasoning || 'Manual estimate.',
+    suggestedBreakdown: existingEstimate.suggestedBreakdown,
+    isManualOverride: true,
+  };
+
+  const now = Date.now();
+  db.query('UPDATE prd_stories SET estimate = ?, updated_at = ? WHERE id = ?')
+    .run(JSON.stringify(estimate), now, storyId);
+  db.query('UPDATE prds SET updated_at = ? WHERE id = ?').run(now, prdId);
+
+  return c.json({ ok: true, data: { storyId, estimate } });
+});
+
+// Estimate all stories in a PRD
+app.post('/:id/estimate', async (c) => {
+  const db = getDb();
+  const prdId = c.req.param('id');
+  const body = (await c.req.json()) as EstimatePrdRequest;
+
+  const prdRow = db.query('SELECT * FROM prds WHERE id = ?').get(prdId) as any;
+  if (!prdRow) return c.json({ ok: false, error: 'PRD not found' }, 404);
+
+  const stories = db
+    .query('SELECT * FROM prd_stories WHERE prd_id = ? ORDER BY sort_order ASC')
+    .all(prdId) as any[];
+
+  if (stories.length === 0) {
+    return c.json({ ok: false, error: 'No stories to estimate' }, 400);
+  }
+
+  const mappedStories = stories.map(storyFromRow);
+
+  // Filter: skip stories that already have estimates unless reEstimate is true
+  const storiesToEstimate = body.reEstimate
+    ? mappedStories
+    : mappedStories.filter((s) => !s.estimate || s.estimate.isManualOverride === false);
+
+  if (storiesToEstimate.length === 0) {
+    // All stories already estimated — return current data
+    const allEstimates = mappedStories.filter((s) => s.estimate).map((s) => s.estimate!);
+    return c.json({
+      ok: true,
+      data: buildEstimateSummary(prdId, allEstimates),
+    });
+  }
+
+  // Build context for batch estimation
+  let storiesContext = '';
+  for (const s of mappedStories) {
+    const criteria = s.acceptanceCriteria
+      .map((ac: any) => `  - ${ac.description}`)
+      .join('\n');
+    const existingEstimate = s.estimate && !storiesToEstimate.find((st) => st.id === s.id)
+      ? ` [Already estimated: ${s.estimate.size}, ${s.estimate.storyPoints}pts]`
+      : '';
+    storiesContext += `\n### Story "${s.title}" (ID: ${s.id}) [${s.priority}]${existingEstimate}
+${s.description}
+Dependencies: ${s.dependsOn?.length || 0}
+Acceptance Criteria:
+${criteria || '(None)'}\n`;
+  }
+
+  // Build project memory context
+  let memoryContext = '';
+  try {
+    const memRows = db
+      .query(
+        `SELECT * FROM project_memories WHERE project_path = ? AND confidence >= 0.3 ORDER BY category, times_seen DESC LIMIT 30`,
+      )
+      .all(prdRow.project_path) as any[];
+    if (memRows.length > 0) {
+      const grouped: Record<string, string[]> = {};
+      for (const m of memRows) {
+        if (!grouped[m.category]) grouped[m.category] = [];
+        grouped[m.category].push(`- ${m.key}: ${m.content}`);
+      }
+      const labels: Record<string, string> = {
+        convention: 'Coding Conventions',
+        decision: 'Architecture Decisions',
+        preference: 'User Preferences',
+        pattern: 'Common Patterns',
+        context: 'Project Context',
+      };
+      memoryContext = '\n\n## Project Memory\n';
+      for (const [cat, items] of Object.entries(grouped)) {
+        memoryContext += `\n### ${labels[cat] || cat}\n${items.join('\n')}\n`;
+      }
+    }
+  } catch { /* no project memory */ }
+
+  const storyIdsToEstimate = storiesToEstimate.map((s) => s.id);
+
+  const systemPrompt = `You are an expert software project estimator. Estimate ALL stories listed below for relative sizing and complexity.
+
+ESTIMATION FRAMEWORK:
+- **small** (1-2 points): Simple, well-understood. Single file, minor changes, clear patterns.
+- **medium** (3-5 points): Moderate complexity. Multiple files, new components, API endpoints with logic.
+- **large** (8-13 points): Complex. Cross-cutting concerns, new architecture, many integration points, unknowns.
+
+CONFIDENCE LEVELS:
+- **high** (80-100): Well-defined, specific criteria, clear scope.
+- **medium** (50-79): Mostly clear but some ambiguity.
+- **low** (0-49): Vague, unclear criteria, significant unknowns.
+
+IMPORTANT: Estimate stories RELATIVE to each other — the smallest should be "small" and the most complex "large". Not all stories need to be the same size.
+
+Only estimate stories with these IDs: ${storyIdsToEstimate.join(', ')}
+
+You MUST respond with ONLY a valid JSON array. No markdown, no explanation, no code fences.
+
+Each element must have:
+{
+  "storyId": "<story ID>",
+  "size": "small" | "medium" | "large",
+  "storyPoints": <1 | 2 | 3 | 5 | 8 | 13>,
+  "confidence": "low" | "medium" | "high",
+  "confidenceScore": <0-100>,
+  "factors": [
+    { "factor": "<description>", "impact": "increases" | "decreases" | "neutral", "weight": "minor" | "moderate" | "major" }
+  ],
+  "reasoning": "<2-3 sentence explanation>",
+  "suggestedBreakdown": ["<sub-task>"] // only for 8+ point stories
+}${memoryContext}`;
+
+  const userPrompt = `Estimate the complexity of each story in this PRD:
+
+## PRD: ${prdRow.name}
+${prdRow.description || '(No description)'}
+${storiesContext}
+
+Provide relative complexity estimates for all stories that need estimation.`;
+
+  try {
+    const auth = getAnthropicAuth();
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+      'anthropic-version': '2023-06-01',
+    };
+    if (auth.type === 'oauth') {
+      headers['Authorization'] = `Bearer ${auth.token}`;
+    } else {
+      headers['x-api-key'] = auth.token;
+    }
+
+    const apiResponse = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-5-20250929',
+        max_tokens: 8192,
+        system: systemPrompt,
+        messages: [{ role: 'user', content: userPrompt }],
+      }),
+    });
+
+    if (!apiResponse.ok) {
+      const errBody = await apiResponse.text().catch(() => 'Unknown error');
+      return c.json(
+        { ok: false, error: `AI estimation failed (${apiResponse.status}): ${errBody}` },
+        502,
+      );
+    }
+
+    const result = await apiResponse.json() as any;
+    const textContent = result.content?.find((ct: any) => ct.type === 'text');
+    if (!textContent?.text) {
+      return c.json({ ok: false, error: 'AI returned no text content' }, 502);
+    }
+
+    let rawText = textContent.text.trim();
+    if (rawText.startsWith('```')) {
+      rawText = rawText.replace(/^```(?:json)?\s*\n?/, '').replace(/\n?```\s*$/, '');
+    }
+
+    let parsedEstimates: any[];
+    try {
+      parsedEstimates = JSON.parse(rawText);
+    } catch {
+      return c.json(
+        { ok: false, error: 'Failed to parse AI estimation response as JSON. Try again.' },
+        502,
+      );
+    }
+
+    if (!Array.isArray(parsedEstimates)) {
+      return c.json({ ok: false, error: 'AI returned invalid estimation format' }, 502);
+    }
+
+    const validSizes: StorySize[] = ['small', 'medium', 'large'];
+    const validPoints = [1, 2, 3, 5, 8, 13];
+    const validConfidences: EstimateConfidence[] = ['low', 'medium', 'high'];
+    const storyIdSet = new Set(storyIdsToEstimate);
+
+    const estimates: StoryEstimate[] = [];
+    const now = Date.now();
+
+    for (const pe of parsedEstimates) {
+      if (!pe.storyId || !storyIdSet.has(pe.storyId)) continue;
+
+      const size: StorySize = validSizes.includes(pe.size) ? pe.size : 'medium';
+      const storyPoints = validPoints.includes(pe.storyPoints)
+        ? pe.storyPoints
+        : size === 'small' ? 2 : size === 'medium' ? 5 : 8;
+      const confidence: EstimateConfidence = validConfidences.includes(pe.confidence)
+        ? pe.confidence
+        : 'medium';
+      const confidenceScore = typeof pe.confidenceScore === 'number'
+        ? Math.max(0, Math.min(100, Math.round(pe.confidenceScore)))
+        : confidence === 'high' ? 85 : confidence === 'medium' ? 60 : 30;
+
+      const factors: EstimationFactor[] = (pe.factors || [])
+        .filter((f: any) => f.factor && typeof f.factor === 'string')
+        .slice(0, 6)
+        .map((f: any) => ({
+          factor: f.factor.trim(),
+          impact: ['increases', 'decreases', 'neutral'].includes(f.impact) ? f.impact : 'neutral',
+          weight: ['minor', 'moderate', 'major'].includes(f.weight) ? f.weight : 'moderate',
+        }));
+
+      const estimate: StoryEstimate = {
+        storyId: pe.storyId,
+        size,
+        storyPoints,
+        confidence,
+        confidenceScore,
+        factors,
+        reasoning: (pe.reasoning || 'Estimated based on story content.').trim(),
+        suggestedBreakdown: storyPoints >= 8 && Array.isArray(pe.suggestedBreakdown)
+          ? pe.suggestedBreakdown.filter((s: any) => typeof s === 'string' && s.trim()).map((s: string) => s.trim())
+          : undefined,
+        isManualOverride: false,
+      };
+
+      estimates.push(estimate);
+
+      // Persist to database
+      db.query('UPDATE prd_stories SET estimate = ?, updated_at = ? WHERE id = ?')
+        .run(JSON.stringify(estimate), now, pe.storyId);
+    }
+
+    db.query('UPDATE prds SET updated_at = ? WHERE id = ?').run(now, prdId);
+
+    // Combine with existing estimates that weren't re-estimated
+    const allEstimates = [
+      ...estimates,
+      ...mappedStories
+        .filter((s) => s.estimate && !storyIdSet.has(s.id))
+        .map((s) => s.estimate!),
+    ];
+
+    return c.json({
+      ok: true,
+      data: buildEstimateSummary(prdId, allEstimates),
+    });
+  } catch (err) {
+    return c.json(
+      { ok: false, error: `Bulk estimation failed: ${(err as Error).message}` },
+      500,
+    );
+  }
+});
+
+function buildEstimateSummary(prdId: string, estimates: StoryEstimate[]): EstimatePrdResponse {
+  const totalPoints = estimates.reduce((sum, e) => sum + e.storyPoints, 0);
+  const averagePoints = estimates.length > 0 ? totalPoints / estimates.length : 0;
+  const smallCount = estimates.filter((e) => e.size === 'small').length;
+  const mediumCount = estimates.filter((e) => e.size === 'medium').length;
+  const largeCount = estimates.filter((e) => e.size === 'large').length;
+  const averageConfidence = estimates.length > 0
+    ? estimates.reduce((sum, e) => sum + e.confidenceScore, 0) / estimates.length
+    : 0;
+
+  return {
+    prdId,
+    estimates,
+    summary: {
+      totalPoints,
+      averagePoints: Math.round(averagePoints * 10) / 10,
+      smallCount,
+      mediumCount,
+      largeCount,
+      averageConfidence: Math.round(averageConfidence),
+    },
+  };
+}
+
 // --- Row mappers ---
 
 function prdFromRow(row: any) {
@@ -1828,6 +2403,7 @@ function storyFromRow(row: any) {
     attempts: row.attempts,
     maxAttempts: row.max_attempts,
     learnings: JSON.parse(row.learnings || '[]'),
+    estimate: row.estimate ? JSON.parse(row.estimate) : undefined,
     sortOrder: row.sort_order,
     createdAt: row.created_at,
     updatedAt: row.updated_at,

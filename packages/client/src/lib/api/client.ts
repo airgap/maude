@@ -604,6 +604,31 @@ export const api = {
         method: 'POST',
         body: JSON.stringify({ storyId, criteria, storyTitle, storyDescription }),
       }),
+    // --- Story Estimation ---
+    estimateStory: (prdId: string, storyId: string) =>
+      request<{
+        ok: boolean;
+        data: import('@maude/shared').EstimateStoryResponse;
+      }>(`/prds/${prdId}/stories/${storyId}/estimate`, {
+        method: 'POST',
+        body: JSON.stringify({ storyId }),
+      }),
+    saveManualEstimate: (prdId: string, storyId: string, body: { size: string; storyPoints: number; reasoning?: string }) =>
+      request<{
+        ok: boolean;
+        data: import('@maude/shared').EstimateStoryResponse;
+      }>(`/prds/${prdId}/stories/${storyId}/estimate`, {
+        method: 'PUT',
+        body: JSON.stringify(body),
+      }),
+    estimatePrd: (prdId: string, reEstimate?: boolean) =>
+      request<{
+        ok: boolean;
+        data: import('@maude/shared').EstimatePrdResponse;
+      }>(`/prds/${prdId}/estimate`, {
+        method: 'POST',
+        body: JSON.stringify({ reEstimate }),
+      }),
   },
 
   // --- Loops ---

@@ -198,6 +198,7 @@ export function initDatabase(): void {
     `ALTER TABLE conversations ADD COLUMN cli_session_id TEXT`,
     `ALTER TABLE conversations ADD COLUMN project_id TEXT REFERENCES projects(id)`,
     `ALTER TABLE conversations ADD COLUMN user_id TEXT`,
+    `ALTER TABLE prd_stories ADD COLUMN estimate TEXT`,
   ];
   for (const sql of alterColumns) {
     try {

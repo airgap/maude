@@ -1,4 +1,4 @@
-import type { PRD, LoopState, IterationLogEntry, StreamLoopEvent, LoopConfig, PlanMode, EditMode, GeneratedStory, RefinementQuestion, RefineStoryResponse, DependencyGraph, SprintValidation, SprintValidationWarning, ValidateACResponse, ACOverride } from '@maude/shared';
+import type { PRD, LoopState, IterationLogEntry, StreamLoopEvent, LoopConfig, PlanMode, EditMode, GeneratedStory, RefinementQuestion, RefineStoryResponse, DependencyGraph, SprintValidation, SprintValidationWarning, ValidateACResponse, ACOverride, StoryEstimate, EstimatePrdResponse } from '@maude/shared';
 import { api, getBaseUrl, getAuthToken } from '../api/client';
 
 function createLoopStore() {
@@ -45,6 +45,14 @@ function createLoopStore() {
   let criteriaValidationResult = $state<ValidateACResponse | null>(null);
   let criteriaValidationError = $state<string | null>(null);
   let criteriaOverrides = $state<ACOverride[]>([]);
+
+  // Estimation state
+  let estimatingStoryId = $state<string | null>(null);
+  let estimating = $state(false);
+  let estimationResult = $state<StoryEstimate | null>(null);
+  let estimationError = $state<string | null>(null);
+  let estimatingPrd = $state(false);
+  let prdEstimationResult = $state<EstimatePrdResponse | null>(null);
 
   return {
     get activeLoop() {
@@ -173,6 +181,24 @@ function createLoopStore() {
     },
     get criteriaOverrides() {
       return criteriaOverrides;
+    },
+    get estimatingStoryId() {
+      return estimatingStoryId;
+    },
+    get estimating() {
+      return estimating;
+    },
+    get estimationResult() {
+      return estimationResult;
+    },
+    get estimationError() {
+      return estimationError;
+    },
+    get estimatingPrd() {
+      return estimatingPrd;
+    },
+    get prdEstimationResult() {
+      return prdEstimationResult;
     },
 
     // --- Setters ---
@@ -762,6 +788,95 @@ function createLoopStore() {
         return { ok: false, error: (res as any).error || 'Failed to update criteria' };
       } catch (err) {
         return { ok: false, error: String(err) };
+      }
+    },
+
+    // --- Story Estimation ---
+
+    setEstimatingStoryId(id: string | null) {
+      estimatingStoryId = id;
+    },
+
+    clearEstimation() {
+      estimatingStoryId = null;
+      estimating = false;
+      estimationResult = null;
+      estimationError = null;
+    },
+
+    clearPrdEstimation() {
+      estimatingPrd = false;
+      prdEstimationResult = null;
+    },
+
+    async estimateStory(
+      prdId: string,
+      storyId: string,
+    ): Promise<{ ok: boolean; error?: string }> {
+      estimating = true;
+      estimationError = null;
+      estimationResult = null;
+      estimatingStoryId = storyId;
+      try {
+        const res = await api.prds.estimateStory(prdId, storyId);
+        if (res.ok) {
+          estimationResult = res.data.estimate;
+          // Reload PRD to reflect the persisted estimate
+          await this.loadPrd(prdId);
+          return { ok: true };
+        }
+        estimationError = (res as any).error || 'Estimation failed';
+        return { ok: false, error: estimationError ?? undefined };
+      } catch (err) {
+        estimationError = String(err);
+        return { ok: false, error: estimationError ?? undefined };
+      } finally {
+        estimating = false;
+      }
+    },
+
+    async saveManualEstimate(
+      prdId: string,
+      storyId: string,
+      size: string,
+      storyPoints: number,
+      reasoning?: string,
+    ): Promise<{ ok: boolean; error?: string }> {
+      try {
+        const res = await api.prds.saveManualEstimate(prdId, storyId, {
+          size,
+          storyPoints,
+          reasoning,
+        });
+        if (res.ok) {
+          estimationResult = res.data.estimate;
+          await this.loadPrd(prdId);
+          return { ok: true };
+        }
+        return { ok: false, error: (res as any).error || 'Failed to save estimate' };
+      } catch (err) {
+        return { ok: false, error: String(err) };
+      }
+    },
+
+    async estimateAllStories(
+      prdId: string,
+      reEstimate?: boolean,
+    ): Promise<{ ok: boolean; error?: string }> {
+      estimatingPrd = true;
+      prdEstimationResult = null;
+      try {
+        const res = await api.prds.estimatePrd(prdId, reEstimate);
+        if (res.ok) {
+          prdEstimationResult = res.data;
+          await this.loadPrd(prdId);
+          return { ok: true };
+        }
+        return { ok: false, error: (res as any).error || 'Bulk estimation failed' };
+      } catch (err) {
+        return { ok: false, error: String(err) };
+      } finally {
+        estimatingPrd = false;
       }
     },
 

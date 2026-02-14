@@ -26,6 +26,7 @@ export interface UserStory {
   attempts: number; // how many times the loop tried this story
   maxAttempts: number; // configurable per-story retry limit
   learnings: string[]; // accumulated learnings from attempts
+  estimate?: StoryEstimate; // AI or manual complexity/effort estimate
   sortOrder: number;
   createdAt: number;
   updatedAt: number;
@@ -331,6 +332,69 @@ export interface ValidateACResponse {
 export interface ACOverride {
   criterionIndex: number;
   justification: string;
+}
+
+// --- Story Estimation Types ---
+
+/** Complexity size for a story */
+export type StorySize = 'small' | 'medium' | 'large';
+
+/** Confidence level for an estimate */
+export type EstimateConfidence = 'low' | 'medium' | 'high';
+
+/** A single factor that influenced the estimate */
+export interface EstimationFactor {
+  factor: string;       // e.g. "Multiple API integrations required"
+  impact: 'increases' | 'decreases' | 'neutral';
+  weight: 'minor' | 'moderate' | 'major';
+}
+
+/** The full estimation result for a story */
+export interface StoryEstimate {
+  storyId: string;
+  size: StorySize;
+  storyPoints: number;           // Fibonacci: 1, 2, 3, 5, 8, 13
+  confidence: EstimateConfidence;
+  confidenceScore: number;       // 0-100 numeric confidence
+  factors: EstimationFactor[];
+  reasoning: string;             // Brief explanation of the estimate
+  suggestedBreakdown?: string[]; // For large stories, suggest sub-tasks
+  isManualOverride: boolean;     // Whether the user overrode the AI estimate
+}
+
+/** Request to estimate a story */
+export interface EstimateStoryRequest {
+  storyId: string;
+  /** Optional: provide story details if not loading from DB */
+  storyTitle?: string;
+  storyDescription?: string;
+  criteria?: string[];
+}
+
+/** Response from story estimation */
+export interface EstimateStoryResponse {
+  storyId: string;
+  estimate: StoryEstimate;
+}
+
+/** Request to estimate all stories in a PRD */
+export interface EstimatePrdRequest {
+  /** If true, re-estimate stories that already have estimates */
+  reEstimate?: boolean;
+}
+
+/** Response from bulk PRD estimation */
+export interface EstimatePrdResponse {
+  prdId: string;
+  estimates: StoryEstimate[];
+  summary: {
+    totalPoints: number;
+    averagePoints: number;
+    smallCount: number;
+    mediumCount: number;
+    largeCount: number;
+    averageConfidence: number;
+  };
 }
 
 // --- Stream Events for Loop ---

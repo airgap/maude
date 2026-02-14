@@ -123,4 +123,12 @@ export type {
   ValidateACRequest,
   ValidateACResponse,
   ACOverride,
+  StorySize,
+  EstimateConfidence,
+  EstimationFactor,
+  StoryEstimate,
+  EstimateStoryRequest,
+  EstimateStoryResponse,
+  EstimatePrdRequest,
+  EstimatePrdResponse,
 } from './prd.js';

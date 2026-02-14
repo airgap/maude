@@ -20,6 +20,7 @@ type ModalId =
   | 'story-generate'
   | 'story-refine'
   | 'criteria-validation'
+  | 'story-estimate'
   | null;
 type FocusedPane = 'chat' | 'editor';
 

@@ -194,6 +194,56 @@
     uiStore.openModal('criteria-validation');
   }
 
+  function openEstimateModal(storyId: string) {
+    loopStore.clearEstimation();
+    loopStore.setEstimatingStoryId(storyId);
+    uiStore.openModal('story-estimate');
+  }
+
+  let estimatingAll = $state(false);
+
+  async function estimateAllStories() {
+    const prdId = loopStore.selectedPrdId;
+    if (!prdId || estimatingAll) return;
+    estimatingAll = true;
+    try {
+      const result = await loopStore.estimateAllStories(prdId);
+      if (result.ok) {
+        const summary = loopStore.prdEstimationResult?.summary;
+        if (summary) {
+          uiStore.toast(`Estimated ${summary.smallCount + summary.mediumCount + summary.largeCount} stories (${summary.totalPoints} total points)`, 'success');
+        } else {
+          uiStore.toast('All stories estimated', 'success');
+        }
+      } else {
+        uiStore.toast(result.error || 'Estimation failed', 'error');
+      }
+    } finally {
+      estimatingAll = false;
+    }
+  }
+
+  function estimateSizeColor(size: string): string {
+    switch (size) {
+      case 'small': return 'var(--accent-secondary)';
+      case 'medium': return 'var(--accent-warning, #e6a817)';
+      case 'large': return 'var(--accent-error)';
+      default: return 'var(--text-tertiary)';
+    }
+  }
+
+  function estimateSizeLabel(size: string): string {
+    return size === 'small' ? 'S' : size === 'medium' ? 'M' : 'L';
+  }
+
+  let totalStoryPoints = $derived(
+    (loopStore.selectedPrd?.stories || []).reduce((sum, s) => sum + (s.estimate?.storyPoints || 0), 0)
+  );
+
+  let estimatedCount = $derived(
+    (loopStore.selectedPrd?.stories || []).filter((s) => s.estimate).length
+  );
+
   async function startPlanning(mode: PlanMode) {
     if (!loopStore.selectedPrdId || planning) return;
 
@@ -334,9 +384,12 @@
   {#if loopStore.selectedPrd}
     <div class="stories-section">
       <div class="section-header">
-        <h4>Stories ({loopStore.selectedPrd.stories?.length || 0})</h4>
+        <h4>Stories ({loopStore.selectedPrd.stories?.length || 0}){#if totalStoryPoints > 0}<span class="total-points" title="{estimatedCount} of {loopStore.selectedPrd.stories?.length || 0} estimated"> · {totalStoryPoints}pts</span>{/if}</h4>
         <div class="header-actions">
           <button class="icon-btn" title="Add story" onclick={() => showAddStory = !showAddStory}>+</button>
+          <button class="icon-btn" title="Estimate all stories" onclick={estimateAllStories} disabled={estimatingAll}>
+            {#if estimatingAll}<span class="spinner-sm"></span>{:else}📊{/if}
+          </button>
           <button class="icon-btn" class:active-btn={showDependencies} title="Dependencies" onclick={() => showDependencies = !showDependencies}>🔗</button>
           <button class="icon-btn" title="Delete PRD" onclick={handleDeletePrd}>🗑</button>
         </div>
@@ -373,19 +426,27 @@
                 {#if !loopStore.isActive}
                   <button class="validate-btn" title="Validate acceptance criteria" onclick={() => openValidateModal(story.id)}>✓</button>
                   <button class="refine-btn" title="Refine story" onclick={() => openRefineModal(story.id)}>⚡</button>
+                  <button class="estimate-btn" title="Estimate complexity" onclick={() => openEstimateModal(story.id)}>📊</button>
                   <button class="delete-btn" onclick={() => handleDeleteStory(story.id)}>×</button>
                 {/if}
               </div>
-              {#if story.dependsOn?.length > 0}
-                <span class="dep-badge" title="Depends on {story.dependsOn.length} story(ies)">
-                  ↑{story.dependsOn.length}
-                </span>
-              {/if}
-              {#if story.attempts > 0}
-                <span class="attempts-badge">
-                  {story.attempts}/{story.maxAttempts} attempts
-                </span>
-              {/if}
+              <div class="story-badges">
+                {#if story.estimate}
+                  <span class="estimate-badge" style:background={estimateSizeColor(story.estimate.size)} title="{story.estimate.size} · {story.estimate.storyPoints} points · Confidence: {story.estimate.confidence}{story.estimate.isManualOverride ? ' (manual)' : ''}">
+                    {estimateSizeLabel(story.estimate.size)}{story.estimate.storyPoints}
+                  </span>
+                {/if}
+                {#if story.dependsOn?.length > 0}
+                  <span class="dep-badge" title="Depends on {story.dependsOn.length} story(ies)">
+                    ↑{story.dependsOn.length}
+                  </span>
+                {/if}
+                {#if story.attempts > 0}
+                  <span class="attempts-badge">
+                    {story.attempts}/{story.maxAttempts} attempts
+                  </span>
+                {/if}
+              </div>
             </div>
           {/each}
         {/if}
@@ -621,6 +682,7 @@
   }
   .validate-btn,
   .refine-btn,
+  .estimate-btn,
   .delete-btn {
     font-size: 12px;
     padding: 0 4px;
@@ -630,6 +692,7 @@
   }
   .story-item:hover .validate-btn,
   .story-item:hover .refine-btn,
+  .story-item:hover .estimate-btn,
   .story-item:hover .delete-btn {
     opacity: 1;
   }
@@ -639,8 +702,45 @@
   .refine-btn:hover {
     color: var(--accent-primary);
   }
+  .estimate-btn:hover {
+    color: var(--accent-warning, #e6a817);
+  }
   .delete-btn:hover {
     color: var(--accent-error);
+  }
+
+  .story-badges {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    margin-left: 20px;
+    margin-top: 2px;
+  }
+
+  .estimate-badge {
+    font-size: 8px;
+    padding: 0 4px;
+    border-radius: 2px;
+    color: #fff;
+    font-weight: 700;
+    flex-shrink: 0;
+    letter-spacing: 0.3px;
+  }
+
+  .total-points {
+    font-weight: 400;
+    font-size: 11px;
+    color: var(--accent-primary);
+  }
+
+  .spinner-sm {
+    display: inline-block;
+    width: 10px;
+    height: 10px;
+    border: 2px solid transparent;
+    border-top-color: var(--accent-primary);
+    border-radius: 50%;
+    animation: spin 0.6s linear infinite;
   }
 
   .dep-badge {
@@ -855,5 +955,9 @@
   @keyframes pulse {
     0%, 100% { opacity: 1; }
     50% { opacity: 0.7; }
+  }
+
+  @keyframes spin {
+    to { transform: rotate(360deg); }
   }
 </style>
