@@ -1282,6 +1282,950 @@ describe('PRD Routes', () => {
   });
 
   // ---------------------------------------------------------------
+  // POST /:prdId/stories/:storyId/refine — Story refinement
+  // ---------------------------------------------------------------
+  describe('POST /:prdId/stories/:storyId/refine — story refinement', () => {
+    function mockAnthropicRefine(response: any, captureBody?: { body: any }) {
+      globalThis.fetch = (async (url: string | URL | Request, init?: RequestInit) => {
+        const urlStr = typeof url === 'string' ? url : url instanceof URL ? url.toString() : url.url;
+        if (urlStr.includes('api.anthropic.com')) {
+          if (captureBody && init?.body) {
+            captureBody.body = JSON.parse(init.body as string);
+          }
+          return new Response(
+            JSON.stringify({
+              content: [{ type: 'text', text: JSON.stringify(response) }],
+            }),
+            { status: 200, headers: { 'Content-Type': 'application/json' } },
+          );
+        }
+        return originalFetch(url, init);
+      }) as typeof fetch;
+    }
+
+    function withApiKey(fn: () => Promise<void>) {
+      return async () => {
+        const origKey = process.env.ANTHROPIC_API_KEY;
+        process.env.ANTHROPIC_API_KEY = 'test-key';
+        try {
+          await fn();
+        } finally {
+          if (origKey) process.env.ANTHROPIC_API_KEY = origKey;
+          else delete process.env.ANTHROPIC_API_KEY;
+        }
+      };
+    }
+
+    test('returns 404 for non-existent PRD', async () => {
+      const res = await app.request('/nonexistent/stories/story-1/refine', {
+        method: 'POST',
+        body: JSON.stringify({}),
+        headers: { 'Content-Type': 'application/json' },
+      });
+      expect(res.status).toBe(404);
+      const json = await res.json();
+      expect(json.ok).toBe(false);
+      expect(json.error).toContain('PRD not found');
+    });
+
+    test('returns 404 for non-existent story', async () => {
+      insertPrd({ id: 'prd-1' });
+
+      const res = await app.request('/prd-1/stories/nonexistent/refine', {
+        method: 'POST',
+        body: JSON.stringify({}),
+        headers: { 'Content-Type': 'application/json' },
+      });
+      expect(res.status).toBe(404);
+      const json = await res.json();
+      expect(json.ok).toBe(false);
+      expect(json.error).toContain('Story not found');
+    });
+
+    test('performs initial analysis with quality score and questions', withApiKey(async () => {
+      insertPrd({ id: 'prd-1', name: 'Test PRD', description: 'A test PRD' });
+      insertStory({ id: 'story-1', prd_id: 'prd-1', title: 'Add login', description: 'Users should be able to log in' });
+
+      mockAnthropicRefine({
+        qualityScore: 45,
+        qualityExplanation: 'The story lacks detail about authentication method, error handling, and UI requirements.',
+        meetsThreshold: false,
+        questions: [
+          {
+            id: 'q1',
+            question: 'What authentication method should be used?',
+            context: 'Different auth methods have different implementation requirements',
+            suggestedAnswers: ['OAuth 2.0', 'Email/password', 'SSO'],
+          },
+          {
+            id: 'q2',
+            question: 'What should happen on login failure?',
+            context: 'Error handling is critical for security and UX',
+            suggestedAnswers: ['Show generic error', 'Show specific error'],
+          },
+          {
+            id: 'q3',
+            question: 'Is there a session timeout requirement?',
+            context: 'Session management affects security posture',
+          },
+        ],
+        improvements: [],
+      });
+
+      const res = await app.request('/prd-1/stories/story-1/refine', {
+        method: 'POST',
+        body: JSON.stringify({}),
+        headers: { 'Content-Type': 'application/json' },
+      });
+
+      expect(res.status).toBe(200);
+      const json = await res.json();
+      expect(json.ok).toBe(true);
+      expect(json.data.storyId).toBe('story-1');
+      expect(json.data.qualityScore).toBe(45);
+      expect(json.data.qualityExplanation).toContain('lacks detail');
+      expect(json.data.meetsThreshold).toBe(false);
+      expect(json.data.questions).toHaveLength(3);
+
+      // Verify question structure
+      const q1 = json.data.questions[0];
+      expect(q1.id).toBe('q1');
+      expect(q1.question).toBe('What authentication method should be used?');
+      expect(q1.context).toContain('auth methods');
+      expect(q1.suggestedAnswers).toEqual(['OAuth 2.0', 'Email/password', 'SSO']);
+    }));
+
+    test('generates 2-5 relevant clarifying questions', withApiKey(async () => {
+      insertPrd({ id: 'prd-1' });
+      insertStory({ id: 'story-1', prd_id: 'prd-1', title: 'Vague story' });
+
+      mockAnthropicRefine({
+        qualityScore: 30,
+        qualityExplanation: 'Very vague',
+        meetsThreshold: false,
+        questions: [
+          { id: 'q1', question: 'Q1?', context: 'C1' },
+          { id: 'q2', question: 'Q2?', context: 'C2' },
+          { id: 'q3', question: 'Q3?', context: 'C3' },
+          { id: 'q4', question: 'Q4?', context: 'C4' },
+        ],
+        improvements: [],
+      });
+
+      const res = await app.request('/prd-1/stories/story-1/refine', {
+        method: 'POST',
+        body: JSON.stringify({}),
+        headers: { 'Content-Type': 'application/json' },
+      });
+
+      const json = await res.json();
+      expect(json.ok).toBe(true);
+      // Should have between 2 and 5 questions (up to 5 per spec)
+      expect(json.data.questions.length).toBeGreaterThanOrEqual(2);
+      expect(json.data.questions.length).toBeLessThanOrEqual(5);
+    }));
+
+    test('limits questions to maximum of 5', withApiKey(async () => {
+      insertPrd({ id: 'prd-1' });
+      insertStory({ id: 'story-1', prd_id: 'prd-1' });
+
+      // AI returns 8 questions — should be truncated to 5
+      mockAnthropicRefine({
+        qualityScore: 20,
+        qualityExplanation: 'Very vague',
+        meetsThreshold: false,
+        questions: Array.from({ length: 8 }, (_, i) => ({
+          id: `q${i + 1}`,
+          question: `Question ${i + 1}?`,
+          context: `Context ${i + 1}`,
+        })),
+        improvements: [],
+      });
+
+      const res = await app.request('/prd-1/stories/story-1/refine', {
+        method: 'POST',
+        body: JSON.stringify({}),
+        headers: { 'Content-Type': 'application/json' },
+      });
+
+      const json = await res.json();
+      expect(json.ok).toBe(true);
+      expect(json.data.questions).toHaveLength(5);
+    }));
+
+    test('incorporates user answers to update story', withApiKey(async () => {
+      insertPrd({ id: 'prd-1', name: 'Test PRD' });
+      insertStory({
+        id: 'story-1',
+        prd_id: 'prd-1',
+        title: 'Add login',
+        description: 'Users should be able to log in',
+      });
+
+      mockAnthropicRefine({
+        qualityScore: 85,
+        qualityExplanation: 'Story is now well-defined with clear authentication method and error handling.',
+        meetsThreshold: true,
+        questions: [],
+        updatedStory: {
+          title: 'Add OAuth 2.0 Login',
+          description: 'Users should be able to log in using OAuth 2.0 with Google and GitHub providers. On failure, a generic error message is shown with a retry option.',
+          acceptanceCriteria: [
+            'User can log in with Google OAuth',
+            'User can log in with GitHub OAuth',
+            'Failed login shows generic error with retry button',
+            'Session persists for 24 hours',
+          ],
+          priority: 'high',
+        },
+        improvements: [
+          'Added specific authentication method (OAuth 2.0)',
+          'Defined error handling behavior',
+          'Added session timeout requirement',
+          'Split acceptance criteria into specific, testable items',
+        ],
+      });
+
+      const res = await app.request('/prd-1/stories/story-1/refine', {
+        method: 'POST',
+        body: JSON.stringify({
+          answers: [
+            { questionId: 'q1', answer: 'OAuth 2.0 with Google and GitHub' },
+            { questionId: 'q2', answer: 'Show generic error with retry' },
+            { questionId: 'q3', answer: '24 hours' },
+          ],
+        }),
+        headers: { 'Content-Type': 'application/json' },
+      });
+
+      const json = await res.json();
+      expect(json.ok).toBe(true);
+      expect(json.data.qualityScore).toBe(85);
+      expect(json.data.meetsThreshold).toBe(true);
+      expect(json.data.questions).toHaveLength(0);
+
+      // Verify updated story
+      expect(json.data.updatedStory).toBeDefined();
+      expect(json.data.updatedStory.title).toBe('Add OAuth 2.0 Login');
+      expect(json.data.updatedStory.description).toContain('OAuth 2.0');
+      expect(json.data.updatedStory.acceptanceCriteria).toHaveLength(4);
+      expect(json.data.updatedStory.priority).toBe('high');
+
+      // Verify improvements explanation
+      expect(json.data.improvements).toBeDefined();
+      expect(json.data.improvements.length).toBeGreaterThanOrEqual(1);
+      expect(json.data.improvements[0]).toContain('authentication method');
+    }));
+
+    test('auto-applies updated story to database when answers provided', withApiKey(async () => {
+      insertPrd({ id: 'prd-1' });
+      insertStory({
+        id: 'story-1',
+        prd_id: 'prd-1',
+        title: 'Original Title',
+        description: 'Original description',
+        priority: 'medium',
+      });
+
+      mockAnthropicRefine({
+        qualityScore: 90,
+        qualityExplanation: 'Excellent',
+        meetsThreshold: true,
+        questions: [],
+        updatedStory: {
+          title: 'Refined Title',
+          description: 'Refined description with more detail',
+          acceptanceCriteria: ['Criterion A', 'Criterion B', 'Criterion C'],
+          priority: 'high',
+        },
+        improvements: ['Improved title clarity', 'Added more context'],
+      });
+
+      await app.request('/prd-1/stories/story-1/refine', {
+        method: 'POST',
+        body: JSON.stringify({
+          answers: [{ questionId: 'q1', answer: 'Some answer' }],
+        }),
+        headers: { 'Content-Type': 'application/json' },
+      });
+
+      // Check the database was updated
+      const dbStory = testDb.query('SELECT * FROM prd_stories WHERE id = ?').get('story-1') as any;
+      expect(dbStory.title).toBe('Refined Title');
+      expect(dbStory.description).toBe('Refined description with more detail');
+      expect(dbStory.priority).toBe('high');
+
+      const criteria = JSON.parse(dbStory.acceptance_criteria);
+      expect(criteria).toHaveLength(3);
+      expect(criteria[0].description).toBe('Criterion A');
+      expect(criteria[0].passed).toBe(false);
+      expect(criteria[0].id).toBeDefined();
+
+      // PRD updated_at should also be updated
+      const dbPrd = testDb.query('SELECT updated_at FROM prds WHERE id = ?').get('prd-1') as any;
+      expect(dbPrd.updated_at).toBeGreaterThan(1000000);
+    }));
+
+    test('does not update database on initial analysis (no answers)', withApiKey(async () => {
+      insertPrd({ id: 'prd-1' });
+      insertStory({
+        id: 'story-1',
+        prd_id: 'prd-1',
+        title: 'Original Title',
+        description: 'Original desc',
+      });
+
+      mockAnthropicRefine({
+        qualityScore: 50,
+        qualityExplanation: 'Needs work',
+        meetsThreshold: false,
+        questions: [{ id: 'q1', question: 'Q?', context: 'C' }],
+        updatedStory: {
+          title: 'Should Not Be Applied',
+          description: 'This should not be saved',
+          acceptanceCriteria: ['AC'],
+          priority: 'critical',
+        },
+      });
+
+      await app.request('/prd-1/stories/story-1/refine', {
+        method: 'POST',
+        body: JSON.stringify({}),
+        headers: { 'Content-Type': 'application/json' },
+      });
+
+      // Database should remain unchanged
+      const dbStory = testDb.query('SELECT * FROM prd_stories WHERE id = ?').get('story-1') as any;
+      expect(dbStory.title).toBe('Original Title');
+      expect(dbStory.description).toBe('Original desc');
+    }));
+
+    test('handles markdown code fences in AI response', withApiKey(async () => {
+      insertPrd({ id: 'prd-1' });
+      insertStory({ id: 'story-1', prd_id: 'prd-1' });
+
+      const response = {
+        qualityScore: 60,
+        qualityExplanation: 'Fair',
+        meetsThreshold: false,
+        questions: [{ id: 'q1', question: 'Q?', context: 'C' }],
+      };
+
+      globalThis.fetch = (async (url: string | URL | Request, init?: RequestInit) => {
+        const urlStr = typeof url === 'string' ? url : url instanceof URL ? url.toString() : url.url;
+        if (urlStr.includes('api.anthropic.com')) {
+          return new Response(
+            JSON.stringify({
+              content: [{ type: 'text', text: '```json\n' + JSON.stringify(response) + '\n```' }],
+            }),
+            { status: 200, headers: { 'Content-Type': 'application/json' } },
+          );
+        }
+        return originalFetch(url, init);
+      }) as typeof fetch;
+
+      const res = await app.request('/prd-1/stories/story-1/refine', {
+        method: 'POST',
+        body: JSON.stringify({}),
+        headers: { 'Content-Type': 'application/json' },
+      });
+
+      const json = await res.json();
+      expect(json.ok).toBe(true);
+      expect(json.data.qualityScore).toBe(60);
+    }));
+
+    test('clamps quality score to valid range', withApiKey(async () => {
+      insertPrd({ id: 'prd-1' });
+      insertStory({ id: 'story-1', prd_id: 'prd-1' });
+
+      mockAnthropicRefine({
+        qualityScore: 150,
+        qualityExplanation: 'Out of range',
+        meetsThreshold: true,
+        questions: [],
+      });
+
+      const res = await app.request('/prd-1/stories/story-1/refine', {
+        method: 'POST',
+        body: JSON.stringify({}),
+        headers: { 'Content-Type': 'application/json' },
+      });
+
+      const json = await res.json();
+      expect(json.ok).toBe(true);
+      expect(json.data.qualityScore).toBe(100);
+    }));
+
+    test('defaults quality score to 50 for non-numeric value', withApiKey(async () => {
+      insertPrd({ id: 'prd-1' });
+      insertStory({ id: 'story-1', prd_id: 'prd-1' });
+
+      mockAnthropicRefine({
+        qualityScore: 'not a number',
+        qualityExplanation: 'Bad score',
+        meetsThreshold: false,
+        questions: [{ id: 'q1', question: 'Q?', context: 'C' }],
+      });
+
+      const res = await app.request('/prd-1/stories/story-1/refine', {
+        method: 'POST',
+        body: JSON.stringify({}),
+        headers: { 'Content-Type': 'application/json' },
+      });
+
+      const json = await res.json();
+      expect(json.ok).toBe(true);
+      expect(json.data.qualityScore).toBe(50);
+    }));
+
+    test('handles AI API error (non-200 response)', withApiKey(async () => {
+      insertPrd({ id: 'prd-1' });
+      insertStory({ id: 'story-1', prd_id: 'prd-1' });
+
+      globalThis.fetch = (async (url: string | URL | Request) => {
+        const urlStr = typeof url === 'string' ? url : url instanceof URL ? url.toString() : url.url;
+        if (urlStr.includes('api.anthropic.com')) {
+          return new Response('Rate limited', { status: 429 });
+        }
+        return originalFetch(url);
+      }) as typeof fetch;
+
+      const res = await app.request('/prd-1/stories/story-1/refine', {
+        method: 'POST',
+        body: JSON.stringify({}),
+        headers: { 'Content-Type': 'application/json' },
+      });
+
+      expect(res.status).toBe(502);
+      const json = await res.json();
+      expect(json.ok).toBe(false);
+      expect(json.error).toContain('AI refinement failed');
+      expect(json.error).toContain('429');
+    }));
+
+    test('handles invalid JSON in AI response', withApiKey(async () => {
+      insertPrd({ id: 'prd-1' });
+      insertStory({ id: 'story-1', prd_id: 'prd-1' });
+
+      globalThis.fetch = (async (url: string | URL | Request) => {
+        const urlStr = typeof url === 'string' ? url : url instanceof URL ? url.toString() : url.url;
+        if (urlStr.includes('api.anthropic.com')) {
+          return new Response(
+            JSON.stringify({
+              content: [{ type: 'text', text: 'This is not valid JSON{' }],
+            }),
+            { status: 200, headers: { 'Content-Type': 'application/json' } },
+          );
+        }
+        return originalFetch(url);
+      }) as typeof fetch;
+
+      const res = await app.request('/prd-1/stories/story-1/refine', {
+        method: 'POST',
+        body: JSON.stringify({}),
+        headers: { 'Content-Type': 'application/json' },
+      });
+
+      expect(res.status).toBe(502);
+      const json = await res.json();
+      expect(json.ok).toBe(false);
+      expect(json.error).toContain('Failed to parse');
+    }));
+
+    test('handles AI response with no text content', withApiKey(async () => {
+      insertPrd({ id: 'prd-1' });
+      insertStory({ id: 'story-1', prd_id: 'prd-1' });
+
+      globalThis.fetch = (async (url: string | URL | Request) => {
+        const urlStr = typeof url === 'string' ? url : url instanceof URL ? url.toString() : url.url;
+        if (urlStr.includes('api.anthropic.com')) {
+          return new Response(
+            JSON.stringify({
+              content: [{ type: 'tool_use', text: null }],
+            }),
+            { status: 200, headers: { 'Content-Type': 'application/json' } },
+          );
+        }
+        return originalFetch(url);
+      }) as typeof fetch;
+
+      const res = await app.request('/prd-1/stories/story-1/refine', {
+        method: 'POST',
+        body: JSON.stringify({}),
+        headers: { 'Content-Type': 'application/json' },
+      });
+
+      expect(res.status).toBe(502);
+      const json = await res.json();
+      expect(json.ok).toBe(false);
+      expect(json.error).toContain('no text content');
+    }));
+
+    test('filters out invalid questions (no question text)', withApiKey(async () => {
+      insertPrd({ id: 'prd-1' });
+      insertStory({ id: 'story-1', prd_id: 'prd-1' });
+
+      mockAnthropicRefine({
+        qualityScore: 40,
+        qualityExplanation: 'Needs work',
+        meetsThreshold: false,
+        questions: [
+          { id: 'q1', question: 'Valid question?', context: 'Context' },
+          { id: 'q2', question: '', context: 'No question text' },
+          { id: 'q3', question: null, context: 'Null question' },
+          { id: 'q4', question: 'Another valid?', context: 'More context' },
+        ],
+      });
+
+      const res = await app.request('/prd-1/stories/story-1/refine', {
+        method: 'POST',
+        body: JSON.stringify({}),
+        headers: { 'Content-Type': 'application/json' },
+      });
+
+      const json = await res.json();
+      expect(json.ok).toBe(true);
+      expect(json.data.questions).toHaveLength(2);
+      expect(json.data.questions[0].question).toBe('Valid question?');
+      expect(json.data.questions[1].question).toBe('Another valid?');
+    }));
+
+    test('assigns default id for questions without an id', withApiKey(async () => {
+      insertPrd({ id: 'prd-1' });
+      insertStory({ id: 'story-1', prd_id: 'prd-1' });
+
+      mockAnthropicRefine({
+        qualityScore: 50,
+        qualityExplanation: 'Fair',
+        meetsThreshold: false,
+        questions: [
+          { question: 'Question without id?', context: 'Context' },
+        ],
+      });
+
+      const res = await app.request('/prd-1/stories/story-1/refine', {
+        method: 'POST',
+        body: JSON.stringify({}),
+        headers: { 'Content-Type': 'application/json' },
+      });
+
+      const json = await res.json();
+      expect(json.ok).toBe(true);
+      expect(json.data.questions[0].id).toBeDefined();
+      expect(json.data.questions[0].id.length).toBeGreaterThan(0);
+    }));
+
+    test('includes project memory context in system prompt', withApiKey(async () => {
+      insertPrd({ id: 'prd-1', project_path: '/test/project' });
+      insertStory({ id: 'story-1', prd_id: 'prd-1' });
+      insertMemory({
+        id: 'mem-1',
+        project_path: '/test/project',
+        category: 'convention',
+        key: 'testing',
+        content: 'Use vitest for all tests',
+        confidence: 0.9,
+      });
+
+      const captured: { body: any } = { body: null };
+      mockAnthropicRefine(
+        {
+          qualityScore: 60,
+          qualityExplanation: 'Fair',
+          meetsThreshold: false,
+          questions: [{ id: 'q1', question: 'Q?', context: 'C' }],
+        },
+        captured,
+      );
+
+      await app.request('/prd-1/stories/story-1/refine', {
+        method: 'POST',
+        body: JSON.stringify({}),
+        headers: { 'Content-Type': 'application/json' },
+      });
+
+      expect(captured.body.system).toContain('Project Memory');
+      expect(captured.body.system).toContain('Use vitest');
+    }));
+
+    test('includes sibling story context in system prompt', withApiKey(async () => {
+      insertPrd({ id: 'prd-1' });
+      insertStory({ id: 'story-1', prd_id: 'prd-1', title: 'Login Feature' });
+      insertStory({ id: 'story-2', prd_id: 'prd-1', title: 'Registration Feature', description: 'User registration flow' });
+
+      const captured: { body: any } = { body: null };
+      mockAnthropicRefine(
+        {
+          qualityScore: 60,
+          qualityExplanation: 'Fair',
+          meetsThreshold: false,
+          questions: [{ id: 'q1', question: 'Q?', context: 'C' }],
+        },
+        captured,
+      );
+
+      await app.request('/prd-1/stories/story-1/refine', {
+        method: 'POST',
+        body: JSON.stringify({}),
+        headers: { 'Content-Type': 'application/json' },
+      });
+
+      // System prompt should include sibling stories but NOT the story being refined
+      expect(captured.body.system).toContain('Registration Feature');
+      expect(captured.body.system).toContain('Other Stories');
+    }));
+
+    test('validates priority in updated story', withApiKey(async () => {
+      insertPrd({ id: 'prd-1' });
+      insertStory({ id: 'story-1', prd_id: 'prd-1', priority: 'medium' });
+
+      mockAnthropicRefine({
+        qualityScore: 85,
+        qualityExplanation: 'Good',
+        meetsThreshold: true,
+        questions: [],
+        updatedStory: {
+          title: 'Updated',
+          description: 'Updated desc',
+          acceptanceCriteria: ['AC1', 'AC2', 'AC3'],
+          priority: 'invalid-priority',
+        },
+        improvements: ['Fixed title'],
+      });
+
+      const res = await app.request('/prd-1/stories/story-1/refine', {
+        method: 'POST',
+        body: JSON.stringify({
+          answers: [{ questionId: 'q1', answer: 'Answer' }],
+        }),
+        headers: { 'Content-Type': 'application/json' },
+      });
+
+      const json = await res.json();
+      expect(json.ok).toBe(true);
+      // Invalid priority should fall back to story's original priority
+      expect(json.data.updatedStory.priority).toBe('medium');
+    }));
+
+    test('filters out empty/invalid acceptance criteria', withApiKey(async () => {
+      insertPrd({ id: 'prd-1' });
+      insertStory({ id: 'story-1', prd_id: 'prd-1' });
+
+      mockAnthropicRefine({
+        qualityScore: 85,
+        qualityExplanation: 'Good',
+        meetsThreshold: true,
+        questions: [],
+        updatedStory: {
+          title: 'Updated',
+          description: 'Updated desc',
+          acceptanceCriteria: ['Valid AC', '', '   ', 'Another valid AC', null],
+          priority: 'high',
+        },
+        improvements: ['Cleaned up'],
+      });
+
+      const res = await app.request('/prd-1/stories/story-1/refine', {
+        method: 'POST',
+        body: JSON.stringify({
+          answers: [{ questionId: 'q1', answer: 'Answer' }],
+        }),
+        headers: { 'Content-Type': 'application/json' },
+      });
+
+      const json = await res.json();
+      expect(json.ok).toBe(true);
+      expect(json.data.updatedStory.acceptanceCriteria).toEqual(['Valid AC', 'Another valid AC']);
+    }));
+
+    test('refinement can be repeated (iterative refinement)', withApiKey(async () => {
+      insertPrd({ id: 'prd-1' });
+      insertStory({
+        id: 'story-1',
+        prd_id: 'prd-1',
+        title: 'Vague story',
+        description: 'Do something',
+      });
+
+      // Round 1: Initial analysis — low quality
+      mockAnthropicRefine({
+        qualityScore: 35,
+        qualityExplanation: 'Very vague story with no specifics',
+        meetsThreshold: false,
+        questions: [
+          { id: 'q1', question: 'What exactly?', context: 'Need specifics' },
+          { id: 'q2', question: 'For whom?', context: 'Need target user' },
+        ],
+      });
+
+      const res1 = await app.request('/prd-1/stories/story-1/refine', {
+        method: 'POST',
+        body: JSON.stringify({}),
+        headers: { 'Content-Type': 'application/json' },
+      });
+
+      const json1 = await res1.json();
+      expect(json1.data.qualityScore).toBe(35);
+      expect(json1.data.meetsThreshold).toBe(false);
+      expect(json1.data.questions.length).toBeGreaterThan(0);
+
+      // Round 2: Submit answers — improved but still needs work
+      mockAnthropicRefine({
+        qualityScore: 65,
+        qualityExplanation: 'Better but still missing edge cases',
+        meetsThreshold: false,
+        questions: [
+          { id: 'q3', question: 'What about error cases?', context: 'Edge cases matter' },
+        ],
+        updatedStory: {
+          title: 'Better title',
+          description: 'Better description',
+          acceptanceCriteria: ['AC1', 'AC2', 'AC3'],
+          priority: 'medium',
+        },
+        improvements: ['Clarified scope'],
+      });
+
+      const res2 = await app.request('/prd-1/stories/story-1/refine', {
+        method: 'POST',
+        body: JSON.stringify({
+          answers: [
+            { questionId: 'q1', answer: 'Build a dashboard' },
+            { questionId: 'q2', answer: 'For admins' },
+          ],
+        }),
+        headers: { 'Content-Type': 'application/json' },
+      });
+
+      const json2 = await res2.json();
+      expect(json2.data.qualityScore).toBe(65);
+      expect(json2.data.meetsThreshold).toBe(false);
+      expect(json2.data.questions.length).toBeGreaterThan(0);
+
+      // Round 3: Submit more answers — now meets threshold
+      mockAnthropicRefine({
+        qualityScore: 92,
+        qualityExplanation: 'Excellent — story is fully defined',
+        meetsThreshold: true,
+        questions: [],
+        updatedStory: {
+          title: 'Admin Dashboard with Error Handling',
+          description: 'Build admin dashboard with comprehensive error handling',
+          acceptanceCriteria: ['AC1', 'AC2', 'AC3', 'AC4'],
+          priority: 'high',
+        },
+        improvements: ['Added error handling', 'Refined acceptance criteria'],
+      });
+
+      const res3 = await app.request('/prd-1/stories/story-1/refine', {
+        method: 'POST',
+        body: JSON.stringify({
+          answers: [{ questionId: 'q3', answer: 'Show error toast and log to monitoring' }],
+        }),
+        headers: { 'Content-Type': 'application/json' },
+      });
+
+      const json3 = await res3.json();
+      expect(json3.data.qualityScore).toBe(92);
+      expect(json3.data.meetsThreshold).toBe(true);
+      expect(json3.data.questions).toHaveLength(0);
+      expect(json3.data.improvements.length).toBeGreaterThan(0);
+    }));
+
+    test('meetsThreshold is correctly derived from qualityScore >= 80', withApiKey(async () => {
+      insertPrd({ id: 'prd-1' });
+      insertStory({ id: 'story-1', prd_id: 'prd-1' });
+
+      // Score 79 — below threshold
+      mockAnthropicRefine({
+        qualityScore: 79,
+        qualityExplanation: 'Almost there',
+        meetsThreshold: true, // AI says true but server should override based on score
+        questions: [],
+      });
+
+      const res1 = await app.request('/prd-1/stories/story-1/refine', {
+        method: 'POST',
+        body: JSON.stringify({}),
+        headers: { 'Content-Type': 'application/json' },
+      });
+
+      const json1 = await res1.json();
+      expect(json1.data.meetsThreshold).toBe(false);
+
+      // Score 80 — meets threshold
+      mockAnthropicRefine({
+        qualityScore: 80,
+        qualityExplanation: 'Good enough',
+        meetsThreshold: false, // AI says false but server should override
+        questions: [],
+      });
+
+      const res2 = await app.request('/prd-1/stories/story-1/refine', {
+        method: 'POST',
+        body: JSON.stringify({}),
+        headers: { 'Content-Type': 'application/json' },
+      });
+
+      const json2 = await res2.json();
+      expect(json2.data.meetsThreshold).toBe(true);
+    }));
+
+    test('provides quality explanation of what was unclear', withApiKey(async () => {
+      insertPrd({ id: 'prd-1' });
+      insertStory({ id: 'story-1', prd_id: 'prd-1', title: 'Do stuff' });
+
+      mockAnthropicRefine({
+        qualityScore: 25,
+        qualityExplanation: 'The story title "Do stuff" is extremely vague. It lacks a clear description, has no acceptance criteria specifics, and does not define the target user or expected behavior.',
+        meetsThreshold: false,
+        questions: [
+          { id: 'q1', question: 'What stuff?', context: 'The scope is completely undefined' },
+        ],
+      });
+
+      const res = await app.request('/prd-1/stories/story-1/refine', {
+        method: 'POST',
+        body: JSON.stringify({}),
+        headers: { 'Content-Type': 'application/json' },
+      });
+
+      const json = await res.json();
+      expect(json.ok).toBe(true);
+      expect(json.data.qualityExplanation).toContain('vague');
+      expect(json.data.qualityExplanation.length).toBeGreaterThan(20);
+    }));
+
+    test('provides improvements explanation after refinement', withApiKey(async () => {
+      insertPrd({ id: 'prd-1' });
+      insertStory({ id: 'story-1', prd_id: 'prd-1' });
+
+      mockAnthropicRefine({
+        qualityScore: 88,
+        qualityExplanation: 'Story is now well-defined',
+        meetsThreshold: true,
+        questions: [],
+        updatedStory: {
+          title: 'Refined',
+          description: 'Refined desc',
+          acceptanceCriteria: ['AC1', 'AC2', 'AC3'],
+          priority: 'high',
+        },
+        improvements: [
+          'Changed vague title to specific feature name',
+          'Added error handling acceptance criteria',
+          'Defined target user persona',
+        ],
+      });
+
+      const res = await app.request('/prd-1/stories/story-1/refine', {
+        method: 'POST',
+        body: JSON.stringify({
+          answers: [{ questionId: 'q1', answer: 'An answer' }],
+        }),
+        headers: { 'Content-Type': 'application/json' },
+      });
+
+      const json = await res.json();
+      expect(json.ok).toBe(true);
+      expect(json.data.improvements).toHaveLength(3);
+      expect(json.data.improvements[0]).toContain('title');
+      expect(json.data.improvements[1]).toContain('error handling');
+    }));
+
+    test('handles missing improvements gracefully', withApiKey(async () => {
+      insertPrd({ id: 'prd-1' });
+      insertStory({ id: 'story-1', prd_id: 'prd-1' });
+
+      mockAnthropicRefine({
+        qualityScore: 50,
+        qualityExplanation: 'Fair',
+        meetsThreshold: false,
+        questions: [{ id: 'q1', question: 'Q?', context: 'C' }],
+        // No improvements field
+      });
+
+      const res = await app.request('/prd-1/stories/story-1/refine', {
+        method: 'POST',
+        body: JSON.stringify({}),
+        headers: { 'Content-Type': 'application/json' },
+      });
+
+      const json = await res.json();
+      expect(json.ok).toBe(true);
+      // Should not have improvements key when not provided
+      expect(json.data.improvements).toBeUndefined();
+    }));
+
+    test('includes user answers in prompt to AI', withApiKey(async () => {
+      insertPrd({ id: 'prd-1' });
+      insertStory({ id: 'story-1', prd_id: 'prd-1', title: 'My Story' });
+
+      const captured: { body: any } = { body: null };
+      mockAnthropicRefine(
+        {
+          qualityScore: 80,
+          qualityExplanation: 'Good',
+          meetsThreshold: true,
+          questions: [],
+          updatedStory: {
+            title: 'Updated',
+            description: 'Updated',
+            acceptanceCriteria: ['AC1', 'AC2', 'AC3'],
+            priority: 'medium',
+          },
+        },
+        captured,
+      );
+
+      await app.request('/prd-1/stories/story-1/refine', {
+        method: 'POST',
+        body: JSON.stringify({
+          answers: [
+            { questionId: 'auth-method', answer: 'Use JWT tokens' },
+            { questionId: 'error-handling', answer: 'Show toast notifications' },
+          ],
+        }),
+        headers: { 'Content-Type': 'application/json' },
+      });
+
+      // The user prompt should contain the answers
+      const userMessage = captured.body.messages[0].content;
+      expect(userMessage).toContain('Use JWT tokens');
+      expect(userMessage).toContain('Show toast notifications');
+      expect(userMessage).toContain('auth-method');
+      expect(userMessage).toContain('error-handling');
+    }));
+
+    test('includes PRD context in initial analysis prompt', withApiKey(async () => {
+      insertPrd({ id: 'prd-1', name: 'Auth System PRD', description: 'Build a complete authentication system' });
+      insertStory({ id: 'story-1', prd_id: 'prd-1', title: 'Login' });
+
+      const captured: { body: any } = { body: null };
+      mockAnthropicRefine(
+        {
+          qualityScore: 55,
+          qualityExplanation: 'Fair',
+          meetsThreshold: false,
+          questions: [{ id: 'q1', question: 'Q?', context: 'C' }],
+        },
+        captured,
+      );
+
+      await app.request('/prd-1/stories/story-1/refine', {
+        method: 'POST',
+        body: JSON.stringify({}),
+        headers: { 'Content-Type': 'application/json' },
+      });
+
+      const userMessage = captured.body.messages[0].content;
+      expect(userMessage).toContain('Auth System PRD');
+      expect(userMessage).toContain('Build a complete authentication system');
+    }));
+  });
+
+  // ---------------------------------------------------------------
   // POST /:id/plan — Sprint planning
   // ---------------------------------------------------------------
   describe('POST /:id/plan — sprint planning', () => {
