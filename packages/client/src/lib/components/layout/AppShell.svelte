@@ -12,6 +12,7 @@
   import LoopConfigModal from '../settings/LoopConfigModal.svelte';
   import StoryGenerateModal from '../settings/StoryGenerateModal.svelte';
   import StoryRefineModal from '../settings/StoryRefineModal.svelte';
+  import CriteriaValidationModal from '../settings/CriteriaValidationModal.svelte';
   import CommandPalette from '../common/CommandPalette.svelte';
   import ToastContainer from '../common/ToastContainer.svelte';
   import QuickOpen from '../editor/QuickOpen.svelte';
@@ -199,6 +200,10 @@
 
   {#if uiStore.activeModal === 'story-refine'}
     <StoryRefineModal />
+  {/if}
+
+  {#if uiStore.activeModal === 'criteria-validation'}
+    <CriteriaValidationModal />
   {/if}
 
   {#if uiStore.activeModal === 'command-palette'}

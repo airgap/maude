@@ -188,6 +188,12 @@
     uiStore.openModal('story-refine');
   }
 
+  function openValidateModal(storyId: string) {
+    loopStore.clearCriteriaValidation();
+    loopStore.setValidatingCriteriaStoryId(storyId);
+    uiStore.openModal('criteria-validation');
+  }
+
   async function startPlanning(mode: PlanMode) {
     if (!loopStore.selectedPrdId || planning) return;
 
@@ -365,6 +371,7 @@
                   <span class="priority-badge">{priorityLabel(story.priority)}</span>
                 {/if}
                 {#if !loopStore.isActive}
+                  <button class="validate-btn" title="Validate acceptance criteria" onclick={() => openValidateModal(story.id)}>✓</button>
                   <button class="refine-btn" title="Refine story" onclick={() => openRefineModal(story.id)}>⚡</button>
                   <button class="delete-btn" onclick={() => handleDeleteStory(story.id)}>×</button>
                 {/if}
@@ -612,6 +619,7 @@
     color: var(--accent-warning, #e6a817);
     font-weight: bold;
   }
+  .validate-btn,
   .refine-btn,
   .delete-btn {
     font-size: 12px;
@@ -620,9 +628,13 @@
     opacity: 0;
     transition: opacity var(--transition);
   }
+  .story-item:hover .validate-btn,
   .story-item:hover .refine-btn,
   .story-item:hover .delete-btn {
     opacity: 1;
+  }
+  .validate-btn:hover {
+    color: var(--accent-secondary);
   }
   .refine-btn:hover {
     color: var(--accent-primary);

@@ -116,4 +116,11 @@ export type {
   AnalyzeDependenciesResponse,
   SprintValidation,
   SprintValidationWarning,
+  ACValidationSeverity,
+  ACValidationCategory,
+  ACValidationIssue,
+  ACCriterionValidation,
+  ValidateACRequest,
+  ValidateACResponse,
+  ACOverride,
 } from './prd.js';

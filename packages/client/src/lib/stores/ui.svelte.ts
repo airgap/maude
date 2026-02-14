@@ -19,6 +19,7 @@ type ModalId =
   | 'loop-config'
   | 'story-generate'
   | 'story-refine'
+  | 'criteria-validation'
   | null;
 type FocusedPane = 'chat' | 'editor';
 

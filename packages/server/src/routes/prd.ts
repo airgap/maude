@@ -19,6 +19,10 @@ import type {
   SprintValidation,
   SprintValidationWarning,
   UserStory,
+  ValidateACRequest,
+  ValidateACResponse,
+  ACCriterionValidation,
+  ACValidationIssue,
 } from '@maude/shared';
 import { readFileSync } from 'fs';
 import { join } from 'path';
@@ -1591,6 +1595,206 @@ function validateSprintPlan(stories: UserStory[]): SprintValidation {
     warnings,
   };
 }
+
+// --- Acceptance Criteria Validation ---
+
+// Validate acceptance criteria for specificity, measurability, and testability
+app.post('/:prdId/stories/:storyId/validate-criteria', async (c) => {
+  const db = getDb();
+  const prdId = c.req.param('prdId');
+  const storyId = c.req.param('storyId');
+  const body = (await c.req.json()) as ValidateACRequest;
+
+  const prdRow = db.query('SELECT * FROM prds WHERE id = ?').get(prdId) as any;
+  if (!prdRow) return c.json({ ok: false, error: 'PRD not found' }, 404);
+
+  const storyRow = db.query('SELECT * FROM prd_stories WHERE id = ? AND prd_id = ?').get(storyId, prdId) as any;
+  if (!storyRow) return c.json({ ok: false, error: 'Story not found' }, 404);
+
+  const story = storyFromRow(storyRow);
+
+  // Use criteria from request body or fall back to stored criteria
+  const criteria = body.criteria && body.criteria.length > 0
+    ? body.criteria
+    : story.acceptanceCriteria.map((ac: any) => ac.description);
+
+  if (criteria.length === 0) {
+    return c.json({ ok: false, error: 'No acceptance criteria to validate' }, 400);
+  }
+
+  const criteriaList = criteria
+    .map((c: string, i: number) => `${i + 1}. "${c}"`)
+    .join('\n');
+
+  const systemPrompt = `You are an expert agile coach specializing in writing high-quality acceptance criteria. Your task is to validate acceptance criteria for specificity, measurability, and testability.
+
+VALIDATION RULES — check each criterion for:
+
+1. **Specificity (vague)**: Flag criteria using vague language like "should work well", "user-friendly", "fast", "efficient", "appropriate", "proper", "good", "nice", "easy", "simple", "clean", "modern", "intuitive", "seamless", "robust", "scalable", "flexible", "relevant", "suitable", "reasonable", "adequate", etc.
+
+2. **Measurability (unmeasurable)**: Flag criteria that cannot be objectively measured or verified. Good criteria define specific, observable outcomes (e.g., "returns HTTP 200" vs "works correctly").
+
+3. **Testability (untestable)**: Flag criteria that a developer or QA engineer cannot write a concrete test for. Criteria should describe verifiable behavior, not aspirational goals.
+
+4. **Scope (too_broad)**: Flag criteria that try to cover too many things at once or are too vague to implement in a single check.
+
+5. **Ambiguity (ambiguous)**: Flag criteria with unclear terms, undefined references, or multiple possible interpretations.
+
+6. **Missing Detail (missing_detail)**: Flag criteria that omit important specifics like error handling, edge cases, expected values, or user actions.
+
+SEVERITY LEVELS:
+- "error": Criterion is fundamentally unclear and MUST be rewritten before implementation
+- "warning": Criterion could be improved but is still somewhat usable
+- "info": Minor suggestion for improvement
+
+SCORING:
+- 90-100: Excellent criteria, specific and testable
+- 70-89: Good, minor improvements possible
+- 50-69: Fair, some criteria need attention
+- 30-49: Poor, multiple criteria need rewriting
+- 0-29: Very poor, most criteria are vague or untestable
+
+You MUST respond with ONLY a valid JSON object. No markdown, no explanation, no code fences.
+
+{
+  "overallScore": <number 0-100>,
+  "allValid": <boolean>,
+  "summary": "<brief overall assessment>",
+  "criteria": [
+    {
+      "index": <0-based index>,
+      "text": "<the original criterion text>",
+      "isValid": <boolean>,
+      "issues": [
+        {
+          "criterionIndex": <same 0-based index>,
+          "criterionText": "<the criterion text>",
+          "severity": "error" | "warning" | "info",
+          "category": "vague" | "unmeasurable" | "untestable" | "too_broad" | "ambiguous" | "missing_detail",
+          "message": "<clear explanation of the issue>",
+          "suggestedReplacement": "<improved version of this criterion>"
+        }
+      ],
+      "suggestedReplacement": "<improved version if any issues found, or null>"
+    }
+  ]
+}
+
+IMPORTANT:
+- Validate EVERY criterion — even ones that pass should appear in the response with isValid: true and empty issues
+- For each issue, ALWAYS provide a concrete suggestedReplacement
+- Suggestions should be specific, measurable, and testable
+- Keep the same intent as the original, just make it clearer
+- Do NOT add new requirements — only clarify existing ones`;
+
+  const storyContext = body.storyTitle || story.title;
+  const storyDesc = body.storyDescription || story.description;
+
+  const userPrompt = `Validate these acceptance criteria for the story "${storyContext}":
+
+${storyDesc ? `Story Description: ${storyDesc}\n\n` : ''}Acceptance Criteria:
+${criteriaList}
+
+Analyze each criterion and identify any issues with specificity, measurability, or testability.`;
+
+  try {
+    const auth = getAnthropicAuth();
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+      'anthropic-version': '2023-06-01',
+    };
+    if (auth.type === 'oauth') {
+      headers['Authorization'] = `Bearer ${auth.token}`;
+    } else {
+      headers['x-api-key'] = auth.token;
+    }
+
+    const apiResponse = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-5-20250929',
+        max_tokens: 4096,
+        system: systemPrompt,
+        messages: [{ role: 'user', content: userPrompt }],
+      }),
+    });
+
+    if (!apiResponse.ok) {
+      const errBody = await apiResponse.text().catch(() => 'Unknown error');
+      return c.json(
+        { ok: false, error: `AI validation failed (${apiResponse.status}): ${errBody}` },
+        502,
+      );
+    }
+
+    const result = await apiResponse.json() as any;
+    const textContent = result.content?.find((ct: any) => ct.type === 'text');
+    if (!textContent?.text) {
+      return c.json({ ok: false, error: 'AI returned no text content' }, 502);
+    }
+
+    // Parse JSON response
+    let rawText = textContent.text.trim();
+    if (rawText.startsWith('```')) {
+      rawText = rawText.replace(/^```(?:json)?\s*\n?/, '').replace(/\n?```\s*$/, '');
+    }
+
+    let parsed: any;
+    try {
+      parsed = JSON.parse(rawText);
+    } catch {
+      return c.json(
+        { ok: false, error: 'Failed to parse AI validation response as JSON. Try again.' },
+        502,
+      );
+    }
+
+    // Validate and shape the response
+    const validSeverities = ['error', 'warning', 'info'];
+    const validCategories = ['vague', 'unmeasurable', 'untestable', 'too_broad', 'ambiguous', 'missing_detail'];
+
+    const validatedCriteria: ACCriterionValidation[] = (parsed.criteria || []).map((cr: any, idx: number) => {
+      const issues: ACValidationIssue[] = (cr.issues || [])
+        .filter((iss: any) => iss.message && typeof iss.message === 'string')
+        .map((iss: any) => ({
+          criterionIndex: typeof iss.criterionIndex === 'number' ? iss.criterionIndex : idx,
+          criterionText: (iss.criterionText || cr.text || criteria[idx] || '').trim(),
+          severity: validSeverities.includes(iss.severity) ? iss.severity : 'warning',
+          category: validCategories.includes(iss.category) ? iss.category : 'vague',
+          message: iss.message.trim(),
+          suggestedReplacement: iss.suggestedReplacement?.trim() || undefined,
+        }));
+
+      return {
+        index: typeof cr.index === 'number' ? cr.index : idx,
+        text: (cr.text || criteria[idx] || '').trim(),
+        isValid: issues.length === 0 || (cr.isValid === true && issues.every((i: any) => i.severity === 'info')),
+        issues,
+        suggestedReplacement: cr.suggestedReplacement?.trim() || undefined,
+      };
+    });
+
+    const overallScore = typeof parsed.overallScore === 'number'
+      ? Math.max(0, Math.min(100, Math.round(parsed.overallScore)))
+      : 50;
+
+    const response: ValidateACResponse = {
+      storyId,
+      overallScore,
+      allValid: validatedCriteria.every((cr) => cr.isValid),
+      criteria: validatedCriteria,
+      summary: parsed.summary || 'Validation complete.',
+    };
+
+    return c.json({ ok: true, data: response });
+  } catch (err) {
+    return c.json(
+      { ok: false, error: `Criteria validation failed: ${(err as Error).message}` },
+      500,
+    );
+  }
+});
 
 // --- Row mappers ---
 

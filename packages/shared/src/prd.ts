@@ -283,6 +283,56 @@ export interface SprintValidationWarning {
   blockedByStoryTitles?: string[];
 }
 
+// --- Acceptance Criteria Validation Types ---
+
+/** Severity of a validation issue found in a criterion */
+export type ACValidationSeverity = 'error' | 'warning' | 'info';
+
+/** Category of the validation issue */
+export type ACValidationCategory = 'vague' | 'unmeasurable' | 'untestable' | 'too_broad' | 'ambiguous' | 'missing_detail';
+
+/** A single validation issue for one acceptance criterion */
+export interface ACValidationIssue {
+  criterionIndex: number;
+  criterionText: string;
+  severity: ACValidationSeverity;
+  category: ACValidationCategory;
+  message: string;
+  suggestedReplacement?: string;
+}
+
+/** Validation result for a single criterion */
+export interface ACCriterionValidation {
+  index: number;
+  text: string;
+  isValid: boolean;
+  issues: ACValidationIssue[];
+  suggestedReplacement?: string;
+}
+
+/** Request to validate acceptance criteria */
+export interface ValidateACRequest {
+  storyId: string;
+  criteria: string[]; // the criteria text to validate
+  storyTitle?: string;
+  storyDescription?: string;
+}
+
+/** Response from AC validation */
+export interface ValidateACResponse {
+  storyId: string;
+  overallScore: number; // 0-100 quality score for all criteria
+  allValid: boolean;
+  criteria: ACCriterionValidation[];
+  summary: string; // brief overall assessment
+}
+
+/** Override justification when user dismisses a warning */
+export interface ACOverride {
+  criterionIndex: number;
+  justification: string;
+}
+
 // --- Stream Events for Loop ---
 
 export interface StreamLoopEvent {

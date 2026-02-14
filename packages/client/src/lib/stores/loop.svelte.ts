@@ -1,4 +1,4 @@
-import type { PRD, LoopState, IterationLogEntry, StreamLoopEvent, LoopConfig, PlanMode, EditMode, GeneratedStory, RefinementQuestion, RefineStoryResponse, DependencyGraph, SprintValidation, SprintValidationWarning } from '@maude/shared';
+import type { PRD, LoopState, IterationLogEntry, StreamLoopEvent, LoopConfig, PlanMode, EditMode, GeneratedStory, RefinementQuestion, RefineStoryResponse, DependencyGraph, SprintValidation, SprintValidationWarning, ValidateACResponse, ACOverride } from '@maude/shared';
 import { api, getBaseUrl, getAuthToken } from '../api/client';
 
 function createLoopStore() {
@@ -38,6 +38,13 @@ function createLoopStore() {
   let dependencyError = $state<string | null>(null);
   let sprintValidation = $state<SprintValidation | null>(null);
   let analyzingDependencies = $state(false);
+
+  // AC validation state
+  let validatingCriteriaStoryId = $state<string | null>(null);
+  let validatingCriteria = $state(false);
+  let criteriaValidationResult = $state<ValidateACResponse | null>(null);
+  let criteriaValidationError = $state<string | null>(null);
+  let criteriaOverrides = $state<ACOverride[]>([]);
 
   return {
     get activeLoop() {
@@ -151,6 +158,21 @@ function createLoopStore() {
     },
     get sprintWarnings(): SprintValidationWarning[] {
       return sprintValidation?.warnings || [];
+    },
+    get validatingCriteriaStoryId() {
+      return validatingCriteriaStoryId;
+    },
+    get validatingCriteria() {
+      return validatingCriteria;
+    },
+    get criteriaValidationResult() {
+      return criteriaValidationResult;
+    },
+    get criteriaValidationError() {
+      return criteriaValidationError;
+    },
+    get criteriaOverrides() {
+      return criteriaOverrides;
     },
 
     // --- Setters ---
@@ -636,6 +658,111 @@ function createLoopStore() {
       dependencyError = null;
       sprintValidation = null;
       analyzingDependencies = false;
+    },
+
+    // --- Acceptance Criteria Validation ---
+
+    setValidatingCriteriaStoryId(id: string | null) {
+      validatingCriteriaStoryId = id;
+    },
+
+    clearCriteriaValidation() {
+      validatingCriteriaStoryId = null;
+      validatingCriteria = false;
+      criteriaValidationResult = null;
+      criteriaValidationError = null;
+      criteriaOverrides = [];
+    },
+
+    async validateCriteria(
+      prdId: string,
+      storyId: string,
+      criteria?: string[],
+      storyTitle?: string,
+      storyDescription?: string,
+    ): Promise<{ ok: boolean; error?: string }> {
+      validatingCriteria = true;
+      criteriaValidationError = null;
+      criteriaValidationResult = null;
+      validatingCriteriaStoryId = storyId;
+      criteriaOverrides = [];
+      try {
+        // If no criteria provided, extract from the story
+        let criteriaToValidate = criteria;
+        if (!criteriaToValidate) {
+          const prd = prds.find((p) => p.id === prdId);
+          const story = prd?.stories?.find((s) => s.id === storyId);
+          if (story) {
+            criteriaToValidate = story.acceptanceCriteria.map((ac: any) => ac.description);
+            storyTitle = storyTitle || story.title;
+            storyDescription = storyDescription || story.description;
+          }
+        }
+        if (!criteriaToValidate || criteriaToValidate.length === 0) {
+          criteriaValidationError = 'No acceptance criteria to validate';
+          return { ok: false, error: criteriaValidationError };
+        }
+
+        const res = await api.prds.validateCriteria(prdId, storyId, criteriaToValidate, storyTitle, storyDescription);
+        if (res.ok) {
+          criteriaValidationResult = res.data;
+          return { ok: true };
+        }
+        criteriaValidationError = (res as any).error || 'Validation failed';
+        return { ok: false, error: criteriaValidationError ?? undefined };
+      } catch (err) {
+        criteriaValidationError = String(err);
+        return { ok: false, error: criteriaValidationError ?? undefined };
+      } finally {
+        validatingCriteria = false;
+      }
+    },
+
+    addCriteriaOverride(override: ACOverride) {
+      criteriaOverrides = [...criteriaOverrides, override];
+    },
+
+    removeCriteriaOverride(criterionIndex: number) {
+      criteriaOverrides = criteriaOverrides.filter((o) => o.criterionIndex !== criterionIndex);
+    },
+
+    async applyCriteriaSuggestions(
+      prdId: string,
+      storyId: string,
+      acceptedIndices: number[],
+    ): Promise<{ ok: boolean; error?: string }> {
+      if (!criteriaValidationResult) {
+        return { ok: false, error: 'No validation result to apply' };
+      }
+
+      // Find the current story
+      const prd = prds.find((p) => p.id === prdId);
+      const story = prd?.stories?.find((s) => s.id === storyId);
+      if (!story) return { ok: false, error: 'Story not found' };
+
+      // Build new criteria: apply suggestions for accepted indices, keep original for others
+      const newCriteria = story.acceptanceCriteria.map((ac: any, idx: number) => {
+        if (acceptedIndices.includes(idx)) {
+          const validation = criteriaValidationResult!.criteria.find((c) => c.index === idx);
+          if (validation?.suggestedReplacement) {
+            return { ...ac, description: validation.suggestedReplacement };
+          }
+        }
+        return ac;
+      });
+
+      try {
+        const res = await api.prds.updateStory(prdId, storyId, {
+          acceptanceCriteria: newCriteria,
+        });
+        if (res.ok) {
+          await this.loadPrd(prdId);
+          return { ok: true };
+        }
+        return { ok: false, error: (res as any).error || 'Failed to update criteria' };
+      } catch (err) {
+        return { ok: false, error: String(err) };
+      }
     },
 
     // --- Sprint planning ---

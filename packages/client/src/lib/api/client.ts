@@ -595,6 +595,15 @@ export const api = {
         ok: boolean;
         data: import('@maude/shared').SprintValidation;
       }>(`/prds/${prdId}/dependencies/validate`),
+    // --- Acceptance Criteria Validation ---
+    validateCriteria: (prdId: string, storyId: string, criteria: string[], storyTitle?: string, storyDescription?: string) =>
+      request<{
+        ok: boolean;
+        data: import('@maude/shared').ValidateACResponse;
+      }>(`/prds/${prdId}/stories/${storyId}/validate-criteria`, {
+        method: 'POST',
+        body: JSON.stringify({ storyId, criteria, storyTitle, storyDescription }),
+      }),
   },
 
   // --- Loops ---
