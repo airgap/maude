@@ -6,8 +6,11 @@
   let capacity = $state(loopStore.sprintPlanCapacity);
   let capacityMode = $state<'points' | 'count'>(loopStore.sprintPlanCapacityMode);
   let showRationale = $state<number | null>(null);
+  let expandedStoryReason = $state<string | null>(null);
   let dragStoryId = $state<string | null>(null);
   let dragFromSprint = $state<number | null>(null);
+  let hasBeenAdjusted = $state(false);
+  let saving = $state(false);
 
   function close() {
     loopStore.clearSprintPlan();
@@ -20,6 +23,7 @@
 
     loopStore.setSprintPlanCapacity(capacity);
     loopStore.setSprintPlanCapacityMode(capacityMode);
+    hasBeenAdjusted = false;
 
     const result = await loopStore.generateSprintPlan(prdId, capacity, capacityMode);
     if (!result.ok) {
@@ -27,8 +31,30 @@
     }
   }
 
+  async function saveAdjustedPlan() {
+    const prdId = loopStore.selectedPrdId;
+    if (!prdId) return;
+
+    saving = true;
+    try {
+      const result = await loopStore.saveAdjustedPlan(prdId);
+      if (result.ok) {
+        hasBeenAdjusted = false;
+        uiStore.toast('Sprint plan saved', 'success');
+      } else {
+        uiStore.toast(result.error || 'Failed to save plan', 'error');
+      }
+    } finally {
+      saving = false;
+    }
+  }
+
   function toggleRationale(sprintIndex: number) {
     showRationale = showRationale === sprintIndex ? null : sprintIndex;
+  }
+
+  function toggleStoryReason(storyId: string) {
+    expandedStoryReason = expandedStoryReason === storyId ? null : storyId;
   }
 
   function onDragStart(storyId: string, sprintIndex: number) {
@@ -44,6 +70,7 @@
     e.preventDefault();
     if (dragStoryId !== null && dragFromSprint !== null && dragFromSprint !== toSprintIndex) {
       loopStore.moveStoryInPlan(dragStoryId, dragFromSprint, toSprintIndex);
+      hasBeenAdjusted = true;
     }
     dragStoryId = null;
     dragFromSprint = null;
@@ -196,17 +223,27 @@
 
               <div class="sprint-stories">
                 {#each sprint.stories as story (story.storyId)}
-                  <div
-                    class="sprint-story-item"
-                    draggable="true"
-                    ondragstart={() => onDragStart(story.storyId, sprintIdx)}
-                  >
-                    <span class="story-priority" style:color={priorityColor(story.priority)}>
-                      {priorityLabel(story.priority) || '·'}
-                    </span>
-                    <span class="story-name">{story.title}</span>
-                    <span class="story-pts">{story.storyPoints}pts</span>
-                    <span class="story-reason" title={story.reason}>ℹ</span>
+                  <div class="sprint-story-wrapper">
+                    <div
+                      class="sprint-story-item"
+                      draggable="true"
+                      ondragstart={() => onDragStart(story.storyId, sprintIdx)}
+                    >
+                      <span class="story-priority" style:color={priorityColor(story.priority)}>
+                        {priorityLabel(story.priority) || '·'}
+                      </span>
+                      <span class="story-name">{story.title}</span>
+                      <span class="story-pts">{story.storyPoints}pts</span>
+                      <button
+                        class="story-reason-btn"
+                        class:active={expandedStoryReason === story.storyId}
+                        title="View placement rationale"
+                        onclick={(e) => { e.stopPropagation(); toggleStoryReason(story.storyId); }}
+                      >ℹ</button>
+                    </div>
+                    {#if expandedStoryReason === story.storyId && story.reason}
+                      <div class="story-reason-detail">{story.reason}</div>
+                    {/if}
                   </div>
                 {/each}
               </div>
@@ -242,6 +279,19 @@
     </div>
 
     <div class="modal-footer">
+      {#if plan && hasBeenAdjusted}
+        <button
+          class="btn-save"
+          onclick={saveAdjustedPlan}
+          disabled={saving}
+        >
+          {#if saving}
+            <span class="spinner-sm"></span> Saving...
+          {:else}
+            Save Adjusted Plan
+          {/if}
+        </button>
+      {/if}
       <button class="btn-close" onclick={close}>
         {plan ? 'Done' : 'Close'}
       </button>
@@ -562,11 +612,36 @@
     color: var(--accent-primary);
     flex-shrink: 0;
   }
-  .story-reason {
+  .sprint-story-wrapper {
+    display: flex;
+    flex-direction: column;
+  }
+  .story-reason-btn {
     font-size: 10px;
     color: var(--text-tertiary);
-    cursor: help;
+    cursor: pointer;
     flex-shrink: 0;
+    background: none;
+    border: none;
+    padding: 2px 4px;
+    border-radius: 2px;
+    line-height: 1;
+  }
+  .story-reason-btn:hover,
+  .story-reason-btn.active {
+    color: var(--accent-primary);
+    background: var(--bg-hover);
+  }
+  .story-reason-detail {
+    font-size: 10px;
+    color: var(--text-secondary);
+    padding: 4px 8px 4px 28px;
+    line-height: 1.4;
+    background: var(--bg-tertiary);
+    border-radius: 0 0 var(--radius-sm) var(--radius-sm);
+    margin-top: -1px;
+    border: 1px solid var(--border-primary);
+    border-top: none;
   }
 
   /* Unassigned */
@@ -639,6 +714,26 @@
     gap: 8px;
     padding: 12px 20px;
     border-top: 1px solid var(--border-primary);
+  }
+  .btn-save {
+    padding: 6px 16px;
+    font-size: 12px;
+    border-radius: var(--radius-sm);
+    background: var(--accent-primary);
+    color: var(--text-on-accent);
+    font-weight: 600;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    border: none;
+  }
+  .btn-save:hover:not(:disabled) {
+    opacity: 0.9;
+  }
+  .btn-save:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
   }
   .btn-close {
     padding: 6px 16px;

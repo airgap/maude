@@ -2581,6 +2581,10 @@ You MUST respond with ONLY a valid JSON object. No markdown, no explanation, no 
     {
       "sprintNumber": 1,
       "storyIds": ["id1", "id2"],
+      "storyReasons": {
+        "id1": "Why this specific story is placed in this sprint",
+        "id2": "Why this specific story is placed in this sprint"
+      },
       "rationale": "Why these stories were grouped in this sprint"
     }
   ],
@@ -2593,6 +2597,7 @@ IMPORTANT:
 - A story's dependencies must be in earlier sprints or already completed
 - Prioritize critical/high priority stories in earlier sprints
 - Provide clear rationale for each sprint grouping
+- Provide a specific reason for EACH story explaining why it was placed in that particular sprint
 - sprintNumber starts at 1 and increments sequentially`;
 
   const userPrompt = `Plan sprints for these ${estimatedPending.length} stories with a capacity of ${capacity} ${capacityMode === 'count' ? 'stories' : 'story points'} per sprint. Respect dependencies and prioritize critical/high-priority items first.`;
@@ -2665,6 +2670,7 @@ IMPORTANT:
     for (const ps of parsed.sprints) {
       const sprintNum = typeof ps.sprintNumber === 'number' ? ps.sprintNumber : sprints.length + 1;
       const storyIds: string[] = Array.isArray(ps.storyIds) ? ps.storyIds : [];
+      const storyReasons: Record<string, string> = ps.storyReasons || {};
 
       const sprintStories: SprintStoryAssignment[] = [];
       let sprintPoints = 0;
@@ -2678,12 +2684,16 @@ IMPORTANT:
         sprintPoints += pts;
         overallTotalPoints += pts;
 
+        // Use AI-provided per-story reason if available, otherwise generate a descriptive fallback
+        const aiReason = storyReasons[sid];
+        const fallbackReason = `${story.priority} priority, ${pts}pts${story.dependsOn?.length ? `, depends on ${story.dependsOn.length} story(ies)` : ''}`;
+
         sprintStories.push({
           storyId: sid,
           title: story.title,
           storyPoints: pts,
           priority: story.priority,
-          reason: `${story.priority} priority, ${pts}pts${story.dependsOn?.length ? `, depends on ${story.dependsOn.length} story(ies)` : ''}`,
+          reason: aiReason || fallbackReason,
         });
       }
 
