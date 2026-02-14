@@ -2293,4 +2293,992 @@ describe('PRD Routes', () => {
       expect(conv.system_prompt).toContain('Auth Story');
     });
   });
+
+  // ---------------------------------------------------------------
+  // POST /:prdId/stories/:storyId/validate-criteria — AC validation
+  // ---------------------------------------------------------------
+  describe('POST /:prdId/stories/:storyId/validate-criteria — acceptance criteria validation', () => {
+    test('returns 404 for non-existent PRD', async () => {
+      const res = await app.request('/nonexistent/stories/story-1/validate-criteria', {
+        method: 'POST',
+        body: JSON.stringify({ storyId: 'story-1', criteria: ['Test criterion'] }),
+        headers: { 'Content-Type': 'application/json' },
+      });
+      expect(res.status).toBe(404);
+    });
+
+    test('returns 404 for non-existent story', async () => {
+      insertPrd({ id: 'prd-1' });
+
+      const res = await app.request('/prd-1/stories/nonexistent/validate-criteria', {
+        method: 'POST',
+        body: JSON.stringify({ storyId: 'nonexistent', criteria: ['Test criterion'] }),
+        headers: { 'Content-Type': 'application/json' },
+      });
+      expect(res.status).toBe(404);
+    });
+
+    test('returns 400 when no criteria available (empty body and empty story criteria)', async () => {
+      insertPrd({ id: 'prd-1' });
+      insertStory({ id: 'story-1', prd_id: 'prd-1', acceptance_criteria: '[]' });
+
+      const res = await app.request('/prd-1/stories/story-1/validate-criteria', {
+        method: 'POST',
+        body: JSON.stringify({ storyId: 'story-1', criteria: [] }),
+        headers: { 'Content-Type': 'application/json' },
+      });
+      expect(res.status).toBe(400);
+      const json = await res.json();
+      expect(json.ok).toBe(false);
+      expect(json.error).toContain('No acceptance criteria');
+    });
+
+    test('falls back to stored criteria when request criteria is empty', async () => {
+      insertPrd({ id: 'prd-1' });
+      insertStory({
+        id: 'story-1',
+        prd_id: 'prd-1',
+        title: 'Login Story',
+        acceptance_criteria: JSON.stringify([
+          { id: 'ac-1', description: 'User can enter email and password', passed: false },
+          { id: 'ac-2', description: 'System returns JWT on success', passed: false },
+        ]),
+      });
+
+      const mockValidation = {
+        overallScore: 85,
+        allValid: true,
+        summary: 'Good criteria overall.',
+        criteria: [
+          {
+            index: 0,
+            text: 'User can enter email and password',
+            isValid: true,
+            issues: [],
+            suggestedReplacement: null,
+          },
+          {
+            index: 1,
+            text: 'System returns JWT on success',
+            isValid: true,
+            issues: [],
+            suggestedReplacement: null,
+          },
+        ],
+      };
+
+      globalThis.fetch = (async (url: string | URL | Request, init?: RequestInit) => {
+        const urlStr = typeof url === 'string' ? url : url instanceof URL ? url.toString() : url.url;
+        if (urlStr.includes('api.anthropic.com')) {
+          return new Response(
+            JSON.stringify({
+              content: [{ type: 'text', text: JSON.stringify(mockValidation) }],
+            }),
+            { status: 200, headers: { 'Content-Type': 'application/json' } },
+          );
+        }
+        return originalFetch(url, init);
+      }) as typeof fetch;
+
+      const origKey = process.env.ANTHROPIC_API_KEY;
+      process.env.ANTHROPIC_API_KEY = 'test-key';
+
+      try {
+        const res = await app.request('/prd-1/stories/story-1/validate-criteria', {
+          method: 'POST',
+          body: JSON.stringify({ storyId: 'story-1' }),
+          headers: { 'Content-Type': 'application/json' },
+        });
+
+        expect(res.status).toBe(200);
+        const json = await res.json();
+        expect(json.ok).toBe(true);
+        expect(json.data.criteria).toHaveLength(2);
+      } finally {
+        if (origKey) process.env.ANTHROPIC_API_KEY = origKey;
+        else delete process.env.ANTHROPIC_API_KEY;
+      }
+    });
+
+    test('validates criteria and returns issues for vague language', async () => {
+      insertPrd({ id: 'prd-1' });
+      insertStory({ id: 'story-1', prd_id: 'prd-1', title: 'UI Story' });
+
+      const mockValidation = {
+        overallScore: 35,
+        allValid: false,
+        summary: 'Criteria contain vague and unmeasurable language.',
+        criteria: [
+          {
+            index: 0,
+            text: 'The system should work well',
+            isValid: false,
+            issues: [
+              {
+                criterionIndex: 0,
+                criterionText: 'The system should work well',
+                severity: 'error',
+                category: 'vague',
+                message: 'The phrase "work well" is subjective and lacks measurable outcomes.',
+                suggestedReplacement: 'The system responds to all API requests within 200ms under normal load',
+              },
+            ],
+            suggestedReplacement: 'The system responds to all API requests within 200ms under normal load',
+          },
+          {
+            index: 1,
+            text: 'The UI should be user-friendly',
+            isValid: false,
+            issues: [
+              {
+                criterionIndex: 1,
+                criterionText: 'The UI should be user-friendly',
+                severity: 'error',
+                category: 'vague',
+                message: '"User-friendly" is subjective without specific metrics.',
+                suggestedReplacement: 'New users can complete the registration flow in under 2 minutes without external help',
+              },
+              {
+                criterionIndex: 1,
+                criterionText: 'The UI should be user-friendly',
+                severity: 'warning',
+                category: 'unmeasurable',
+                message: 'No objective measurement criteria provided.',
+                suggestedReplacement: 'New users can complete the registration flow in under 2 minutes without external help',
+              },
+            ],
+            suggestedReplacement: 'New users can complete the registration flow in under 2 minutes without external help',
+          },
+        ],
+      };
+
+      globalThis.fetch = (async (url: string | URL | Request, init?: RequestInit) => {
+        const urlStr = typeof url === 'string' ? url : url instanceof URL ? url.toString() : url.url;
+        if (urlStr.includes('api.anthropic.com')) {
+          return new Response(
+            JSON.stringify({
+              content: [{ type: 'text', text: JSON.stringify(mockValidation) }],
+            }),
+            { status: 200, headers: { 'Content-Type': 'application/json' } },
+          );
+        }
+        return originalFetch(url, init);
+      }) as typeof fetch;
+
+      const origKey = process.env.ANTHROPIC_API_KEY;
+      process.env.ANTHROPIC_API_KEY = 'test-key';
+
+      try {
+        const res = await app.request('/prd-1/stories/story-1/validate-criteria', {
+          method: 'POST',
+          body: JSON.stringify({
+            storyId: 'story-1',
+            criteria: ['The system should work well', 'The UI should be user-friendly'],
+            storyTitle: 'UI Story',
+          }),
+          headers: { 'Content-Type': 'application/json' },
+        });
+
+        expect(res.status).toBe(200);
+        const json = await res.json();
+        expect(json.ok).toBe(true);
+
+        // AC1: System checks each criterion for specificity (not vague language)
+        expect(json.data.overallScore).toBe(35);
+        expect(json.data.allValid).toBe(false);
+        expect(json.data.storyId).toBe('story-1');
+        expect(json.data.summary).toBeTruthy();
+
+        // Check criteria structure
+        expect(json.data.criteria).toHaveLength(2);
+
+        // First criterion — vague language flagged
+        const c0 = json.data.criteria[0];
+        expect(c0.isValid).toBe(false);
+        expect(c0.issues).toHaveLength(1);
+        expect(c0.issues[0].category).toBe('vague');
+        expect(c0.issues[0].severity).toBe('error');
+        expect(c0.issues[0].message).toBeTruthy();
+
+        // AC4: AI suggests improved versions of problematic criteria
+        expect(c0.suggestedReplacement).toBeTruthy();
+        expect(c0.issues[0].suggestedReplacement).toBeTruthy();
+
+        // Second criterion — multiple issues
+        const c1 = json.data.criteria[1];
+        expect(c1.isValid).toBe(false);
+        expect(c1.issues.length).toBeGreaterThanOrEqual(2);
+        expect(c1.suggestedReplacement).toBeTruthy();
+      } finally {
+        if (origKey) process.env.ANTHROPIC_API_KEY = origKey;
+        else delete process.env.ANTHROPIC_API_KEY;
+      }
+    });
+
+    test('validates measurability and testability of criteria', async () => {
+      insertPrd({ id: 'prd-1' });
+      insertStory({ id: 'story-1', prd_id: 'prd-1', title: 'API Story' });
+
+      const mockValidation = {
+        overallScore: 45,
+        allValid: false,
+        summary: 'Several criteria lack measurable outcomes.',
+        criteria: [
+          {
+            index: 0,
+            text: 'API should handle errors properly',
+            isValid: false,
+            issues: [
+              {
+                criterionIndex: 0,
+                criterionText: 'API should handle errors properly',
+                severity: 'error',
+                category: 'untestable',
+                message: 'No specific error scenarios or expected behaviors defined.',
+                suggestedReplacement: 'API returns HTTP 400 with error message JSON for invalid input parameters',
+              },
+              {
+                criterionIndex: 0,
+                criterionText: 'API should handle errors properly',
+                severity: 'warning',
+                category: 'unmeasurable',
+                message: '"Properly" is not objectively verifiable.',
+                suggestedReplacement: 'API returns HTTP 400 with error message JSON for invalid input parameters',
+              },
+            ],
+            suggestedReplacement: 'API returns HTTP 400 with error message JSON for invalid input parameters',
+          },
+          {
+            index: 1,
+            text: 'System returns HTTP 200 with user data on successful login',
+            isValid: true,
+            issues: [],
+            suggestedReplacement: null,
+          },
+        ],
+      };
+
+      globalThis.fetch = (async (url: string | URL | Request, init?: RequestInit) => {
+        const urlStr = typeof url === 'string' ? url : url instanceof URL ? url.toString() : url.url;
+        if (urlStr.includes('api.anthropic.com')) {
+          return new Response(
+            JSON.stringify({
+              content: [{ type: 'text', text: JSON.stringify(mockValidation) }],
+            }),
+            { status: 200, headers: { 'Content-Type': 'application/json' } },
+          );
+        }
+        return originalFetch(url, init);
+      }) as typeof fetch;
+
+      const origKey = process.env.ANTHROPIC_API_KEY;
+      process.env.ANTHROPIC_API_KEY = 'test-key';
+
+      try {
+        const res = await app.request('/prd-1/stories/story-1/validate-criteria', {
+          method: 'POST',
+          body: JSON.stringify({
+            storyId: 'story-1',
+            criteria: [
+              'API should handle errors properly',
+              'System returns HTTP 200 with user data on successful login',
+            ],
+          }),
+          headers: { 'Content-Type': 'application/json' },
+        });
+
+        const json = await res.json();
+        expect(json.ok).toBe(true);
+
+        // AC2: System validates criteria are measurable/testable
+        const c0 = json.data.criteria[0];
+        expect(c0.isValid).toBe(false);
+        expect(c0.issues.some((i: any) => i.category === 'untestable')).toBe(true);
+        expect(c0.issues.some((i: any) => i.category === 'unmeasurable')).toBe(true);
+
+        // Valid criterion passes
+        const c1 = json.data.criteria[1];
+        expect(c1.isValid).toBe(true);
+        expect(c1.issues).toHaveLength(0);
+      } finally {
+        if (origKey) process.env.ANTHROPIC_API_KEY = origKey;
+        else delete process.env.ANTHROPIC_API_KEY;
+      }
+    });
+
+    test('normalizes severity and category values from AI', async () => {
+      insertPrd({ id: 'prd-1' });
+      insertStory({ id: 'story-1', prd_id: 'prd-1' });
+
+      // AI returns invalid severity/category — should be normalized
+      const mockValidation = {
+        overallScore: 50,
+        allValid: false,
+        summary: 'Mixed results.',
+        criteria: [
+          {
+            index: 0,
+            text: 'Some criterion',
+            isValid: false,
+            issues: [
+              {
+                criterionIndex: 0,
+                criterionText: 'Some criterion',
+                severity: 'critical', // invalid → should become 'warning'
+                category: 'unclear', // invalid → should become 'vague'
+                message: 'This is unclear.',
+                suggestedReplacement: 'Improved version',
+              },
+            ],
+            suggestedReplacement: 'Improved version',
+          },
+        ],
+      };
+
+      globalThis.fetch = (async (url: string | URL | Request, init?: RequestInit) => {
+        const urlStr = typeof url === 'string' ? url : url instanceof URL ? url.toString() : url.url;
+        if (urlStr.includes('api.anthropic.com')) {
+          return new Response(
+            JSON.stringify({
+              content: [{ type: 'text', text: JSON.stringify(mockValidation) }],
+            }),
+            { status: 200, headers: { 'Content-Type': 'application/json' } },
+          );
+        }
+        return originalFetch(url, init);
+      }) as typeof fetch;
+
+      const origKey = process.env.ANTHROPIC_API_KEY;
+      process.env.ANTHROPIC_API_KEY = 'test-key';
+
+      try {
+        const res = await app.request('/prd-1/stories/story-1/validate-criteria', {
+          method: 'POST',
+          body: JSON.stringify({ storyId: 'story-1', criteria: ['Some criterion'] }),
+          headers: { 'Content-Type': 'application/json' },
+        });
+
+        const json = await res.json();
+        expect(json.ok).toBe(true);
+
+        const issue = json.data.criteria[0].issues[0];
+        // Invalid severity normalized to 'warning'
+        expect(['error', 'warning', 'info']).toContain(issue.severity);
+        expect(issue.severity).toBe('warning');
+        // Invalid category normalized to 'vague'
+        expect(['vague', 'unmeasurable', 'untestable', 'too_broad', 'ambiguous', 'missing_detail']).toContain(issue.category);
+        expect(issue.category).toBe('vague');
+      } finally {
+        if (origKey) process.env.ANTHROPIC_API_KEY = origKey;
+        else delete process.env.ANTHROPIC_API_KEY;
+      }
+    });
+
+    test('clamps overall score to 0-100 range', async () => {
+      insertPrd({ id: 'prd-1' });
+      insertStory({ id: 'story-1', prd_id: 'prd-1' });
+
+      const mockValidation = {
+        overallScore: 150, // out of range — should clamp to 100
+        allValid: true,
+        summary: 'Overly generous score.',
+        criteria: [
+          { index: 0, text: 'Criterion', isValid: true, issues: [], suggestedReplacement: null },
+        ],
+      };
+
+      globalThis.fetch = (async (url: string | URL | Request, init?: RequestInit) => {
+        const urlStr = typeof url === 'string' ? url : url instanceof URL ? url.toString() : url.url;
+        if (urlStr.includes('api.anthropic.com')) {
+          return new Response(
+            JSON.stringify({
+              content: [{ type: 'text', text: JSON.stringify(mockValidation) }],
+            }),
+            { status: 200, headers: { 'Content-Type': 'application/json' } },
+          );
+        }
+        return originalFetch(url, init);
+      }) as typeof fetch;
+
+      const origKey = process.env.ANTHROPIC_API_KEY;
+      process.env.ANTHROPIC_API_KEY = 'test-key';
+
+      try {
+        const res = await app.request('/prd-1/stories/story-1/validate-criteria', {
+          method: 'POST',
+          body: JSON.stringify({ storyId: 'story-1', criteria: ['Criterion'] }),
+          headers: { 'Content-Type': 'application/json' },
+        });
+
+        const json = await res.json();
+        expect(json.ok).toBe(true);
+        expect(json.data.overallScore).toBeLessThanOrEqual(100);
+        expect(json.data.overallScore).toBeGreaterThanOrEqual(0);
+      } finally {
+        if (origKey) process.env.ANTHROPIC_API_KEY = origKey;
+        else delete process.env.ANTHROPIC_API_KEY;
+      }
+    });
+
+    test('handles markdown code fences in AI response', async () => {
+      insertPrd({ id: 'prd-1' });
+      insertStory({ id: 'story-1', prd_id: 'prd-1' });
+
+      const mockValidation = {
+        overallScore: 90,
+        allValid: true,
+        summary: 'All clear.',
+        criteria: [
+          { index: 0, text: 'Test criterion', isValid: true, issues: [], suggestedReplacement: null },
+        ],
+      };
+
+      globalThis.fetch = (async (url: string | URL | Request, init?: RequestInit) => {
+        const urlStr = typeof url === 'string' ? url : url instanceof URL ? url.toString() : url.url;
+        if (urlStr.includes('api.anthropic.com')) {
+          return new Response(
+            JSON.stringify({
+              content: [{ type: 'text', text: '```json\n' + JSON.stringify(mockValidation) + '\n```' }],
+            }),
+            { status: 200, headers: { 'Content-Type': 'application/json' } },
+          );
+        }
+        return originalFetch(url, init);
+      }) as typeof fetch;
+
+      const origKey = process.env.ANTHROPIC_API_KEY;
+      process.env.ANTHROPIC_API_KEY = 'test-key';
+
+      try {
+        const res = await app.request('/prd-1/stories/story-1/validate-criteria', {
+          method: 'POST',
+          body: JSON.stringify({ storyId: 'story-1', criteria: ['Test criterion'] }),
+          headers: { 'Content-Type': 'application/json' },
+        });
+
+        const json = await res.json();
+        expect(json.ok).toBe(true);
+        expect(json.data.overallScore).toBe(90);
+      } finally {
+        if (origKey) process.env.ANTHROPIC_API_KEY = origKey;
+        else delete process.env.ANTHROPIC_API_KEY;
+      }
+    });
+
+    test('returns 502 when AI returns non-JSON response', async () => {
+      insertPrd({ id: 'prd-1' });
+      insertStory({ id: 'story-1', prd_id: 'prd-1' });
+
+      globalThis.fetch = (async (url: string | URL | Request, init?: RequestInit) => {
+        const urlStr = typeof url === 'string' ? url : url instanceof URL ? url.toString() : url.url;
+        if (urlStr.includes('api.anthropic.com')) {
+          return new Response(
+            JSON.stringify({
+              content: [{ type: 'text', text: 'This is not valid JSON at all' }],
+            }),
+            { status: 200, headers: { 'Content-Type': 'application/json' } },
+          );
+        }
+        return originalFetch(url, init);
+      }) as typeof fetch;
+
+      const origKey = process.env.ANTHROPIC_API_KEY;
+      process.env.ANTHROPIC_API_KEY = 'test-key';
+
+      try {
+        const res = await app.request('/prd-1/stories/story-1/validate-criteria', {
+          method: 'POST',
+          body: JSON.stringify({ storyId: 'story-1', criteria: ['Test criterion'] }),
+          headers: { 'Content-Type': 'application/json' },
+        });
+
+        expect(res.status).toBe(502);
+        const json = await res.json();
+        expect(json.ok).toBe(false);
+        expect(json.error).toContain('parse');
+      } finally {
+        if (origKey) process.env.ANTHROPIC_API_KEY = origKey;
+        else delete process.env.ANTHROPIC_API_KEY;
+      }
+    });
+
+    test('returns 502 when AI API returns error status', async () => {
+      insertPrd({ id: 'prd-1' });
+      insertStory({ id: 'story-1', prd_id: 'prd-1' });
+
+      globalThis.fetch = (async (url: string | URL | Request, init?: RequestInit) => {
+        const urlStr = typeof url === 'string' ? url : url instanceof URL ? url.toString() : url.url;
+        if (urlStr.includes('api.anthropic.com')) {
+          return new Response('Rate limited', { status: 429 });
+        }
+        return originalFetch(url, init);
+      }) as typeof fetch;
+
+      const origKey = process.env.ANTHROPIC_API_KEY;
+      process.env.ANTHROPIC_API_KEY = 'test-key';
+
+      try {
+        const res = await app.request('/prd-1/stories/story-1/validate-criteria', {
+          method: 'POST',
+          body: JSON.stringify({ storyId: 'story-1', criteria: ['Test criterion'] }),
+          headers: { 'Content-Type': 'application/json' },
+        });
+
+        expect(res.status).toBe(502);
+        const json = await res.json();
+        expect(json.ok).toBe(false);
+        expect(json.error).toContain('429');
+      } finally {
+        if (origKey) process.env.ANTHROPIC_API_KEY = origKey;
+        else delete process.env.ANTHROPIC_API_KEY;
+      }
+    });
+
+    test('returns 502 when AI returns no text content', async () => {
+      insertPrd({ id: 'prd-1' });
+      insertStory({ id: 'story-1', prd_id: 'prd-1' });
+
+      globalThis.fetch = (async (url: string | URL | Request, init?: RequestInit) => {
+        const urlStr = typeof url === 'string' ? url : url instanceof URL ? url.toString() : url.url;
+        if (urlStr.includes('api.anthropic.com')) {
+          return new Response(
+            JSON.stringify({ content: [] }),
+            { status: 200, headers: { 'Content-Type': 'application/json' } },
+          );
+        }
+        return originalFetch(url, init);
+      }) as typeof fetch;
+
+      const origKey = process.env.ANTHROPIC_API_KEY;
+      process.env.ANTHROPIC_API_KEY = 'test-key';
+
+      try {
+        const res = await app.request('/prd-1/stories/story-1/validate-criteria', {
+          method: 'POST',
+          body: JSON.stringify({ storyId: 'story-1', criteria: ['Test criterion'] }),
+          headers: { 'Content-Type': 'application/json' },
+        });
+
+        expect(res.status).toBe(502);
+        const json = await res.json();
+        expect(json.ok).toBe(false);
+        expect(json.error).toContain('no text content');
+      } finally {
+        if (origKey) process.env.ANTHROPIC_API_KEY = origKey;
+        else delete process.env.ANTHROPIC_API_KEY;
+      }
+    });
+
+    test('correctly determines allValid based on individual criteria validity', async () => {
+      insertPrd({ id: 'prd-1' });
+      insertStory({ id: 'story-1', prd_id: 'prd-1' });
+
+      const mockValidation = {
+        overallScore: 95,
+        allValid: true, // AI says all valid
+        summary: 'Excellent criteria.',
+        criteria: [
+          { index: 0, text: 'Criterion A', isValid: true, issues: [], suggestedReplacement: null },
+          {
+            index: 1,
+            text: 'Criterion B',
+            isValid: false, // But this is invalid — allValid should be recomputed to false
+            issues: [
+              {
+                criterionIndex: 1,
+                criterionText: 'Criterion B',
+                severity: 'warning',
+                category: 'ambiguous',
+                message: 'Ambiguous terms used.',
+                suggestedReplacement: 'Improved B',
+              },
+            ],
+            suggestedReplacement: 'Improved B',
+          },
+        ],
+      };
+
+      globalThis.fetch = (async (url: string | URL | Request, init?: RequestInit) => {
+        const urlStr = typeof url === 'string' ? url : url instanceof URL ? url.toString() : url.url;
+        if (urlStr.includes('api.anthropic.com')) {
+          return new Response(
+            JSON.stringify({
+              content: [{ type: 'text', text: JSON.stringify(mockValidation) }],
+            }),
+            { status: 200, headers: { 'Content-Type': 'application/json' } },
+          );
+        }
+        return originalFetch(url, init);
+      }) as typeof fetch;
+
+      const origKey = process.env.ANTHROPIC_API_KEY;
+      process.env.ANTHROPIC_API_KEY = 'test-key';
+
+      try {
+        const res = await app.request('/prd-1/stories/story-1/validate-criteria', {
+          method: 'POST',
+          body: JSON.stringify({ storyId: 'story-1', criteria: ['Criterion A', 'Criterion B'] }),
+          headers: { 'Content-Type': 'application/json' },
+        });
+
+        const json = await res.json();
+        expect(json.ok).toBe(true);
+        // Server recomputes allValid from individual criteria, so it should be false
+        expect(json.data.allValid).toBe(false);
+      } finally {
+        if (origKey) process.env.ANTHROPIC_API_KEY = origKey;
+        else delete process.env.ANTHROPIC_API_KEY;
+      }
+    });
+
+    test('provides suggested improvements for each problematic criterion', async () => {
+      insertPrd({ id: 'prd-1' });
+      insertStory({ id: 'story-1', prd_id: 'prd-1', title: 'Perf Story' });
+
+      const mockValidation = {
+        overallScore: 40,
+        allValid: false,
+        summary: 'Multiple criteria need improvement.',
+        criteria: [
+          {
+            index: 0,
+            text: 'System should be fast',
+            isValid: false,
+            issues: [
+              {
+                criterionIndex: 0,
+                criterionText: 'System should be fast',
+                severity: 'error',
+                category: 'vague',
+                message: '"Fast" is subjective without specific performance thresholds.',
+                suggestedReplacement: 'Page load time is under 1 second on 3G network connection',
+              },
+            ],
+            suggestedReplacement: 'Page load time is under 1 second on 3G network connection',
+          },
+          {
+            index: 1,
+            text: 'Data should be handled efficiently',
+            isValid: false,
+            issues: [
+              {
+                criterionIndex: 1,
+                criterionText: 'Data should be handled efficiently',
+                severity: 'error',
+                category: 'unmeasurable',
+                message: '"Efficiently" has no defined metric.',
+                suggestedReplacement: 'Database queries complete within 100ms for datasets up to 10,000 records',
+              },
+            ],
+            suggestedReplacement: 'Database queries complete within 100ms for datasets up to 10,000 records',
+          },
+          {
+            index: 2,
+            text: 'Error messages should be appropriate',
+            isValid: false,
+            issues: [
+              {
+                criterionIndex: 2,
+                criterionText: 'Error messages should be appropriate',
+                severity: 'warning',
+                category: 'ambiguous',
+                message: '"Appropriate" is unclear. What constitutes appropriate?',
+                suggestedReplacement: 'Error messages include the HTTP status code, error type, and a human-readable description',
+              },
+            ],
+            suggestedReplacement: 'Error messages include the HTTP status code, error type, and a human-readable description',
+          },
+        ],
+      };
+
+      globalThis.fetch = (async (url: string | URL | Request, init?: RequestInit) => {
+        const urlStr = typeof url === 'string' ? url : url instanceof URL ? url.toString() : url.url;
+        if (urlStr.includes('api.anthropic.com')) {
+          return new Response(
+            JSON.stringify({
+              content: [{ type: 'text', text: JSON.stringify(mockValidation) }],
+            }),
+            { status: 200, headers: { 'Content-Type': 'application/json' } },
+          );
+        }
+        return originalFetch(url, init);
+      }) as typeof fetch;
+
+      const origKey = process.env.ANTHROPIC_API_KEY;
+      process.env.ANTHROPIC_API_KEY = 'test-key';
+
+      try {
+        const res = await app.request('/prd-1/stories/story-1/validate-criteria', {
+          method: 'POST',
+          body: JSON.stringify({
+            storyId: 'story-1',
+            criteria: [
+              'System should be fast',
+              'Data should be handled efficiently',
+              'Error messages should be appropriate',
+            ],
+            storyTitle: 'Perf Story',
+            storyDescription: 'Performance optimization story',
+          }),
+          headers: { 'Content-Type': 'application/json' },
+        });
+
+        const json = await res.json();
+        expect(json.ok).toBe(true);
+
+        // AC4: AI suggests improved versions for ALL problematic criteria
+        for (const criterion of json.data.criteria) {
+          expect(criterion.isValid).toBe(false);
+          expect(criterion.suggestedReplacement).toBeTruthy();
+          expect(criterion.suggestedReplacement.length).toBeGreaterThan(10);
+
+          // Each issue also has a suggested replacement
+          for (const issue of criterion.issues) {
+            expect(issue.suggestedReplacement).toBeTruthy();
+          }
+        }
+      } finally {
+        if (origKey) process.env.ANTHROPIC_API_KEY = origKey;
+        else delete process.env.ANTHROPIC_API_KEY;
+      }
+    });
+
+    test('uses story title and description for context when provided', async () => {
+      insertPrd({ id: 'prd-1' });
+      insertStory({ id: 'story-1', prd_id: 'prd-1', title: 'Auth Story', description: 'Implement user authentication' });
+
+      let capturedBody: any = null;
+
+      const mockValidation = {
+        overallScore: 80,
+        allValid: true,
+        summary: 'Good criteria.',
+        criteria: [
+          { index: 0, text: 'Login works', isValid: true, issues: [], suggestedReplacement: null },
+        ],
+      };
+
+      globalThis.fetch = (async (url: string | URL | Request, init?: RequestInit) => {
+        const urlStr = typeof url === 'string' ? url : url instanceof URL ? url.toString() : url.url;
+        if (urlStr.includes('api.anthropic.com')) {
+          capturedBody = JSON.parse((init?.body as string) || '{}');
+          return new Response(
+            JSON.stringify({
+              content: [{ type: 'text', text: JSON.stringify(mockValidation) }],
+            }),
+            { status: 200, headers: { 'Content-Type': 'application/json' } },
+          );
+        }
+        return originalFetch(url, init);
+      }) as typeof fetch;
+
+      const origKey = process.env.ANTHROPIC_API_KEY;
+      process.env.ANTHROPIC_API_KEY = 'test-key';
+
+      try {
+        const res = await app.request('/prd-1/stories/story-1/validate-criteria', {
+          method: 'POST',
+          body: JSON.stringify({
+            storyId: 'story-1',
+            criteria: ['Login works'],
+            storyTitle: 'Custom Title Override',
+            storyDescription: 'Custom description override',
+          }),
+          headers: { 'Content-Type': 'application/json' },
+        });
+
+        const json = await res.json();
+        expect(json.ok).toBe(true);
+
+        // Verify the AI was sent the proper context
+        expect(capturedBody).toBeTruthy();
+        const userMessage = capturedBody.messages[0].content;
+        expect(userMessage).toContain('Custom Title Override');
+        expect(userMessage).toContain('Custom description override');
+      } finally {
+        if (origKey) process.env.ANTHROPIC_API_KEY = origKey;
+        else delete process.env.ANTHROPIC_API_KEY;
+      }
+    });
+
+    test('treats info-only issues as valid criteria', async () => {
+      insertPrd({ id: 'prd-1' });
+      insertStory({ id: 'story-1', prd_id: 'prd-1' });
+
+      const mockValidation = {
+        overallScore: 85,
+        allValid: true,
+        summary: 'Minor suggestions only.',
+        criteria: [
+          {
+            index: 0,
+            text: 'User receives email notification within 5 minutes',
+            isValid: true,
+            issues: [
+              {
+                criterionIndex: 0,
+                criterionText: 'User receives email notification within 5 minutes',
+                severity: 'info',
+                category: 'missing_detail',
+                message: 'Consider specifying what triggers the notification.',
+                suggestedReplacement: 'User receives email notification within 5 minutes of account creation',
+              },
+            ],
+            suggestedReplacement: 'User receives email notification within 5 minutes of account creation',
+          },
+        ],
+      };
+
+      globalThis.fetch = (async (url: string | URL | Request, init?: RequestInit) => {
+        const urlStr = typeof url === 'string' ? url : url instanceof URL ? url.toString() : url.url;
+        if (urlStr.includes('api.anthropic.com')) {
+          return new Response(
+            JSON.stringify({
+              content: [{ type: 'text', text: JSON.stringify(mockValidation) }],
+            }),
+            { status: 200, headers: { 'Content-Type': 'application/json' } },
+          );
+        }
+        return originalFetch(url, init);
+      }) as typeof fetch;
+
+      const origKey = process.env.ANTHROPIC_API_KEY;
+      process.env.ANTHROPIC_API_KEY = 'test-key';
+
+      try {
+        const res = await app.request('/prd-1/stories/story-1/validate-criteria', {
+          method: 'POST',
+          body: JSON.stringify({
+            storyId: 'story-1',
+            criteria: ['User receives email notification within 5 minutes'],
+          }),
+          headers: { 'Content-Type': 'application/json' },
+        });
+
+        const json = await res.json();
+        expect(json.ok).toBe(true);
+
+        // Criterion with only info-level issues should be considered valid
+        const c0 = json.data.criteria[0];
+        expect(c0.isValid).toBe(true);
+        expect(c0.issues).toHaveLength(1);
+        expect(c0.issues[0].severity).toBe('info');
+        expect(json.data.allValid).toBe(true);
+      } finally {
+        if (origKey) process.env.ANTHROPIC_API_KEY = origKey;
+        else delete process.env.ANTHROPIC_API_KEY;
+      }
+    });
+
+    test('handles missing overallScore with default of 50', async () => {
+      insertPrd({ id: 'prd-1' });
+      insertStory({ id: 'story-1', prd_id: 'prd-1' });
+
+      const mockValidation = {
+        // Missing overallScore
+        allValid: true,
+        summary: 'Score missing.',
+        criteria: [
+          { index: 0, text: 'Test', isValid: true, issues: [], suggestedReplacement: null },
+        ],
+      };
+
+      globalThis.fetch = (async (url: string | URL | Request, init?: RequestInit) => {
+        const urlStr = typeof url === 'string' ? url : url instanceof URL ? url.toString() : url.url;
+        if (urlStr.includes('api.anthropic.com')) {
+          return new Response(
+            JSON.stringify({
+              content: [{ type: 'text', text: JSON.stringify(mockValidation) }],
+            }),
+            { status: 200, headers: { 'Content-Type': 'application/json' } },
+          );
+        }
+        return originalFetch(url, init);
+      }) as typeof fetch;
+
+      const origKey = process.env.ANTHROPIC_API_KEY;
+      process.env.ANTHROPIC_API_KEY = 'test-key';
+
+      try {
+        const res = await app.request('/prd-1/stories/story-1/validate-criteria', {
+          method: 'POST',
+          body: JSON.stringify({ storyId: 'story-1', criteria: ['Test'] }),
+          headers: { 'Content-Type': 'application/json' },
+        });
+
+        const json = await res.json();
+        expect(json.ok).toBe(true);
+        expect(json.data.overallScore).toBe(50); // Default when missing
+      } finally {
+        if (origKey) process.env.ANTHROPIC_API_KEY = origKey;
+        else delete process.env.ANTHROPIC_API_KEY;
+      }
+    });
+
+    test('includes system prompt checking for all six validation categories', async () => {
+      insertPrd({ id: 'prd-1' });
+      insertStory({ id: 'story-1', prd_id: 'prd-1' });
+
+      let capturedSystem = '';
+
+      const mockValidation = {
+        overallScore: 80,
+        allValid: true,
+        summary: 'OK',
+        criteria: [
+          { index: 0, text: 'Test', isValid: true, issues: [], suggestedReplacement: null },
+        ],
+      };
+
+      globalThis.fetch = (async (url: string | URL | Request, init?: RequestInit) => {
+        const urlStr = typeof url === 'string' ? url : url instanceof URL ? url.toString() : url.url;
+        if (urlStr.includes('api.anthropic.com')) {
+          const body = JSON.parse((init?.body as string) || '{}');
+          capturedSystem = body.system || '';
+          return new Response(
+            JSON.stringify({
+              content: [{ type: 'text', text: JSON.stringify(mockValidation) }],
+            }),
+            { status: 200, headers: { 'Content-Type': 'application/json' } },
+          );
+        }
+        return originalFetch(url, init);
+      }) as typeof fetch;
+
+      const origKey = process.env.ANTHROPIC_API_KEY;
+      process.env.ANTHROPIC_API_KEY = 'test-key';
+
+      try {
+        const res = await app.request('/prd-1/stories/story-1/validate-criteria', {
+          method: 'POST',
+          body: JSON.stringify({ storyId: 'story-1', criteria: ['Test'] }),
+          headers: { 'Content-Type': 'application/json' },
+        });
+
+        const json = await res.json();
+        expect(json.ok).toBe(true);
+
+        // AC1 + AC2: System prompt should reference all validation categories
+        expect(capturedSystem).toContain('vague');
+        expect(capturedSystem).toContain('unmeasurable');
+        expect(capturedSystem).toContain('untestable');
+        expect(capturedSystem).toContain('too_broad');
+        expect(capturedSystem).toContain('ambiguous');
+        expect(capturedSystem).toContain('missing_detail');
+
+        // Should also mention specificity, measurability, testability
+        expect(capturedSystem).toContain('Specificity');
+        expect(capturedSystem).toContain('Measurability');
+        expect(capturedSystem).toContain('Testability');
+
+        // Should define severity levels
+        expect(capturedSystem).toContain('error');
+        expect(capturedSystem).toContain('warning');
+        expect(capturedSystem).toContain('info');
+      } finally {
+        if (origKey) process.env.ANTHROPIC_API_KEY = origKey;
+        else delete process.env.ANTHROPIC_API_KEY;
+      }
+    });
+  });
 });
