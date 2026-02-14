@@ -109,6 +109,64 @@ export function createTestDb(): Database {
     )
   `);
 
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS prds (
+      id TEXT PRIMARY KEY,
+      project_path TEXT NOT NULL,
+      name TEXT NOT NULL,
+      description TEXT NOT NULL DEFAULT '',
+      branch_name TEXT,
+      quality_checks TEXT NOT NULL DEFAULT '[]',
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL
+    )
+  `);
+
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS prd_stories (
+      id TEXT PRIMARY KEY,
+      prd_id TEXT NOT NULL,
+      title TEXT NOT NULL,
+      description TEXT NOT NULL DEFAULT '',
+      acceptance_criteria TEXT NOT NULL DEFAULT '[]',
+      priority TEXT NOT NULL DEFAULT 'medium',
+      depends_on TEXT NOT NULL DEFAULT '[]',
+      status TEXT NOT NULL DEFAULT 'pending',
+      task_id TEXT,
+      agent_id TEXT,
+      conversation_id TEXT,
+      commit_sha TEXT,
+      attempts INTEGER NOT NULL DEFAULT 0,
+      max_attempts INTEGER NOT NULL DEFAULT 3,
+      learnings TEXT NOT NULL DEFAULT '[]',
+      sort_order INTEGER NOT NULL DEFAULT 0,
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL,
+      FOREIGN KEY (prd_id) REFERENCES prds(id) ON DELETE CASCADE
+    )
+  `);
+
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS loops (
+      id TEXT PRIMARY KEY,
+      prd_id TEXT NOT NULL,
+      project_path TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'idle',
+      config TEXT NOT NULL DEFAULT '{}',
+      current_iteration INTEGER NOT NULL DEFAULT 0,
+      current_story_id TEXT,
+      current_agent_id TEXT,
+      started_at INTEGER NOT NULL,
+      paused_at INTEGER,
+      completed_at INTEGER,
+      total_stories_completed INTEGER NOT NULL DEFAULT 0,
+      total_stories_failed INTEGER NOT NULL DEFAULT 0,
+      total_iterations INTEGER NOT NULL DEFAULT 0,
+      iteration_log TEXT NOT NULL DEFAULT '[]',
+      FOREIGN KEY (prd_id) REFERENCES prds(id) ON DELETE CASCADE
+    )
+  `);
+
   db.exec('CREATE INDEX IF NOT EXISTS idx_messages_conv ON messages(conversation_id, timestamp)');
   db.exec('CREATE INDEX IF NOT EXISTS idx_tasks_conv ON tasks(conversation_id)');
   db.exec('CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status)');
@@ -117,6 +175,10 @@ export function createTestDb(): Database {
   db.exec(
     'CREATE INDEX IF NOT EXISTS idx_project_memories_category ON project_memories(project_path, category)',
   );
+  db.exec('CREATE INDEX IF NOT EXISTS idx_prds_project_path ON prds(project_path)');
+  db.exec('CREATE INDEX IF NOT EXISTS idx_prd_stories_prd ON prd_stories(prd_id)');
+  db.exec('CREATE INDEX IF NOT EXISTS idx_loops_prd ON loops(prd_id)');
+  db.exec('CREATE INDEX IF NOT EXISTS idx_loops_status ON loops(status)');
 
   return db;
 }
