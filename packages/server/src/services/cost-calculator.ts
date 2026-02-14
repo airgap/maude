@@ -12,6 +12,8 @@ const PRICING: Record<string, { input: number; output: number }> = {
 const DEFAULT_PRICING = { input: 3.0, output: 15.0 };
 
 export function calculateCost(model: string, inputTokens: number, outputTokens: number): number {
+  // Ollama models are local — free
+  if (model.startsWith('ollama:')) return 0;
   const pricing = PRICING[model] || DEFAULT_PRICING;
   const inputCost = (inputTokens / 1_000_000) * pricing.input;
   const outputCost = (outputTokens / 1_000_000) * pricing.output;

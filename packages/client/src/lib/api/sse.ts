@@ -1,6 +1,7 @@
 import type { StreamEvent } from '@maude/shared';
 import { streamStore } from '$lib/stores/stream.svelte';
 import { conversationStore } from '$lib/stores/conversation.svelte';
+import { projectMemoryStore } from '$lib/stores/project-memory.svelte';
 import { api } from './client';
 
 /**
@@ -8,9 +9,16 @@ import { api } from './client';
  * Uses fetch() instead of EventSource to support POST with body.
  */
 export async function sendAndStream(conversationId: string, content: string): Promise<void> {
+  console.log('[sse] Starting stream for conversation:', conversationId, 'content:', content.slice(0, 100));
   const abortController = new AbortController();
   streamStore.setAbortController(abortController);
   streamStore.startStream();
+
+  // Auto-snapshot before agent runs (fire-and-forget)
+  const projectPath = conversationStore.active?.projectPath;
+  if (projectPath) {
+    api.git.snapshot(projectPath, conversationId, 'pre-agent').catch(() => {});
+  }
 
   // Add user message to conversation immediately
   conversationStore.addMessage({
@@ -22,10 +30,20 @@ export async function sendAndStream(conversationId: string, content: string): Pr
 
   try {
     const response = await api.stream.send(conversationId, content, streamStore.sessionId);
+    console.log('[sse] Got response:', response.status, response.ok);
 
     if (!response.ok) {
-      const err = await response.json().catch(() => ({ error: 'Stream failed' }));
-      streamStore.handleEvent({ type: 'error', error: { type: 'http_error', message: err.error } });
+      let errMsg = `HTTP ${response.status}`;
+      try {
+        const body = await response.json();
+        errMsg = body.error || errMsg;
+      } catch {
+        try {
+          const text = await response.text();
+          errMsg = text.slice(0, 300) || errMsg;
+        } catch { /* use status */ }
+      }
+      streamStore.handleEvent({ type: 'error', error: { type: 'http_error', message: errMsg } });
       return;
     }
 
@@ -46,6 +64,7 @@ export async function sendAndStream(conversationId: string, content: string): Pr
     });
 
     const reader = response.body?.getReader();
+    console.log('[sse] Got reader:', !!reader);
     if (!reader) {
       streamStore.handleEvent({
         type: 'error',
@@ -58,10 +77,12 @@ export async function sendAndStream(conversationId: string, content: string): Pr
     let buffer = '';
 
     while (true) {
+      console.log('[sse] Reading chunk...');
       const { done, value } = await reader.read();
-      if (done) break;
+      if (done) { console.log('[sse] Stream done'); break; }
 
       buffer += decoder.decode(value, { stream: true });
+      console.log('[sse] Decoded buffer length:', buffer.length, 'contains:', buffer.slice(0, 100));
       const lines = buffer.split('\n');
       buffer = lines.pop() ?? '';
 
@@ -72,12 +93,13 @@ export async function sendAndStream(conversationId: string, content: string): Pr
 
         try {
           const event: StreamEvent = JSON.parse(data);
+          console.log('[sse] Received event:', event.type, event);
           streamStore.handleEvent(event);
 
           // Sync content blocks to the assistant message
           conversationStore.updateLastAssistantMessage([...streamStore.contentBlocks]);
-        } catch {
-          // Non-JSON SSE line, ignore
+        } catch (parseErr) {
+          console.warn('[sse] Failed to parse SSE data:', data, parseErr);
         }
       }
     }
@@ -85,6 +107,25 @@ export async function sendAndStream(conversationId: string, content: string): Pr
     // Final sync
     if (streamStore.contentBlocks.length > 0) {
       conversationStore.updateLastAssistantMessage([...streamStore.contentBlocks]);
+    }
+
+    // Auto-extract project memories from this conversation
+    const projectPath = conversationStore.active?.projectPath;
+    if (projectPath) {
+      const msgs = conversationStore.active?.messages ?? [];
+      // Take last 10 messages for extraction (avoid processing huge histories)
+      const recent = msgs.slice(-10).map((m) => ({
+        role: m.role,
+        content: Array.isArray(m.content)
+          ? m.content
+              .filter((b: any) => b.type === 'text')
+              .map((b: any) => b.text)
+              .join('\n')
+          : String(m.content),
+      }));
+      if (recent.length > 0) {
+        projectMemoryStore.extractFromConversation(projectPath, recent).catch(() => {});
+      }
     }
   } catch (err) {
     if ((err as Error).name === 'AbortError') {

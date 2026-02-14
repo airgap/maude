@@ -107,6 +107,7 @@ function createStreamStore() {
     },
 
     handleEvent(event: StreamEvent) {
+      console.log('[streamStore.handleEvent] Processing:', event.type, 'contentBlocks.length:', contentBlocks.length);
       switch (event.type) {
         case 'message_start':
           status = 'streaming';
@@ -125,6 +126,7 @@ function createStreamStore() {
               ...contentBlocks,
               { type: 'text', text: event.content_block.text ?? '', parentToolUseId: pid },
             ];
+            console.log('[streamStore] Added text block, new length:', contentBlocks.length);
           } else if (event.content_block.type === 'thinking') {
             contentBlocks = [
               ...contentBlocks,
@@ -134,6 +136,7 @@ function createStreamStore() {
                 parentToolUseId: pid,
               },
             ];
+            console.log('[streamStore] Added thinking block, new length:', contentBlocks.length);
           } else if (event.content_block.type === 'tool_use') {
             contentBlocks = [
               ...contentBlocks,
@@ -145,6 +148,7 @@ function createStreamStore() {
                 parentToolUseId: pid,
               },
             ];
+            console.log('[streamStore] Added tool_use block, new length:', contentBlocks.length);
           }
           break;
         }
@@ -158,12 +162,15 @@ function createStreamStore() {
           if (event.delta.type === 'text_delta' && block.type === 'text') {
             block.text += event.delta.text ?? '';
             partialText += event.delta.text ?? '';
+            console.log('[streamStore] Updated text delta, block index:', idx);
           } else if (event.delta.type === 'thinking_delta' && block.type === 'thinking') {
             block.thinking += event.delta.thinking ?? '';
             partialThinking += event.delta.thinking ?? '';
+            console.log('[streamStore] Updated thinking delta, block index:', idx);
           } else if (event.delta.type === 'input_json_delta' && block.type === 'tool_use') {
             try {
               block.input = JSON.parse(event.delta.partial_json ?? '{}');
+              console.log('[streamStore] Updated tool_use input, block index:', idx);
             } catch {
               // Partial JSON not yet parseable
             }

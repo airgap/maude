@@ -19,10 +19,12 @@
   });
 
   function handleClickOutside(e: MouseEvent) {
-    if (dropdownEl && !dropdownEl.contains(e.target as Node) && !addBtnEl?.contains(e.target as Node)) {
-      dropdownOpen = false;
-      browsing = false;
-    }
+    if (!dropdownOpen) return;
+    const target = e.target as Node;
+    if (addBtnEl?.contains(target)) return;
+    if (dropdownEl?.contains(target)) return;
+    dropdownOpen = false;
+    browsing = false;
   }
 
   function switchTo(projectId: string) {
@@ -93,7 +95,7 @@
   }
 </script>
 
-<svelte:window onclick={handleClickOutside} />
+<svelte:window onmousedown={handleClickOutside} />
 
 <div class="workspace-tabs">
   <div class="tab-list" role="tablist">
@@ -106,7 +108,9 @@
         tabindex="0"
         aria-selected={workspace.projectId === workspaceStore.activeWorkspaceId}
         onclick={() => switchTo(workspace.projectId)}
-        onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') switchTo(workspace.projectId); }}
+        onkeydown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') switchTo(workspace.projectId);
+        }}
         onmousedown={(e) => onMiddleClick(e, workspace.projectId)}
         title={workspace.projectPath}
       >
@@ -122,7 +126,14 @@
           onclick={(e) => closeTab(e, workspace.projectId)}
           title="Close workspace"
         >
-          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <svg
+            width="10"
+            height="10"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+          >
             <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
           </svg>
         </button>
@@ -137,7 +148,14 @@
       onclick={() => (dropdownOpen = !dropdownOpen)}
       title="Open project in new tab"
     >
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <svg
+        width="14"
+        height="14"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+      >
         <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
       </svg>
     </button>
@@ -151,8 +169,9 @@
           {#if browsedPath !== '/'}
             <button
               class="dropdown-item browse-item"
-              onclick={() => browseDirectories(browsedPath.split('/').slice(0, -1).join('/') || '/')}
-            >..</button>
+              onclick={() =>
+                browseDirectories(browsedPath.split('/').slice(0, -1).join('/') || '/')}>..</button
+            >
           {/if}
           <button class="dropdown-item browse-select" onclick={() => selectFolder(browsedPath)}>
             Open this folder
@@ -193,7 +212,10 @@
           </button>
           <button
             class="dropdown-item new-project"
-            onclick={() => { uiStore.openModal('project-setup'); dropdownOpen = false; }}
+            onclick={() => {
+              uiStore.openModal('project-setup');
+              dropdownOpen = false;
+            }}
           >
             New Project...
           </button>
@@ -210,7 +232,7 @@
     gap: 2px;
     min-width: 0;
     flex: 1;
-    overflow: hidden;
+    overflow: visible;
   }
 
   .tab-list {
@@ -279,8 +301,13 @@
   }
 
   @keyframes pulse {
-    0%, 100% { opacity: 1; }
-    50% { opacity: 0.3; }
+    0%,
+    100% {
+      opacity: 1;
+    }
+    50% {
+      opacity: 0.3;
+    }
   }
 
   .close-btn {
@@ -327,7 +354,7 @@
   .dropdown {
     position: absolute;
     top: 100%;
-    right: 0;
+    left: 0;
     min-width: 260px;
     max-height: 400px;
     overflow-y: auto;

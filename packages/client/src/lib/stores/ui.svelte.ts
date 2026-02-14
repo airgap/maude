@@ -1,4 +1,12 @@
-export type SidebarTab = 'conversations' | 'files' | 'search' | 'tasks' | 'memory' | 'agents' | 'symbols';
+export type SidebarTab =
+  | 'conversations'
+  | 'files'
+  | 'search'
+  | 'tasks'
+  | 'memory'
+  | 'agents'
+  | 'symbols'
+  | 'mcp';
 type ModalId =
   | 'settings'
   | 'command-palette'
@@ -6,6 +14,7 @@ type ModalId =
   | 'keybindings'
   | 'quick-open'
   | 'project-setup'
+  | 'snapshots'
   | null;
 type FocusedPane = 'chat' | 'editor';
 

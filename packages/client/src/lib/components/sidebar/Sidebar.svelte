@@ -7,6 +7,7 @@
   import AgentPanel from './AgentPanel.svelte';
   import SearchPanel from './SearchPanel.svelte';
   import SymbolOutline from '../editor/SymbolOutline.svelte';
+  import McpPanel from './McpPanel.svelte';
 
   const tabs = [
     {
@@ -43,6 +44,11 @@
       id: 'agents' as const,
       label: 'Agents',
       icon: 'M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5',
+    },
+    {
+      id: 'mcp' as const,
+      label: 'MCP',
+      icon: 'M4 4h16v4H4zM4 10h16v4H4zM4 16h16v4H4z',
     },
   ];
 </script>
@@ -85,6 +91,8 @@
       <MemoryPanel />
     {:else if uiStore.sidebarTab === 'agents'}
       <AgentPanel />
+    {:else if uiStore.sidebarTab === 'mcp'}
+      <McpPanel />
     {/if}
   </div>
 </div>

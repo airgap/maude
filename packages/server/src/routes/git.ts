@@ -1,4 +1,6 @@
 import { Hono } from 'hono';
+import { nanoid } from 'nanoid';
+import { getDb } from '../db/database';
 
 const app = new Hono();
 
@@ -77,6 +79,143 @@ app.get('/branch', async (c) => {
     return c.json({ ok: true, data: { branch: output.trim() } });
   } catch {
     return c.json({ ok: true, data: { branch: '' } });
+  }
+});
+
+// Create a snapshot (stash-like) before agent runs
+app.post('/snapshot', async (c) => {
+  const body = await c.req.json();
+  const { path: rootPath, conversationId, reason } = body;
+
+  if (!rootPath) return c.json({ ok: false, error: 'path required' }, 400);
+
+  try {
+    // Check if this is a git repo
+    const checkProc = Bun.spawn(['git', 'rev-parse', '--is-inside-work-tree'], {
+      cwd: rootPath,
+      stdout: 'pipe',
+      stderr: 'pipe',
+    });
+    const isRepo = (await new Response(checkProc.stdout).text()).trim() === 'true';
+    if (!isRepo) return c.json({ ok: false, error: 'Not a git repo' }, 400);
+
+    // Get current HEAD
+    const headProc = Bun.spawn(['git', 'rev-parse', 'HEAD'], {
+      cwd: rootPath,
+      stdout: 'pipe',
+      stderr: 'pipe',
+    });
+    const headSha = (await new Response(headProc.stdout).text()).trim();
+    const headExited = await headProc.exited;
+    if (headExited !== 0) {
+      return c.json({ ok: false, error: 'No commits yet' }, 400);
+    }
+
+    // Check if there are changes to snapshot
+    const statusProc = Bun.spawn(['git', 'status', '--porcelain'], {
+      cwd: rootPath,
+      stdout: 'pipe',
+      stderr: 'pipe',
+    });
+    const statusOutput = (await new Response(statusProc.stdout).text()).trim();
+    const hasChanges = statusOutput.length > 0;
+
+    // Create a snapshot tag using git stash create (creates a commit object without modifying working tree)
+    let stashSha: string | null = null;
+    if (hasChanges) {
+      const stashProc = Bun.spawn(['git', 'stash', 'create'], {
+        cwd: rootPath,
+        stdout: 'pipe',
+        stderr: 'pipe',
+      });
+      stashSha = (await new Response(stashProc.stdout).text()).trim() || null;
+    }
+
+    // Record snapshot in DB
+    const id = nanoid();
+    const now = Date.now();
+    const db = getDb();
+    db.query(
+      `INSERT INTO git_snapshots (id, project_path, conversation_id, head_sha, stash_sha, reason, has_changes, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+    ).run(
+      id,
+      rootPath,
+      conversationId || null,
+      headSha,
+      stashSha,
+      reason || 'pre-agent',
+      hasChanges ? 1 : 0,
+      now,
+    );
+
+    return c.json({
+      ok: true,
+      data: { id, headSha, stashSha, hasChanges },
+    });
+  } catch (err) {
+    return c.json({ ok: false, error: String(err) }, 500);
+  }
+});
+
+// List snapshots for a project
+app.get('/snapshots', (c) => {
+  const rootPath = c.req.query('path');
+  if (!rootPath) return c.json({ ok: false, error: 'path required' }, 400);
+
+  const db = getDb();
+  const rows = db
+    .query(`SELECT * FROM git_snapshots WHERE project_path = ? ORDER BY created_at DESC LIMIT 50`)
+    .all(rootPath) as any[];
+
+  return c.json({
+    ok: true,
+    data: rows.map((r) => ({
+      id: r.id,
+      projectPath: r.project_path,
+      conversationId: r.conversation_id,
+      headSha: r.head_sha,
+      stashSha: r.stash_sha,
+      reason: r.reason,
+      hasChanges: !!r.has_changes,
+      createdAt: r.created_at,
+    })),
+  });
+});
+
+// Restore a snapshot
+app.post('/snapshot/:id/restore', async (c) => {
+  const id = c.req.param('id');
+  const db = getDb();
+  const snapshot = db.query(`SELECT * FROM git_snapshots WHERE id = ?`).get(id) as any;
+  if (!snapshot) return c.json({ ok: false, error: 'Snapshot not found' }, 404);
+
+  try {
+    // Reset to the HEAD sha from the snapshot
+    const resetProc = Bun.spawn(['git', 'reset', '--hard', snapshot.head_sha], {
+      cwd: snapshot.project_path,
+      stdout: 'pipe',
+      stderr: 'pipe',
+    });
+    const resetExit = await resetProc.exited;
+    if (resetExit !== 0) {
+      const err = await new Response(resetProc.stderr).text();
+      return c.json({ ok: false, error: `Reset failed: ${err}` }, 500);
+    }
+
+    // If there was a stash, apply it
+    if (snapshot.stash_sha) {
+      const applyProc = Bun.spawn(['git', 'stash', 'apply', snapshot.stash_sha], {
+        cwd: snapshot.project_path,
+        stdout: 'pipe',
+        stderr: 'pipe',
+      });
+      await applyProc.exited;
+      // Stash apply can fail if there are conflicts — that's okay, user can resolve
+    }
+
+    return c.json({ ok: true, data: { restored: true } });
+  } catch (err) {
+    return c.json({ ok: false, error: String(err) }, 500);
   }
 });
 

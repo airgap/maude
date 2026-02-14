@@ -1,7 +1,11 @@
 import { Hono } from 'hono';
 import { getDb } from '../db/database';
+import { listOllamaModels, checkOllamaHealth } from '../services/ollama-provider';
 
 const app = new Hono();
+
+// Sensitive keys that should never be sent to the client
+const SENSITIVE_KEYS = new Set(['anthropicApiKey', 'openaiApiKey', 'googleApiKey']);
 
 // Get all settings
 app.get('/', (c) => {
@@ -9,7 +13,12 @@ app.get('/', (c) => {
   const rows = db.query('SELECT * FROM settings').all() as any[];
   const settings: Record<string, any> = {};
   for (const row of rows) {
-    settings[row.key] = JSON.parse(row.value);
+    if (SENSITIVE_KEYS.has(row.key)) {
+      // Only expose whether the key is configured, not the value
+      settings[row.key + 'Configured'] = !!JSON.parse(row.value);
+    } else {
+      settings[row.key] = JSON.parse(row.value);
+    }
   }
   return c.json({ ok: true, data: settings });
 });
@@ -37,6 +46,97 @@ app.get('/:key', (c) => {
   const row = db.query('SELECT value FROM settings WHERE key = ?').get(c.req.param('key')) as any;
   if (!row) return c.json({ ok: false, error: 'Not found' }, 404);
   return c.json({ ok: true, data: JSON.parse(row.value) });
+});
+
+// Ollama model discovery
+app.get('/ollama/status', async (c) => {
+  const healthy = await checkOllamaHealth();
+  return c.json({ ok: true, data: { available: healthy } });
+});
+
+app.get('/ollama/models', async (c) => {
+  const models = await listOllamaModels();
+  return c.json({ ok: true, data: models });
+});
+
+// Set API key (BYOK)
+app.put('/api-key', async (c) => {
+  const body = await c.req.json();
+  const { provider, apiKey } = body;
+
+  if (!provider || !apiKey) {
+    return c.json({ ok: false, error: 'provider and apiKey required' }, 400);
+  }
+
+  const keyMap: Record<string, string> = {
+    anthropic: 'anthropicApiKey',
+    openai: 'openaiApiKey',
+    google: 'googleApiKey',
+  };
+
+  const settingKey = keyMap[provider];
+  if (!settingKey) return c.json({ ok: false, error: 'Unknown provider' }, 400);
+
+  const db = getDb();
+  db.query(
+    `INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value`,
+  ).run(settingKey, JSON.stringify(apiKey));
+
+  // Also set as environment variable for the current process
+  const envMap: Record<string, string> = {
+    anthropic: 'ANTHROPIC_API_KEY',
+    openai: 'OPENAI_API_KEY',
+    google: 'GOOGLE_API_KEY',
+  };
+  if (envMap[provider]) {
+    process.env[envMap[provider]] = apiKey;
+  }
+
+  return c.json({ ok: true });
+});
+
+// Check which API keys are configured
+app.get('/api-keys/status', (c) => {
+  const db = getDb();
+  const keys = ['anthropicApiKey', 'openaiApiKey', 'googleApiKey'];
+  const status: Record<string, boolean> = {};
+
+  for (const key of keys) {
+    const row = db.query('SELECT value FROM settings WHERE key = ?').get(key) as any;
+    const envKey =
+      key === 'anthropicApiKey'
+        ? 'ANTHROPIC_API_KEY'
+        : key === 'openaiApiKey'
+          ? 'OPENAI_API_KEY'
+          : 'GOOGLE_API_KEY';
+    status[key.replace('ApiKey', '')] = !!(row && JSON.parse(row.value)) || !!process.env[envKey];
+  }
+
+  return c.json({ ok: true, data: status });
+});
+
+// Get/set session budget
+app.get('/budget', (c) => {
+  const db = getDb();
+  const row = db.query("SELECT value FROM settings WHERE key = 'sessionBudgetUsd'").get() as any;
+  const budget = row ? JSON.parse(row.value) : null;
+  return c.json({ ok: true, data: { budgetUsd: budget } });
+});
+
+app.put('/budget', async (c) => {
+  const body = await c.req.json();
+  const { budgetUsd } = body;
+
+  const db = getDb();
+  if (budgetUsd == null) {
+    db.query("DELETE FROM settings WHERE key = 'sessionBudgetUsd'").run();
+  } else {
+    db.query(
+      `INSERT INTO settings (key, value) VALUES ('sessionBudgetUsd', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value`,
+    ).run(JSON.stringify(budgetUsd));
+  }
+
+  return c.json({ ok: true });
 });
 
 export { app as settingsRoutes };

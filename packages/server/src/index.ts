@@ -17,6 +17,9 @@ import { searchRoutes } from './routes/search';
 import { gitRoutes } from './routes/git';
 import { terminalRoutes } from './routes/terminal';
 import { lspRoutes } from './routes/lsp';
+import { authRoutes } from './routes/auth';
+import { projectMemoryRoutes } from './routes/project-memory';
+import { authMiddleware } from './middleware/auth';
 import { websocket } from './ws';
 import { initDatabase } from './db/database';
 import { existsSync } from 'fs';
@@ -28,11 +31,20 @@ const app = new Hono();
 app.use(
   '*',
   cors({
-    origin: ['http://localhost:5173', 'tauri://localhost', 'https://tauri.localhost'],
-    credentials: true,
+    origin: (origin) => {
+      // No origin: same-origin request, Tauri on Linux (webkit sends empty origin), or tools
+      if (!origin) return '*';
+      // Allow any localhost port (dev mode, Tauri on other platforms)
+      if (/^https?:\/\/localhost(:\d+)?$/.test(origin)) return origin;
+      if (origin === 'tauri://localhost' || origin === 'https://tauri.localhost') return origin;
+      return null;
+    },
   }),
 );
 app.use('*', logger());
+
+// Auth middleware (no-op in single-user mode)
+app.use('/api/*', authMiddleware);
 
 // Health check
 app.get('/health', (c) => c.json({ ok: true, version: '0.1.0' }));
@@ -53,6 +65,8 @@ app.route('/api/search', searchRoutes);
 app.route('/api/git', gitRoutes);
 app.route('/api/terminal', terminalRoutes);
 app.route('/api/lsp', lspRoutes);
+app.route('/api/auth', authRoutes);
+app.route('/api/project-memory', projectMemoryRoutes);
 
 // Initialize database
 initDatabase();
@@ -69,12 +83,25 @@ if (existsSync(clientBuildPath)) {
   console.log(`Serving client from ${clientBuildPath}`);
 }
 
-const port = Number(process.env.PORT) || 3002;
-console.log(`Maude server running on http://localhost:${port}`);
+const requestedPort = process.env.PORT !== undefined ? Number(process.env.PORT) : 3002;
 
-export default {
-  port,
-  fetch: app.fetch,
-  websocket,
-  idleTimeout: 120, // SSE streams need long-lived connections
-};
+if (requestedPort === 0) {
+  // Dynamic port mode (used by Tauri sidecar) — use Bun.serve directly
+  const server = Bun.serve({
+    port: 0,
+    fetch: app.fetch,
+    websocket,
+    idleTimeout: 120,
+  });
+  // Machine-parseable line for Tauri to read the actual port
+  console.log(`MAUDE_PORT=${server.port}`);
+  console.log(`Maude server running on http://localhost:${server.port}`);
+} else {
+  console.log(`MAUDE_PORT=${requestedPort}`);
+  console.log(`Maude server running on http://localhost:${requestedPort}`);
+}
+
+// Used by Bun's module loader when requestedPort !== 0 (supports --hot reload in dev)
+export default requestedPort !== 0
+  ? { port: requestedPort, fetch: app.fetch, websocket, idleTimeout: 120 }
+  : undefined;

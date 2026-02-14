@@ -26,6 +26,7 @@ export type {
   StreamPing,
   StreamTaskUpdate,
   StreamAgentEvent,
+  StreamVerificationResult,
 } from './streaming.js';
 
 export type {
@@ -59,6 +60,14 @@ export type { MemoryFile, MemoryFileType, Skill, MemoryState } from './memory.js
 export type { Project, ProjectSettings, ProjectSummary } from './projects.js';
 
 export type { EditorConfigProps } from './editorconfig.js';
+
+export type {
+  MemoryCategory,
+  MemorySource,
+  ProjectMemory,
+  ProjectMemoryCreate,
+  ProjectMemoryUpdate,
+} from './project-memory.js';
 
 export type {
   CreateConversationRequest,

@@ -15,6 +15,7 @@ export function createTestDb(): Database {
       model TEXT NOT NULL DEFAULT 'claude-sonnet-4-5-20250929',
       system_prompt TEXT,
       project_path TEXT,
+      project_id TEXT,
       plan_mode INTEGER NOT NULL DEFAULT 0,
       plan_file TEXT,
       total_tokens INTEGER NOT NULL DEFAULT 0,
@@ -80,9 +81,42 @@ export function createTestDb(): Database {
     )
   `);
 
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS git_snapshots (
+      id TEXT PRIMARY KEY,
+      project_path TEXT NOT NULL,
+      conversation_id TEXT,
+      head_sha TEXT NOT NULL,
+      stash_sha TEXT,
+      reason TEXT NOT NULL DEFAULT 'pre-agent',
+      has_changes INTEGER NOT NULL DEFAULT 0,
+      created_at INTEGER NOT NULL
+    )
+  `);
+
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS project_memories (
+      id TEXT PRIMARY KEY,
+      project_path TEXT NOT NULL,
+      category TEXT NOT NULL DEFAULT 'convention',
+      key TEXT NOT NULL,
+      content TEXT NOT NULL,
+      source TEXT NOT NULL DEFAULT 'manual',
+      confidence REAL NOT NULL DEFAULT 1.0,
+      times_seen INTEGER NOT NULL DEFAULT 1,
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL
+    )
+  `);
+
   db.exec('CREATE INDEX IF NOT EXISTS idx_messages_conv ON messages(conversation_id, timestamp)');
   db.exec('CREATE INDEX IF NOT EXISTS idx_tasks_conv ON tasks(conversation_id)');
   db.exec('CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status)');
+  db.exec('CREATE INDEX IF NOT EXISTS idx_git_snapshots_path ON git_snapshots(project_path)');
+  db.exec('CREATE INDEX IF NOT EXISTS idx_project_memories_path ON project_memories(project_path)');
+  db.exec(
+    'CREATE INDEX IF NOT EXISTS idx_project_memories_category ON project_memories(project_path, category)',
+  );
 
   return db;
 }

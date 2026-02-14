@@ -126,6 +126,14 @@
         uiStore.openModal('mcp-manager');
       },
     },
+    {
+      id: 'snapshots',
+      label: 'Git Snapshots',
+      category: 'Git',
+      action: () => {
+        uiStore.openModal('snapshots');
+      },
+    },
   ];
 
   let filtered = $derived(

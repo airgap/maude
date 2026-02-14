@@ -92,7 +92,8 @@ const REGISTRY: Record<string, LspRegistryEntry> = {
     command: 'lemminx',
     args: [],
     binaryDownload: {
-      linux: 'https://github.com/redhat-developer/vscode-xml/releases/download/0.29.0/lemminx-linux.zip',
+      linux:
+        'https://github.com/redhat-developer/vscode-xml/releases/download/0.29.0/lemminx-linux.zip',
       'darwin-arm64':
         'https://github.com/redhat-developer/vscode-xml/releases/download/0.29.0/lemminx-osx-aarch_64.zip',
       'darwin-x64':
@@ -159,9 +160,7 @@ export async function getAvailableServers(): Promise<LspServerEntry[]> {
       const managedNpmBin = join(LSP_DIR, 'node_modules', '.bin', entry.command);
       const managedBin = join(LSP_DIR, 'bin', entry.command);
       available =
-        existsSync(managedNpmBin) ||
-        existsSync(managedBin) ||
-        Bun.which(entry.command) !== null;
+        existsSync(managedNpmBin) || existsSync(managedBin) || Bun.which(entry.command) !== null;
     }
     seen.add(key);
 

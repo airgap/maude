@@ -3,7 +3,7 @@
  * JSON-RPC transport, and document synchronization.
  */
 
-import { api } from '$lib/api/client';
+import { api, getWsBase } from '$lib/api/client';
 
 interface LspServerInfo {
   language: string;
@@ -14,11 +14,6 @@ interface LspServerInfo {
   npmPackage?: string;
   systemInstallHint?: string;
 }
-
-const WS_BASE =
-  typeof window !== 'undefined' && (window as any).__TAURI__
-    ? 'ws://localhost:3002/api/lsp'
-    : `ws://${typeof window !== 'undefined' ? window.location.host : 'localhost:3002'}/api/lsp`;
 
 interface LspConnection {
   ws: WebSocket;
@@ -112,7 +107,7 @@ function createLspStore() {
       if (connections.has(language)) return;
 
       return new Promise<void>((resolve, reject) => {
-        const url = `${WS_BASE}/ws?language=${encodeURIComponent(language)}&rootPath=${encodeURIComponent(rootPath)}`;
+        const url = `${getWsBase()}/lsp/ws?language=${encodeURIComponent(language)}&rootPath=${encodeURIComponent(rootPath)}`;
         const ws = new WebSocket(url);
 
         const conn: LspConnection = {

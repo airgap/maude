@@ -1,6 +1,7 @@
 import { Hono } from 'hono';
 import { getDb } from '../db/database';
 import { randomUUID } from 'crypto';
+import { getSandboxConfig } from '../middleware/sandbox';
 
 const app = new Hono();
 
@@ -99,6 +100,39 @@ app.delete('/:id', (c) => {
 app.post('/:id/open', (c) => {
   const db = getDb();
   db.query('UPDATE projects SET last_opened = ? WHERE id = ?').run(Date.now(), c.req.param('id'));
+  return c.json({ ok: true });
+});
+
+// Get sandbox config for a project by path
+app.get('/sandbox/config', (c) => {
+  const projectPath = c.req.query('path');
+  if (!projectPath) return c.json({ ok: false, error: 'path required' }, 400);
+  const config = getSandboxConfig(projectPath);
+  return c.json({ ok: true, data: config });
+});
+
+// Update sandbox config for a project
+app.put('/sandbox/config', async (c) => {
+  const body = await c.req.json();
+  const { projectPath, enabled, allowedPaths, blockedCommands } = body;
+  if (!projectPath) return c.json({ ok: false, error: 'projectPath required' }, 400);
+
+  const db = getDb();
+  const project = db.query(`SELECT * FROM projects WHERE path = ?`).get(projectPath) as any;
+  if (!project) return c.json({ ok: false, error: 'Project not found' }, 404);
+
+  const settings = project.settings ? JSON.parse(project.settings) : {};
+  settings.sandbox = {
+    enabled: enabled !== undefined ? enabled : true,
+    allowedPaths: allowedPaths || [projectPath],
+    blockedCommands: blockedCommands || [],
+  };
+
+  db.query(`UPDATE projects SET settings = ? WHERE id = ?`).run(
+    JSON.stringify(settings),
+    project.id,
+  );
+
   return c.json({ ok: true });
 });
 

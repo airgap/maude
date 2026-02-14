@@ -22,6 +22,7 @@ function insertConversation(overrides: Record<string, any> = {}) {
     model: 'claude-sonnet-4-5-20250929',
     system_prompt: null,
     project_path: '/tmp/test',
+    project_id: null,
     plan_mode: 0,
     plan_file: null,
     total_tokens: 0,
@@ -38,10 +39,10 @@ function insertConversation(overrides: Record<string, any> = {}) {
   const row = { ...defaults, ...overrides };
   testDb
     .query(
-      `INSERT INTO conversations (id, title, model, system_prompt, project_path, plan_mode, plan_file,
+      `INSERT INTO conversations (id, title, model, system_prompt, project_path, project_id, plan_mode, plan_file,
         total_tokens, permission_mode, effort, max_budget_usd, max_turns, allowed_tools, disallowed_tools,
         cli_session_id, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     )
     .run(
       row.id,
@@ -49,6 +50,7 @@ function insertConversation(overrides: Record<string, any> = {}) {
       row.model,
       row.system_prompt,
       row.project_path,
+      row.project_id,
       row.plan_mode,
       row.plan_file,
       row.total_tokens,

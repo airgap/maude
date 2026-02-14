@@ -1,24 +1,107 @@
 pipeline {
-    agent none
+    agent any
+
+    environment {
+        DOCKER_IMAGE = 'maude'
+        DOCKER_TAG   = "${env.GIT_COMMIT?.take(8) ?: 'latest'}"
+        JENKINS_URL  = 'http://localhost:8080'
+    }
 
     stages {
-        stage('CI') {
-            agent { label 'linux' }
-            options { timeout(time: 10, unit: 'MINUTES') }
+        stage('Install') {
+            options { timeout(time: 5, unit: 'MINUTES') }
             steps {
                 sh '''
                     export PATH="$HOME/.bun/bin:$PATH"
                     if ! command -v bun &>/dev/null; then
                         curl -fsSL https://bun.sh/install | bash
+                        export PATH="$HOME/.bun/bin:$PATH"
                     fi
                     bun install --frozen-lockfile
-                    bun run check
-                    bun run test
                 '''
             }
         }
 
-        stage('Build') {
+        stage('Check & Test') {
+            options { timeout(time: 10, unit: 'MINUTES') }
+            parallel {
+                stage('Type Check') {
+                    steps {
+                        sh '''
+                            export PATH="$HOME/.bun/bin:$PATH"
+                            bun run check
+                        '''
+                    }
+                }
+                stage('Tests') {
+                    steps {
+                        sh '''
+                            export PATH="$HOME/.bun/bin:$PATH"
+                            bun test --reporter=junit --reporter-output=test-results.xml 2>/dev/null || \
+                            bun test
+                        '''
+                    }
+                    post {
+                        always {
+                            junit allowEmptyResults: true, testResults: 'test-results.xml'
+                        }
+                    }
+                }
+            }
+        }
+
+        stage('Docker Build') {
+            options { timeout(time: 15, unit: 'MINUTES') }
+            steps {
+                sh """
+                    docker build \
+                        --build-arg BUILDKIT_INLINE_CACHE=1 \
+                        -t ${DOCKER_IMAGE}:${DOCKER_TAG} \
+                        -t ${DOCKER_IMAGE}:latest \
+                        .
+                """
+            }
+        }
+
+        stage('Docker Deploy') {
+            when {
+                anyOf {
+                    branch 'main'
+                    buildingTag()
+                }
+            }
+            options { timeout(time: 5, unit: 'MINUTES') }
+            steps {
+                sh """
+                    # Stop existing container if running
+                    docker stop maude-app 2>/dev/null || true
+                    docker rm maude-app 2>/dev/null || true
+
+                    # Run new container
+                    docker run -d \
+                        --name maude-app \
+                        --restart unless-stopped \
+                        -p 3002:3002 \
+                        -v maude-data:/root/.maude \
+                        ${DOCKER_IMAGE}:${DOCKER_TAG}
+
+                    # Wait for health check
+                    echo "Waiting for health check..."
+                    for i in \$(seq 1 30); do
+                        if curl -sf http://localhost:3002/health > /dev/null 2>&1; then
+                            echo "Health check passed"
+                            exit 0
+                        fi
+                        sleep 2
+                    done
+                    echo "Health check failed after 60s"
+                    docker logs maude-app
+                    exit 1
+                """
+            }
+        }
+
+        stage('Desktop Build') {
             when {
                 anyOf {
                     branch 'main'
@@ -93,9 +176,8 @@ pipeline {
             }
         }
 
-        stage('Release') {
+        stage('Archive') {
             when { buildingTag() }
-            agent { label 'linux' }
             steps {
                 sh 'rm -rf release-artifacts && mkdir release-artifacts'
                 unstash 'linux-deb'
@@ -106,17 +188,20 @@ pipeline {
                     find src-tauri/target -name '*.rpm' -exec cp {} release-artifacts/ \\;
                     find src-tauri/target -name '*.dmg' -exec cp {} release-artifacts/ \\;
                 '''
-                withCredentials([usernamePassword(credentialsId: 'github-pat', usernameVariable: 'GH_USER', passwordVariable: 'GITHUB_TOKEN')]) {
-                    sh '''
-                        REPO_SLUG=$(echo "$GIT_URL" | sed -E 's#.*github\\.com[:/]([^/]+/[^/.]+)(\\.git)?$#\\1#')
-                        gh release create "$TAG_NAME" \
-                            --repo "$REPO_SLUG" \
-                            --draft \
-                            --generate-notes \
-                            release-artifacts/*
-                    '''
-                }
+                archiveArtifacts artifacts: 'release-artifacts/*', fingerprint: true
+                sh """
+                    docker tag ${DOCKER_IMAGE}:${DOCKER_TAG} ${DOCKER_IMAGE}:${env.TAG_NAME}
+                """
             }
+        }
+    }
+
+    post {
+        failure {
+            sh 'echo "Build failed — check ${BUILD_URL}console for details"'
+        }
+        cleanup {
+            sh 'docker image prune -f 2>/dev/null || true'
         }
     }
 }

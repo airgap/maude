@@ -27,9 +27,7 @@ function resolveBinaryUrl(download: BinaryDownloadInfo): string | null {
   if (platform === 'linux') return download.linux ?? null;
   if (platform === 'win32') return download.win32 ?? null;
   if (platform === 'darwin') {
-    return arch === 'arm64'
-      ? download['darwin-arm64'] ?? null
-      : download['darwin-x64'] ?? null;
+    return arch === 'arm64' ? (download['darwin-arm64'] ?? null) : (download['darwin-x64'] ?? null);
   }
   return null;
 }
@@ -122,7 +120,10 @@ lspRoutes.post('/install', async (c) => {
       }
 
       const stderr = proc.stderr ? await new Response(proc.stderr).text() : '';
-      return c.json({ ok: false, error: `npm install failed (exit ${exitCode}): ${stderr.trim()}` }, 500);
+      return c.json(
+        { ok: false, error: `npm install failed (exit ${exitCode}): ${stderr.trim()}` },
+        500,
+      );
     } catch (err) {
       return c.json({ ok: false, error: `Failed to run npm install: ${err}` }, 500);
     }
@@ -141,8 +142,7 @@ lspRoutes.get('/install-status', async (c) => {
   for (const server of servers) {
     if (server.installable) {
       installed[server.language] =
-        existsSync(join(npmBinDir, server.command)) ||
-        existsSync(join(binDir, server.command));
+        existsSync(join(npmBinDir, server.command)) || existsSync(join(binDir, server.command));
     }
   }
 

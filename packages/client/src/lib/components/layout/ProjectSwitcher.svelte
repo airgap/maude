@@ -131,7 +131,11 @@
 
         <div class="dropdown-divider"></div>
 
-        <button class="dropdown-item open-folder" disabled={browseLoading} onclick={() => browseDirectories()}>
+        <button
+          class="dropdown-item open-folder"
+          disabled={browseLoading}
+          onclick={() => browseDirectories()}
+        >
           {browseLoading ? 'Loading...' : 'Open Folder...'}
         </button>
         <button

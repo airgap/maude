@@ -88,10 +88,46 @@ export function initDatabase(): void {
       created_at INTEGER NOT NULL
     );
 
+    CREATE TABLE IF NOT EXISTS git_snapshots (
+      id TEXT PRIMARY KEY,
+      project_path TEXT NOT NULL,
+      conversation_id TEXT,
+      head_sha TEXT NOT NULL,
+      stash_sha TEXT,
+      reason TEXT NOT NULL DEFAULT 'pre-agent',
+      has_changes INTEGER NOT NULL DEFAULT 0,
+      created_at INTEGER NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS project_memories (
+      id TEXT PRIMARY KEY,
+      project_path TEXT NOT NULL,
+      category TEXT NOT NULL DEFAULT 'convention',
+      key TEXT NOT NULL,
+      content TEXT NOT NULL,
+      source TEXT NOT NULL DEFAULT 'manual',
+      confidence REAL NOT NULL DEFAULT 1.0,
+      times_seen INTEGER NOT NULL DEFAULT 1,
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL
+    );
+
     CREATE INDEX IF NOT EXISTS idx_messages_conversation ON messages(conversation_id, timestamp);
     CREATE INDEX IF NOT EXISTS idx_tasks_conversation ON tasks(conversation_id);
     CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status);
     CREATE INDEX IF NOT EXISTS idx_projects_last_opened ON projects(last_opened DESC);
+    CREATE INDEX IF NOT EXISTS idx_git_snapshots_path ON git_snapshots(project_path, created_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_project_memories_path ON project_memories(project_path);
+    CREATE INDEX IF NOT EXISTS idx_project_memories_category ON project_memories(project_path, category);
+
+    CREATE TABLE IF NOT EXISTS users (
+      id TEXT PRIMARY KEY,
+      username TEXT NOT NULL UNIQUE,
+      password_hash TEXT NOT NULL,
+      display_name TEXT,
+      is_admin INTEGER NOT NULL DEFAULT 0,
+      created_at INTEGER NOT NULL
+    );
   `);
 
   // Migrate: add new conversation columns (safe ALTER TABLE — no-ops if already exist)
@@ -104,6 +140,7 @@ export function initDatabase(): void {
     `ALTER TABLE conversations ADD COLUMN disallowed_tools TEXT`,
     `ALTER TABLE conversations ADD COLUMN cli_session_id TEXT`,
     `ALTER TABLE conversations ADD COLUMN project_id TEXT REFERENCES projects(id)`,
+    `ALTER TABLE conversations ADD COLUMN user_id TEXT`,
   ];
   for (const sql of alterColumns) {
     try {

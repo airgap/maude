@@ -14,7 +14,8 @@ export type StreamEvent =
   | StreamError
   | StreamPing
   | StreamTaskUpdate
-  | StreamAgentEvent;
+  | StreamAgentEvent
+  | StreamVerificationResult;
 
 export interface StreamMessageStart {
   type: 'message_start';
@@ -121,4 +122,18 @@ export interface StreamAgentEvent {
   agentId: string;
   event: 'spawned' | 'progress' | 'completed' | 'error';
   data?: unknown;
+}
+
+export interface StreamVerificationResult {
+  type: 'verification_result';
+  filePath: string;
+  passed: boolean;
+  issues: Array<{
+    severity: 'error' | 'warning' | 'info';
+    line?: number;
+    message: string;
+    rule?: string;
+  }>;
+  tool: string;
+  duration: number;
 }

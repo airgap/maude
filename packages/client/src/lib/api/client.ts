@@ -1,13 +1,50 @@
-const BASE_URL =
-  typeof window !== 'undefined' && (window as any).__TAURI__ ? 'http://localhost:3002/api' : '/api';
+// API base URL. In all modes (browser dev, Tauri desktop), the page is served
+// from the same origin as the API, so we use relative paths.
+export function getBaseUrl(): string {
+  return '/api';
+}
+
+export function getWsBase(): string {
+  const host = typeof window !== 'undefined' ? window.location.host : 'localhost:3002';
+  return `ws://${host}/api`;
+}
+
+export function setServerPort(_port: number) {
+  // No-op — kept for backwards compatibility
+}
+
+export function waitForServer(): Promise<void> {
+  return Promise.resolve();
+}
+
+// Auth token storage
+let _authToken: string | null = null;
+export function setAuthToken(token: string | null) {
+  _authToken = token;
+  if (typeof localStorage !== 'undefined') {
+    if (token) localStorage.setItem('maude-auth-token', token);
+    else localStorage.removeItem('maude-auth-token');
+  }
+}
+export function getAuthToken(): string | null {
+  if (_authToken) return _authToken;
+  if (typeof localStorage !== 'undefined') {
+    _authToken = localStorage.getItem('maude-auth-token');
+  }
+  return _authToken;
+}
 
 async function request<T>(path: string, opts: RequestInit = {}): Promise<T> {
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    ...(opts.headers as Record<string, string>),
+  };
+  const token = getAuthToken();
+  if (token) headers['Authorization'] = `Bearer ${token}`;
+
   let res: Response;
   try {
-    res = await fetch(`${BASE_URL}${path}`, {
-      headers: { 'Content-Type': 'application/json', ...(opts.headers as Record<string, string>) },
-      ...opts,
-    });
+    res = await fetch(`${getBaseUrl()}${path}`, { ...opts, headers });
   } catch (err) {
     throw new Error('Cannot connect to server. Is the backend running?');
   }
@@ -73,8 +110,10 @@ export const api = {
   stream: {
     send: (conversationId: string, content: string, sessionId?: string | null) => {
       const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      const token = getAuthToken();
+      if (token) headers['Authorization'] = `Bearer ${token}`;
       if (sessionId) headers['X-Session-Id'] = sessionId;
-      return fetch(`${BASE_URL}/stream/${conversationId}`, {
+      return fetch(`${getBaseUrl()}/stream/${conversationId}`, {
         method: 'POST',
         headers,
         body: JSON.stringify({ content }),
@@ -119,6 +158,27 @@ export const api = {
       request<{ ok: boolean }>('/settings', {
         method: 'PATCH',
         body: JSON.stringify({ settings }),
+      }),
+    ollamaStatus: () =>
+      request<{ ok: boolean; data: { available: boolean } }>('/settings/ollama/status'),
+    ollamaModels: () =>
+      request<{
+        ok: boolean;
+        data: Array<{ name: string; size: number; modified_at: string }>;
+      }>('/settings/ollama/models'),
+    setApiKey: (provider: string, apiKey: string) =>
+      request<{ ok: boolean }>('/settings/api-key', {
+        method: 'PUT',
+        body: JSON.stringify({ provider, apiKey }),
+      }),
+    apiKeysStatus: () =>
+      request<{ ok: boolean; data: Record<string, boolean> }>('/settings/api-keys/status'),
+    getBudget: () =>
+      request<{ ok: boolean; data: { budgetUsd: number | null } }>('/settings/budget'),
+    setBudget: (budgetUsd: number | null) =>
+      request<{ ok: boolean }>('/settings/budget', {
+        method: 'PUT',
+        body: JSON.stringify({ budgetUsd }),
       }),
   },
 
@@ -188,6 +248,20 @@ export const api = {
         data: { parent: string; directories: { name: string; path: string }[] };
       }>(`/files/directories?${params}`);
     },
+    verify: (path: string, projectPath?: string) =>
+      request<{
+        ok: boolean;
+        data: {
+          filePath: string;
+          passed: boolean;
+          issues: Array<{ severity: string; line?: number; message: string; rule?: string }>;
+          tool: string;
+          duration: number;
+        };
+      }>('/files/verify', {
+        method: 'POST',
+        body: JSON.stringify({ path, projectPath }),
+      }),
   },
 
   // --- Projects ---
@@ -206,6 +280,21 @@ export const api = {
       }),
     delete: (id: string) => request<{ ok: boolean }>(`/projects/${id}`, { method: 'DELETE' }),
     open: (id: string) => request<{ ok: boolean }>(`/projects/${id}/open`, { method: 'POST' }),
+    getSandbox: (path: string) =>
+      request<{
+        ok: boolean;
+        data: { enabled: boolean; allowedPaths: string[]; blockedCommands: string[] };
+      }>(`/projects/sandbox/config?path=${encodeURIComponent(path)}`),
+    updateSandbox: (body: {
+      projectPath: string;
+      enabled?: boolean;
+      allowedPaths?: string[];
+      blockedCommands?: string[];
+    }) =>
+      request<{ ok: boolean }>('/projects/sandbox/config', {
+        method: 'PUT',
+        body: JSON.stringify(body),
+      }),
   },
 
   // --- Agents ---
@@ -289,5 +378,110 @@ export const api = {
       request<{ ok: boolean; data: { branch: string } }>(
         `/git/branch?path=${encodeURIComponent(path)}`,
       ),
+    snapshot: (path: string, conversationId?: string, reason?: string) =>
+      request<{
+        ok: boolean;
+        data: { id: string; headSha: string; stashSha: string | null; hasChanges: boolean };
+      }>('/git/snapshot', {
+        method: 'POST',
+        body: JSON.stringify({ path, conversationId, reason }),
+      }),
+    snapshots: (path: string) =>
+      request<{
+        ok: boolean;
+        data: Array<{
+          id: string;
+          projectPath: string;
+          conversationId: string | null;
+          headSha: string;
+          stashSha: string | null;
+          reason: string;
+          hasChanges: boolean;
+          createdAt: number;
+        }>;
+      }>(`/git/snapshots?path=${encodeURIComponent(path)}`),
+    restoreSnapshot: (id: string) =>
+      request<{ ok: boolean; data: { restored: boolean } }>(`/git/snapshot/${id}/restore`, {
+        method: 'POST',
+      }),
+  },
+
+  // --- Project Memory ---
+  projectMemory: {
+    list: (projectPath: string, category?: string) => {
+      const params = new URLSearchParams({ projectPath });
+      if (category) params.set('category', category);
+      return request<{ ok: boolean; data: any[] }>(`/project-memory?${params}`);
+    },
+    get: (id: string) => request<{ ok: boolean; data: any }>(`/project-memory/${id}`),
+    create: (body: {
+      projectPath: string;
+      category?: string;
+      key: string;
+      content: string;
+      source?: string;
+      confidence?: number;
+    }) =>
+      request<{ ok: boolean; data: { id: string } }>('/project-memory', {
+        method: 'POST',
+        body: JSON.stringify(body),
+      }),
+    update: (id: string, body: Record<string, any>) =>
+      request<{ ok: boolean }>(`/project-memory/${id}`, {
+        method: 'PATCH',
+        body: JSON.stringify(body),
+      }),
+    delete: (id: string) => request<{ ok: boolean }>(`/project-memory/${id}`, { method: 'DELETE' }),
+    search: (projectPath: string, q: string) => {
+      const params = new URLSearchParams({ projectPath, q });
+      return request<{ ok: boolean; data: any[] }>(`/project-memory/search/query?${params}`);
+    },
+    extract: (projectPath: string, messages: Array<{ role: string; content: string }>) =>
+      request<{ ok: boolean; data: { extracted: number; created: number } }>(
+        '/project-memory/extract',
+        {
+          method: 'POST',
+          body: JSON.stringify({ projectPath, messages }),
+        },
+      ),
+    context: (projectPath: string) => {
+      const params = new URLSearchParams({ projectPath });
+      return request<{ ok: boolean; data: { context: string; count: number } }>(
+        `/project-memory/context?${params}`,
+      );
+    },
+  },
+
+  // --- Auth ---
+  auth: {
+    status: () => request<{ ok: boolean; data: { enabled: boolean } }>('/auth/status'),
+    register: (username: string, password: string, displayName?: string) =>
+      request<{
+        ok: boolean;
+        data: { id: string; username: string; token: string; isAdmin: boolean };
+      }>('/auth/register', {
+        method: 'POST',
+        body: JSON.stringify({ username, password, displayName }),
+      }),
+    login: (username: string, password: string) =>
+      request<{
+        ok: boolean;
+        data: {
+          id: string;
+          username: string;
+          displayName: string;
+          isAdmin: boolean;
+          token: string;
+        };
+      }>('/auth/login', {
+        method: 'POST',
+        body: JSON.stringify({ username, password }),
+      }),
+    me: () =>
+      request<{
+        ok: boolean;
+        data: { id: string; username: string; isAdmin: boolean };
+      }>('/auth/me'),
+    users: () => request<{ ok: boolean; data: any[] }>('/auth/users'),
   },
 };

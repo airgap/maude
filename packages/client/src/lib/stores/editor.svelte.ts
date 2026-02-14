@@ -97,6 +97,7 @@ function createEditorStore() {
   let layoutMode = $state<LayoutMode>('chat-only');
   let splitRatio = $state(0.5);
   let previewTabId = $state<string | null>(null);
+  let pendingGoTo = $state<{ line: number; col: number } | null>(null);
 
   const activeTab = $derived(tabs.find((t) => t.id === activeTabId) ?? null);
   const dirtyTabs = $derived(tabs.filter((t) => t.content !== t.originalContent));
@@ -134,7 +135,16 @@ function createEditorStore() {
     },
     isDirty,
 
-    async openFile(filePath: string, preview = false) {
+    get pendingGoTo() {
+      return pendingGoTo;
+    },
+    consumePendingGoTo() {
+      const val = pendingGoTo;
+      pendingGoTo = null;
+      return val;
+    },
+
+    async openFile(filePath: string, preview = false, goTo?: { line: number; col: number }) {
       // Check if already open
       const existing = tabs.find((t) => t.filePath === filePath);
       if (existing) {
@@ -143,6 +153,7 @@ function createEditorStore() {
         if (previewTabId === existing.id && !preview) {
           previewTabId = null;
         }
+        if (goTo) pendingGoTo = goTo;
         return;
       }
 
@@ -202,6 +213,7 @@ function createEditorStore() {
       tabs = [...tabs, tab];
       activeTabId = id;
       if (preview) previewTabId = id;
+      if (goTo) pendingGoTo = goTo;
 
       // Auto-switch to split mode on first tab
       if (layoutMode === 'chat-only') {

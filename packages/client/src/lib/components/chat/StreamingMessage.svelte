@@ -7,6 +7,9 @@
   import ToolCallBlock from './ToolCallBlock.svelte';
   import ToolApprovalDialog from './ToolApprovalDialog.svelte';
   import AgentGroup from './AgentGroup.svelte';
+  import StreamingText from './StreamingText.svelte';
+  import MessageAnimation from './MessageAnimation.svelte';
+  import ToolCallTracker from './ToolCallTracker.svelte';
 
   // Build a grouped view: top-level blocks + agent groups.
   // A "Task" tool_use block becomes an agent header, and all blocks
@@ -26,6 +29,7 @@
 
   let grouped = $derived.by(() => {
     const blocks = streamStore.contentBlocks;
+    console.log('[StreamingMessage] $derived recalculating, blocks.length:', blocks.length);
     const entries: GroupedEntry[] = [];
 
     // Collect all agent task block IDs
@@ -79,55 +83,63 @@
   let totalBlocks = $derived(streamStore.contentBlocks.length);
 </script>
 
-<div class="message assistant streaming">
-  <div class="message-header">
-    <span class="role-label">Claude</span>
-    <span class="streaming-indicator">
-      <span class="dot"></span>
-      <span class="dot"></span>
-      <span class="dot"></span>
-    </span>
-  </div>
+<MessageAnimation>
+  {#snippet children()}
+    <div class="message assistant streaming">
+      <div class="message-header">
+        <span class="role-label">Claude</span>
+        <span class="streaming-indicator">
+          <span class="dot"></span>
+          <span class="dot"></span>
+          <span class="dot"></span>
+        </span>
+      </div>
 
-  <div class="message-body">
-    {#each grouped as entry}
-      {#if entry.kind === 'agent'}
-        <AgentGroup
-          taskBlock={entry.taskBlock}
-          children={entry.children}
-          streaming={entry.lastChildIndex === totalBlocks - 1}
-        />
-      {:else if entry.block.type === 'thinking' && settingsStore.showThinkingBlocks}
-        <ThinkingBlock content={entry.block.thinking} streaming={entry.index === totalBlocks - 1} />
-      {:else if entry.block.type === 'text' && entry.block.text}
-        <div class="prose">{@html renderMarkdownPartial(entry.block.text)}</div>
-      {:else if entry.block.type === 'tool_use'}
-        {@const hasResult = streamStore.toolResults.has(entry.block.id)}
-        {@const isLast = entry.index === totalBlocks - 1}
-        <ToolCallBlock
-          toolName={entry.block.name}
-          input={entry.block.input}
-          result={hasResult
-            ? {
-                content: streamStore.toolResults.get(entry.block.id)!.result,
-                is_error: streamStore.toolResults.get(entry.block.id)!.isError,
-              }
-            : undefined}
-          running={!hasResult && isLast}
-        />
-      {/if}
-    {/each}
+      <div class="message-body">
+        <!-- Tool call tracker for progress visibility -->
+        <ToolCallTracker />
 
-    {#each streamStore.pendingApprovals as approval}
-      <ToolApprovalDialog
-        toolCallId={approval.toolCallId}
-        toolName={approval.toolName}
-        input={approval.input}
-        description={approval.description}
-      />
-    {/each}
-  </div>
-</div>
+        {#each grouped as entry}
+          {#if entry.kind === 'agent'}
+            <AgentGroup
+              taskBlock={entry.taskBlock}
+              children={entry.children}
+              streaming={entry.lastChildIndex === totalBlocks - 1}
+            />
+          {:else if entry.block.type === 'thinking' && settingsStore.showThinkingBlocks}
+            <ThinkingBlock content={entry.block.thinking} streaming={entry.index === totalBlocks - 1} />
+          {:else if entry.block.type === 'text' && entry.block.text}
+            {@const isStreaming = entry.index === totalBlocks - 1}
+            <StreamingText text={entry.block.text} streaming={isStreaming} />
+          {:else if entry.block.type === 'tool_use'}
+            {@const hasResult = streamStore.toolResults.has(entry.block.id)}
+            {@const isLast = entry.index === totalBlocks - 1}
+            <ToolCallBlock
+              toolName={entry.block.name}
+              input={entry.block.input}
+              result={hasResult
+                ? {
+                    content: streamStore.toolResults.get(entry.block.id)!.result,
+                    is_error: streamStore.toolResults.get(entry.block.id)!.isError,
+                  }
+                : undefined}
+              running={!hasResult && isLast}
+            />
+          {/if}
+        {/each}
+
+        {#each streamStore.pendingApprovals as approval}
+          <ToolApprovalDialog
+            toolCallId={approval.toolCallId}
+            toolName={approval.toolName}
+            input={approval.input}
+            description={approval.description}
+          />
+        {/each}
+      </div>
+    </div>
+  {/snippet}
+</MessageAnimation>
 
 <style>
   .message {
@@ -223,5 +235,23 @@
     font-family: var(--font-family-sans);
     font-size: 14px;
     font-weight: 500;
+  }
+
+  @keyframes shieldCharge {
+    0% {
+      background-position: 0% 0%;
+    }
+    100% {
+      background-position: 0% 100%;
+    }
+  }
+
+  @keyframes fadeIn {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
   }
 </style>

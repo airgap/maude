@@ -47,9 +47,10 @@ export function gotoDefinitionExtension(fileId: string, language: string) {
             const currentPath = editorStore.activeTab?.filePath || '';
 
             if (targetPath && targetPath !== currentPath) {
-              // Cross-file navigation
-              editorStore.openFile(targetPath).then(() => {
-                // TODO: scroll to target line after the file opens
+              // Cross-file navigation — pass goto target so CodeEditor scrolls after mount
+              editorStore.openFile(targetPath, false, {
+                line: targetLine + 1,
+                col: targetChar + 1,
               });
             } else {
               // Same-file navigation

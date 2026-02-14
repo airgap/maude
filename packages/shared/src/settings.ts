@@ -8,9 +8,26 @@ export type ThemeId =
   | 'light-colorblind'
   | 'dark-ansi'
   | 'light-ansi'
+  | 'monokai'
+  | 'dracula'
+  | 'nord'
+  | 'gruvbox-dark'
+  | 'gruvbox-light'
+  | 'solarized-dark'
+  | 'solarized-light'
+  | 'catppuccin-mocha'
+  | 'catppuccin-latte'
+  | 'tokyo-night'
+  | 'rose-pine'
+  | 'rose-pine-dawn'
+  | 'synthwave'
+  | 'github-dark'
+  | 'github-light'
+  | 'one-dark'
+  | 'everforest'
   | (string & {});
 
-export type CliProvider = 'claude' | 'kiro';
+export type CliProvider = 'claude' | 'kiro' | 'ollama';
 
 export interface Settings {
   theme: ThemeId;

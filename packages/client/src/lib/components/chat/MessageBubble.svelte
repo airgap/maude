@@ -5,6 +5,7 @@
   import ThinkingBlock from './ThinkingBlock.svelte';
   import ToolCallBlock from './ToolCallBlock.svelte';
   import AgentGroupStatic from './AgentGroupStatic.svelte';
+  import MessageAnimation from './MessageAnimation.svelte';
   import { renderMarkdown } from '$lib/utils/markdown';
 
   let { message } = $props<{ message: Message }>();
@@ -84,57 +85,85 @@
   });
 </script>
 
-<div
-  class="message"
-  class:user={message.role === 'user'}
-  class:assistant={message.role === 'assistant'}
->
-  <div class="message-header">
-    <span class="role-label">{message.role === 'user' ? 'You' : 'Claude'}</span>
-    {#if message.model}
-      <span class="model-label">{message.model.split('-').slice(1, 3).join(' ')}</span>
-    {/if}
-    <span class="timestamp">
-      {new Date(message.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-    </span>
-  </div>
+{#if message.role === 'assistant'}
+  <MessageAnimation>
+    {#snippet children()}
+      <div
+        class="message"
+        class:user={message.role === 'user'}
+        class:assistant={message.role === 'assistant'}
+      >
+        <div class="message-header">
+          <span class="role-label">{message.role === 'user' ? 'You' : 'Claude'}</span>
+          {#if message.model}
+            <span class="model-label">{message.model.split('-').slice(1, 3).join(' ')}</span>
+          {/if}
+          <span class="timestamp">
+            {new Date(message.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+          </span>
+        </div>
 
-  <div class="message-body">
-    {#if message.role === 'user'}
+        <div class="message-body">
+          {#if message.role === 'user'}
+            {#if renderedHtml}
+              <div class="prose">{@html renderedHtml}</div>
+            {/if}
+          {:else}
+            {#if renderedHtml}
+              <div class="prose">{@html renderedHtml}</div>
+            {/if}
+            {#each grouped as entry}
+              {#if entry.kind === 'agent'}
+                {#if settingsStore.showToolDetails}
+                  <AgentGroupStatic
+                    taskBlock={entry.taskBlock}
+                    children={entry.children}
+                    toolResults={getToolResults(message.content)}
+                  />
+                {/if}
+              {:else if entry.block.type === 'thinking' && settingsStore.showThinkingBlocks}
+                <ThinkingBlock content={entry.block.thinking} />
+              {:else if entry.block.type === 'tool_use'}
+                {#if settingsStore.showToolDetails}
+                  {@const toolBlock = entry.block as import('@maude/shared').ToolUseContent}
+                  <ToolCallBlock
+                    toolName={toolBlock.name}
+                    input={toolBlock.input}
+                    result={getToolResults(message.content).find(
+                      (r: any) => r.tool_use_id === toolBlock.id,
+                    )}
+                  />
+                {/if}
+              {/if}
+            {/each}
+          {/if}
+        </div>
+      </div>
+    {/snippet}
+  </MessageAnimation>
+{:else}
+  <div
+    class="message"
+    class:user={message.role === 'user'}
+    class:assistant={message.role === 'assistant'}
+  >
+    <div class="message-header">
+      <span class="role-label">{message.role === 'user' ? 'You' : 'Claude'}</span>
+      {#if message.model}
+        <span class="model-label">{message.model.split('-').slice(1, 3).join(' ')}</span>
+      {/if}
+      <span class="timestamp">
+        {new Date(message.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+      </span>
+    </div>
+
+    <div class="message-body">
       {#if renderedHtml}
         <div class="prose">{@html renderedHtml}</div>
       {/if}
-    {:else}
-      {#if renderedHtml}
-        <div class="prose">{@html renderedHtml}</div>
-      {/if}
-      {#each grouped as entry}
-        {#if entry.kind === 'agent'}
-          {#if settingsStore.showToolDetails}
-            <AgentGroupStatic
-              taskBlock={entry.taskBlock}
-              children={entry.children}
-              toolResults={getToolResults(message.content)}
-            />
-          {/if}
-        {:else if entry.block.type === 'thinking' && settingsStore.showThinkingBlocks}
-          <ThinkingBlock content={entry.block.thinking} />
-        {:else if entry.block.type === 'tool_use'}
-          {#if settingsStore.showToolDetails}
-            {@const toolBlock = entry.block as import('@maude/shared').ToolUseContent}
-            <ToolCallBlock
-              toolName={toolBlock.name}
-              input={toolBlock.input}
-              result={getToolResults(message.content).find(
-                (r: any) => r.tool_use_id === toolBlock.id,
-              )}
-            />
-          {/if}
-        {/if}
-      {/each}
-    {/if}
+    </div>
   </div>
-</div>
+{/if}
 
 <style>
   .message {

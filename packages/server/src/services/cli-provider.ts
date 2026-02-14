@@ -1,4 +1,7 @@
 import type { CliProvider } from '@maude/shared';
+import { existsSync } from 'fs';
+import { join } from 'path';
+import { homedir } from 'os';
 
 export interface CliSessionOpts {
   content: string;
@@ -16,6 +19,25 @@ export interface CliSessionOpts {
 interface CliCommand {
   binary: string;
   args: string[];
+}
+
+/**
+ * Resolve the full path to a CLI binary, checking common install locations.
+ * Falls back to bare name (relies on PATH) if not found at known locations.
+ */
+function resolveBinary(name: string): string {
+  const home = homedir();
+  const candidates = [
+    join(home, '.local', 'bin', name),
+    join(home, '.claude', 'local', 'bin', name),
+    join(home, '.npm-global', 'bin', name),
+    join('/usr', 'local', 'bin', name),
+    join('/usr', 'bin', name),
+  ];
+  for (const p of candidates) {
+    if (existsSync(p)) return p;
+  }
+  return name; // fall back to PATH lookup
 }
 
 /**
@@ -57,7 +79,7 @@ function buildClaudeCommand(opts: CliSessionOpts): CliCommand {
   }
   if (opts.mcpConfigPath) args.push('--mcp-config', opts.mcpConfigPath);
 
-  return { binary: 'claude', args };
+  return { binary: resolveBinary('claude'), args };
 }
 
 function buildKiroCommand(opts: CliSessionOpts): CliCommand {
@@ -83,5 +105,5 @@ function buildKiroCommand(opts: CliSessionOpts): CliCommand {
   // Prompt goes as positional arg at the end
   args.push(opts.content);
 
-  return { binary: 'kiro-cli', args };
+  return { binary: resolveBinary('kiro-cli'), args };
 }

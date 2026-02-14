@@ -73,6 +73,13 @@
     {#if streamStore.isStreaming}
       <StreamingMessage />
     {/if}
+
+    {#if streamStore.status === 'error' && streamStore.error}
+      <div class="stream-error">
+        <span class="error-label">ERROR</span>
+        <span class="error-message">{streamStore.error}</span>
+      </div>
+    {/if}
   {/if}
 
   {#if userScrolled}
@@ -159,6 +166,29 @@
     margin-right: 5px;
     border: 1px solid var(--border-primary);
     color: var(--accent-primary);
+  }
+
+  .stream-error {
+    margin: 8px 28px;
+    padding: 12px 16px;
+    background: rgba(255, 50, 50, 0.08);
+    border-left: 2px solid var(--error, #ff3232);
+    font-size: 13px;
+    color: var(--text-primary);
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+  }
+  .error-label {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    color: var(--error, #ff3232);
+    flex-shrink: 0;
+  }
+  .error-message {
+    word-break: break-word;
+    color: var(--text-secondary);
   }
 
   .scroll-bottom {

@@ -1,6 +1,7 @@
 import type { ThemeId, CliProvider, Keybinding, PermissionMode } from '@maude/shared';
 import { convertVsCodeSnippets, type ConvertedSnippet } from '$lib/utils/vscode-snippet-converter';
 import { convertVsCodeTheme, type ConvertedTheme } from '$lib/utils/vscode-theme-converter';
+import { getBaseUrl } from '$lib/api/client';
 
 const STORAGE_KEY = 'maude-settings';
 
@@ -18,10 +19,12 @@ interface SettingsState {
   autoScroll: boolean;
   streamingEnabled: boolean;
   compactMessages: boolean;
+  showBudgetDisplay: boolean;
   projectPath: string;
   effort: string;
   maxBudgetUsd: number | null;
   maxTurns: number | null;
+  sessionBudgetUsd: number | null;
   customSnippets: Record<string, ConvertedSnippet[]>;
   customThemes: Record<
     string,
@@ -54,10 +57,12 @@ const defaults: SettingsState = {
   autoScroll: true,
   streamingEnabled: true,
   compactMessages: false,
+  showBudgetDisplay: true,
   projectPath: '.',
   effort: 'high',
   maxBudgetUsd: null,
   maxTurns: null,
+  sessionBudgetUsd: null,
   customSnippets: {},
   customThemes: {},
 };
@@ -90,11 +95,7 @@ function createSettingsStore() {
     }
     if (Object.keys(serverSettings).length === 0) return;
 
-    const BASE_URL =
-      typeof window !== 'undefined' && (window as any).__TAURI__
-        ? 'http://localhost:3002/api'
-        : '/api';
-    fetch(`${BASE_URL}/settings`, {
+    fetch(`${getBaseUrl()}/settings`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ settings: serverSettings }),
@@ -170,6 +171,9 @@ function createSettingsStore() {
     get compactMessages() {
       return state.compactMessages;
     },
+    get showBudgetDisplay() {
+      return state.showBudgetDisplay;
+    },
     get projectPath() {
       return state.projectPath;
     },
@@ -181,6 +185,9 @@ function createSettingsStore() {
     },
     get maxTurns() {
       return state.maxTurns;
+    },
+    get sessionBudgetUsd() {
+      return state.sessionBudgetUsd;
     },
     get all() {
       return state;

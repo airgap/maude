@@ -1,6 +1,8 @@
 <script lang="ts">
   import { settingsStore } from '$lib/stores/settings.svelte';
   import { uiStore } from '$lib/stores/ui.svelte';
+  import { api } from '$lib/api/client';
+  import { onMount } from 'svelte';
   import type { ThemeId, CliProvider } from '@maude/shared';
 
   const cliProviders: { id: CliProvider; label: string; desc: string }[] = [
@@ -9,8 +11,106 @@
   ];
 
   let activeTab = $state<
-    'general' | 'appearance' | 'editor' | 'permissions' | 'mcp' | 'keybindings'
+    'general' | 'appearance' | 'editor' | 'permissions' | 'security' | 'mcp' | 'keybindings'
   >('general');
+
+  // --- BYOK state ---
+  let apiKeyStatus = $state<Record<string, boolean>>({});
+  let apiKeyInputs = $state<Record<string, string>>({});
+  let apiKeySaving = $state<Record<string, boolean>>({});
+
+  const apiProviders = [
+    { id: 'anthropic', label: 'Anthropic', desc: 'Claude models' },
+    { id: 'openai', label: 'OpenAI', desc: 'GPT models' },
+    { id: 'google', label: 'Google', desc: 'Gemini models' },
+  ];
+
+  async function loadApiKeyStatus() {
+    try {
+      const res = await api.settings.apiKeysStatus();
+      apiKeyStatus = res.data;
+    } catch {}
+  }
+
+  async function saveApiKey(provider: string) {
+    const key = apiKeyInputs[provider]?.trim();
+    if (!key) return;
+    apiKeySaving = { ...apiKeySaving, [provider]: true };
+    try {
+      await api.settings.setApiKey(provider, key);
+      apiKeyInputs = { ...apiKeyInputs, [provider]: '' };
+      await loadApiKeyStatus();
+      uiStore.toast(`${provider} API key saved`, 'success');
+    } catch {
+      uiStore.toast(`Failed to save ${provider} API key`, 'error');
+    }
+    apiKeySaving = { ...apiKeySaving, [provider]: false };
+  }
+
+  // --- Budget state ---
+  let budgetValue = $state<string>('');
+  let budgetLoading = $state(false);
+
+  async function loadBudget() {
+    try {
+      const res = await api.settings.getBudget();
+      budgetValue = res.data.budgetUsd != null ? String(res.data.budgetUsd) : '';
+    } catch {}
+  }
+
+  async function saveBudget() {
+    budgetLoading = true;
+    try {
+      const val = budgetValue.trim() ? parseFloat(budgetValue) : null;
+      await api.settings.setBudget(val);
+      settingsStore.update({ sessionBudgetUsd: val });
+      uiStore.toast(val ? `Budget set to $${val.toFixed(2)}` : 'Budget limit removed', 'success');
+    } catch {
+      uiStore.toast('Failed to save budget', 'error');
+    }
+    budgetLoading = false;
+  }
+
+  // --- Sandbox state ---
+  let sandboxEnabled = $state(false);
+  let sandboxPaths = $state<string[]>([]);
+  let sandboxNewPath = $state('');
+  let sandboxLoading = $state(false);
+
+  async function loadSandbox() {
+    try {
+      const res = await api.projects.getSandbox(settingsStore.projectPath);
+      sandboxEnabled = res.data.enabled;
+      sandboxPaths = res.data.allowedPaths;
+    } catch {}
+  }
+
+  async function saveSandbox() {
+    sandboxLoading = true;
+    try {
+      await api.projects.updateSandbox({
+        projectPath: settingsStore.projectPath,
+        enabled: sandboxEnabled,
+        allowedPaths: sandboxPaths,
+      });
+      uiStore.toast('Sandbox settings saved', 'success');
+    } catch {
+      uiStore.toast('Failed to save sandbox settings', 'error');
+    }
+    sandboxLoading = false;
+  }
+
+  function addSandboxPath() {
+    const p = sandboxNewPath.trim();
+    if (p && !sandboxPaths.includes(p)) {
+      sandboxPaths = [...sandboxPaths, p];
+      sandboxNewPath = '';
+    }
+  }
+
+  function removeSandboxPath(path: string) {
+    sandboxPaths = sandboxPaths.filter((p) => p !== path);
+  }
 
   // --- Snippet import state ---
   let snippetLanguage = $state('javascript');
@@ -80,13 +180,58 @@
     { id: 'light-colorblind', label: 'Light (Colorblind)' },
     { id: 'dark-ansi', label: 'Dark (ANSI)' },
     { id: 'light-ansi', label: 'Light (ANSI)' },
+    { id: 'monokai', label: 'Monokai' },
+    { id: 'dracula', label: 'Dracula' },
+    { id: 'nord', label: 'Nord' },
+    { id: 'gruvbox-dark', label: 'Gruvbox Dark' },
+    { id: 'gruvbox-light', label: 'Gruvbox Light' },
+    { id: 'solarized-dark', label: 'Solarized Dark' },
+    { id: 'solarized-light', label: 'Solarized Light' },
+    { id: 'catppuccin-mocha', label: 'Catppuccin Mocha' },
+    { id: 'catppuccin-latte', label: 'Catppuccin Latte' },
+    { id: 'tokyo-night', label: 'Tokyo Night' },
+    { id: 'rose-pine', label: 'Rosé Pine' },
+    { id: 'rose-pine-dawn', label: 'Rosé Pine Dawn' },
+    { id: 'synthwave', label: "Synthwave '84" },
+    { id: 'github-dark', label: 'GitHub Dark' },
+    { id: 'github-light', label: 'GitHub Light' },
+    { id: 'one-dark', label: 'One Dark' },
+    { id: 'everforest', label: 'Everforest' },
   ];
 
-  const models = [
+  const cloudModels = [
     { id: 'claude-opus-4-6', label: 'Claude Opus 4.6' },
     { id: 'claude-sonnet-4-5-20250929', label: 'Claude Sonnet 4.5' },
     { id: 'claude-haiku-4-5-20251001', label: 'Claude Haiku 4.5' },
   ];
+
+  let ollamaAvailable = $state(false);
+  let ollamaModels = $state<Array<{ name: string; size: number }>>([]);
+  let models = $state(cloudModels);
+
+  onMount(async () => {
+    try {
+      const status = await api.settings.ollamaStatus();
+      ollamaAvailable = status.data.available;
+      if (ollamaAvailable) {
+        const res = await api.settings.ollamaModels();
+        ollamaModels = res.data;
+        models = [
+          ...cloudModels,
+          ...ollamaModels.map((m) => ({
+            id: `ollama:${m.name}`,
+            label: `${m.name} (local)`,
+          })),
+        ];
+      }
+    } catch {
+      /* Ollama not available */
+    }
+    // Pre-load security data
+    loadApiKeyStatus();
+    loadBudget();
+    loadSandbox();
+  });
 
   const permModes = [
     { id: 'plan', label: 'Plan', desc: 'Read-only, plan before executing' },
@@ -122,7 +267,7 @@
 
     <div class="modal-body">
       <nav class="settings-tabs">
-        {#each ['general', 'appearance', 'editor', 'permissions', 'mcp', 'keybindings'] as tab}
+        {#each ['general', 'appearance', 'editor', 'permissions', 'security', 'mcp', 'keybindings'] as tab}
           <button
             class="settings-tab"
             class:active={activeTab === tab}
@@ -305,6 +450,18 @@
               <span class="toggle-slider"></span>
             </label>
           </div>
+          <div class="setting-group">
+            <label class="setting-label">Show budget in status bar</label>
+            <label class="toggle">
+              <input
+                type="checkbox"
+                checked={settingsStore.showBudgetDisplay}
+                onchange={() =>
+                  settingsStore.update({ showBudgetDisplay: !settingsStore.showBudgetDisplay })}
+              />
+              <span class="toggle-slider"></span>
+            </label>
+          </div>
         {:else if activeTab === 'editor'}
           <div class="setting-group">
             <label class="setting-label">Import VS Code Snippets</label>
@@ -361,6 +518,135 @@
                 </button>
               {/each}
             </div>
+          </div>
+        {:else if activeTab === 'security'}
+          <!-- API Keys (BYOK) -->
+          <div class="setting-group">
+            <label class="setting-label">API Keys</label>
+            <p class="setting-desc">
+              Bring your own API keys. Keys are stored server-side and never sent back to the
+              client.
+            </p>
+            <div class="api-keys-list">
+              {#each apiProviders as provider}
+                <div class="api-key-row">
+                  <div class="api-key-info">
+                    <span class="api-key-name">{provider.label}</span>
+                    <span class="api-key-desc">{provider.desc}</span>
+                    {#if apiKeyStatus[`${provider.id}Configured`]}
+                      <span class="api-key-badge configured">Configured</span>
+                    {:else}
+                      <span class="api-key-badge not-configured">Not set</span>
+                    {/if}
+                  </div>
+                  <div class="api-key-input-row">
+                    <input
+                      type="password"
+                      class="api-key-input"
+                      placeholder={apiKeyStatus[`${provider.id}Configured`]
+                        ? '••••••••'
+                        : `Enter ${provider.label} API key`}
+                      value={apiKeyInputs[provider.id] || ''}
+                      oninput={(e) => {
+                        apiKeyInputs = {
+                          ...apiKeyInputs,
+                          [provider.id]: (e.target as HTMLInputElement).value,
+                        };
+                      }}
+                      onkeydown={(e) => {
+                        if (e.key === 'Enter') saveApiKey(provider.id);
+                      }}
+                    />
+                    <button
+                      class="btn-secondary"
+                      onclick={() => saveApiKey(provider.id)}
+                      disabled={apiKeySaving[provider.id] || !apiKeyInputs[provider.id]?.trim()}
+                    >
+                      {apiKeySaving[provider.id] ? 'Saving...' : 'Save'}
+                    </button>
+                  </div>
+                </div>
+              {/each}
+            </div>
+          </div>
+
+          <!-- Budget -->
+          <div class="setting-group">
+            <label class="setting-label">Session Budget</label>
+            <p class="setting-desc">Set a maximum spend per session. Leave empty for no limit.</p>
+            <div class="budget-row">
+              <span class="budget-prefix">$</span>
+              <input
+                type="number"
+                class="budget-input"
+                placeholder="No limit"
+                step="0.50"
+                min="0"
+                value={budgetValue}
+                oninput={(e) => {
+                  budgetValue = (e.target as HTMLInputElement).value;
+                }}
+                onkeydown={(e) => {
+                  if (e.key === 'Enter') saveBudget();
+                }}
+              />
+              <button class="btn-secondary" onclick={saveBudget} disabled={budgetLoading}>
+                {budgetLoading ? 'Saving...' : 'Save'}
+              </button>
+            </div>
+          </div>
+
+          <!-- Sandbox -->
+          <div class="setting-group">
+            <label class="setting-label">Filesystem Sandbox</label>
+            <p class="setting-desc">Restrict agent file access to specific directories.</p>
+            <div class="sandbox-toggle-row">
+              <label class="toggle">
+                <input
+                  type="checkbox"
+                  checked={sandboxEnabled}
+                  onchange={() => {
+                    sandboxEnabled = !sandboxEnabled;
+                  }}
+                />
+                <span class="toggle-slider"></span>
+              </label>
+              <span class="sandbox-status">{sandboxEnabled ? 'Enabled' : 'Disabled'}</span>
+            </div>
+            {#if sandboxEnabled}
+              <div class="sandbox-paths">
+                <label class="setting-label" style="font-size: 12px;">Allowed Paths</label>
+                {#each sandboxPaths as path}
+                  <div class="sandbox-path-row">
+                    <code class="sandbox-path">{path}</code>
+                    <button class="btn-danger-sm" onclick={() => removeSandboxPath(path)}>x</button>
+                  </div>
+                {/each}
+                <div class="sandbox-add-row">
+                  <input
+                    type="text"
+                    class="sandbox-path-input"
+                    placeholder="/path/to/allow"
+                    value={sandboxNewPath}
+                    oninput={(e) => {
+                      sandboxNewPath = (e.target as HTMLInputElement).value;
+                    }}
+                    onkeydown={(e) => {
+                      if (e.key === 'Enter') addSandboxPath();
+                    }}
+                  />
+                  <button class="btn-secondary" onclick={addSandboxPath}>Add</button>
+                </div>
+              </div>
+              <button
+                class="btn-primary"
+                style="margin-top: 10px;"
+                onclick={saveSandbox}
+                disabled={sandboxLoading}
+              >
+                {sandboxLoading ? 'Saving...' : 'Save Sandbox Config'}
+              </button>
+            {/if}
           </div>
         {:else if activeTab === 'mcp'}
           <div class="setting-group">
@@ -783,5 +1069,146 @@
     background: var(--accent-error);
     color: white;
     border-color: var(--accent-error);
+  }
+
+  /* API Keys */
+  .api-keys-list {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+  .api-key-row {
+    padding: 10px 12px;
+    background: var(--bg-tertiary);
+    border-radius: var(--radius-sm);
+  }
+  .api-key-info {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 8px;
+  }
+  .api-key-name {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-primary);
+  }
+  .api-key-desc {
+    font-size: 11px;
+    color: var(--text-tertiary);
+  }
+  .api-key-badge {
+    font-size: 10px;
+    font-weight: 700;
+    padding: 1px 8px;
+    border-radius: var(--radius-sm);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-left: auto;
+  }
+  .api-key-badge.configured {
+    color: var(--accent-secondary);
+    border: 1px solid var(--accent-secondary);
+  }
+  .api-key-badge.not-configured {
+    color: var(--text-tertiary);
+    border: 1px solid var(--border-secondary);
+  }
+  .api-key-input-row {
+    display: flex;
+    gap: 6px;
+  }
+  .api-key-input {
+    flex: 1;
+    padding: 6px 10px;
+    font-size: 12px;
+    background: var(--bg-input);
+    border: 1px solid var(--border-secondary);
+    border-radius: var(--radius-sm);
+    color: var(--text-primary);
+    font-family: var(--font-family);
+  }
+  .api-key-input:focus {
+    border-color: var(--accent-primary);
+    outline: none;
+  }
+
+  /* Budget */
+  .budget-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .budget-prefix {
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--text-secondary);
+  }
+  .budget-input {
+    width: 120px;
+    padding: 6px 10px;
+    font-size: 13px;
+    background: var(--bg-input);
+    border: 1px solid var(--border-secondary);
+    border-radius: var(--radius-sm);
+    color: var(--text-primary);
+    font-family: var(--font-family);
+  }
+  .budget-input:focus {
+    border-color: var(--accent-primary);
+    outline: none;
+  }
+
+  /* Sandbox */
+  .sandbox-toggle-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 12px;
+  }
+  .sandbox-status {
+    font-size: 12px;
+    color: var(--text-secondary);
+    font-weight: 600;
+  }
+  .sandbox-paths {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin-top: 8px;
+  }
+  .sandbox-path-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 4px 8px;
+    background: var(--bg-tertiary);
+    border-radius: var(--radius-sm);
+  }
+  .sandbox-path {
+    flex: 1;
+    font-size: 12px;
+    color: var(--text-primary);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .sandbox-add-row {
+    display: flex;
+    gap: 6px;
+  }
+  .sandbox-path-input {
+    flex: 1;
+    padding: 6px 10px;
+    font-size: 12px;
+    background: var(--bg-input);
+    border: 1px solid var(--border-secondary);
+    border-radius: var(--radius-sm);
+    color: var(--text-primary);
+    font-family: var(--font-family);
+  }
+  .sandbox-path-input:focus {
+    border-color: var(--accent-primary);
+    outline: none;
   }
 </style>

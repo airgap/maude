@@ -6,6 +6,35 @@
   import { gitStore } from '$lib/stores/git.svelte';
   import { lspStore } from '$lib/stores/lsp.svelte';
 
+  // Client-side pricing table (per million tokens)
+  const PRICING: Record<string, { input: number; output: number }> = {
+    'claude-opus-4-6': { input: 15.0, output: 75.0 },
+    'claude-sonnet-4-5-20250929': { input: 3.0, output: 15.0 },
+    'claude-haiku-4-5-20251001': { input: 0.8, output: 4.0 },
+  };
+  const DEFAULT_PRICING = { input: 3.0, output: 15.0 };
+
+  function estimateCost(model: string, inputTokens: number, outputTokens: number): string {
+    const p = PRICING[model] || DEFAULT_PRICING;
+    const cost = (inputTokens / 1_000_000) * p.input + (outputTokens / 1_000_000) * p.output;
+    return cost < 0.01 ? cost.toFixed(4) : cost.toFixed(2);
+  }
+
+  // Accumulate session-wide spend
+  let sessionCost = $state(0);
+  let lastTrackedTokens = $state({ input: 0, output: 0 });
+
+  $effect(() => {
+    const { input, output } = streamStore.tokenUsage;
+    if (input > lastTrackedTokens.input || output > lastTrackedTokens.output) {
+      const deltaIn = input - lastTrackedTokens.input;
+      const deltaOut = output - lastTrackedTokens.output;
+      const p = PRICING[settingsStore.model] || DEFAULT_PRICING;
+      sessionCost += (deltaIn / 1_000_000) * p.input + (deltaOut / 1_000_000) * p.output;
+      lastTrackedTokens = { input, output };
+    }
+  });
+
   const layoutIcons: Record<string, string> = {
     'chat-only': 'Chat',
     'editor-only': 'Editor',
@@ -28,7 +57,7 @@
       {:else if streamStore.status === 'tool_pending'}
         <span class="status-dot pending"></span> Tool approval pending
       {:else if streamStore.status === 'error'}
-        <span class="status-dot error"></span> Error
+        <span class="status-dot error"></span> Error{#if streamStore.error}: {streamStore.error}{/if}
       {:else}
         <span class="status-dot idle"></span> Ready
       {/if}
@@ -125,10 +154,35 @@
       {layoutIcons[editorStore.layoutMode]}
     </button>
 
-    {#if streamStore.tokenUsage.input || streamStore.tokenUsage.output}
-      <span class="status-item tokens">
-        {streamStore.tokenUsage.input.toLocaleString()}in / {streamStore.tokenUsage.output.toLocaleString()}out
-      </span>
+    {#if settingsStore.showBudgetDisplay}
+      {#if streamStore.tokenUsage.input || streamStore.tokenUsage.output}
+        {@const cost = estimateCost(
+          settingsStore.model,
+          streamStore.tokenUsage.input,
+          streamStore.tokenUsage.output,
+        )}
+        <span
+          class="status-item tokens"
+          title="Input: {streamStore.tokenUsage.input.toLocaleString()} / Output: {streamStore.tokenUsage.output.toLocaleString()} tokens"
+        >
+          {streamStore.tokenUsage.input.toLocaleString()}in / {streamStore.tokenUsage.output.toLocaleString()}out
+          <span class="cost-badge">${cost}</span>
+        </span>
+      {/if}
+
+      {#if sessionCost > 0}
+        {@const budget = settingsStore.sessionBudgetUsd}
+        {@const overBudget = budget && sessionCost >= budget}
+        {@const nearBudget = budget && sessionCost >= budget * 0.8 && !overBudget}
+        <span
+          class="status-item session-cost"
+          class:over-budget={overBudget}
+          class:near-budget={nearBudget}
+          title="Total session spend{budget ? ` (budget: $${budget.toFixed(2)})` : ''}"
+        >
+          Session: ${sessionCost.toFixed(4)}{budget ? ` / $${budget.toFixed(2)}` : ''}
+        </span>
+      {/if}
     {/if}
 
     <span class="status-item mode">
@@ -250,6 +304,28 @@
     font-size: 10px;
     letter-spacing: 0.5px;
     color: var(--accent-primary);
+  }
+  .cost-badge {
+    padding: 0 4px;
+    background: rgba(0, 180, 255, 0.15);
+    border: 1px solid rgba(0, 180, 255, 0.3);
+    font-weight: 700;
+    font-size: 9px;
+    margin-left: 4px;
+  }
+  .session-cost {
+    font-family: var(--font-family);
+    font-size: 10px;
+    letter-spacing: 0.5px;
+    color: var(--accent-secondary);
+    font-weight: 700;
+  }
+  .session-cost.near-budget {
+    color: var(--accent-warning);
+  }
+  .session-cost.over-budget {
+    color: var(--accent-error);
+    animation: pulse 1.2s infinite;
   }
 
   .mode {

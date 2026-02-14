@@ -1,4 +1,8 @@
 <script lang="ts">
+  import { streamStore } from '$lib/stores/stream.svelte';
+  import { conversationStore } from '$lib/stores/conversation.svelte';
+  import { cancelStream } from '$lib/api/sse';
+
   let { toolCallId, toolName, input, description } = $props<{
     toolCallId: string;
     toolName: string;
@@ -8,10 +12,17 @@
 
   let responding = $state(false);
 
-  // TODO: Wire up our own approval layer (CLI runs with --dangerously-skip-permissions)
   async function respond(approved: boolean) {
     if (responding) return;
     responding = true;
+    streamStore.resolveApproval(toolCallId);
+    if (!approved) {
+      // Cancel the stream to stop further agent execution
+      const convId = conversationStore.active?.id;
+      if (convId) {
+        await cancelStream(convId);
+      }
+    }
   }
 
   function formatInput(): string {

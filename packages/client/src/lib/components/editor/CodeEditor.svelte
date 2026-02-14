@@ -264,6 +264,26 @@
     }
   });
 
+  // Handle pending goto-definition scroll after file opens
+  $effect(() => {
+    const goTo = editorStore.pendingGoTo;
+    if (goTo && view && currentTabId === tab.id) {
+      const target = editorStore.consumePendingGoTo();
+      if (target) {
+        const lineCount = view.state.doc.lines;
+        if (target.line >= 1 && target.line <= lineCount) {
+          const docLine = view.state.doc.line(target.line);
+          const pos = docLine.from + Math.min(target.col - 1, docLine.length);
+          view.dispatch({
+            selection: { anchor: pos },
+            scrollIntoView: true,
+          });
+          editorStore.setCursorPosition(tab.id, target.line, target.col);
+        }
+      }
+    }
+  });
+
   onMount(() => {
     // Load server info so StatusBar can show install prompts
     lspStore.loadServerInfo();
