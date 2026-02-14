@@ -141,6 +141,7 @@ export function createTestDb(): Database {
       learnings TEXT NOT NULL DEFAULT '[]',
       estimate TEXT,
       dependency_reasons TEXT NOT NULL DEFAULT '{}',
+      priority_recommendation TEXT,
       sort_order INTEGER NOT NULL DEFAULT 0,
       created_at INTEGER NOT NULL,
       updated_at INTEGER NOT NULL,

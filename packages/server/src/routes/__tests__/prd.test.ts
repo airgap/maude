@@ -3652,4 +3652,666 @@ describe('PRD Routes', () => {
       expect(dbRow.sort_order).toBe(1); // Should be after existing story
     });
   });
+
+  // ---------------------------------------------------------------
+  // Priority Recommendation Engine Tests
+  // ---------------------------------------------------------------
+  describe('Priority Recommendation Engine', () => {
+    function withApiKey(fn: () => Promise<void>) {
+      return async () => {
+        const origKey = process.env.ANTHROPIC_API_KEY;
+        process.env.ANTHROPIC_API_KEY = 'test-key';
+        try {
+          await fn();
+        } finally {
+          if (origKey) process.env.ANTHROPIC_API_KEY = origKey;
+          else delete process.env.ANTHROPIC_API_KEY;
+        }
+      };
+    }
+
+    function mockAiPriorityResponse(response: any) {
+      globalThis.fetch = (async (url: string | URL | Request, init?: RequestInit) => {
+        const urlStr = typeof url === 'string' ? url : url instanceof URL ? url.toString() : url.url;
+        if (urlStr.includes('api.anthropic.com')) {
+          return new Response(
+            JSON.stringify({
+              content: [{ type: 'text', text: JSON.stringify(response) }],
+            }),
+            { status: 200, headers: { 'Content-Type': 'application/json' } },
+          );
+        }
+        return originalFetch(url, init);
+      }) as typeof fetch;
+    }
+
+    function setPriorityRecommendation(storyId: string, rec: any) {
+      testDb.query('UPDATE prd_stories SET priority_recommendation = ? WHERE id = ?')
+        .run(JSON.stringify(rec), storyId);
+    }
+
+    // -- Single story priority recommendation --
+
+    describe('POST /:prdId/stories/:storyId/priority — single story recommendation', () => {
+      test('returns 404 for non-existent PRD', async () => {
+        const res = await app.request('/nonexistent/stories/story-1/priority', {
+          method: 'POST',
+          body: JSON.stringify({ storyId: 'story-1' }),
+          headers: { 'Content-Type': 'application/json' },
+        });
+        expect(res.status).toBe(404);
+      });
+
+      test('returns 404 for non-existent story', async () => {
+        insertPrd({ id: 'prd-pri-1' });
+        const res = await app.request('/prd-pri-1/stories/nonexistent/priority', {
+          method: 'POST',
+          body: JSON.stringify({ storyId: 'nonexistent' }),
+          headers: { 'Content-Type': 'application/json' },
+        });
+        expect(res.status).toBe(404);
+      });
+
+      test('recommends priority with all factor categories', withApiKey(async () => {
+        insertPrd({ id: 'prd-pri-2', description: 'E-commerce platform' });
+        insertStory({
+          id: 'story-pri-1',
+          prd_id: 'prd-pri-2',
+          title: 'User Authentication',
+          description: 'Implement secure login with OAuth and session management',
+          priority: 'medium',
+          acceptance_criteria: JSON.stringify([
+            { id: 'ac-1', description: 'Users can log in with email/password', passed: false },
+            { id: 'ac-2', description: 'Session tokens are securely stored', passed: false },
+            { id: 'ac-3', description: 'Failed login attempts are rate-limited', passed: false },
+          ]),
+        });
+
+        mockAiPriorityResponse({
+          suggestedPriority: 'high',
+          confidence: 85,
+          factors: [
+            { factor: 'Security-critical feature', category: 'risk', impact: 'increases', weight: 'major' },
+            { factor: 'Foundation for other features', category: 'dependency', impact: 'increases', weight: 'major' },
+            { factor: 'Core user workflow', category: 'user_impact', impact: 'increases', weight: 'moderate' },
+            { factor: 'Moderate scope with 3 criteria', category: 'scope', impact: 'neutral', weight: 'minor' },
+          ],
+          explanation: 'Authentication is a security-critical, foundational feature that blocks other user-facing stories.',
+        });
+
+        const res = await app.request('/prd-pri-2/stories/story-pri-1/priority', {
+          method: 'POST',
+          body: JSON.stringify({ storyId: 'story-pri-1' }),
+          headers: { 'Content-Type': 'application/json' },
+        });
+
+        expect(res.status).toBe(200);
+        const json = await res.json();
+        expect(json.ok).toBe(true);
+        expect(json.data.recommendation.suggestedPriority).toBe('high');
+        expect(json.data.recommendation.currentPriority).toBe('medium');
+        expect(json.data.recommendation.confidence).toBe(85);
+        expect(json.data.recommendation.factors).toHaveLength(4);
+        expect(json.data.recommendation.explanation).toContain('security-critical');
+        expect(json.data.recommendation.isManualOverride).toBe(false);
+
+        // Verify all factor categories are present
+        const categories = json.data.recommendation.factors.map((f: any) => f.category);
+        expect(categories).toContain('risk');
+        expect(categories).toContain('dependency');
+        expect(categories).toContain('user_impact');
+        expect(categories).toContain('scope');
+      }));
+
+      test('persists recommendation to database', withApiKey(async () => {
+        insertPrd({ id: 'prd-pri-3' });
+        insertStory({ id: 'story-pri-2', prd_id: 'prd-pri-3', priority: 'low' });
+
+        mockAiPriorityResponse({
+          suggestedPriority: 'critical',
+          confidence: 92,
+          factors: [
+            { factor: 'Blocks all other stories', category: 'dependency', impact: 'increases', weight: 'major' },
+          ],
+          explanation: 'This is a blocking story.',
+        });
+
+        await app.request('/prd-pri-3/stories/story-pri-2/priority', {
+          method: 'POST',
+          body: JSON.stringify({ storyId: 'story-pri-2' }),
+          headers: { 'Content-Type': 'application/json' },
+        });
+
+        // Check database directly
+        const dbRow = testDb
+          .query('SELECT priority_recommendation FROM prd_stories WHERE id = ?')
+          .get('story-pri-2') as any;
+        expect(dbRow.priority_recommendation).toBeTruthy();
+        const rec = JSON.parse(dbRow.priority_recommendation);
+        expect(rec.suggestedPriority).toBe('critical');
+        expect(rec.confidence).toBe(92);
+        expect(rec.isManualOverride).toBe(false);
+      }));
+
+      test('handles invalid AI response gracefully', withApiKey(async () => {
+        insertPrd({ id: 'prd-pri-4' });
+        insertStory({ id: 'story-pri-3', prd_id: 'prd-pri-4' });
+
+        // Return invalid priority and missing fields
+        mockAiPriorityResponse({
+          suggestedPriority: 'ultra-critical',
+          confidence: 200,
+          factors: [
+            { factor: 'Valid factor', category: 'invalid-cat', impact: 'invalid-impact', weight: 'invalid-weight' },
+          ],
+        });
+
+        const res = await app.request('/prd-pri-4/stories/story-pri-3/priority', {
+          method: 'POST',
+          body: JSON.stringify({ storyId: 'story-pri-3' }),
+          headers: { 'Content-Type': 'application/json' },
+        });
+
+        expect(res.status).toBe(200);
+        const json = await res.json();
+        // Invalid priority should fall back to 'medium'
+        expect(json.data.recommendation.suggestedPriority).toBe('medium');
+        // Confidence capped at 100
+        expect(json.data.recommendation.confidence).toBe(100);
+        // Invalid category defaults to 'scope'
+        expect(json.data.recommendation.factors[0].category).toBe('scope');
+        // Invalid impact defaults to 'neutral'
+        expect(json.data.recommendation.factors[0].impact).toBe('neutral');
+        // Invalid weight defaults to 'moderate'
+        expect(json.data.recommendation.factors[0].weight).toBe('moderate');
+        // Missing explanation gets default
+        expect(json.data.recommendation.explanation).toBeTruthy();
+      }));
+
+      test('includes dependency context in AI prompt', withApiKey(async () => {
+        insertPrd({ id: 'prd-pri-5' });
+        insertStory({
+          id: 'story-blocker',
+          prd_id: 'prd-pri-5',
+          title: 'Setup Database',
+          priority: 'high',
+          sort_order: 0,
+        });
+        insertStory({
+          id: 'story-blocked',
+          prd_id: 'prd-pri-5',
+          title: 'User CRUD',
+          priority: 'medium',
+          depends_on: JSON.stringify(['story-blocker']),
+          sort_order: 1,
+        });
+        insertStory({
+          id: 'story-downstream',
+          prd_id: 'prd-pri-5',
+          title: 'User Profile',
+          priority: 'low',
+          depends_on: JSON.stringify(['story-blocked']),
+          sort_order: 2,
+        });
+
+        let capturedPrompt = '';
+        globalThis.fetch = (async (url: string | URL | Request, init?: RequestInit) => {
+          const urlStr = typeof url === 'string' ? url : url instanceof URL ? url.toString() : url.url;
+          if (urlStr.includes('api.anthropic.com')) {
+            const body = JSON.parse(init?.body as string);
+            capturedPrompt = body.messages[0].content;
+            return new Response(
+              JSON.stringify({
+                content: [{ type: 'text', text: JSON.stringify({
+                  suggestedPriority: 'high',
+                  confidence: 80,
+                  factors: [{ factor: 'Blocks downstream', category: 'dependency', impact: 'increases', weight: 'major' }],
+                  explanation: 'Story blocks other work.',
+                }) }],
+              }),
+              { status: 200, headers: { 'Content-Type': 'application/json' } },
+            );
+          }
+          return originalFetch(url, init);
+        }) as typeof fetch;
+
+        await app.request('/prd-pri-5/stories/story-blocker/priority', {
+          method: 'POST',
+          body: JSON.stringify({ storyId: 'story-blocker' }),
+          headers: { 'Content-Type': 'application/json' },
+        });
+
+        // The prompt should include dependency info — story-blocker blocks story-blocked
+        expect(capturedPrompt).toContain('BLOCKS');
+        expect(capturedPrompt).toContain('User CRUD');
+      }));
+    });
+
+    // -- Accept/override priority --
+
+    describe('PUT /:prdId/stories/:storyId/priority — accept/override priority', () => {
+      test('accepts AI-suggested priority', async () => {
+        insertPrd({ id: 'prd-acc-1' });
+        insertStory({ id: 'story-acc-1', prd_id: 'prd-acc-1', priority: 'medium' });
+        setPriorityRecommendation('story-acc-1', {
+          storyId: 'story-acc-1',
+          suggestedPriority: 'high',
+          currentPriority: 'medium',
+          confidence: 85,
+          factors: [],
+          explanation: 'Should be high.',
+          isManualOverride: false,
+        });
+
+        const res = await app.request('/prd-acc-1/stories/story-acc-1/priority', {
+          method: 'PUT',
+          body: JSON.stringify({ priority: 'high', accept: true }),
+          headers: { 'Content-Type': 'application/json' },
+        });
+
+        expect(res.status).toBe(200);
+        const json = await res.json();
+        expect(json.ok).toBe(true);
+
+        // Verify story priority was updated
+        const dbRow = testDb.query('SELECT * FROM prd_stories WHERE id = ?').get('story-acc-1') as any;
+        expect(dbRow.priority).toBe('high');
+
+        // Verify recommendation was updated (not marked as manual override since we accepted)
+        const rec = JSON.parse(dbRow.priority_recommendation);
+        expect(rec.isManualOverride).toBe(false);
+        expect(rec.currentPriority).toBe('high');
+      });
+
+      test('overrides with different priority (manual override)', async () => {
+        insertPrd({ id: 'prd-acc-2' });
+        insertStory({ id: 'story-acc-2', prd_id: 'prd-acc-2', priority: 'medium' });
+        setPriorityRecommendation('story-acc-2', {
+          storyId: 'story-acc-2',
+          suggestedPriority: 'high',
+          currentPriority: 'medium',
+          confidence: 85,
+          factors: [],
+          explanation: 'Should be high.',
+          isManualOverride: false,
+        });
+
+        const res = await app.request('/prd-acc-2/stories/story-acc-2/priority', {
+          method: 'PUT',
+          body: JSON.stringify({ priority: 'critical', accept: false }),
+          headers: { 'Content-Type': 'application/json' },
+        });
+
+        expect(res.status).toBe(200);
+
+        const dbRow = testDb.query('SELECT * FROM prd_stories WHERE id = ?').get('story-acc-2') as any;
+        expect(dbRow.priority).toBe('critical');
+
+        const rec = JSON.parse(dbRow.priority_recommendation);
+        expect(rec.isManualOverride).toBe(true);
+        expect(rec.currentPriority).toBe('critical');
+      });
+
+      test('rejects invalid priority', async () => {
+        insertPrd({ id: 'prd-acc-3' });
+        insertStory({ id: 'story-acc-3', prd_id: 'prd-acc-3' });
+
+        const res = await app.request('/prd-acc-3/stories/story-acc-3/priority', {
+          method: 'PUT',
+          body: JSON.stringify({ priority: 'invalid', accept: true }),
+          headers: { 'Content-Type': 'application/json' },
+        });
+
+        expect(res.status).toBe(400);
+        const json = await res.json();
+        expect(json.error).toContain('Invalid priority');
+      });
+
+      test('returns 404 for non-existent story', async () => {
+        insertPrd({ id: 'prd-acc-4' });
+        const res = await app.request('/prd-acc-4/stories/nonexistent/priority', {
+          method: 'PUT',
+          body: JSON.stringify({ priority: 'high', accept: true }),
+          headers: { 'Content-Type': 'application/json' },
+        });
+        expect(res.status).toBe(404);
+      });
+    });
+
+    // -- Bulk priority recommendation --
+
+    describe('POST /:id/priorities — bulk priority recommendation', () => {
+      test('returns 404 for non-existent PRD', async () => {
+        const res = await app.request('/nonexistent/priorities', {
+          method: 'POST',
+          body: JSON.stringify({}),
+          headers: { 'Content-Type': 'application/json' },
+        });
+        expect(res.status).toBe(404);
+      });
+
+      test('returns 400 when PRD has no stories', async () => {
+        insertPrd({ id: 'prd-bulk-1' });
+        const res = await app.request('/prd-bulk-1/priorities', {
+          method: 'POST',
+          body: JSON.stringify({}),
+          headers: { 'Content-Type': 'application/json' },
+        });
+        expect(res.status).toBe(400);
+        const json = await res.json();
+        expect(json.error).toContain('No stories');
+      });
+
+      test('recommends priorities for all stories', withApiKey(async () => {
+        insertPrd({ id: 'prd-bulk-2', description: 'Task management app' });
+        insertStory({ id: 'bulk-s1', prd_id: 'prd-bulk-2', title: 'Auth System', priority: 'medium', sort_order: 0 });
+        insertStory({ id: 'bulk-s2', prd_id: 'prd-bulk-2', title: 'Dashboard UI', priority: 'medium', sort_order: 1 });
+        insertStory({ id: 'bulk-s3', prd_id: 'prd-bulk-2', title: 'Email Notifications', priority: 'medium', sort_order: 2 });
+
+        mockAiPriorityResponse({
+          recommendations: [
+            {
+              storyId: 'bulk-s1',
+              suggestedPriority: 'critical',
+              confidence: 90,
+              factors: [{ factor: 'Foundation feature', category: 'dependency', impact: 'increases', weight: 'major' }],
+              explanation: 'Authentication is foundational.',
+            },
+            {
+              storyId: 'bulk-s2',
+              suggestedPriority: 'high',
+              confidence: 75,
+              factors: [{ factor: 'Core user interface', category: 'user_impact', impact: 'increases', weight: 'moderate' }],
+              explanation: 'Dashboard is the primary interface.',
+            },
+            {
+              storyId: 'bulk-s3',
+              suggestedPriority: 'low',
+              confidence: 80,
+              factors: [{ factor: 'Nice-to-have feature', category: 'scope', impact: 'decreases', weight: 'minor' }],
+              explanation: 'Notifications can be added later.',
+            },
+          ],
+          summary: 'Auth first, then dashboard, notifications last.',
+        });
+
+        const res = await app.request('/prd-bulk-2/priorities', {
+          method: 'POST',
+          body: JSON.stringify({}),
+          headers: { 'Content-Type': 'application/json' },
+        });
+
+        expect(res.status).toBe(200);
+        const json = await res.json();
+        expect(json.ok).toBe(true);
+        expect(json.data.recommendations).toHaveLength(3);
+        expect(json.data.summary.criticalCount).toBe(1);
+        expect(json.data.summary.highCount).toBe(1);
+        expect(json.data.summary.lowCount).toBe(1);
+        expect(json.data.summary.changedCount).toBe(3); // All changed from medium
+
+        // Verify persisted in database
+        const s1 = testDb.query('SELECT priority_recommendation FROM prd_stories WHERE id = ?').get('bulk-s1') as any;
+        const s2 = testDb.query('SELECT priority_recommendation FROM prd_stories WHERE id = ?').get('bulk-s2') as any;
+        const s3 = testDb.query('SELECT priority_recommendation FROM prd_stories WHERE id = ?').get('bulk-s3') as any;
+        expect(JSON.parse(s1.priority_recommendation).suggestedPriority).toBe('critical');
+        expect(JSON.parse(s2.priority_recommendation).suggestedPriority).toBe('high');
+        expect(JSON.parse(s3.priority_recommendation).suggestedPriority).toBe('low');
+      }));
+    });
+
+    // -- Priority recommendations update when dependencies change --
+
+    describe('Priority recommendation invalidation on dependency changes', () => {
+      test('adding a dependency invalidates priority recommendations for both stories', async () => {
+        insertPrd({ id: 'prd-inv-1' });
+        insertStory({ id: 'inv-s1', prd_id: 'prd-inv-1', title: 'Story A', sort_order: 0 });
+        insertStory({ id: 'inv-s2', prd_id: 'prd-inv-1', title: 'Story B', sort_order: 1 });
+
+        // Set priority recommendations on both
+        setPriorityRecommendation('inv-s1', {
+          storyId: 'inv-s1', suggestedPriority: 'medium', currentPriority: 'medium',
+          confidence: 80, factors: [], explanation: 'Initial recommendation', isManualOverride: false,
+        });
+        setPriorityRecommendation('inv-s2', {
+          storyId: 'inv-s2', suggestedPriority: 'low', currentPriority: 'low',
+          confidence: 70, factors: [], explanation: 'Initial recommendation', isManualOverride: false,
+        });
+
+        // Add dependency: s1 depends on s2
+        await app.request('/prd-inv-1/dependencies', {
+          method: 'POST',
+          body: JSON.stringify({ fromStoryId: 'inv-s1', toStoryId: 'inv-s2', reason: 'Data model needed' }),
+          headers: { 'Content-Type': 'application/json' },
+        });
+
+        // Both recommendations should be nullified
+        const s1Row = testDb.query('SELECT priority_recommendation FROM prd_stories WHERE id = ?').get('inv-s1') as any;
+        const s2Row = testDb.query('SELECT priority_recommendation FROM prd_stories WHERE id = ?').get('inv-s2') as any;
+        expect(s1Row.priority_recommendation).toBeNull();
+        expect(s2Row.priority_recommendation).toBeNull();
+      });
+
+      test('removing a dependency invalidates priority recommendations', async () => {
+        insertPrd({ id: 'prd-inv-2' });
+        insertStory({
+          id: 'inv-s3', prd_id: 'prd-inv-2', title: 'Story C',
+          depends_on: JSON.stringify(['inv-s4']), sort_order: 0,
+        });
+        insertStory({ id: 'inv-s4', prd_id: 'prd-inv-2', title: 'Story D', sort_order: 1 });
+
+        setPriorityRecommendation('inv-s3', {
+          storyId: 'inv-s3', suggestedPriority: 'high', currentPriority: 'medium',
+          confidence: 85, factors: [], explanation: 'Based on dependency', isManualOverride: false,
+        });
+        setPriorityRecommendation('inv-s4', {
+          storyId: 'inv-s4', suggestedPriority: 'critical', currentPriority: 'medium',
+          confidence: 90, factors: [], explanation: 'Blocking story', isManualOverride: false,
+        });
+
+        // Remove dependency
+        await app.request('/prd-inv-2/dependencies', {
+          method: 'DELETE',
+          body: JSON.stringify({ fromStoryId: 'inv-s3', toStoryId: 'inv-s4' }),
+          headers: { 'Content-Type': 'application/json' },
+        });
+
+        const s3Row = testDb.query('SELECT priority_recommendation FROM prd_stories WHERE id = ?').get('inv-s3') as any;
+        const s4Row = testDb.query('SELECT priority_recommendation FROM prd_stories WHERE id = ?').get('inv-s4') as any;
+        expect(s3Row.priority_recommendation).toBeNull();
+        expect(s4Row.priority_recommendation).toBeNull();
+      });
+
+      test('updating dependsOn via PATCH invalidates priority recommendations', async () => {
+        insertPrd({ id: 'prd-inv-3' });
+        insertStory({ id: 'inv-s5', prd_id: 'prd-inv-3', title: 'Story E', sort_order: 0 });
+        insertStory({ id: 'inv-s6', prd_id: 'prd-inv-3', title: 'Story F', sort_order: 1 });
+
+        setPriorityRecommendation('inv-s5', {
+          storyId: 'inv-s5', suggestedPriority: 'medium', currentPriority: 'medium',
+          confidence: 75, factors: [], explanation: 'Recommendation', isManualOverride: false,
+        });
+        setPriorityRecommendation('inv-s6', {
+          storyId: 'inv-s6', suggestedPriority: 'high', currentPriority: 'medium',
+          confidence: 80, factors: [], explanation: 'Recommendation', isManualOverride: false,
+        });
+
+        // Update story E to depend on story F via PATCH
+        await app.request('/prd-inv-3/stories/inv-s5', {
+          method: 'PATCH',
+          body: JSON.stringify({ dependsOn: ['inv-s6'] }),
+          headers: { 'Content-Type': 'application/json' },
+        });
+
+        // Both recommendations should be invalidated
+        const s5Row = testDb.query('SELECT priority_recommendation FROM prd_stories WHERE id = ?').get('inv-s5') as any;
+        const s6Row = testDb.query('SELECT priority_recommendation FROM prd_stories WHERE id = ?').get('inv-s6') as any;
+        expect(s5Row.priority_recommendation).toBeNull();
+        expect(s6Row.priority_recommendation).toBeNull();
+      });
+
+      test('changing priority via PATCH invalidates related stories recommendations', async () => {
+        insertPrd({ id: 'prd-inv-4' });
+        insertStory({
+          id: 'inv-s7', prd_id: 'prd-inv-4', title: 'Story G', priority: 'medium',
+          depends_on: JSON.stringify(['inv-s8']), sort_order: 0,
+        });
+        insertStory({
+          id: 'inv-s8', prd_id: 'prd-inv-4', title: 'Story H', priority: 'medium',
+          sort_order: 1,
+        });
+
+        setPriorityRecommendation('inv-s7', {
+          storyId: 'inv-s7', suggestedPriority: 'high', currentPriority: 'medium',
+          confidence: 80, factors: [], explanation: 'Recommendation', isManualOverride: false,
+        });
+        setPriorityRecommendation('inv-s8', {
+          storyId: 'inv-s8', suggestedPriority: 'high', currentPriority: 'medium',
+          confidence: 80, factors: [], explanation: 'Recommendation', isManualOverride: false,
+        });
+
+        // Change story H's priority — story G depends on H, so G's recommendation should be invalidated
+        await app.request('/prd-inv-4/stories/inv-s8', {
+          method: 'PATCH',
+          body: JSON.stringify({ priority: 'critical' }),
+          headers: { 'Content-Type': 'application/json' },
+        });
+
+        // Story G's recommendation should be invalidated (it depends on H)
+        const s7Row = testDb.query('SELECT priority_recommendation FROM prd_stories WHERE id = ?').get('inv-s7') as any;
+        expect(s7Row.priority_recommendation).toBeNull();
+
+        // Story H's own recommendation should remain (only related stories are invalidated, not the story itself)
+        const s8Row = testDb.query('SELECT priority_recommendation FROM prd_stories WHERE id = ?').get('inv-s8') as any;
+        expect(s8Row.priority_recommendation).toBeTruthy();
+      });
+
+      test('changing priority via PATCH invalidates blocked-by stories recommendations', async () => {
+        insertPrd({ id: 'prd-inv-5' });
+        insertStory({
+          id: 'inv-s9', prd_id: 'prd-inv-5', title: 'Story I', priority: 'high',
+          sort_order: 0,
+        });
+        insertStory({
+          id: 'inv-s10', prd_id: 'prd-inv-5', title: 'Story J', priority: 'medium',
+          depends_on: JSON.stringify(['inv-s9']), sort_order: 1,
+        });
+
+        setPriorityRecommendation('inv-s9', {
+          storyId: 'inv-s9', suggestedPriority: 'high', currentPriority: 'high',
+          confidence: 90, factors: [], explanation: 'Recommendation', isManualOverride: false,
+        });
+        setPriorityRecommendation('inv-s10', {
+          storyId: 'inv-s10', suggestedPriority: 'medium', currentPriority: 'medium',
+          confidence: 75, factors: [], explanation: 'Recommendation', isManualOverride: false,
+        });
+
+        // Change story I's priority — story J depends on I (i.e. J is blocked by I)
+        await app.request('/prd-inv-5/stories/inv-s9', {
+          method: 'PATCH',
+          body: JSON.stringify({ priority: 'low' }),
+          headers: { 'Content-Type': 'application/json' },
+        });
+
+        // Story J's recommendation should be invalidated (it's blocked by I whose priority changed)
+        const s10Row = testDb.query('SELECT priority_recommendation FROM prd_stories WHERE id = ?').get('inv-s10') as any;
+        expect(s10Row.priority_recommendation).toBeNull();
+      });
+    });
+
+    // -- Generated stories get priorities --
+
+    describe('Generated stories receive priorities', () => {
+      test('AI-generated stories include priority assignments', withApiKey(async () => {
+        insertPrd({ id: 'prd-gen-pri', description: 'Project management tool' });
+
+        const mockStories = [
+          {
+            title: 'Authentication System',
+            description: 'User login and registration',
+            acceptanceCriteria: ['Users can register', 'Users can login', 'Password reset works'],
+            priority: 'critical',
+          },
+          {
+            title: 'Dashboard View',
+            description: 'Main dashboard with overview',
+            acceptanceCriteria: ['Shows project stats', 'Lists recent activity', 'Navigation works'],
+            priority: 'high',
+          },
+          {
+            title: 'Dark Mode',
+            description: 'Theme toggle for dark mode',
+            acceptanceCriteria: ['Toggle available', 'All pages support dark theme', 'Preference persisted'],
+            priority: 'low',
+          },
+        ];
+
+        mockAiPriorityResponse(mockStories); // Same mock works since structure matches
+
+        // Override fetch for the generation endpoint
+        globalThis.fetch = (async (url: string | URL | Request, init?: RequestInit) => {
+          const urlStr = typeof url === 'string' ? url : url instanceof URL ? url.toString() : url.url;
+          if (urlStr.includes('api.anthropic.com')) {
+            return new Response(
+              JSON.stringify({
+                content: [{ type: 'text', text: JSON.stringify(mockStories) }],
+              }),
+              { status: 200, headers: { 'Content-Type': 'application/json' } },
+            );
+          }
+          return originalFetch(url, init);
+        }) as typeof fetch;
+
+        const res = await app.request('/prd-gen-pri/generate', {
+          method: 'POST',
+          body: JSON.stringify({ description: 'Build a project management tool' }),
+          headers: { 'Content-Type': 'application/json' },
+        });
+
+        expect(res.status).toBe(200);
+        const json = await res.json();
+        expect(json.ok).toBe(true);
+
+        // Each generated story should have a priority
+        expect(json.data.stories[0].priority).toBe('critical');
+        expect(json.data.stories[1].priority).toBe('high');
+        expect(json.data.stories[2].priority).toBe('low');
+      }));
+
+      test('generated stories with invalid priority default to medium', withApiKey(async () => {
+        insertPrd({ id: 'prd-gen-pri2', description: 'Test' });
+
+        const mockStories = [
+          {
+            title: 'Story',
+            description: 'Desc',
+            acceptanceCriteria: ['AC1', 'AC2', 'AC3'],
+            priority: 'super-important', // invalid
+          },
+        ];
+
+        globalThis.fetch = (async (url: string | URL | Request, init?: RequestInit) => {
+          const urlStr = typeof url === 'string' ? url : url instanceof URL ? url.toString() : url.url;
+          if (urlStr.includes('api.anthropic.com')) {
+            return new Response(
+              JSON.stringify({
+                content: [{ type: 'text', text: JSON.stringify(mockStories) }],
+              }),
+              { status: 200, headers: { 'Content-Type': 'application/json' } },
+            );
+          }
+          return originalFetch(url, init);
+        }) as typeof fetch;
+
+        const res = await app.request('/prd-gen-pri2/generate', {
+          method: 'POST',
+          body: JSON.stringify({ description: 'Test' }),
+          headers: { 'Content-Type': 'application/json' },
+        });
+
+        const json = await res.json();
+        expect(json.data.stories[0].priority).toBe('medium');
+      }));
+    });
+  });
 });

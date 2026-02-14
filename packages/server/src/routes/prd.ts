@@ -423,15 +423,53 @@ app.patch('/:prdId/stories/:storyId', async (c) => {
 
   if (updates.length === 0) return c.json({ ok: false, error: 'No fields to update' }, 400);
 
+  const now = Date.now();
   updates.push('updated_at = ?');
-  values.push(Date.now());
+  values.push(now);
   values.push(storyId);
 
   db.query(`UPDATE prd_stories SET ${updates.join(', ')} WHERE id = ?`).run(...values);
 
   // Touch PRD updated_at
   const prdId = c.req.param('prdId');
-  db.query('UPDATE prds SET updated_at = ? WHERE id = ?').run(Date.now(), prdId);
+  db.query('UPDATE prds SET updated_at = ? WHERE id = ?').run(now, prdId);
+
+  // Invalidate priority recommendations when dependencies change
+  if (body.dependsOn !== undefined) {
+    // Invalidate this story's recommendation since its dependencies changed
+    db.query('UPDATE prd_stories SET priority_recommendation = NULL, updated_at = ? WHERE id = ?')
+      .run(now, storyId);
+    // Also invalidate recommendations for stories that were previously depended on
+    // (they might have had their blocksCount change)
+    const oldDeps: string[] = JSON.parse(existing.depends_on || '[]');
+    const newDeps: string[] = body.dependsOn;
+    const affectedIds = new Set([...oldDeps, ...newDeps]);
+    for (const depId of affectedIds) {
+      db.query('UPDATE prd_stories SET priority_recommendation = NULL, updated_at = ? WHERE id = ?')
+        .run(now, depId);
+    }
+  }
+
+  // Invalidate priority recommendations for related stories when priority changes
+  // (sibling stories' recommendations may reference this story's priority level)
+  if (body.priority !== undefined && body.priority !== existing.priority) {
+    // Invalidate recommendations for stories that depend on this one or that this one depends on
+    const deps: string[] = JSON.parse(existing.depends_on || '[]');
+    const allPrdStories = db
+      .query('SELECT id, depends_on FROM prd_stories WHERE prd_id = ?')
+      .all(prdId) as any[];
+    const blockedByThis = allPrdStories
+      .filter((s: any) => {
+        const d: string[] = JSON.parse(s.depends_on || '[]');
+        return d.includes(storyId);
+      })
+      .map((s: any) => s.id);
+    const affectedIds = new Set([...deps, ...blockedByThis]);
+    for (const id of affectedIds) {
+      db.query('UPDATE prd_stories SET priority_recommendation = NULL, updated_at = ? WHERE id = ?')
+        .run(now, id);
+    }
+  }
 
   const updated = db.query('SELECT * FROM prd_stories WHERE id = ?').get(storyId);
   return c.json({ ok: true, data: storyFromRow(updated as any) });
