@@ -18,6 +18,7 @@ function clearTables() {
   testDb.exec('DELETE FROM prds');
   testDb.exec('DELETE FROM project_memories');
   testDb.exec('DELETE FROM conversations');
+  testDb.exec('DELETE FROM story_templates');
 }
 
 function insertPrd(overrides: Record<string, any> = {}) {
@@ -3279,6 +3280,376 @@ describe('PRD Routes', () => {
         if (origKey) process.env.ANTHROPIC_API_KEY = origKey;
         else delete process.env.ANTHROPIC_API_KEY;
       }
+    });
+  });
+
+  // ---------------------------------------------------------------
+  // Story Template Library
+  // ---------------------------------------------------------------
+
+  function insertTemplate(overrides: Record<string, any> = {}) {
+    const defaults = {
+      id: 'tmpl-1',
+      name: 'Custom Template',
+      description: 'A custom story template',
+      category: 'feature',
+      title_template: 'As a {{user_role}}, I want to {{action}}',
+      description_template: '## Overview\n{{description}}',
+      acceptance_criteria_templates: JSON.stringify([
+        'User can {{action}} from the {{page}} page',
+        'Validation is performed on all inputs',
+      ]),
+      priority: 'medium',
+      tags: JSON.stringify(['custom', 'test']),
+      is_built_in: 0,
+      created_at: 1000000,
+      updated_at: 1000000,
+    };
+    const row = { ...defaults, ...overrides };
+    testDb
+      .query(
+        `INSERT INTO story_templates (id, name, description, category, title_template, description_template,
+         acceptance_criteria_templates, priority, tags, is_built_in, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      )
+      .run(
+        row.id,
+        row.name,
+        row.description,
+        row.category,
+        row.title_template,
+        row.description_template,
+        row.acceptance_criteria_templates,
+        row.priority,
+        row.tags,
+        row.is_built_in,
+        row.created_at,
+        row.updated_at,
+      );
+  }
+
+  describe('GET /templates — list templates', () => {
+    test('seeds built-in templates on first call and returns them', async () => {
+      const res = await app.request('/templates');
+      expect(res.status).toBe(200);
+      const json = await res.json();
+      expect(json.ok).toBe(true);
+      // Should have at least 4 built-in templates (feature, bug, tech_debt, spike)
+      expect(json.data.length).toBeGreaterThanOrEqual(4);
+
+      const categories = json.data.map((t: any) => t.category);
+      expect(categories).toContain('feature');
+      expect(categories).toContain('bug');
+      expect(categories).toContain('tech_debt');
+      expect(categories).toContain('spike');
+
+      // All should be built-in
+      for (const t of json.data) {
+        expect(t.isBuiltIn).toBe(true);
+      }
+    });
+
+    test('each built-in template has pre-filled sections with placeholder guidance', async () => {
+      const res = await app.request('/templates');
+      const json = await res.json();
+      for (const t of json.data) {
+        expect(t.name).toBeTruthy();
+        expect(t.description).toBeTruthy();
+        expect(t.titleTemplate).toBeTruthy();
+        expect(t.descriptionTemplate).toBeTruthy();
+        expect(t.acceptanceCriteriaTemplates.length).toBeGreaterThan(0);
+        // Templates should have placeholder guidance with {{}} syntax
+        const allText = [t.titleTemplate, t.descriptionTemplate, ...t.acceptanceCriteriaTemplates].join(' ');
+        expect(allText).toContain('{{');
+      }
+    });
+
+    test('includes type-appropriate acceptance criteria examples', async () => {
+      const res = await app.request('/templates');
+      const json = await res.json();
+
+      // Feature template should mention user-facing criteria
+      const featureTmpl = json.data.find((t: any) => t.category === 'feature');
+      expect(featureTmpl).toBeDefined();
+      expect(featureTmpl.acceptanceCriteriaTemplates.length).toBeGreaterThanOrEqual(3);
+
+      // Bug template should mention regression
+      const bugTmpl = json.data.find((t: any) => t.category === 'bug');
+      expect(bugTmpl).toBeDefined();
+      const bugAcText = bugTmpl.acceptanceCriteriaTemplates.join(' ');
+      expect(bugAcText.toLowerCase()).toContain('regression');
+
+      // Tech debt template should mention refactor or tests
+      const techDebtTmpl = json.data.find((t: any) => t.category === 'tech_debt');
+      expect(techDebtTmpl).toBeDefined();
+      const tdAcText = techDebtTmpl.acceptanceCriteriaTemplates.join(' ');
+      expect(tdAcText.toLowerCase()).toContain('test');
+
+      // Spike template should mention findings/recommendation
+      const spikeTmpl = json.data.find((t: any) => t.category === 'spike');
+      expect(spikeTmpl).toBeDefined();
+      const spikeAcText = spikeTmpl.acceptanceCriteriaTemplates.join(' ');
+      expect(spikeAcText.toLowerCase()).toContain('recommendation');
+    });
+
+    test('filters by category query param', async () => {
+      // Seed built-ins first
+      await app.request('/templates');
+      // Insert a custom template
+      insertTemplate({ id: 'tmpl-custom', category: 'custom' });
+
+      const res = await app.request('/templates?category=custom');
+      const json = await res.json();
+      expect(json.ok).toBe(true);
+      expect(json.data).toHaveLength(1);
+      expect(json.data[0].category).toBe('custom');
+    });
+
+    test('returns both built-in and custom templates', async () => {
+      // Seed built-ins first
+      await app.request('/templates');
+      insertTemplate({ id: 'tmpl-custom', name: 'My Custom', category: 'custom' });
+
+      const res = await app.request('/templates');
+      const json = await res.json();
+      const builtIn = json.data.filter((t: any) => t.isBuiltIn);
+      const custom = json.data.filter((t: any) => !t.isBuiltIn);
+      expect(builtIn.length).toBeGreaterThanOrEqual(4);
+      expect(custom.length).toBe(1);
+      expect(custom[0].name).toBe('My Custom');
+    });
+  });
+
+  describe('GET /templates/:templateId — get single template', () => {
+    test('returns a template by id', async () => {
+      insertTemplate({ id: 'tmpl-get' });
+      const res = await app.request('/templates/tmpl-get');
+      expect(res.status).toBe(200);
+      const json = await res.json();
+      expect(json.ok).toBe(true);
+      expect(json.data.id).toBe('tmpl-get');
+      expect(json.data.name).toBe('Custom Template');
+    });
+
+    test('returns 404 for non-existent template', async () => {
+      const res = await app.request('/templates/nonexistent');
+      expect(res.status).toBe(404);
+      const json = await res.json();
+      expect(json.ok).toBe(false);
+    });
+  });
+
+  describe('POST /templates — create custom template', () => {
+    test('creates a custom template successfully', async () => {
+      const body = {
+        name: 'API Endpoint',
+        description: 'Template for REST API endpoints',
+        category: 'feature',
+        titleTemplate: 'API: {{method}} {{endpoint}}',
+        descriptionTemplate: 'Implement {{method}} {{endpoint}} endpoint',
+        acceptanceCriteriaTemplates: [
+          'Endpoint returns correct status codes',
+          'Request validation is implemented',
+          'Response matches documented schema',
+        ],
+        priority: 'high',
+        tags: ['api', 'backend'],
+      };
+
+      const res = await app.request('/templates', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      expect(res.status).toBe(201);
+      const json = await res.json();
+      expect(json.ok).toBe(true);
+      expect(json.data.name).toBe('API Endpoint');
+      expect(json.data.category).toBe('feature');
+      expect(json.data.isBuiltIn).toBe(false);
+      expect(json.data.acceptanceCriteriaTemplates).toHaveLength(3);
+      expect(json.data.tags).toEqual(['api', 'backend']);
+      expect(json.data.id).toBeTruthy();
+    });
+
+    test('rejects template without name', async () => {
+      const res = await app.request('/templates', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: '', category: 'feature' }),
+      });
+      expect(res.status).toBe(400);
+    });
+
+    test('rejects template without category', async () => {
+      const res = await app.request('/templates', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: 'Test' }),
+      });
+      expect(res.status).toBe(400);
+    });
+  });
+
+  describe('PATCH /templates/:templateId — update template', () => {
+    test('updates a custom template', async () => {
+      insertTemplate({ id: 'tmpl-upd' });
+      const res = await app.request('/templates/tmpl-upd', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: 'Updated Name', priority: 'high' }),
+      });
+      expect(res.status).toBe(200);
+      const json = await res.json();
+      expect(json.ok).toBe(true);
+      expect(json.data.name).toBe('Updated Name');
+      expect(json.data.priority).toBe('high');
+    });
+
+    test('returns 404 for non-existent template', async () => {
+      const res = await app.request('/templates/nonexistent', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: 'Updated' }),
+      });
+      expect(res.status).toBe(404);
+    });
+
+    test('returns unchanged template if no updates provided', async () => {
+      insertTemplate({ id: 'tmpl-noop' });
+      const res = await app.request('/templates/tmpl-noop', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({}),
+      });
+      expect(res.status).toBe(200);
+      const json = await res.json();
+      expect(json.data.name).toBe('Custom Template');
+    });
+  });
+
+  describe('DELETE /templates/:templateId — delete template', () => {
+    test('deletes a custom template', async () => {
+      insertTemplate({ id: 'tmpl-del', is_built_in: 0 });
+      const res = await app.request('/templates/tmpl-del', { method: 'DELETE' });
+      expect(res.status).toBe(200);
+      const json = await res.json();
+      expect(json.ok).toBe(true);
+
+      // Verify it's gone
+      const check = await app.request('/templates/tmpl-del');
+      expect(check.status).toBe(404);
+    });
+
+    test('refuses to delete built-in templates', async () => {
+      insertTemplate({ id: 'tmpl-builtin', is_built_in: 1 });
+      const res = await app.request('/templates/tmpl-builtin', { method: 'DELETE' });
+      expect(res.status).toBe(400);
+      const json = await res.json();
+      expect(json.error).toContain('built-in');
+    });
+
+    test('returns 404 for non-existent template', async () => {
+      const res = await app.request('/templates/nonexistent', { method: 'DELETE' });
+      expect(res.status).toBe(404);
+    });
+  });
+
+  describe('POST /:id/stories/from-template — create story from template', () => {
+    test('creates a story from a template with variable substitution', async () => {
+      insertPrd({ id: 'prd-tmpl' });
+      insertTemplate({
+        id: 'tmpl-use',
+        title_template: 'As a {{user_role}}, I want to {{action}}',
+        description_template: '## Feature\n{{user_role}} needs to {{action}}',
+        acceptance_criteria_templates: JSON.stringify([
+          'User can {{action}} from the dashboard',
+          'System validates input before processing',
+        ]),
+        priority: 'high',
+      });
+
+      const res = await app.request('/prd-tmpl/stories/from-template', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          templateId: 'tmpl-use',
+          variables: {
+            user_role: 'developer',
+            action: 'deploy code',
+          },
+        }),
+      });
+      expect(res.status).toBe(201);
+      const json = await res.json();
+      expect(json.ok).toBe(true);
+      expect(json.data.story.title).toBe('As a developer, I want to deploy code');
+      expect(json.data.story.description).toContain('developer needs to deploy code');
+      expect(json.data.story.acceptanceCriteria[0]).toBe('User can deploy code from the dashboard');
+      expect(json.data.story.priority).toBe('high');
+      expect(json.data.storyId).toBeTruthy();
+    });
+
+    test('keeps placeholders when variables are not provided', async () => {
+      insertPrd({ id: 'prd-tmpl2' });
+      insertTemplate({
+        id: 'tmpl-partial',
+        title_template: 'Fix: {{bug_description}}',
+        description_template: 'Bug in {{area}}',
+        acceptance_criteria_templates: JSON.stringify(['Bug is fixed']),
+      });
+
+      const res = await app.request('/prd-tmpl2/stories/from-template', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ templateId: 'tmpl-partial' }),
+      });
+      expect(res.status).toBe(201);
+      const json = await res.json();
+      // Placeholders should remain when no variables are provided
+      expect(json.data.story.title).toBe('Fix: {{bug_description}}');
+      expect(json.data.story.description).toBe('Bug in {{area}}');
+    });
+
+    test('returns 404 when PRD does not exist', async () => {
+      insertTemplate({ id: 'tmpl-no-prd' });
+      const res = await app.request('/nonexistent-prd/stories/from-template', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ templateId: 'tmpl-no-prd' }),
+      });
+      expect(res.status).toBe(404);
+    });
+
+    test('returns 404 when template does not exist', async () => {
+      insertPrd({ id: 'prd-tmpl3' });
+      const res = await app.request('/prd-tmpl3/stories/from-template', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ templateId: 'nonexistent-tmpl' }),
+      });
+      expect(res.status).toBe(404);
+    });
+
+    test('story is persisted in database with correct sort order', async () => {
+      insertPrd({ id: 'prd-tmpl4' });
+      insertStory({ id: 'existing-story', prd_id: 'prd-tmpl4', sort_order: 0 });
+      insertTemplate({ id: 'tmpl-sort' });
+
+      const res = await app.request('/prd-tmpl4/stories/from-template', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ templateId: 'tmpl-sort' }),
+      });
+      const json = await res.json();
+
+      // Verify story is in the database
+      const dbRow = testDb
+        .query('SELECT * FROM prd_stories WHERE id = ?')
+        .get(json.data.storyId) as any;
+      expect(dbRow).toBeTruthy();
+      expect(dbRow.prd_id).toBe('prd-tmpl4');
+      expect(dbRow.sort_order).toBe(1); // Should be after existing story
     });
   });
 });

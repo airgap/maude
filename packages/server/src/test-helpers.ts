@@ -169,6 +169,24 @@ export function createTestDb(): Database {
     )
   `);
 
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS story_templates (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      description TEXT NOT NULL DEFAULT '',
+      category TEXT NOT NULL DEFAULT 'feature',
+      title_template TEXT NOT NULL DEFAULT '',
+      description_template TEXT NOT NULL DEFAULT '',
+      acceptance_criteria_templates TEXT NOT NULL DEFAULT '[]',
+      priority TEXT NOT NULL DEFAULT 'medium',
+      tags TEXT NOT NULL DEFAULT '[]',
+      is_built_in INTEGER NOT NULL DEFAULT 0,
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL
+    )
+  `);
+  db.exec('CREATE INDEX IF NOT EXISTS idx_story_templates_category ON story_templates(category)');
+
   db.exec('CREATE INDEX IF NOT EXISTS idx_messages_conv ON messages(conversation_id, timestamp)');
   db.exec('CREATE INDEX IF NOT EXISTS idx_tasks_conv ON tasks(conversation_id)');
   db.exec('CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status)');

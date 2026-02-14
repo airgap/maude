@@ -77,6 +77,128 @@ app.get('/', (c) => {
   });
 });
 
+// --- List all templates ---
+// NOTE: Template routes MUST be defined before /:id to avoid being caught by the catch-all param route
+app.get('/templates', (c) => {
+  const db = getDb();
+  seedBuiltInTemplates();
+
+  const category = c.req.query('category');
+  let rows: any[];
+  if (category) {
+    rows = db.query('SELECT * FROM story_templates WHERE category = ? ORDER BY is_built_in DESC, name ASC').all(category);
+  } else {
+    rows = db.query('SELECT * FROM story_templates ORDER BY is_built_in DESC, name ASC').all();
+  }
+
+  return c.json({ ok: true, data: rows.map(templateFromRow) });
+});
+
+// --- Get a single template ---
+app.get('/templates/:templateId', (c) => {
+  const db = getDb();
+  seedBuiltInTemplates();
+
+  const row = db.query('SELECT * FROM story_templates WHERE id = ?').get(c.req.param('templateId'));
+  if (!row) {
+    return c.json({ ok: false, error: 'Template not found' }, 404);
+  }
+  return c.json({ ok: true, data: templateFromRow(row) });
+});
+
+// --- Create a custom template ---
+app.post('/templates', async (c) => {
+  const db = getDb();
+  const body = await c.req.json() as CreateTemplateRequest;
+
+  if (!body.name?.trim()) {
+    return c.json({ ok: false, error: 'Template name is required' }, 400);
+  }
+  if (!body.category) {
+    return c.json({ ok: false, error: 'Template category is required' }, 400);
+  }
+
+  const id = nanoid(12);
+  const now = Date.now();
+
+  db.query(
+    `INSERT INTO story_templates (id, name, description, category, title_template, description_template,
+     acceptance_criteria_templates, priority, tags, is_built_in, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?)`
+  ).run(
+    id,
+    body.name.trim(),
+    body.description?.trim() || '',
+    body.category,
+    body.titleTemplate?.trim() || '',
+    body.descriptionTemplate?.trim() || '',
+    JSON.stringify(body.acceptanceCriteriaTemplates || []),
+    body.priority || 'medium',
+    JSON.stringify(body.tags || []),
+    now,
+    now,
+  );
+
+  const row = db.query('SELECT * FROM story_templates WHERE id = ?').get(id);
+  return c.json({ ok: true, data: templateFromRow(row) }, 201);
+});
+
+// --- Update a custom template ---
+app.patch('/templates/:templateId', async (c) => {
+  const db = getDb();
+  const templateId = c.req.param('templateId');
+  const body = await c.req.json();
+
+  const existing = db.query('SELECT * FROM story_templates WHERE id = ?').get(templateId) as any;
+  if (!existing) {
+    return c.json({ ok: false, error: 'Template not found' }, 404);
+  }
+
+  // Don't allow editing built-in templates' core fields, but allow all edits on custom
+  const now = Date.now();
+  const updates: string[] = [];
+  const values: any[] = [];
+
+  if (body.name !== undefined) { updates.push('name = ?'); values.push(body.name.trim()); }
+  if (body.description !== undefined) { updates.push('description = ?'); values.push(body.description.trim()); }
+  if (body.category !== undefined) { updates.push('category = ?'); values.push(body.category); }
+  if (body.titleTemplate !== undefined) { updates.push('title_template = ?'); values.push(body.titleTemplate.trim()); }
+  if (body.descriptionTemplate !== undefined) { updates.push('description_template = ?'); values.push(body.descriptionTemplate.trim()); }
+  if (body.acceptanceCriteriaTemplates !== undefined) { updates.push('acceptance_criteria_templates = ?'); values.push(JSON.stringify(body.acceptanceCriteriaTemplates)); }
+  if (body.priority !== undefined) { updates.push('priority = ?'); values.push(body.priority); }
+  if (body.tags !== undefined) { updates.push('tags = ?'); values.push(JSON.stringify(body.tags)); }
+
+  if (updates.length === 0) {
+    return c.json({ ok: true, data: templateFromRow(existing) });
+  }
+
+  updates.push('updated_at = ?');
+  values.push(now);
+  values.push(templateId);
+
+  db.query(`UPDATE story_templates SET ${updates.join(', ')} WHERE id = ?`).run(...values);
+
+  const row = db.query('SELECT * FROM story_templates WHERE id = ?').get(templateId);
+  return c.json({ ok: true, data: templateFromRow(row) });
+});
+
+// --- Delete a custom template ---
+app.delete('/templates/:templateId', (c) => {
+  const db = getDb();
+  const templateId = c.req.param('templateId');
+
+  const existing = db.query('SELECT * FROM story_templates WHERE id = ?').get(templateId) as any;
+  if (!existing) {
+    return c.json({ ok: false, error: 'Template not found' }, 404);
+  }
+  if (existing.is_built_in) {
+    return c.json({ ok: false, error: 'Cannot delete built-in templates' }, 400);
+  }
+
+  db.query('DELETE FROM story_templates WHERE id = ?').run(templateId);
+  return c.json({ ok: true });
+});
+
 // Get single PRD with all stories
 app.get('/:id', (c) => {
   const db = getDb();
@@ -3261,127 +3383,6 @@ function seedBuiltInTemplates(): void {
     );
   }
 }
-
-// --- List all templates ---
-app.get('/templates', (c) => {
-  const db = getDb();
-  seedBuiltInTemplates();
-
-  const category = c.req.query('category');
-  let rows: any[];
-  if (category) {
-    rows = db.query('SELECT * FROM story_templates WHERE category = ? ORDER BY is_built_in DESC, name ASC').all(category);
-  } else {
-    rows = db.query('SELECT * FROM story_templates ORDER BY is_built_in DESC, name ASC').all();
-  }
-
-  return c.json({ ok: true, data: rows.map(templateFromRow) });
-});
-
-// --- Get a single template ---
-app.get('/templates/:templateId', (c) => {
-  const db = getDb();
-  seedBuiltInTemplates();
-
-  const row = db.query('SELECT * FROM story_templates WHERE id = ?').get(c.req.param('templateId'));
-  if (!row) {
-    return c.json({ ok: false, error: 'Template not found' }, 404);
-  }
-  return c.json({ ok: true, data: templateFromRow(row) });
-});
-
-// --- Create a custom template ---
-app.post('/templates', async (c) => {
-  const db = getDb();
-  const body = await c.req.json() as CreateTemplateRequest;
-
-  if (!body.name?.trim()) {
-    return c.json({ ok: false, error: 'Template name is required' }, 400);
-  }
-  if (!body.category) {
-    return c.json({ ok: false, error: 'Template category is required' }, 400);
-  }
-
-  const id = nanoid(12);
-  const now = Date.now();
-
-  db.query(
-    `INSERT INTO story_templates (id, name, description, category, title_template, description_template,
-     acceptance_criteria_templates, priority, tags, is_built_in, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?)`
-  ).run(
-    id,
-    body.name.trim(),
-    body.description?.trim() || '',
-    body.category,
-    body.titleTemplate?.trim() || '',
-    body.descriptionTemplate?.trim() || '',
-    JSON.stringify(body.acceptanceCriteriaTemplates || []),
-    body.priority || 'medium',
-    JSON.stringify(body.tags || []),
-    now,
-    now,
-  );
-
-  const row = db.query('SELECT * FROM story_templates WHERE id = ?').get(id);
-  return c.json({ ok: true, data: templateFromRow(row) }, 201);
-});
-
-// --- Update a custom template ---
-app.patch('/templates/:templateId', async (c) => {
-  const db = getDb();
-  const templateId = c.req.param('templateId');
-  const body = await c.req.json();
-
-  const existing = db.query('SELECT * FROM story_templates WHERE id = ?').get(templateId) as any;
-  if (!existing) {
-    return c.json({ ok: false, error: 'Template not found' }, 404);
-  }
-
-  // Don't allow editing built-in templates' core fields, but allow all edits on custom
-  const now = Date.now();
-  const updates: string[] = [];
-  const values: any[] = [];
-
-  if (body.name !== undefined) { updates.push('name = ?'); values.push(body.name.trim()); }
-  if (body.description !== undefined) { updates.push('description = ?'); values.push(body.description.trim()); }
-  if (body.category !== undefined) { updates.push('category = ?'); values.push(body.category); }
-  if (body.titleTemplate !== undefined) { updates.push('title_template = ?'); values.push(body.titleTemplate.trim()); }
-  if (body.descriptionTemplate !== undefined) { updates.push('description_template = ?'); values.push(body.descriptionTemplate.trim()); }
-  if (body.acceptanceCriteriaTemplates !== undefined) { updates.push('acceptance_criteria_templates = ?'); values.push(JSON.stringify(body.acceptanceCriteriaTemplates)); }
-  if (body.priority !== undefined) { updates.push('priority = ?'); values.push(body.priority); }
-  if (body.tags !== undefined) { updates.push('tags = ?'); values.push(JSON.stringify(body.tags)); }
-
-  if (updates.length === 0) {
-    return c.json({ ok: true, data: templateFromRow(existing) });
-  }
-
-  updates.push('updated_at = ?');
-  values.push(now);
-  values.push(templateId);
-
-  db.query(`UPDATE story_templates SET ${updates.join(', ')} WHERE id = ?`).run(...values);
-
-  const row = db.query('SELECT * FROM story_templates WHERE id = ?').get(templateId);
-  return c.json({ ok: true, data: templateFromRow(row) });
-});
-
-// --- Delete a custom template ---
-app.delete('/templates/:templateId', (c) => {
-  const db = getDb();
-  const templateId = c.req.param('templateId');
-
-  const existing = db.query('SELECT * FROM story_templates WHERE id = ?').get(templateId) as any;
-  if (!existing) {
-    return c.json({ ok: false, error: 'Template not found' }, 404);
-  }
-  if (existing.is_built_in) {
-    return c.json({ ok: false, error: 'Cannot delete built-in templates' }, 400);
-  }
-
-  db.query('DELETE FROM story_templates WHERE id = ?').run(templateId);
-  return c.json({ ok: true });
-});
 
 // --- Create story from template ---
 app.post('/:id/stories/from-template', async (c) => {
