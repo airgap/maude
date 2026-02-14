@@ -13,16 +13,19 @@
     for (const block of streamStore.contentBlocks) {
       if (block.type === 'tool_use') {
         const result = streamStore.toolResults.get(block.id);
+        let status: 'pending' | 'running' | 'completed' | 'error';
+        if (result) {
+          // During active streaming, treat errors as "completed with warning"
+          // rather than a hard error, since Claude often retries.
+          // Only show as error when the stream is done.
+          status = result.isError ? 'error' : 'completed';
+        } else {
+          status = streamStore.status === 'streaming' && block.id ? 'running' : 'pending';
+        }
         calls.push({
           id: block.id,
           name: block.name,
-          status: result
-            ? result.isError
-              ? 'error'
-              : 'completed'
-            : streamStore.status === 'streaming' && block.id
-              ? 'running'
-              : 'pending',
+          status,
           duration: result?.duration,
         });
       }
@@ -238,7 +241,7 @@
     background: var(--bg-primary);
     border-radius: var(--radius-sm);
     font-size: 12px;
-    transition: all 0.2s ease;
+    transition: all 0.3s ease;
   }
 
   .tool-item.completed {
@@ -246,7 +249,8 @@
   }
 
   .tool-item.error {
-    background: rgba(255, 50, 50, 0.08);
+    background: rgba(255, 50, 50, 0.05);
+    transition: background 0.3s ease;
   }
 
   .tool-status-icon {

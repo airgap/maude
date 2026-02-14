@@ -110,7 +110,7 @@ function createStreamStore() {
     },
 
     handleEvent(event: StreamEvent) {
-      console.log('[streamStore.handleEvent] Processing:', event.type, 'contentBlocks.length:', contentBlocks.length);
+      // console.log('[streamStore.handleEvent] Processing:', event.type);
       switch (event.type) {
         case 'message_start':
           status = 'streaming';
@@ -129,7 +129,7 @@ function createStreamStore() {
               ...contentBlocks,
               { type: 'text', text: event.content_block.text ?? '', parentToolUseId: pid },
             ];
-            console.log('[streamStore] Added text block, new length:', contentBlocks.length);
+            // Text block added
           } else if (event.content_block.type === 'thinking') {
             contentBlocks = [
               ...contentBlocks,
@@ -139,7 +139,7 @@ function createStreamStore() {
                 parentToolUseId: pid,
               },
             ];
-            console.log('[streamStore] Added thinking block, new length:', contentBlocks.length);
+            // Thinking block added
           } else if (event.content_block.type === 'tool_use') {
             contentBlocks = [
               ...contentBlocks,
@@ -151,7 +151,7 @@ function createStreamStore() {
                 parentToolUseId: pid,
               },
             ];
-            console.log('[streamStore] Added tool_use block, new length:', contentBlocks.length);
+            // Tool use block added
           }
           break;
         }
@@ -160,26 +160,29 @@ function createStreamStore() {
           // Map the event index to the actual position in contentBlocks
           const idx = indexOffset + event.index;
           if (idx < 0 || idx >= contentBlocks.length) break;
-          const block = { ...contentBlocks[idx] };
+          const prev = contentBlocks[idx];
 
-          if (event.delta.type === 'text_delta' && block.type === 'text') {
-            block.text += event.delta.text ?? '';
+          // Build a fully new object — never mutate before reassign,
+          // or Svelte 5's reactivity tracking won't detect the change.
+          let updated: MessageContent;
+          if (event.delta.type === 'text_delta' && prev.type === 'text') {
+            updated = { ...prev, text: prev.text + (event.delta.text ?? '') };
             partialText += event.delta.text ?? '';
-            console.log('[streamStore] Updated text delta, block index:', idx);
-          } else if (event.delta.type === 'thinking_delta' && block.type === 'thinking') {
-            block.thinking += event.delta.thinking ?? '';
+          } else if (event.delta.type === 'thinking_delta' && prev.type === 'thinking') {
+            updated = { ...prev, thinking: prev.thinking + (event.delta.thinking ?? '') };
             partialThinking += event.delta.thinking ?? '';
-            console.log('[streamStore] Updated thinking delta, block index:', idx);
-          } else if (event.delta.type === 'input_json_delta' && block.type === 'tool_use') {
+          } else if (event.delta.type === 'input_json_delta' && prev.type === 'tool_use') {
             try {
-              block.input = JSON.parse(event.delta.partial_json ?? '{}');
-              console.log('[streamStore] Updated tool_use input, block index:', idx);
+              updated = { ...prev, input: JSON.parse(event.delta.partial_json ?? '{}') };
             } catch {
               // Partial JSON not yet parseable
+              updated = prev;
             }
+          } else {
+            updated = prev;
           }
 
-          contentBlocks = [...contentBlocks.slice(0, idx), block, ...contentBlocks.slice(idx + 1)];
+          contentBlocks = [...contentBlocks.slice(0, idx), updated, ...contentBlocks.slice(idx + 1)];
           break;
         }
 

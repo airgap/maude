@@ -12,10 +12,14 @@
 
   let renderedHtml = $state('');
 
-  // Render text blocks as markdown
+  // Render user message text as markdown (single blob for user messages)
   $effect(() => {
+    if (message.role !== 'user') {
+      renderedHtml = '';
+      return;
+    }
     const textContent = (message.content as any[])
-      .filter((c: any) => c.type === 'text' && !c.parentToolUseId)
+      .filter((c: any) => c.type === 'text')
       .map((c: any) => c.text as string)
       .join('\n\n');
 
@@ -26,14 +30,38 @@
     }
   });
 
+  // Pre-render each text block's markdown for assistant messages
+  let renderedTextBlocks = $state<Map<number, string>>(new Map());
+
+  $effect(() => {
+    if (message.role !== 'assistant') return;
+    const blocks = message.content as any[];
+    const promises: Array<{ idx: number; promise: Promise<string> }> = [];
+    for (let i = 0; i < blocks.length; i++) {
+      const b = blocks[i];
+      if (b.type === 'text' && !b.parentToolUseId && b.text) {
+        promises.push({ idx: i, promise: renderMarkdown(b.text) });
+      }
+    }
+    Promise.all(promises.map(async (p) => ({ idx: p.idx, html: await p.promise }))).then(
+      (results) => {
+        const newMap = new Map<number, string>();
+        for (const r of results) newMap.set(r.idx, r.html);
+        renderedTextBlocks = newMap;
+      },
+    );
+  });
+
   function getToolResults(content: any[]) {
     return content.filter((c: any) => c.type === 'tool_result');
   }
 
-  // Group content blocks: top-level items + agent groups
+  // Group content blocks: top-level items + agent groups, preserving original order
+  // Text blocks are now included so they render interleaved with tool calls.
   interface GroupedItem {
     kind: 'block';
     block: MessageContent;
+    index: number;
   }
   interface GroupedAgent {
     kind: 'agent';
@@ -65,10 +93,10 @@
       }
     }
 
-    // Build entries — skip child blocks, tool_results, and top-level text (rendered separately)
-    for (const b of blocks) {
+    // Build entries in original order — include text blocks for interleaved rendering
+    for (let i = 0; i < blocks.length; i++) {
+      const b = blocks[i];
       if (b.type === 'tool_result') continue;
-      if (b.type === 'text' && !b.parentToolUseId) continue;
       if (b.parentToolUseId && agentIds.has(b.parentToolUseId)) continue;
       if (b.type === 'tool_use' && agentIds.has(b.id)) {
         entries.push({
@@ -77,7 +105,7 @@
           children: childrenMap.get(b.id) || [],
         });
       } else {
-        entries.push({ kind: 'block', block: b });
+        entries.push({ kind: 'block', block: b, index: i });
       }
     }
 
@@ -109,9 +137,6 @@
               <div class="prose">{@html renderedHtml}</div>
             {/if}
           {:else}
-            {#if renderedHtml}
-              <div class="prose">{@html renderedHtml}</div>
-            {/if}
             {#each grouped as entry}
               {#if entry.kind === 'agent'}
                 {#if settingsStore.showToolDetails}
@@ -120,6 +145,11 @@
                     children={entry.children}
                     toolResults={getToolResults(message.content)}
                   />
+                {/if}
+              {:else if entry.block.type === 'text' && !entry.block.parentToolUseId}
+                {@const html = renderedTextBlocks.get(entry.index)}
+                {#if html}
+                  <div class="prose">{@html html}</div>
                 {/if}
               {:else if entry.block.type === 'thinking' && settingsStore.showThinkingBlocks}
                 <ThinkingBlock content={entry.block.thinking} />

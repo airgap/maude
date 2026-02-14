@@ -2,6 +2,7 @@
   import { conversationStore } from '$lib/stores/conversation.svelte';
   import { streamStore } from '$lib/stores/stream.svelte';
   import { projectStore } from '$lib/stores/projects.svelte';
+  import { workspaceStore } from '$lib/stores/workspace.svelte';
   import { api } from '$lib/api/client';
   import { onMount } from 'svelte';
 
@@ -27,6 +28,21 @@
     try {
       const res = await api.conversations.list();
       conversationStore.setList(res.data);
+
+      // Auto-restore the previously active conversation after page reload
+      if (!conversationStore.active) {
+        const savedId = workspaceStore.activeWorkspace?.snapshot.activeConversationId;
+        if (savedId && res.data.some((c: any) => c.id === savedId)) {
+          conversationStore.setLoading(true);
+          try {
+            const convRes = await api.conversations.get(savedId);
+            conversationStore.setActive(convRes.data);
+            streamStore.reset();
+          } finally {
+            conversationStore.setLoading(false);
+          }
+        }
+      }
     } catch (err) {
       console.error('Failed to load conversations:', err);
     }

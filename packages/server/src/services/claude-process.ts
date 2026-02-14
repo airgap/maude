@@ -67,20 +67,10 @@ export function translateCliEvent(event: any): string[] {
         }),
       );
 
-      // Emit content blocks
+      // Emit content blocks in their original order
       const content = msg.content || [];
-      // Reorder blocks: text/thinking first, then tool_use blocks
-      // This ensures text appears in UI before tool calls
-      // Map blocks with their original indices to preserve SSE event indexing
-      const blocksWithIndex = content.map((block, idx) => ({ block, originalIndex: idx }));
-      const textBlocksWithIndex = blocksWithIndex.filter(item => item.block.type === 'text' || item.block.type === 'thinking');
-      const toolBlocksWithIndex = blocksWithIndex.filter(item => item.block.type === 'tool_use');
-      const reorderedBlocks = [...textBlocksWithIndex, ...toolBlocksWithIndex];
-      
-      for (let orderIdx = 0; orderIdx < reorderedBlocks.length; orderIdx++) {
-        const { block, originalIndex } = reorderedBlocks[orderIdx];
-        const i = originalIndex;  // Use original index for SSE events
-
+      for (let i = 0; i < content.length; i++) {
+        const block = content[i];
 
         if (block.type === 'text') {
           events.push(
@@ -280,13 +270,13 @@ class ClaudeProcessManager {
       // Build a clean env: remove CLAUDECODE to avoid "nested session" detection,
       // strip FORCE_COLOR to get plain output, and enable unbuffered I/O for real-time
       // streaming of events from the Claude CLI.
-      const spawnEnv = { 
-        ...process.env, 
+      const spawnEnv = {
+        ...process.env,
         FORCE_COLOR: '0',
         PYTHONUNBUFFERED: '1',
         PYTHONIOENCODING: 'utf-8:strict',
       };
-      delete spawnEnv.CLAUDECODE;
+      delete (spawnEnv as any).CLAUDECODE;
 
       proc = Bun.spawn([binary, ...args], {
         cwd: session.projectPath || process.cwd(),
@@ -331,12 +321,19 @@ class ClaudeProcessManager {
           stderrChunks.push(text);
           console.error(`[claude:${session.id}]`, text);
         }
-      } catch { /* process ended */ }
+      } catch {
+        /* process ended */
+      }
     };
     stderrReader();
 
+    // Hoist assistant content accumulator so the cancel handler can persist
+    // any partial response that was already received before cancellation.
+    let assistantContent: any[] | null = null;
+    let assistantModel: string | null = null;
+
     return new ReadableStream({
-      async start(controller) {
+      start(controller) {
         // Ping to keep connection alive
         const pingInterval = setInterval(() => {
           try {
@@ -350,6 +347,31 @@ class ClaudeProcessManager {
           cancelled = true;
           clearInterval(pingInterval);
           proc.kill('SIGINT');
+
+          // Save any assistant content accumulated before cancellation
+          if (assistantContent && assistantContent.length > 0) {
+            try {
+              const db = getDb();
+              const msgId = nanoid();
+              db.query(
+                `INSERT INTO messages (id, conversation_id, role, content, model, timestamp)
+                 VALUES (?, ?, 'assistant', ?, ?, ?)`,
+              ).run(
+                msgId,
+                session.conversationId,
+                JSON.stringify(assistantContent),
+                assistantModel,
+                Date.now(),
+              );
+              db.query('UPDATE conversations SET updated_at = ? WHERE id = ?').run(
+                Date.now(),
+                session.conversationId,
+              );
+            } catch (dbErr) {
+              console.error('[claude] Failed to save assistant message on cancel:', dbErr);
+            }
+          }
+
           try {
             controller.enqueue(
               encoder.encode(`data: {"type":"message_stop","reason":"cancelled"}\n\n`),
@@ -361,280 +383,347 @@ class ClaudeProcessManager {
           session.status = 'idle';
         });
 
-        try {
-          const decoder = new TextDecoder();
-          let buffer = '';
-          let sentStop = false;
-          let sentMessageStart = false;
-          let receivedAnyEvent = false;
-          let assistantContent: any[] | null = null;
-          let assistantModel: string | null = null;
+        // Run the streaming loop WITHOUT awaiting — this lets start() return
+        // immediately so Bun begins delivering enqueued data to the HTTP
+        // response in real-time instead of buffering until the CLI exits.
+        (async () => {
+          try {
+            const decoder = new TextDecoder();
+            let buffer = '';
+            let sentStop = false;
+            let sentMessageStart = false;
+            let receivedAnyEvent = false;
 
-          // Read stdout using async iteration (stdout is always a ReadableStream when spawned with 'pipe')
-          for await (const chunk of proc.stdout as ReadableStream<Uint8Array>) {
-            console.log('[stream] Starting to read from CLI stdout');
-            if (cancelled) break;
-            buffer += decoder.decode(chunk, { stream: true });
-            const lines = buffer.split('\n');
-            buffer = lines.pop() || '';
+            // Read stdout using async iteration (stdout is always a ReadableStream when spawned with 'pipe')
+            for await (const chunk of proc.stdout as ReadableStream<Uint8Array>) {
+              console.log('[stream] Starting to read from CLI stdout');
+              if (cancelled) break;
+              buffer += decoder.decode(chunk, { stream: true });
+              const lines = buffer.split('\n');
+              buffer = lines.pop() || '';
 
-            for (const line of lines) {
-              if (!line.trim()) continue;
-              try {
-                const cliEvent = JSON.parse(line);
-                
-                // Log event receipt for debugging streaming delays
-                if (cliEvent.type !== 'system') {
-                  console.log(`[claude:${session.id}] Received ${cliEvent.type} event`);
-                }
+              for (const line of lines) {
+                if (!line.trim()) continue;
+                try {
+                  const cliEvent = JSON.parse(line);
 
-                // Capture CLI session ID for future resume and persist to DB
-                if (cliEvent.type === 'system' && cliEvent.session_id) {
-                  session.cliSessionId = cliEvent.session_id;
-                  try {
-                    const db = getDb();
-                    db.query('UPDATE conversations SET cli_session_id = ? WHERE id = ?').run(
-                      cliEvent.session_id,
-                      session.conversationId,
-                    );
-                  } catch (e) {
-                    console.error('[claude] Failed to persist session ID:', e);
+                  // Log event receipt for debugging streaming delays
+                  if (cliEvent.type !== 'system') {
+                    console.log(`[claude:${session.id}] Received ${cliEvent.type} event`);
                   }
-                  
-                  // Send message_start immediately so UI shows streaming indicator
-                  // This ensures users see feedback even if response generation is slow
-                  if (!sentMessageStart) {
-                    sentMessageStart = true;
-                    const messageStartEvent = JSON.stringify({
-                      type: 'message_start',
-                      message: {
-                        id: nanoid(),
-                        role: 'assistant',
-                        model: session.model || 'unknown',
-                      },
-                    });
+
+                  // Capture CLI session ID for future resume and persist to DB
+                  if (cliEvent.type === 'system' && cliEvent.session_id) {
+                    session.cliSessionId = cliEvent.session_id;
                     try {
-                    console.log('[stream] Enqueuing message_start event');
-                      controller.enqueue(encoder.encode(`data: ${messageStartEvent}\n\n`));
-                    } catch {
-                      /* stream may be closed */
+                      const db = getDb();
+                      db.query('UPDATE conversations SET cli_session_id = ? WHERE id = ?').run(
+                        cliEvent.session_id,
+                        session.conversationId,
+                      );
+                    } catch (e) {
+                      console.error('[claude] Failed to persist session ID:', e);
                     }
-                  }
-                }
 
-                // Accumulate all assistant content blocks across multi-turn tool execution
-                if (cliEvent.type === 'assistant' && cliEvent.message?.content) {
-                  if (!assistantContent) assistantContent = [];
-                  assistantContent.push(...cliEvent.message.content);
-                  assistantModel = cliEvent.message.model || session.model || null;
-
-                  // Track file-writing tool calls for verification + approval
-                  const fileWriteTools = [
-                    'write_file',
-                    'edit_file',
-                    'create_file',
-                    'str_replace_editor',
-                    'Write',
-                    'Edit',
-                  ];
-                  // Check permission mode for tool approval
-                  let permMode = 'safe';
-                  try {
-                    const pDb = getDb();
-                    const pRow = pDb
-                      .query("SELECT value FROM settings WHERE key = 'permissionMode'")
-                      .get() as any;
-                    if (pRow) permMode = JSON.parse(pRow.value);
-                  } catch {
-                    /* default to safe */
-                  }
-
-                  const approvalTools = [
-                    ...fileWriteTools,
-                    'Bash',
-                    'bash',
-                    'execute_command',
-                    'NotebookEdit',
-                  ];
-                  for (const block of cliEvent.message.content) {
-                    // Emit tool_approval_request for dangerous tools in safe mode
-                    if (
-                      block.type === 'tool_use' &&
-                      approvalTools.includes(block.name) &&
-                      (permMode === 'safe' || permMode === 'plan')
-                    ) {
-                      const filePath =
-                        block.input?.file_path || block.input?.path || block.input?.filePath;
-                      const desc =
-                        block.name === 'Bash' ||
-                        block.name === 'bash' ||
-                        block.name === 'execute_command'
-                          ? `Run: ${String(block.input?.command || '').slice(0, 100)}`
-                          : filePath
-                            ? `Write to ${filePath}`
-                            : `Execute ${block.name}`;
-                      const approvalEvent = JSON.stringify({
-                        type: 'tool_approval_request',
-                        toolCallId: block.id || nanoid(),
-                        toolName: block.name,
-                        input: block.input || {},
-                        description: desc,
+                    // Send message_start immediately so UI shows streaming indicator
+                    // This ensures users see feedback even if response generation is slow
+                    if (!sentMessageStart) {
+                      sentMessageStart = true;
+                      const messageStartEvent = JSON.stringify({
+                        type: 'message_start',
+                        message: {
+                          id: nanoid(),
+                          role: 'assistant',
+                          model: session.model || 'unknown',
+                        },
                       });
                       try {
-                        controller.enqueue(encoder.encode(`data: ${approvalEvent}\n\n`));
+                        console.log('[stream] Enqueuing message_start event');
+                        controller.enqueue(encoder.encode(`data: ${messageStartEvent}\n\n`));
                       } catch {
                         /* stream may be closed */
                       }
                     }
+                  }
 
-                    if (block.type === 'tool_use' && fileWriteTools.includes(block.name)) {
-                      const filePath =
-                        block.input?.file_path || block.input?.path || block.input?.filePath;
-                      if (filePath && typeof filePath === 'string') {
-                        // Run async verification after a short delay to let the file be written
-                        setTimeout(async () => {
-                          try {
-                            const result = await verifyFile(
-                              filePath,
-                              session.projectPath || process.cwd(),
-                            );
-                            const verifyEvent = JSON.stringify({
-                              type: 'verification_result',
-                              filePath: result.filePath,
-                              passed: result.passed,
-                              issues: result.issues,
-                              tool: result.tool,
-                              duration: result.duration,
-                            });
+                  // Accumulate all assistant content blocks across multi-turn tool execution
+                  if (cliEvent.type === 'assistant' && cliEvent.message?.content) {
+                    if (!assistantContent) assistantContent = [];
+                    assistantContent.push(...cliEvent.message.content);
+                    assistantModel = cliEvent.message.model || session.model || null;
+
+                    // Track file-writing tool calls for verification + approval
+                    const fileWriteTools = [
+                      'write_file',
+                      'edit_file',
+                      'create_file',
+                      'str_replace_editor',
+                      'Write',
+                      'Edit',
+                    ];
+                    // Check permission mode for tool approval
+                    let permMode = 'safe';
+                    try {
+                      const pDb = getDb();
+                      const pRow = pDb
+                        .query("SELECT value FROM settings WHERE key = 'permissionMode'")
+                        .get() as any;
+                      if (pRow) permMode = JSON.parse(pRow.value);
+                    } catch {
+                      /* default to safe */
+                    }
+
+                    const approvalTools = [
+                      ...fileWriteTools,
+                      'Bash',
+                      'bash',
+                      'execute_command',
+                      'NotebookEdit',
+                    ];
+                    for (const block of cliEvent.message.content) {
+                      // Emit tool_approval_request for dangerous tools in safe mode
+                      if (
+                        block.type === 'tool_use' &&
+                        approvalTools.includes(block.name) &&
+                        (permMode === 'safe' || permMode === 'plan')
+                      ) {
+                        const filePath =
+                          block.input?.file_path || block.input?.path || block.input?.filePath;
+                        const desc =
+                          block.name === 'Bash' ||
+                          block.name === 'bash' ||
+                          block.name === 'execute_command'
+                            ? `Run: ${String(block.input?.command || '').slice(0, 100)}`
+                            : filePath
+                              ? `Write to ${filePath}`
+                              : `Execute ${block.name}`;
+                        const approvalEvent = JSON.stringify({
+                          type: 'tool_approval_request',
+                          toolCallId: block.id || nanoid(),
+                          toolName: block.name,
+                          input: block.input || {},
+                          description: desc,
+                        });
+                        try {
+                          controller.enqueue(encoder.encode(`data: ${approvalEvent}\n\n`));
+                        } catch {
+                          /* stream may be closed */
+                        }
+                      }
+
+                      if (block.type === 'tool_use' && fileWriteTools.includes(block.name)) {
+                        const filePath =
+                          block.input?.file_path || block.input?.path || block.input?.filePath;
+                        if (filePath && typeof filePath === 'string') {
+                          // Run async verification after a short delay to let the file be written
+                          setTimeout(async () => {
                             try {
-                              controller.enqueue(encoder.encode(`data: ${verifyEvent}\n\n`));
+                              const result = await verifyFile(
+                                filePath,
+                                session.projectPath || process.cwd(),
+                              );
+                              const verifyEvent = JSON.stringify({
+                                type: 'verification_result',
+                                filePath: result.filePath,
+                                passed: result.passed,
+                                issues: result.issues,
+                                tool: result.tool,
+                                duration: result.duration,
+                              });
+                              try {
+                                controller.enqueue(encoder.encode(`data: ${verifyEvent}\n\n`));
+                              } catch {
+                                /* stream may be closed */
+                              }
                             } catch {
-                              /* stream may be closed */
+                              /* verification failed silently */
                             }
-                          } catch {
-                            /* verification failed silently */
-                          }
-                        }, 500);
+                          }, 500);
+                        }
                       }
                     }
                   }
-                }
 
-                // Emit tool_result events for user-type events (tool results from CLI)
-                if (cliEvent.type === 'user' && cliEvent.message?.content) {
-                  for (const block of cliEvent.message.content) {
-                    if (block.type === 'tool_result') {
-                      const resultEvent = JSON.stringify({
-                        type: 'tool_result',
-                        toolCallId: block.tool_use_id || '',
-                        result:
-                          typeof block.content === 'string'
-                            ? block.content
-                            : JSON.stringify(block.content),
-                        isError: Boolean(block.is_error),
-                      });
-                      controller.enqueue(encoder.encode(`data: ${resultEvent}\n\n`));
+                  // Emit tool_result events for user-type events (tool results from CLI)
+                  if (cliEvent.type === 'user' && cliEvent.message?.content) {
+                    for (const block of cliEvent.message.content) {
+                      if (block.type === 'tool_result') {
+                        // Look up tool name from accumulated assistant content
+                        let toolName: string | undefined;
+                        if (assistantContent) {
+                          const toolBlock = assistantContent.find(
+                            (b: any) => b.type === 'tool_use' && b.id === block.tool_use_id,
+                          );
+                          if (toolBlock) toolName = toolBlock.name;
+                        }
+                        const resultEvent = JSON.stringify({
+                          type: 'tool_result',
+                          toolCallId: block.tool_use_id || '',
+                          toolName,
+                          result:
+                            typeof block.content === 'string'
+                              ? block.content
+                              : JSON.stringify(block.content),
+                          isError: Boolean(block.is_error),
+                        });
+                        try {
+                          controller.enqueue(encoder.encode(`data: ${resultEvent}\n\n`));
+                        } catch {
+                          /* client disconnected */
+                        }
+                      }
                     }
                   }
-                }
 
-                receivedAnyEvent = true;
+                  receivedAnyEvent = true;
 
-                // Translate CLI events to API-style events
-                const apiEvents = translateCliEvent(cliEvent);
-                for (const evt of apiEvents) {
-                  console.log('[stream] Enqueuing event:', evt.slice(0, 100));
-                  controller.enqueue(encoder.encode(`data: ${evt}\n\n`));
-                }
-
-                // Persist token usage on result
-                if (cliEvent.type === 'result') {
-                  sentStop = true;
-                  const usage = cliEvent.usage;
-                  if (usage) {
+                  // Translate CLI events to API-style events and send to client.
+                  // Wrap in try/catch so a client disconnect doesn't abort the
+                  // loop — we still need to accumulate assistantContent for DB save.
+                  const apiEvents = translateCliEvent(cliEvent);
+                  for (const evt of apiEvents) {
+                    console.log('[stream] Enqueuing event:', evt.slice(0, 100));
                     try {
-                      const totalTokens = (usage.input_tokens || 0) + (usage.output_tokens || 0);
-                      const db = getDb();
-                      db.query(
-                        'UPDATE conversations SET total_tokens = total_tokens + ? WHERE id = ?',
-                      ).run(totalTokens, session.conversationId);
-                    } catch (e) {
-                      console.error('[claude] Failed to persist token usage:', e);
+                      controller.enqueue(encoder.encode(`data: ${evt}\n\n`));
+                    } catch {
+                      // Client disconnected — continue processing CLI events
+                      // so assistantContent is fully accumulated for DB persistence
                     }
                   }
+
+                  // Persist token usage on result
+                  if (cliEvent.type === 'result') {
+                    sentStop = true;
+                    const usage = cliEvent.usage;
+                    if (usage) {
+                      try {
+                        const totalTokens = (usage.input_tokens || 0) + (usage.output_tokens || 0);
+                        const db = getDb();
+                        db.query(
+                          'UPDATE conversations SET total_tokens = total_tokens + ? WHERE id = ?',
+                        ).run(totalTokens, session.conversationId);
+                      } catch (e) {
+                        console.error('[claude] Failed to persist token usage:', e);
+                      }
+                    }
+                  }
+                } catch {
+                  // Non-JSON line, skip
                 }
-              } catch {
-                // Non-JSON line, skip
               }
             }
-          }
 
-          clearInterval(pingInterval);
+            clearInterval(pingInterval);
 
-          // Check exit code and report errors if no events received
-          if (!cancelled && !receivedAnyEvent) {
-            // Wait briefly for stderr to finish
-            await new Promise((r) => setTimeout(r, 100));
-            const exitCode = proc.exitCode;
-            const stderr = stderrChunks.join('').trim();
-            const errMsg = stderr
-              ? `CLI exited (code ${exitCode}) with: ${stderr.slice(0, 500)}`
-              : `CLI exited with code ${exitCode} and produced no output`;
-            console.error(`[claude:${session.id}] ${errMsg}`);
-            const errEvt = JSON.stringify({
-              type: 'error',
-              error: { type: 'cli_error', message: errMsg },
-            });
-            controller.enqueue(encoder.encode(`data: ${errEvt}\n\n`));
-          }
+            // Check exit code and report errors if no events received
+            if (!cancelled && !receivedAnyEvent) {
+              // Wait briefly for stderr to finish
+              await new Promise((r) => setTimeout(r, 100));
+              const exitCode = proc.exitCode;
+              const stderr = stderrChunks.join('').trim();
+              const errMsg = stderr
+                ? `CLI exited (code ${exitCode}) with: ${stderr.slice(0, 500)}`
+                : `CLI exited with code ${exitCode} and produced no output`;
+              console.error(`[claude:${session.id}] ${errMsg}`);
+              const errEvt = JSON.stringify({
+                type: 'error',
+                error: { type: 'cli_error', message: errMsg },
+              });
+              try {
+                controller.enqueue(encoder.encode(`data: ${errEvt}\n\n`));
+              } catch {
+                /* client disconnected */
+              }
+            }
 
-          // Save assistant message to DB
-          if (assistantContent && assistantContent.length > 0) {
-            try {
-              const db = getDb();
-              const msgId = nanoid();
-              db.query(
-                `
+            // Save assistant message to DB (skip if cancel handler already saved it)
+            if (!cancelled && assistantContent && assistantContent.length > 0) {
+              try {
+                const db = getDb();
+                const msgId = nanoid();
+                db.query(
+                  `
                 INSERT INTO messages (id, conversation_id, role, content, model, timestamp)
                 VALUES (?, ?, 'assistant', ?, ?, ?)
               `,
-              ).run(
-                msgId,
-                session.conversationId,
-                JSON.stringify(assistantContent),
-                assistantModel,
-                Date.now(),
-              );
+                ).run(
+                  msgId,
+                  session.conversationId,
+                  JSON.stringify(assistantContent),
+                  assistantModel,
+                  Date.now(),
+                );
 
-              db.query('UPDATE conversations SET updated_at = ? WHERE id = ?').run(
-                Date.now(),
-                session.conversationId,
-              );
-            } catch (dbErr) {
-              console.error('[claude] Failed to save assistant message:', dbErr);
+                db.query('UPDATE conversations SET updated_at = ? WHERE id = ?').run(
+                  Date.now(),
+                  session.conversationId,
+                );
+              } catch (dbErr) {
+                console.error('[claude] Failed to save assistant message:', dbErr);
+              }
             }
-          }
 
-          if (!cancelled && !sentStop) {
-            controller.enqueue(encoder.encode(`data: {"type":"message_stop"}\n\n`));
+            if (!cancelled && !sentStop) {
+              try {
+                controller.enqueue(encoder.encode(`data: {"type":"message_stop"}\n\n`));
+              } catch {
+                /* client disconnected */
+              }
+            }
+            if (!cancelled) {
+              try {
+                controller.close();
+              } catch {
+                /* already closed */
+              }
+            }
+            session.status = 'idle';
+          } catch (err) {
+            clearInterval(pingInterval);
+
+            // Save any accumulated assistant content even on error/disconnect.
+            // This is critical for page reloads — the client drops the connection
+            // causing controller.enqueue to throw, but we still want to persist
+            // whatever content was already received from the CLI.
+            if (!cancelled && assistantContent && assistantContent.length > 0) {
+              try {
+                const db = getDb();
+                const msgId = nanoid();
+                db.query(
+                  `INSERT INTO messages (id, conversation_id, role, content, model, timestamp)
+                 VALUES (?, ?, 'assistant', ?, ?, ?)`,
+                ).run(
+                  msgId,
+                  session.conversationId,
+                  JSON.stringify(assistantContent),
+                  assistantModel,
+                  Date.now(),
+                );
+                db.query('UPDATE conversations SET updated_at = ? WHERE id = ?').run(
+                  Date.now(),
+                  session.conversationId,
+                );
+              } catch (dbErr) {
+                console.error('[claude] Failed to save assistant message on error:', dbErr);
+              }
+            }
+
+            if (!cancelled) {
+              try {
+                const msg = String(err).replace(/"/g, '\\"');
+                controller.enqueue(
+                  encoder.encode(
+                    `data: {"type":"error","error":{"type":"stream_error","message":"${msg}"}}\n\n`,
+                  ),
+                );
+                controller.close();
+              } catch {
+                /* controller already closed */
+              }
+            }
+            session.status = 'idle';
           }
-          if (!cancelled) {
-            controller.close();
-          }
-          session.status = 'idle';
-        } catch (err) {
-          clearInterval(pingInterval);
-          if (!cancelled) {
-            const msg = String(err).replace(/"/g, '\\"');
-            controller.enqueue(
-              encoder.encode(
-                `data: {"type":"error","error":{"type":"stream_error","message":"${msg}"}}\n\n`,
-              ),
-            );
-            controller.close();
-          }
-          session.status = 'idle';
-        }
+        })(); // end async IIFE — not awaited so start() returns immediately
       },
     });
   }
@@ -666,7 +755,6 @@ class ClaudeProcessManager {
       status: s.status,
     }));
   }
-
 }
 
 export const claudeManager = new ClaudeProcessManager();

@@ -4,11 +4,14 @@
     input,
     result,
     running = false,
+    compact = false,
   } = $props<{
     toolName: string;
     input: Record<string, unknown>;
     result?: { content: string; is_error?: boolean };
     running?: boolean;
+    /** When true, suppress large error styling (used during streaming) */
+    compact?: boolean;
   }>();
 
   let expanded = $state(false);
@@ -48,7 +51,7 @@
   };
 </script>
 
-<div class="tool-block" class:running class:error={result?.is_error}>
+<div class="tool-block" class:running class:error={result?.is_error && !compact} class:compact>
   <button class="tool-header" onclick={() => (expanded = !expanded)}>
     <svg
       width="12"
@@ -80,12 +83,14 @@
     <span class="tool-summary truncate">{formatInput(input)}</span>
     {#if running}
       <span class="running-indicator"></span>
+    {:else if result && !result.is_error}
+      <span class="success-badge">✓</span>
     {:else if result?.is_error}
-      <span class="error-badge">ERROR</span>
+      <span class="error-badge">{compact ? '✕' : 'ERROR'}</span>
     {/if}
   </button>
 
-  {#if expanded}
+  {#if expanded && !compact}
     <div class="tool-details">
       <div class="detail-section">
         <span class="detail-label">Input</span>
@@ -163,6 +168,24 @@
     border-radius: 3px;
     background: var(--accent-error);
     color: var(--text-on-accent);
+  }
+
+  .success-badge {
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--accent-secondary, #00ff88);
+    opacity: 0.7;
+  }
+
+  .tool-block.compact {
+    border-color: var(--border-secondary);
+    transition: border-color 0.3s ease;
+  }
+  .tool-block.compact .error-badge {
+    font-size: 10px;
+    background: transparent;
+    color: var(--accent-error);
+    padding: 0;
   }
 
   .tool-details {

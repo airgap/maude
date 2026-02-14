@@ -1,5 +1,4 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
   import { renderMarkdownPartial } from '$lib/utils/markdown';
 
   interface Props {
@@ -9,32 +8,13 @@
 
   let { text, streaming = false }: Props = $props();
 
-  let displayText = $state('');
-  let mounted = $state(false);
-  let animationKey = $state(0);
-
-  // Just update display text instantly - CSS will handle the animation
-  $effect(() => {
-    if (!streaming || !mounted) {
-      displayText = text;
-      return;
-    }
-
-    // Update immediately when new text arrives
-    displayText = text;
-    // Trigger re-animation by changing key
-    animationKey++;
-  });
-
-  onMount(() => {
-    mounted = true;
-    displayText = text;
-  });
+  // Render text directly — no intermediate $state needed.
+  // CSS handles the streaming animation.
 </script>
 
-<div class="streaming-text-wrapper" class:active={streaming} data-key={animationKey}>
+<div class="streaming-text-wrapper" class:active={streaming}>
   <div class="prose" class:streaming={streaming}>
-    {@html renderMarkdownPartial(displayText)}
+    {@html renderMarkdownPartial(text)}
   </div>
   {#if streaming}
     <span class="cursor">▊</span>

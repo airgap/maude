@@ -9,7 +9,7 @@ import { api } from './client';
  * Uses fetch() instead of EventSource to support POST with body.
  */
 export async function sendAndStream(conversationId: string, content: string): Promise<void> {
-  console.log('[sse] Starting stream for conversation:', conversationId, 'content:', content.slice(0, 100));
+  // console.log('[sse] Starting stream for conversation:', conversationId);
   const abortController = new AbortController();
   streamStore.setAbortController(abortController);
   streamStore.startStream();
@@ -30,7 +30,7 @@ export async function sendAndStream(conversationId: string, content: string): Pr
 
   try {
     const response = await api.stream.send(conversationId, content, streamStore.sessionId);
-    console.log('[sse] Got response:', response.status, response.ok);
+    // console.log('[sse] Got response:', response.status, response.ok);
 
     if (!response.ok) {
       let errMsg = `HTTP ${response.status}`;
@@ -41,7 +41,9 @@ export async function sendAndStream(conversationId: string, content: string): Pr
         try {
           const text = await response.text();
           errMsg = text.slice(0, 300) || errMsg;
-        } catch { /* use status */ }
+        } catch {
+          /* use status */
+        }
       }
       streamStore.handleEvent({ type: 'error', error: { type: 'http_error', message: errMsg } });
       return;
@@ -64,7 +66,7 @@ export async function sendAndStream(conversationId: string, content: string): Pr
     });
 
     const reader = response.body?.getReader();
-    console.log('[sse] Got reader:', !!reader);
+    // console.log('[sse] Got reader:', !!reader);
     if (!reader) {
       streamStore.handleEvent({
         type: 'error',
@@ -77,12 +79,11 @@ export async function sendAndStream(conversationId: string, content: string): Pr
     let buffer = '';
 
     while (true) {
-      console.log('[sse] Reading chunk...');
+      // console.log('[sse] Reading chunk...');
       const { done, value } = await reader.read();
-      if (done) { console.log('[sse] Stream done'); break; }
+      if (done) break;
 
       buffer += decoder.decode(value, { stream: true });
-      console.log('[sse] Decoded buffer length:', buffer.length, 'contains:', buffer.slice(0, 100));
       const lines = buffer.split('\n');
       buffer = lines.pop() ?? '';
 
@@ -93,7 +94,6 @@ export async function sendAndStream(conversationId: string, content: string): Pr
 
         try {
           const event: StreamEvent = JSON.parse(data);
-          console.log('[sse] Received event:', event.type, event);
           streamStore.handleEvent(event);
 
           // Sync content blocks to the assistant message
@@ -104,14 +104,26 @@ export async function sendAndStream(conversationId: string, content: string): Pr
       }
     }
 
-    // Final sync
+    // Final sync from stream store
     if (streamStore.contentBlocks.length > 0) {
       conversationStore.updateLastAssistantMessage([...streamStore.contentBlocks]);
     }
 
+    // Ensure streaming state is cleared when the SSE connection closes.
+    // The message_stop event should have already done this, but if it was
+    // lost (e.g. stream closed before the event was flushed), clean up.
+    if (streamStore.isStreaming) {
+      streamStore.handleEvent({ type: 'message_stop' } as any);
+    }
+
+    // Reload conversation from DB to pick up server-persisted messages.
+    // This handles cases where the stream produced no content_block events
+    // (e.g. /compact, /init) but the server still saved an assistant message.
+    await conversationStore.reload();
+
     // Auto-extract project memories from this conversation
-    const projectPath = conversationStore.active?.projectPath;
-    if (projectPath) {
+    const activeProjectPath = conversationStore.active?.projectPath;
+    if (activeProjectPath) {
       const msgs = conversationStore.active?.messages ?? [];
       // Take last 10 messages for extraction (avoid processing huge histories)
       const recent = msgs.slice(-10).map((m) => ({
@@ -124,7 +136,7 @@ export async function sendAndStream(conversationId: string, content: string): Pr
           : String(m.content),
       }));
       if (recent.length > 0) {
-        projectMemoryStore.extractFromConversation(projectPath, recent).catch(() => {});
+        projectMemoryStore.extractFromConversation(activeProjectPath, recent).catch(() => {});
       }
     }
   } catch (err) {

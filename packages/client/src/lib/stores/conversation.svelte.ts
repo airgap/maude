@@ -1,4 +1,5 @@
 import type { Message, Conversation, ConversationSummary, MessageContent } from '@maude/shared';
+import { api } from '$lib/api/client';
 
 function createConversationStore() {
   let conversations = $state<ConversationSummary[]>([]);
@@ -62,6 +63,19 @@ function createConversationStore() {
 
     prependConversation(summary: ConversationSummary) {
       conversations = [summary, ...conversations];
+    },
+
+    /** Reload the active conversation from the server DB. */
+    async reload() {
+      if (!active) return;
+      try {
+        const res = await api.conversations.get(active.id);
+        if (res.ok && res.data) {
+          active = res.data as Conversation;
+        }
+      } catch (e) {
+        console.warn('[conversationStore] Failed to reload:', e);
+      }
     },
   };
 }
