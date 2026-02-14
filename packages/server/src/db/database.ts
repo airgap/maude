@@ -181,10 +181,26 @@ export function initDatabase(): void {
       FOREIGN KEY (prd_id) REFERENCES prds(id) ON DELETE CASCADE
     );
 
+    CREATE TABLE IF NOT EXISTS story_templates (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      description TEXT NOT NULL DEFAULT '',
+      category TEXT NOT NULL DEFAULT 'feature',
+      title_template TEXT NOT NULL DEFAULT '',
+      description_template TEXT NOT NULL DEFAULT '',
+      acceptance_criteria_templates TEXT NOT NULL DEFAULT '[]',
+      priority TEXT NOT NULL DEFAULT 'medium',
+      tags TEXT NOT NULL DEFAULT '[]',
+      is_built_in INTEGER NOT NULL DEFAULT 0,
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL
+    );
+
     CREATE INDEX IF NOT EXISTS idx_prds_project_path ON prds(project_path);
     CREATE INDEX IF NOT EXISTS idx_prd_stories_prd ON prd_stories(prd_id);
     CREATE INDEX IF NOT EXISTS idx_loops_prd ON loops(prd_id);
     CREATE INDEX IF NOT EXISTS idx_loops_status ON loops(status);
+    CREATE INDEX IF NOT EXISTS idx_story_templates_category ON story_templates(category);
   `);
 
   // Migrate: add new conversation columns (safe ALTER TABLE — no-ops if already exist)

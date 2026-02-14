@@ -141,4 +141,9 @@ export type {
   PRDCompletenessAnalysis,
   AnalyzePrdCompletenessRequest,
   AnalyzePrdCompletenessResponse,
+  StoryTemplateCategory,
+  StoryTemplate,
+  CreateTemplateRequest,
+  CreateStoryFromTemplateRequest,
+  CreateStoryFromTemplateResponse,
 } from './prd.js';

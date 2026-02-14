@@ -23,6 +23,7 @@ type ModalId =
   | 'story-estimate'
   | 'sprint-plan'
   | 'prd-completeness'
+  | 'template-library'
   | null;
 type FocusedPane = 'chat' | 'editor';
 

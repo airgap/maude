@@ -210,6 +210,11 @@
     uiStore.openModal('prd-completeness');
   }
 
+  function openTemplateLibrary() {
+    loopStore.clearTemplates();
+    uiStore.openModal('template-library');
+  }
+
   let estimatingAll = $state(false);
 
   async function estimateAllStories() {
@@ -402,6 +407,7 @@
           </button>
           <button class="icon-btn" title="Sprint plan recommendations" onclick={openSprintPlanModal}>📅</button>
           <button class="icon-btn" title="PRD completeness analysis" onclick={openCompletenessModal}>🔍</button>
+          <button class="icon-btn" title="Story templates" onclick={openTemplateLibrary}>📄</button>
           <button class="icon-btn" class:active-btn={showDependencies} title="Dependencies" onclick={() => showDependencies = !showDependencies}>🔗</button>
           <button class="icon-btn" title="Delete PRD" onclick={handleDeletePrd}>🗑</button>
         </div>

@@ -41,6 +41,11 @@ import type {
   PRDSectionSeverity,
   AnalyzePrdCompletenessRequest,
   AnalyzePrdCompletenessResponse,
+  StoryTemplate,
+  StoryTemplateCategory,
+  CreateTemplateRequest,
+  CreateStoryFromTemplateRequest,
+  CreateStoryFromTemplateResponse,
 } from '@maude/shared';
 import { readFileSync } from 'fs';
 import { join } from 'path';
@@ -3120,6 +3125,316 @@ function buildEstimateSummary(prdId: string, estimates: StoryEstimate[]): Estima
   };
 }
 
+// =============================================
+// Story Template Library
+// =============================================
+
+/** Built-in templates seeded on first load */
+const BUILT_IN_TEMPLATES: Array<Omit<StoryTemplate, 'id' | 'createdAt' | 'updatedAt'>> = [
+  {
+    name: 'Feature',
+    description: 'A new user-facing feature or capability',
+    category: 'feature',
+    titleTemplate: 'As a {{user_role}}, I want to {{action}} so that {{benefit}}',
+    descriptionTemplate:
+      'Implement a new feature that allows {{user_role}} to {{action}}.\n\n' +
+      '## Context\nDescribe why this feature is needed and how it fits into the larger product.\n\n' +
+      '## Scope\n- What is included in this feature\n- What is explicitly out of scope\n\n' +
+      '## Technical Notes\nAny implementation guidance, API changes, or architectural considerations.',
+    acceptanceCriteriaTemplates: [
+      'User can {{primary_action}} from the {{location}} page',
+      'System validates {{input}} before processing',
+      'Success/error feedback is displayed to the user',
+      'Feature is accessible via keyboard navigation',
+      'Unit tests cover the core logic with >80% coverage',
+    ],
+    priority: 'medium',
+    tags: ['feature', 'user-facing'],
+    isBuiltIn: true,
+  },
+  {
+    name: 'Bug Fix',
+    description: 'Fix a defect or unexpected behavior in existing functionality',
+    category: 'bug',
+    titleTemplate: 'Fix: {{brief_description_of_bug}}',
+    descriptionTemplate:
+      '## Bug Description\nDescribe the incorrect behavior that users are experiencing.\n\n' +
+      '## Steps to Reproduce\n1. Go to {{location}}\n2. Perform {{action}}\n3. Observe {{incorrect_result}}\n\n' +
+      '## Expected Behavior\nDescribe what should happen instead.\n\n' +
+      '## Actual Behavior\nDescribe what currently happens.\n\n' +
+      '## Environment\n- Browser/OS: \n- Version: \n- User role: ',
+    acceptanceCriteriaTemplates: [
+      'The reported bug no longer occurs when following the reproduction steps',
+      'Existing related functionality is not broken (regression check)',
+      'A regression test is added to prevent this bug from recurring',
+      'The fix works across supported browsers/environments',
+    ],
+    priority: 'high',
+    tags: ['bug', 'fix', 'defect'],
+    isBuiltIn: true,
+  },
+  {
+    name: 'Technical Debt',
+    description: 'Refactoring, cleanup, or infrastructure improvement',
+    category: 'tech_debt',
+    titleTemplate: 'Tech Debt: {{area}} - {{improvement}}',
+    descriptionTemplate:
+      '## Current State\nDescribe the current technical issue or suboptimal implementation.\n\n' +
+      '## Problem\nExplain why this technical debt is problematic (performance, maintainability, scalability, etc.).\n\n' +
+      '## Proposed Solution\nDescribe the refactoring or improvement to be made.\n\n' +
+      '## Impact\n- Code quality: \n- Performance: \n- Developer experience: \n\n' +
+      '## Migration Plan\nIf applicable, describe how to migrate existing data or code.',
+    acceptanceCriteriaTemplates: [
+      'Code is refactored according to the proposed solution',
+      'All existing tests continue to pass',
+      'No user-facing behavior changes (unless explicitly intended)',
+      'Code review confirms improved readability/maintainability',
+      'Performance benchmarks show no regression (or improvement if applicable)',
+    ],
+    priority: 'low',
+    tags: ['tech-debt', 'refactor', 'infrastructure'],
+    isBuiltIn: true,
+  },
+  {
+    name: 'Research Spike',
+    description: 'Time-boxed investigation to reduce uncertainty or evaluate options',
+    category: 'spike',
+    titleTemplate: 'Spike: Investigate {{topic_or_question}}',
+    descriptionTemplate:
+      '## Research Question\nWhat specific question(s) need to be answered?\n\n' +
+      '## Background\nWhat context led to this research need? What do we already know?\n\n' +
+      '## Options to Evaluate\n1. {{option_1}}\n2. {{option_2}}\n3. {{option_3}}\n\n' +
+      '## Time Box\nThis spike is limited to {{duration}} of effort.\n\n' +
+      '## Success Criteria\nWhat deliverables are expected from this research?',
+    acceptanceCriteriaTemplates: [
+      'A written summary document with findings is produced',
+      'At least {{number}} options are evaluated with pros/cons',
+      'A recommendation is made with clear rationale',
+      'Identified risks and unknowns are documented',
+      'Follow-up stories are created based on findings',
+    ],
+    priority: 'medium',
+    tags: ['spike', 'research', 'investigation'],
+    isBuiltIn: true,
+  },
+];
+
+/** Seed built-in templates if they don't exist */
+function seedBuiltInTemplates(): void {
+  const db = getDb();
+  const existing = db.query('SELECT COUNT(*) as count FROM story_templates WHERE is_built_in = 1').get() as any;
+  if (existing.count > 0) return;
+
+  const now = Date.now();
+  const stmt = db.prepare(
+    `INSERT INTO story_templates (id, name, description, category, title_template, description_template,
+     acceptance_criteria_templates, priority, tags, is_built_in, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)`
+  );
+
+  for (const tmpl of BUILT_IN_TEMPLATES) {
+    stmt.run(
+      nanoid(12),
+      tmpl.name,
+      tmpl.description,
+      tmpl.category,
+      tmpl.titleTemplate,
+      tmpl.descriptionTemplate,
+      JSON.stringify(tmpl.acceptanceCriteriaTemplates),
+      tmpl.priority,
+      JSON.stringify(tmpl.tags),
+      now,
+      now,
+    );
+  }
+}
+
+// --- List all templates ---
+app.get('/templates', (c) => {
+  const db = getDb();
+  seedBuiltInTemplates();
+
+  const category = c.req.query('category');
+  let rows: any[];
+  if (category) {
+    rows = db.query('SELECT * FROM story_templates WHERE category = ? ORDER BY is_built_in DESC, name ASC').all(category);
+  } else {
+    rows = db.query('SELECT * FROM story_templates ORDER BY is_built_in DESC, name ASC').all();
+  }
+
+  return c.json({ ok: true, data: rows.map(templateFromRow) });
+});
+
+// --- Get a single template ---
+app.get('/templates/:templateId', (c) => {
+  const db = getDb();
+  seedBuiltInTemplates();
+
+  const row = db.query('SELECT * FROM story_templates WHERE id = ?').get(c.req.param('templateId'));
+  if (!row) {
+    return c.json({ ok: false, error: 'Template not found' }, 404);
+  }
+  return c.json({ ok: true, data: templateFromRow(row) });
+});
+
+// --- Create a custom template ---
+app.post('/templates', async (c) => {
+  const db = getDb();
+  const body = await c.req.json() as CreateTemplateRequest;
+
+  if (!body.name?.trim()) {
+    return c.json({ ok: false, error: 'Template name is required' }, 400);
+  }
+  if (!body.category) {
+    return c.json({ ok: false, error: 'Template category is required' }, 400);
+  }
+
+  const id = nanoid(12);
+  const now = Date.now();
+
+  db.query(
+    `INSERT INTO story_templates (id, name, description, category, title_template, description_template,
+     acceptance_criteria_templates, priority, tags, is_built_in, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?)`
+  ).run(
+    id,
+    body.name.trim(),
+    body.description?.trim() || '',
+    body.category,
+    body.titleTemplate?.trim() || '',
+    body.descriptionTemplate?.trim() || '',
+    JSON.stringify(body.acceptanceCriteriaTemplates || []),
+    body.priority || 'medium',
+    JSON.stringify(body.tags || []),
+    now,
+    now,
+  );
+
+  const row = db.query('SELECT * FROM story_templates WHERE id = ?').get(id);
+  return c.json({ ok: true, data: templateFromRow(row) }, 201);
+});
+
+// --- Update a custom template ---
+app.patch('/templates/:templateId', async (c) => {
+  const db = getDb();
+  const templateId = c.req.param('templateId');
+  const body = await c.req.json();
+
+  const existing = db.query('SELECT * FROM story_templates WHERE id = ?').get(templateId) as any;
+  if (!existing) {
+    return c.json({ ok: false, error: 'Template not found' }, 404);
+  }
+
+  // Don't allow editing built-in templates' core fields, but allow all edits on custom
+  const now = Date.now();
+  const updates: string[] = [];
+  const values: any[] = [];
+
+  if (body.name !== undefined) { updates.push('name = ?'); values.push(body.name.trim()); }
+  if (body.description !== undefined) { updates.push('description = ?'); values.push(body.description.trim()); }
+  if (body.category !== undefined) { updates.push('category = ?'); values.push(body.category); }
+  if (body.titleTemplate !== undefined) { updates.push('title_template = ?'); values.push(body.titleTemplate.trim()); }
+  if (body.descriptionTemplate !== undefined) { updates.push('description_template = ?'); values.push(body.descriptionTemplate.trim()); }
+  if (body.acceptanceCriteriaTemplates !== undefined) { updates.push('acceptance_criteria_templates = ?'); values.push(JSON.stringify(body.acceptanceCriteriaTemplates)); }
+  if (body.priority !== undefined) { updates.push('priority = ?'); values.push(body.priority); }
+  if (body.tags !== undefined) { updates.push('tags = ?'); values.push(JSON.stringify(body.tags)); }
+
+  if (updates.length === 0) {
+    return c.json({ ok: true, data: templateFromRow(existing) });
+  }
+
+  updates.push('updated_at = ?');
+  values.push(now);
+  values.push(templateId);
+
+  db.query(`UPDATE story_templates SET ${updates.join(', ')} WHERE id = ?`).run(...values);
+
+  const row = db.query('SELECT * FROM story_templates WHERE id = ?').get(templateId);
+  return c.json({ ok: true, data: templateFromRow(row) });
+});
+
+// --- Delete a custom template ---
+app.delete('/templates/:templateId', (c) => {
+  const db = getDb();
+  const templateId = c.req.param('templateId');
+
+  const existing = db.query('SELECT * FROM story_templates WHERE id = ?').get(templateId) as any;
+  if (!existing) {
+    return c.json({ ok: false, error: 'Template not found' }, 404);
+  }
+  if (existing.is_built_in) {
+    return c.json({ ok: false, error: 'Cannot delete built-in templates' }, 400);
+  }
+
+  db.query('DELETE FROM story_templates WHERE id = ?').run(templateId);
+  return c.json({ ok: true });
+});
+
+// --- Create story from template ---
+app.post('/:id/stories/from-template', async (c) => {
+  const db = getDb();
+  const prdId = c.req.param('id');
+  const body = await c.req.json() as CreateStoryFromTemplateRequest;
+
+  // Verify PRD exists
+  const prdRow = db.query('SELECT * FROM prds WHERE id = ?').get(prdId) as any;
+  if (!prdRow) {
+    return c.json({ ok: false, error: 'PRD not found' }, 404);
+  }
+
+  // Get the template
+  seedBuiltInTemplates();
+  const tmplRow = db.query('SELECT * FROM story_templates WHERE id = ?').get(body.templateId) as any;
+  if (!tmplRow) {
+    return c.json({ ok: false, error: 'Template not found' }, 404);
+  }
+
+  const template = templateFromRow(tmplRow);
+  const variables = body.variables || {};
+
+  // Apply variable substitutions to template fields
+  function applyVariables(text: string, vars: Record<string, string>): string {
+    return text.replace(/\{\{(\w+)\}\}/g, (match, key) => {
+      return vars[key] || match; // Keep placeholder if no substitution provided
+    });
+  }
+
+  const title = applyVariables(template.titleTemplate, variables);
+  const description = applyVariables(template.descriptionTemplate, variables);
+  const criteria = template.acceptanceCriteriaTemplates.map((ac: string) => applyVariables(ac, variables));
+
+  // Create the story
+  const storyId = nanoid(12);
+  const now = Date.now();
+  const maxSort = db.query('SELECT MAX(sort_order) as mx FROM prd_stories WHERE prd_id = ?').get(prdId) as any;
+  const sortOrder = (maxSort?.mx ?? -1) + 1;
+
+  const acJson = JSON.stringify(criteria.map((desc: string, idx: number) => ({
+    id: nanoid(8),
+    description: desc,
+    passed: false,
+  })));
+
+  db.query(
+    `INSERT INTO prd_stories (id, prd_id, title, description, acceptance_criteria, priority,
+     depends_on, dependency_reasons, status, attempts, max_attempts, learnings, sort_order, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, '[]', '{}', 'pending', 0, 3, '[]', ?, ?, ?)`
+  ).run(storyId, prdId, title, description, acJson, template.priority, sortOrder, now, now);
+
+  return c.json({
+    ok: true,
+    data: {
+      storyId,
+      story: {
+        title,
+        description,
+        acceptanceCriteria: criteria,
+        priority: template.priority,
+      },
+    } as CreateStoryFromTemplateResponse,
+  }, 201);
+});
+
 // --- Row mappers ---
 
 function prdFromRow(row: any) {
@@ -3155,6 +3470,23 @@ function storyFromRow(row: any) {
     learnings: JSON.parse(row.learnings || '[]'),
     estimate: row.estimate ? JSON.parse(row.estimate) : undefined,
     sortOrder: row.sort_order,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+function templateFromRow(row: any): StoryTemplate {
+  return {
+    id: row.id,
+    name: row.name,
+    description: row.description,
+    category: row.category,
+    titleTemplate: row.title_template,
+    descriptionTemplate: row.description_template,
+    acceptanceCriteriaTemplates: JSON.parse(row.acceptance_criteria_templates || '[]'),
+    priority: row.priority,
+    tags: JSON.parse(row.tags || '[]'),
+    isBuiltIn: !!row.is_built_in,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };

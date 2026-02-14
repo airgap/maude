@@ -16,6 +16,7 @@
   import StoryEstimateModal from '../settings/StoryEstimateModal.svelte';
   import SprintPlanModal from '../settings/SprintPlanModal.svelte';
   import PrdCompletenessModal from '../settings/PrdCompletenessModal.svelte';
+  import TemplateLibraryModal from '../settings/TemplateLibraryModal.svelte';
   import CommandPalette from '../common/CommandPalette.svelte';
   import ToastContainer from '../common/ToastContainer.svelte';
   import QuickOpen from '../editor/QuickOpen.svelte';
@@ -219,6 +220,10 @@
 
   {#if uiStore.activeModal === 'prd-completeness'}
     <PrdCompletenessModal />
+  {/if}
+
+  {#if uiStore.activeModal === 'template-library'}
+    <TemplateLibraryModal />
   {/if}
 
   {#if uiStore.activeModal === 'command-palette'}

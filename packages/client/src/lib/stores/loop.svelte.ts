@@ -1,4 +1,4 @@
-import type { PRD, LoopState, IterationLogEntry, StreamLoopEvent, LoopConfig, PlanMode, EditMode, GeneratedStory, RefinementQuestion, RefineStoryResponse, DependencyGraph, SprintValidation, SprintValidationWarning, ValidateACResponse, ACOverride, StoryEstimate, EstimatePrdResponse, SprintPlanResponse, PRDCompletenessAnalysis } from '@maude/shared';
+import type { PRD, LoopState, IterationLogEntry, StreamLoopEvent, LoopConfig, PlanMode, EditMode, GeneratedStory, RefinementQuestion, RefineStoryResponse, DependencyGraph, SprintValidation, SprintValidationWarning, ValidateACResponse, ACOverride, StoryEstimate, EstimatePrdResponse, SprintPlanResponse, PRDCompletenessAnalysis, StoryTemplate, StoryTemplateCategory } from '@maude/shared';
 import { api, getBaseUrl, getAuthToken } from '../api/client';
 
 function createLoopStore() {
@@ -65,6 +65,13 @@ function createLoopStore() {
   let analyzingCompleteness = $state(false);
   let completenessResult = $state<PRDCompletenessAnalysis | null>(null);
   let completenessError = $state<string | null>(null);
+
+  // Story template library state
+  let templates = $state<StoryTemplate[]>([]);
+  let templatesLoading = $state(false);
+  let templatesError = $state<string | null>(null);
+  let selectedTemplateId = $state<string | null>(null);
+  let templateFilterCategory = $state<StoryTemplateCategory | null>(null);
 
   return {
     get activeLoop() {
@@ -235,6 +242,24 @@ function createLoopStore() {
     },
     get completenessError() {
       return completenessError;
+    },
+    get templates() {
+      return templates;
+    },
+    get templatesLoading() {
+      return templatesLoading;
+    },
+    get templatesError() {
+      return templatesError;
+    },
+    get selectedTemplateId() {
+      return selectedTemplateId;
+    },
+    get selectedTemplate() {
+      return templates.find((t) => t.id === selectedTemplateId) || null;
+    },
+    get templateFilterCategory() {
+      return templateFilterCategory;
     },
 
     // --- Setters ---
@@ -1052,6 +1077,108 @@ function createLoopStore() {
         return { ok: false, error: completenessError ?? undefined };
       } finally {
         analyzingCompleteness = false;
+      }
+    },
+
+    // --- Story Template Library ---
+
+    setSelectedTemplateId(id: string | null) {
+      selectedTemplateId = id;
+    },
+
+    setTemplateFilterCategory(cat: StoryTemplateCategory | null) {
+      templateFilterCategory = cat;
+    },
+
+    clearTemplates() {
+      templatesError = null;
+      selectedTemplateId = null;
+    },
+
+    async loadTemplates(category?: StoryTemplateCategory): Promise<void> {
+      templatesLoading = true;
+      templatesError = null;
+      try {
+        const res = await api.prds.listTemplates(category || undefined);
+        if (res.ok) {
+          templates = res.data;
+        } else {
+          templatesError = (res as any).error || 'Failed to load templates';
+        }
+      } catch (err) {
+        templatesError = String(err);
+      } finally {
+        templatesLoading = false;
+      }
+    },
+
+    async createTemplate(body: {
+      name: string;
+      description: string;
+      category: StoryTemplateCategory;
+      titleTemplate: string;
+      descriptionTemplate: string;
+      acceptanceCriteriaTemplates: string[];
+      priority?: string;
+      tags?: string[];
+    }): Promise<{ ok: boolean; error?: string }> {
+      try {
+        const res = await api.prds.createTemplate(body as any);
+        if (res.ok) {
+          templates = [...templates, res.data];
+          return { ok: true };
+        }
+        return { ok: false, error: (res as any).error || 'Failed to create template' };
+      } catch (err) {
+        return { ok: false, error: String(err) };
+      }
+    },
+
+    async updateTemplate(
+      templateId: string,
+      body: Record<string, any>,
+    ): Promise<{ ok: boolean; error?: string }> {
+      try {
+        const res = await api.prds.updateTemplate(templateId, body as any);
+        if (res.ok) {
+          templates = templates.map((t) => (t.id === templateId ? res.data : t));
+          return { ok: true };
+        }
+        return { ok: false, error: (res as any).error || 'Failed to update template' };
+      } catch (err) {
+        return { ok: false, error: String(err) };
+      }
+    },
+
+    async deleteTemplate(templateId: string): Promise<{ ok: boolean; error?: string }> {
+      try {
+        const res = await api.prds.deleteTemplate(templateId);
+        if (res.ok) {
+          templates = templates.filter((t) => t.id !== templateId);
+          if (selectedTemplateId === templateId) selectedTemplateId = null;
+          return { ok: true };
+        }
+        return { ok: false, error: (res as any).error || 'Failed to delete template' };
+      } catch (err) {
+        return { ok: false, error: String(err) };
+      }
+    },
+
+    async createStoryFromTemplate(
+      prdId: string,
+      templateId: string,
+      variables?: Record<string, string>,
+    ): Promise<{ ok: boolean; error?: string }> {
+      try {
+        const res = await api.prds.createStoryFromTemplate(prdId, templateId, variables);
+        if (res.ok) {
+          // Reload the PRD to show the new story
+          await this.loadPrd(prdId);
+          return { ok: true };
+        }
+        return { ok: false, error: (res as any).error || 'Failed to create story from template' };
+      } catch (err) {
+        return { ok: false, error: String(err) };
       }
     },
 

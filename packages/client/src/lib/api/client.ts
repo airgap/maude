@@ -663,6 +663,45 @@ export const api = {
         method: 'PUT',
         body: JSON.stringify(plan),
       }),
+    // --- Story Templates ---
+    listTemplates: (category?: string) => {
+      const q = category ? `?category=${encodeURIComponent(category)}` : '';
+      return request<{
+        ok: boolean;
+        data: import('@maude/shared').StoryTemplate[];
+      }>(`/prds/templates${q}`);
+    },
+    getTemplate: (templateId: string) =>
+      request<{
+        ok: boolean;
+        data: import('@maude/shared').StoryTemplate;
+      }>(`/prds/templates/${templateId}`),
+    createTemplate: (body: import('@maude/shared').CreateTemplateRequest) =>
+      request<{
+        ok: boolean;
+        data: import('@maude/shared').StoryTemplate;
+      }>('/prds/templates', {
+        method: 'POST',
+        body: JSON.stringify(body),
+      }),
+    updateTemplate: (templateId: string, body: Partial<import('@maude/shared').CreateTemplateRequest>) =>
+      request<{
+        ok: boolean;
+        data: import('@maude/shared').StoryTemplate;
+      }>(`/prds/templates/${templateId}`, {
+        method: 'PATCH',
+        body: JSON.stringify(body),
+      }),
+    deleteTemplate: (templateId: string) =>
+      request<{ ok: boolean }>(`/prds/templates/${templateId}`, { method: 'DELETE' }),
+    createStoryFromTemplate: (prdId: string, templateId: string, variables?: Record<string, string>) =>
+      request<{
+        ok: boolean;
+        data: import('@maude/shared').CreateStoryFromTemplateResponse;
+      }>(`/prds/${prdId}/stories/from-template`, {
+        method: 'POST',
+        body: JSON.stringify({ templateId, variables }),
+      }),
   },
 
   // --- Loops ---

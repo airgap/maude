@@ -491,6 +491,57 @@ export interface AnalyzePrdCompletenessResponse {
   analysis: PRDCompletenessAnalysis;
 }
 
+// --- Story Template Types ---
+
+/** Category of a story template */
+export type StoryTemplateCategory = 'feature' | 'bug' | 'tech_debt' | 'spike' | 'custom';
+
+/** A reusable story template with pre-filled sections and guidance */
+export interface StoryTemplate {
+  id: string;
+  name: string;
+  description: string;
+  category: StoryTemplateCategory;
+  titleTemplate: string;              // Template title with placeholders e.g. "[Feature] {{feature_name}}"
+  descriptionTemplate: string;        // Template description with placeholder guidance
+  acceptanceCriteriaTemplates: string[]; // Pre-filled AC examples for this story type
+  priority: StoryPriority;
+  tags: string[];
+  isBuiltIn: boolean;                 // true = system template, false = user-created
+  createdAt: number;
+  updatedAt: number;
+}
+
+/** Request to create a custom template */
+export interface CreateTemplateRequest {
+  name: string;
+  description: string;
+  category: StoryTemplateCategory;
+  titleTemplate: string;
+  descriptionTemplate: string;
+  acceptanceCriteriaTemplates: string[];
+  priority?: StoryPriority;
+  tags?: string[];
+}
+
+/** Request to create a story from a template */
+export interface CreateStoryFromTemplateRequest {
+  templateId: string;
+  /** Variable substitutions for template placeholders */
+  variables?: Record<string, string>;
+}
+
+/** Response after creating a story from a template */
+export interface CreateStoryFromTemplateResponse {
+  storyId: string;
+  story: {
+    title: string;
+    description: string;
+    acceptanceCriteria: string[];
+    priority: StoryPriority;
+  };
+}
+
 // --- Stream Events for Loop ---
 
 export interface StreamLoopEvent {
