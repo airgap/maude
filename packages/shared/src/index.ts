@@ -150,4 +150,7 @@ export type {
   PriorityRecommendation,
   PriorityRecommendationResponse,
   PriorityRecommendationBulkResponse,
+  MatrixQuadrant,
+  MatrixStoryPosition,
+  EffortValueMatrix,
 } from './prd.js';

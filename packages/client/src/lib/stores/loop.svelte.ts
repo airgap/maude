@@ -1,5 +1,76 @@
-import type { PRD, LoopState, IterationLogEntry, StreamLoopEvent, LoopConfig, PlanMode, EditMode, GeneratedStory, RefinementQuestion, RefineStoryResponse, DependencyGraph, SprintValidation, SprintValidationWarning, ValidateACResponse, ACOverride, StoryEstimate, EstimatePrdResponse, SprintPlanResponse, PRDCompletenessAnalysis, StoryTemplate, StoryTemplateCategory, PriorityRecommendation, PriorityRecommendationBulkResponse } from '@maude/shared';
+import type { PRD, LoopState, IterationLogEntry, StreamLoopEvent, LoopConfig, PlanMode, EditMode, GeneratedStory, RefinementQuestion, RefineStoryResponse, DependencyGraph, SprintValidation, SprintValidationWarning, ValidateACResponse, ACOverride, StoryEstimate, EstimatePrdResponse, SprintPlanResponse, PRDCompletenessAnalysis, StoryTemplate, StoryTemplateCategory, PriorityRecommendation, PriorityRecommendationBulkResponse, EffortValueMatrix, MatrixStoryPosition, MatrixQuadrant, UserStory } from '@maude/shared';
 import { api, getBaseUrl, getAuthToken } from '../api/client';
+
+// --- Helper functions for effort-value matrix computation ---
+
+/** Compute effort score (0-100) from story estimate. Higher = more effort. */
+function computeEffortScore(story: UserStory): number | null {
+  if (!story.estimate) return null;
+
+  // Map story points to effort score (higher points = higher effort)
+  // Fibonacci scale: 1, 2, 3, 5, 8, 13
+  const pointsToEffort: Record<number, number> = {
+    1: 10,
+    2: 25,
+    3: 40,
+    5: 60,
+    8: 80,
+    13: 95,
+  };
+
+  const baseEffort = pointsToEffort[story.estimate.storyPoints] ?? Math.min(story.estimate.storyPoints * 7.5, 100);
+
+  // Adjust slightly based on size classification
+  const sizeModifier = story.estimate.size === 'large' ? 5 : story.estimate.size === 'small' ? -5 : 0;
+
+  return Math.max(0, Math.min(100, baseEffort + sizeModifier));
+}
+
+/** Compute value score (0-100) from priority and acceptance criteria impact. Higher = more value. */
+function computeValueScore(story: UserStory): number | null {
+  // Priority contributes the largest share of value (0-60 base)
+  const priorityToValue: Record<string, number> = {
+    critical: 90,
+    high: 70,
+    medium: 45,
+    low: 20,
+  };
+
+  let value = priorityToValue[story.priority] ?? 40;
+
+  // Acceptance criteria count adds impact weight (more criteria = potentially higher impact)
+  const criteriaCount = story.acceptanceCriteria?.length || 0;
+  if (criteriaCount >= 5) value = Math.min(100, value + 8);
+  else if (criteriaCount >= 3) value = Math.min(100, value + 4);
+
+  // If there's a priority recommendation suggesting higher priority, boost value
+  if (story.priorityRecommendation && !story.priorityRecommendation.isManualOverride) {
+    const suggestedVal = priorityToValue[story.priorityRecommendation.suggestedPriority] ?? 0;
+    const currentVal = priorityToValue[story.priority] ?? 0;
+    if (suggestedVal > currentVal) {
+      // Blend in the AI suggestion slightly
+      value = Math.min(100, value + Math.round((suggestedVal - currentVal) * 0.3));
+    }
+  }
+
+  // Stories blocking others are higher value
+  if (story.dependsOn && story.dependsOn.length === 0) {
+    // No dependencies — might be a foundation piece (slight boost if it has dependents tracked elsewhere)
+  }
+
+  return Math.max(0, Math.min(100, value));
+}
+
+/** Determine quadrant from effort and value scores */
+function computeQuadrant(effortScore: number, valueScore: number): MatrixQuadrant {
+  const highValue = valueScore >= 50;
+  const highEffort = effortScore >= 50;
+
+  if (highValue && !highEffort) return 'quick_wins';     // High value, low effort
+  if (highValue && highEffort) return 'major_projects';   // High value, high effort
+  if (!highValue && !highEffort) return 'fill_ins';       // Low value, low effort
+  return 'low_priority';                                   // Low value, high effort
+}
 
 function createLoopStore() {
   let activeLoop = $state<LoopState | null>(null);
@@ -80,6 +151,11 @@ function createLoopStore() {
   let priorityRecommendationError = $state<string | null>(null);
   let recommendingAllPriorities = $state(false);
   let bulkPriorityResult = $state<PriorityRecommendationBulkResponse | null>(null);
+
+  // Effort-value matrix state
+  let effortValueMatrix = $state<EffortValueMatrix | null>(null);
+  let matrixFilterQuadrant = $state<MatrixQuadrant | null>(null);
+  let matrixManualPositions = $state<Record<string, { effortScore: number; valueScore: number }>>({});
 
   return {
     get activeLoop() {
@@ -286,6 +362,15 @@ function createLoopStore() {
     },
     get bulkPriorityResult() {
       return bulkPriorityResult;
+    },
+    get effortValueMatrix() {
+      return effortValueMatrix;
+    },
+    get matrixFilterQuadrant() {
+      return matrixFilterQuadrant;
+    },
+    get matrixManualPositions() {
+      return matrixManualPositions;
     },
 
     // --- Setters ---
@@ -1288,6 +1373,127 @@ function createLoopStore() {
       } finally {
         recommendingAllPriorities = false;
       }
+    },
+
+    // --- Effort vs Value Matrix ---
+
+    setMatrixFilterQuadrant(quadrant: MatrixQuadrant | null) {
+      matrixFilterQuadrant = quadrant;
+    },
+
+    clearEffortValueMatrix() {
+      effortValueMatrix = null;
+      matrixFilterQuadrant = null;
+    },
+
+    /** Adjust a story's position in the matrix manually */
+    adjustStoryPosition(storyId: string, effortScore: number, valueScore: number) {
+      matrixManualPositions = {
+        ...matrixManualPositions,
+        [storyId]: { effortScore, valueScore },
+      };
+      // Recompute matrix if it exists
+      if (effortValueMatrix) {
+        const prd = prds.find((p) => p.id === effortValueMatrix!.prdId);
+        if (prd) {
+          this.computeEffortValueMatrix(prd.id);
+        }
+      }
+    },
+
+    /** Reset a manual position adjustment */
+    resetStoryPosition(storyId: string) {
+      const { [storyId]: _, ...rest } = matrixManualPositions;
+      matrixManualPositions = rest;
+      if (effortValueMatrix) {
+        const prd = prds.find((p) => p.id === effortValueMatrix!.prdId);
+        if (prd) {
+          this.computeEffortValueMatrix(prd.id);
+        }
+      }
+    },
+
+    /** Compute the effort-value matrix from existing story data */
+    computeEffortValueMatrix(prdId: string): EffortValueMatrix | null {
+      const prd = prds.find((p) => p.id === prdId);
+      if (!prd || !prd.stories?.length) {
+        effortValueMatrix = null;
+        return null;
+      }
+
+      const plotted: MatrixStoryPosition[] = [];
+      const excluded: EffortValueMatrix['excludedStories'] = [];
+
+      for (const story of prd.stories) {
+        // Check if story has been manually positioned
+        const manualPos = matrixManualPositions[story.id];
+        if (manualPos) {
+          plotted.push({
+            storyId: story.id,
+            title: story.title,
+            status: story.status,
+            priority: story.priority,
+            effortScore: manualPos.effortScore,
+            valueScore: manualPos.valueScore,
+            quadrant: computeQuadrant(manualPos.effortScore, manualPos.valueScore),
+            storyPoints: story.estimate?.storyPoints ?? null,
+            size: story.estimate?.size ?? null,
+            isManualPosition: true,
+          });
+          continue;
+        }
+
+        // Compute effort from estimate
+        const effortScore = computeEffortScore(story);
+        // Compute value from priority and acceptance criteria
+        const valueScore = computeValueScore(story);
+
+        if (effortScore === null || valueScore === null) {
+          const reasons: string[] = [];
+          if (effortScore === null) reasons.push('no estimate');
+          if (valueScore === null) reasons.push('missing priority data');
+          excluded.push({
+            storyId: story.id,
+            title: story.title,
+            reason: reasons.join(', '),
+          });
+          continue;
+        }
+
+        plotted.push({
+          storyId: story.id,
+          title: story.title,
+          status: story.status,
+          priority: story.priority,
+          effortScore,
+          valueScore,
+          quadrant: computeQuadrant(effortScore, valueScore),
+          storyPoints: story.estimate?.storyPoints ?? null,
+          size: story.estimate?.size ?? null,
+          isManualPosition: false,
+        });
+      }
+
+      const quadrantCounts: Record<MatrixQuadrant, number> = {
+        quick_wins: 0,
+        major_projects: 0,
+        fill_ins: 0,
+        low_priority: 0,
+      };
+      for (const s of plotted) {
+        quadrantCounts[s.quadrant]++;
+      }
+
+      const matrix: EffortValueMatrix = {
+        prdId,
+        stories: plotted,
+        quadrantCounts,
+        totalPlotted: plotted.length,
+        excludedStories: excluded,
+      };
+
+      effortValueMatrix = matrix;
+      return matrix;
     },
 
     // --- Sprint planning (chat) ---

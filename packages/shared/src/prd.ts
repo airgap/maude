@@ -583,6 +583,47 @@ export interface PriorityRecommendationBulkResponse {
   };
 }
 
+// --- Effort vs Value Matrix Types ---
+
+/** Quadrant classification in the effort-value matrix */
+export type MatrixQuadrant = 'quick_wins' | 'major_projects' | 'fill_ins' | 'low_priority';
+
+/** A story positioned in the effort-value matrix */
+export interface MatrixStoryPosition {
+  storyId: string;
+  title: string;
+  status: StoryStatus;
+  priority: StoryPriority;
+  /** Effort score 0-100 (derived from story estimates) */
+  effortScore: number;
+  /** Value score 0-100 (derived from priority and acceptance criteria impact) */
+  valueScore: number;
+  /** Computed quadrant based on effort/value scores */
+  quadrant: MatrixQuadrant;
+  /** Story points from estimate (if available) */
+  storyPoints: number | null;
+  /** Story size from estimate (if available) */
+  size: StorySize | null;
+  /** Whether position has been manually adjusted by the user */
+  isManualPosition: boolean;
+}
+
+/** Full matrix data for a PRD */
+export interface EffortValueMatrix {
+  prdId: string;
+  stories: MatrixStoryPosition[];
+  /** Summary counts per quadrant */
+  quadrantCounts: Record<MatrixQuadrant, number>;
+  /** Total stories in the matrix (excludes stories without enough data) */
+  totalPlotted: number;
+  /** Stories excluded due to missing data */
+  excludedStories: Array<{
+    storyId: string;
+    title: string;
+    reason: string;
+  }>;
+}
+
 // --- Stream Events for Loop ---
 
 export interface StreamLoopEvent {

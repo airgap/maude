@@ -18,6 +18,7 @@
   import PrdCompletenessModal from '../settings/PrdCompletenessModal.svelte';
   import TemplateLibraryModal from '../settings/TemplateLibraryModal.svelte';
   import PriorityRecommendationModal from '../settings/PriorityRecommendationModal.svelte';
+  import EffortValueMatrixModal from '../settings/EffortValueMatrixModal.svelte';
   import CommandPalette from '../common/CommandPalette.svelte';
   import ToastContainer from '../common/ToastContainer.svelte';
   import QuickOpen from '../editor/QuickOpen.svelte';
@@ -229,6 +230,10 @@
 
   {#if uiStore.activeModal === 'priority-recommendation'}
     <PriorityRecommendationModal />
+  {/if}
+
+  {#if uiStore.activeModal === 'effort-value-matrix'}
+    <EffortValueMatrixModal />
   {/if}
 
   {#if uiStore.activeModal === 'command-palette'}

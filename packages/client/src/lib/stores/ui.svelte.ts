@@ -25,6 +25,7 @@ type ModalId =
   | 'prd-completeness'
   | 'template-library'
   | 'priority-recommendation'
+  | 'effort-value-matrix'
   | null;
 type FocusedPane = 'chat' | 'editor';
 

@@ -221,6 +221,11 @@
     uiStore.openModal('priority-recommendation');
   }
 
+  function openEffortValueMatrix() {
+    loopStore.clearEffortValueMatrix();
+    uiStore.openModal('effort-value-matrix');
+  }
+
   let estimatingAll = $state(false);
   let recommendingAllPriorities = $state(false);
 
@@ -437,6 +442,7 @@
             {#if recommendingAllPriorities}<span class="spinner-sm"></span>{:else}🎯{/if}
           </button>
           <button class="icon-btn" title="Sprint plan recommendations" onclick={openSprintPlanModal}>📅</button>
+          <button class="icon-btn" title="Effort vs Value matrix" onclick={openEffortValueMatrix}>📈</button>
           <button class="icon-btn" title="PRD completeness analysis" onclick={openCompletenessModal}>🔍</button>
           <button class="icon-btn" title="Story templates" onclick={openTemplateLibrary}>📄</button>
           <button class="icon-btn" class:active-btn={showDependencies} title="Dependencies" onclick={() => showDependencies = !showDependencies}>🔗</button>
