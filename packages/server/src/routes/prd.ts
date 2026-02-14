@@ -10,6 +10,15 @@ import type {
   GeneratedStory,
   RefineStoryRequest,
   RefinementQuestion,
+  DependencyGraph,
+  DependencyNode,
+  DependencyEdge,
+  DependencyWarning,
+  StoryDependency,
+  AnalyzeDependenciesRequest,
+  SprintValidation,
+  SprintValidationWarning,
+  UserStory,
 } from '@maude/shared';
 import { readFileSync } from 'fs';
 import { join } from 'path';
@@ -1023,6 +1032,565 @@ Each story should be implementable in a single focused session.`;
 
   return c.json({ ok: true, data: response }, 201);
 });
+
+// --- Dependency Management ---
+
+// Get dependency graph for a PRD
+app.get('/:id/dependencies', (c) => {
+  const db = getDb();
+  const prdId = c.req.param('id');
+
+  const prdRow = db.query('SELECT * FROM prds WHERE id = ?').get(prdId) as any;
+  if (!prdRow) return c.json({ ok: false, error: 'PRD not found' }, 404);
+
+  const stories = db
+    .query('SELECT * FROM prd_stories WHERE prd_id = ? ORDER BY sort_order ASC, created_at ASC')
+    .all(prdId) as any[];
+
+  const graph = buildDependencyGraph(stories.map(storyFromRow), prdId);
+  return c.json({ ok: true, data: graph });
+});
+
+// Add or update a dependency between two stories
+app.post('/:id/dependencies', async (c) => {
+  const db = getDb();
+  const prdId = c.req.param('id');
+  const body = await c.req.json();
+
+  const prdRow = db.query('SELECT * FROM prds WHERE id = ?').get(prdId);
+  if (!prdRow) return c.json({ ok: false, error: 'PRD not found' }, 404);
+
+  const { fromStoryId, toStoryId, reason } = body;
+  if (!fromStoryId || !toStoryId) {
+    return c.json({ ok: false, error: 'fromStoryId and toStoryId required' }, 400);
+  }
+  if (fromStoryId === toStoryId) {
+    return c.json({ ok: false, error: 'A story cannot depend on itself' }, 400);
+  }
+
+  // Verify both stories exist and belong to this PRD
+  const fromStory = db.query('SELECT * FROM prd_stories WHERE id = ? AND prd_id = ?').get(fromStoryId, prdId) as any;
+  const toStory = db.query('SELECT * FROM prd_stories WHERE id = ? AND prd_id = ?').get(toStoryId, prdId) as any;
+  if (!fromStory) return c.json({ ok: false, error: `Story ${fromStoryId} not found in this PRD` }, 404);
+  if (!toStory) return c.json({ ok: false, error: `Story ${toStoryId} not found in this PRD` }, 404);
+
+  // fromStoryId depends on toStoryId (toStoryId blocks fromStoryId)
+  const dependsOn: string[] = JSON.parse(fromStory.depends_on || '[]');
+  if (!dependsOn.includes(toStoryId)) {
+    dependsOn.push(toStoryId);
+    const now = Date.now();
+    db.query('UPDATE prd_stories SET depends_on = ?, updated_at = ? WHERE id = ?')
+      .run(JSON.stringify(dependsOn), now, fromStoryId);
+    db.query('UPDATE prds SET updated_at = ? WHERE id = ?').run(now, prdId);
+  }
+
+  // Return the updated graph
+  const stories = db
+    .query('SELECT * FROM prd_stories WHERE prd_id = ? ORDER BY sort_order ASC, created_at ASC')
+    .all(prdId) as any[];
+  const graph = buildDependencyGraph(stories.map(storyFromRow), prdId);
+
+  return c.json({ ok: true, data: graph });
+});
+
+// Remove a dependency between two stories
+app.delete('/:id/dependencies', async (c) => {
+  const db = getDb();
+  const prdId = c.req.param('id');
+  const body = await c.req.json();
+
+  const prdRow = db.query('SELECT * FROM prds WHERE id = ?').get(prdId);
+  if (!prdRow) return c.json({ ok: false, error: 'PRD not found' }, 404);
+
+  const { fromStoryId, toStoryId } = body;
+  if (!fromStoryId || !toStoryId) {
+    return c.json({ ok: false, error: 'fromStoryId and toStoryId required' }, 400);
+  }
+
+  const fromStory = db.query('SELECT * FROM prd_stories WHERE id = ? AND prd_id = ?').get(fromStoryId, prdId) as any;
+  if (!fromStory) return c.json({ ok: false, error: `Story ${fromStoryId} not found in this PRD` }, 404);
+
+  const dependsOn: string[] = JSON.parse(fromStory.depends_on || '[]');
+  const filtered = dependsOn.filter((id) => id !== toStoryId);
+
+  if (filtered.length !== dependsOn.length) {
+    const now = Date.now();
+    db.query('UPDATE prd_stories SET depends_on = ?, updated_at = ? WHERE id = ?')
+      .run(JSON.stringify(filtered), now, fromStoryId);
+    db.query('UPDATE prds SET updated_at = ? WHERE id = ?').run(now, prdId);
+  }
+
+  // Return the updated graph
+  const stories = db
+    .query('SELECT * FROM prd_stories WHERE prd_id = ? ORDER BY sort_order ASC, created_at ASC')
+    .all(prdId) as any[];
+  const graph = buildDependencyGraph(stories.map(storyFromRow), prdId);
+
+  return c.json({ ok: true, data: graph });
+});
+
+// AI-powered dependency analysis
+app.post('/:id/dependencies/analyze', async (c) => {
+  const db = getDb();
+  const prdId = c.req.param('id');
+  const body = (await c.req.json()) as AnalyzeDependenciesRequest;
+
+  const prdRow = db.query('SELECT * FROM prds WHERE id = ?').get(prdId) as any;
+  if (!prdRow) return c.json({ ok: false, error: 'PRD not found' }, 404);
+
+  const stories = db
+    .query('SELECT * FROM prd_stories WHERE prd_id = ? ORDER BY sort_order ASC, created_at ASC')
+    .all(prdId) as any[];
+
+  if (stories.length < 2) {
+    return c.json({ ok: false, error: 'Need at least 2 stories to analyze dependencies' }, 400);
+  }
+
+  const mappedStories = stories.map(storyFromRow);
+
+  // Build story context for AI analysis
+  let storyContext = '';
+  for (const s of mappedStories) {
+    const criteria = s.acceptanceCriteria
+      .map((ac: any) => `  - ${ac.description}`)
+      .join('\n');
+    storyContext += `\n### Story "${s.title}" (ID: ${s.id}) [${s.priority}]
+${s.description}
+Acceptance Criteria:
+${criteria}\n`;
+  }
+
+  // Preserve manually-added dependencies (they won't be in the AI result)
+  // A dependency is "manual" if it existed before analysis and we're not replacing
+  const existingDeps: Map<string, string[]> = new Map();
+  if (!body.replaceAutoDetected) {
+    for (const s of mappedStories) {
+      if (s.dependsOn.length > 0) {
+        existingDeps.set(s.id, [...s.dependsOn]);
+      }
+    }
+  }
+
+  const systemPrompt = `You are an expert software architect analyzing user stories for a product requirements document to identify dependencies between them.
+
+A dependency exists when one story MUST be completed before another can start. Common reasons:
+- Story B builds on infrastructure/features created by Story A
+- Story B requires APIs, schemas, or data models defined in Story A
+- Story B extends or modifies functionality created by Story A
+- Story B tests or validates something implemented in Story A
+
+RULES:
+1. Only identify real, technical dependencies — not just thematic relationships
+2. A story can depend on multiple other stories
+3. Avoid circular dependencies (A→B→C→A)
+4. Consider the acceptance criteria when determining dependencies
+5. If two stories are independent, do NOT create a dependency between them
+
+You MUST respond with ONLY a valid JSON array. No markdown, no explanation, no code fences.
+
+Each dependency object must have this shape:
+{
+  "fromStoryId": "<ID of the story that DEPENDS ON another>",
+  "toStoryId": "<ID of the story that must be done FIRST>",
+  "reason": "<brief explanation of why this dependency exists>"
+}
+
+Only return dependencies you are confident about. Empty array [] is valid if stories are independent.`;
+
+  const userPrompt = `Analyze these stories for the PRD "${prdRow.name}" and identify dependencies between them:
+${storyContext}
+
+Which stories must be completed before others can start? Return the dependency list as JSON.`;
+
+  try {
+    const auth = getAnthropicAuth();
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+      'anthropic-version': '2023-06-01',
+    };
+    if (auth.type === 'oauth') {
+      headers['Authorization'] = `Bearer ${auth.token}`;
+    } else {
+      headers['x-api-key'] = auth.token;
+    }
+
+    const apiResponse = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-5-20250929',
+        max_tokens: 4096,
+        system: systemPrompt,
+        messages: [{ role: 'user', content: userPrompt }],
+      }),
+    });
+
+    if (!apiResponse.ok) {
+      const errBody = await apiResponse.text().catch(() => 'Unknown error');
+      return c.json(
+        { ok: false, error: `AI analysis failed (${apiResponse.status}): ${errBody}` },
+        502,
+      );
+    }
+
+    const result = await apiResponse.json() as any;
+    const textContent = result.content?.find((ct: any) => ct.type === 'text');
+    if (!textContent?.text) {
+      return c.json({ ok: false, error: 'AI returned no text content' }, 502);
+    }
+
+    let rawText = textContent.text.trim();
+    if (rawText.startsWith('```')) {
+      rawText = rawText.replace(/^```(?:json)?\s*\n?/, '').replace(/\n?```\s*$/, '');
+    }
+
+    let aiDeps: Array<{ fromStoryId: string; toStoryId: string; reason?: string }>;
+    try {
+      aiDeps = JSON.parse(rawText);
+    } catch {
+      return c.json(
+        { ok: false, error: 'Failed to parse AI dependency analysis as JSON. Try again.' },
+        502,
+      );
+    }
+
+    if (!Array.isArray(aiDeps)) {
+      return c.json({ ok: false, error: 'AI returned invalid dependency format' }, 502);
+    }
+
+    // Validate story IDs
+    const storyIds = new Set(mappedStories.map((s) => s.id));
+    const validDeps = aiDeps.filter(
+      (d) => d.fromStoryId && d.toStoryId && storyIds.has(d.fromStoryId) && storyIds.has(d.toStoryId) && d.fromStoryId !== d.toStoryId,
+    );
+
+    // Build new depends_on maps
+    const newDepsMap: Map<string, Set<string>> = new Map();
+    for (const s of mappedStories) {
+      newDepsMap.set(s.id, new Set());
+    }
+
+    // If not replacing, keep existing manual deps
+    if (!body.replaceAutoDetected) {
+      for (const [storyId, deps] of existingDeps) {
+        for (const dep of deps) {
+          newDepsMap.get(storyId)?.add(dep);
+        }
+      }
+    }
+
+    // Add AI-detected deps
+    for (const dep of validDeps) {
+      newDepsMap.get(dep.fromStoryId)?.add(dep.toStoryId);
+    }
+
+    // Check for circular dependencies and remove them
+    const circularPairs = detectCircularDependencies(newDepsMap);
+    for (const [from, to] of circularPairs) {
+      // Remove the AI-added dependency that creates the cycle
+      const wasExisting = existingDeps.get(from)?.includes(to);
+      if (!wasExisting) {
+        newDepsMap.get(from)?.delete(to);
+      }
+    }
+
+    // Persist to database
+    const now = Date.now();
+    for (const [storyId, deps] of newDepsMap) {
+      const currentRow = db.query('SELECT depends_on FROM prd_stories WHERE id = ?').get(storyId) as any;
+      const currentDeps = JSON.parse(currentRow?.depends_on || '[]');
+      const newDeps = Array.from(deps);
+
+      // Only update if changed
+      if (JSON.stringify(currentDeps.sort()) !== JSON.stringify(newDeps.sort())) {
+        db.query('UPDATE prd_stories SET depends_on = ?, updated_at = ? WHERE id = ?')
+          .run(JSON.stringify(newDeps), now, storyId);
+      }
+    }
+
+    db.query('UPDATE prds SET updated_at = ? WHERE id = ?').run(now, prdId);
+
+    // Reload stories and build graph
+    const updatedStories = db
+      .query('SELECT * FROM prd_stories WHERE prd_id = ? ORDER BY sort_order ASC, created_at ASC')
+      .all(prdId) as any[];
+    const graph = buildDependencyGraph(updatedStories.map(storyFromRow), prdId);
+
+    const dependencies: StoryDependency[] = validDeps.map((d) => ({
+      fromStoryId: d.fromStoryId,
+      toStoryId: d.toStoryId,
+      type: 'blocked_by' as const,
+      reason: d.reason,
+      autoDetected: true,
+    }));
+
+    return c.json({
+      ok: true,
+      data: {
+        prdId,
+        dependencies,
+        graph,
+      },
+    });
+  } catch (err) {
+    return c.json(
+      { ok: false, error: `Dependency analysis failed: ${(err as Error).message}` },
+      500,
+    );
+  }
+});
+
+// Validate sprint plan — warn about missing dependencies
+app.get('/:id/dependencies/validate', (c) => {
+  const db = getDb();
+  const prdId = c.req.param('id');
+
+  const prdRow = db.query('SELECT * FROM prds WHERE id = ?').get(prdId) as any;
+  if (!prdRow) return c.json({ ok: false, error: 'PRD not found' }, 404);
+
+  const stories = db
+    .query('SELECT * FROM prd_stories WHERE prd_id = ? ORDER BY sort_order ASC, created_at ASC')
+    .all(prdId) as any[];
+
+  const validation = validateSprintPlan(stories.map(storyFromRow));
+  return c.json({ ok: true, data: validation });
+});
+
+// --- Dependency Graph Builder ---
+
+function buildDependencyGraph(stories: UserStory[], prdId: string): DependencyGraph {
+  const storyMap = new Map(stories.map((s) => [s.id, s]));
+  const completedIds = new Set(stories.filter((s) => s.status === 'completed').map((s) => s.id));
+
+  // Build edges
+  const edges: DependencyEdge[] = [];
+  const blocksMap = new Map<string, Set<string>>(); // storyId -> set of stories it blocks
+  const blockedByMap = new Map<string, Set<string>>(); // storyId -> set of stories blocking it
+
+  for (const s of stories) {
+    blocksMap.set(s.id, new Set());
+    blockedByMap.set(s.id, new Set());
+  }
+
+  for (const story of stories) {
+    for (const depId of story.dependsOn) {
+      if (storyMap.has(depId)) {
+        edges.push({
+          from: depId,
+          to: story.id,
+          reason: undefined, // reason not stored in depends_on array, only in AI analysis
+        });
+        blocksMap.get(depId)?.add(story.id);
+        blockedByMap.get(story.id)?.add(depId);
+      }
+    }
+  }
+
+  // Calculate depth using BFS topological approach
+  const depthMap = new Map<string, number>();
+  const calculateDepth = (storyId: string, visited: Set<string> = new Set()): number => {
+    if (depthMap.has(storyId)) return depthMap.get(storyId)!;
+    if (visited.has(storyId)) return 0; // circular dep protection
+    visited.add(storyId);
+
+    const deps = blockedByMap.get(storyId) || new Set();
+    if (deps.size === 0) {
+      depthMap.set(storyId, 0);
+      return 0;
+    }
+
+    let maxDepth = 0;
+    for (const depId of deps) {
+      maxDepth = Math.max(maxDepth, calculateDepth(depId, visited) + 1);
+    }
+    depthMap.set(storyId, maxDepth);
+    return maxDepth;
+  };
+
+  for (const s of stories) {
+    calculateDepth(s.id);
+  }
+
+  // Build nodes
+  const nodes: DependencyNode[] = stories.map((s) => ({
+    storyId: s.id,
+    title: s.title,
+    status: s.status,
+    priority: s.priority,
+    blocksCount: blocksMap.get(s.id)?.size || 0,
+    blockedByCount: blockedByMap.get(s.id)?.size || 0,
+    isReady: Array.from(blockedByMap.get(s.id) || []).every((depId) => completedIds.has(depId)),
+    depth: depthMap.get(s.id) || 0,
+  }));
+
+  // Check for warnings
+  const warnings: DependencyWarning[] = [];
+
+  // Circular dependency detection
+  const depsMapForCycle = new Map<string, Set<string>>();
+  for (const s of stories) {
+    depsMapForCycle.set(s.id, new Set(s.dependsOn.filter((id) => storyMap.has(id))));
+  }
+  const circularPairs = detectCircularDependencies(depsMapForCycle);
+  if (circularPairs.length > 0) {
+    const involvedIds = new Set<string>();
+    for (const [from, to] of circularPairs) {
+      involvedIds.add(from);
+      involvedIds.add(to);
+    }
+    warnings.push({
+      type: 'circular',
+      message: `Circular dependencies detected involving stories: ${Array.from(involvedIds).map((id) => storyMap.get(id)?.title || id).join(', ')}`,
+      storyIds: Array.from(involvedIds),
+    });
+  }
+
+  // Orphan dependency (depends on a story ID that doesn't exist)
+  for (const story of stories) {
+    for (const depId of story.dependsOn) {
+      if (!storyMap.has(depId)) {
+        warnings.push({
+          type: 'orphan_dependency',
+          message: `Story "${story.title}" depends on non-existent story ID: ${depId}`,
+          storyIds: [story.id],
+        });
+      }
+    }
+  }
+
+  // Unresolved blockers (pending/in_progress stories that have uncompleted dependencies)
+  for (const story of stories) {
+    if (story.status === 'pending' || story.status === 'in_progress') {
+      const unresolvedDeps = story.dependsOn
+        .filter((depId) => storyMap.has(depId) && !completedIds.has(depId));
+      if (unresolvedDeps.length > 0) {
+        warnings.push({
+          type: 'unresolved_blocker',
+          message: `Story "${story.title}" is blocked by: ${unresolvedDeps.map((id) => storyMap.get(id)?.title || id).join(', ')}`,
+          storyIds: [story.id, ...unresolvedDeps],
+        });
+      }
+    }
+  }
+
+  return { prdId, nodes, edges, warnings };
+}
+
+function detectCircularDependencies(depsMap: Map<string, Set<string>>): Array<[string, string]> {
+  const circularPairs: Array<[string, string]> = [];
+  const visited = new Set<string>();
+  const inStack = new Set<string>();
+
+  function dfs(node: string, path: string[]): boolean {
+    if (inStack.has(node)) {
+      // Found a cycle — record the back edge
+      const cycleStart = path.indexOf(node);
+      for (let i = cycleStart; i < path.length - 1; i++) {
+        circularPairs.push([path[i], path[i + 1]]);
+      }
+      if (path.length > 0) {
+        circularPairs.push([path[path.length - 1], node]);
+      }
+      return true;
+    }
+    if (visited.has(node)) return false;
+
+    visited.add(node);
+    inStack.add(node);
+
+    const deps = depsMap.get(node) || new Set();
+    for (const dep of deps) {
+      dfs(dep, [...path, node]);
+    }
+
+    inStack.delete(node);
+    return false;
+  }
+
+  for (const node of depsMap.keys()) {
+    if (!visited.has(node)) {
+      dfs(node, []);
+    }
+  }
+
+  return circularPairs;
+}
+
+function validateSprintPlan(stories: UserStory[]): SprintValidation {
+  const storyMap = new Map(stories.map((s) => [s.id, s]));
+  const completedIds = new Set(stories.filter((s) => s.status === 'completed').map((s) => s.id));
+  const warnings: SprintValidationWarning[] = [];
+
+  // Check for stories included in sprint that have unmet dependencies
+  const pendingOrInProgress = stories.filter(
+    (s) => s.status === 'pending' || s.status === 'in_progress',
+  );
+
+  for (const story of pendingOrInProgress) {
+    const unmetDeps = story.dependsOn
+      .filter((depId) => storyMap.has(depId))
+      .filter((depId) => !completedIds.has(depId));
+
+    if (unmetDeps.length > 0) {
+      // Check if the blocking stories are also in the sprint (pending/in_progress)
+      const blockingStories = unmetDeps.map((id) => storyMap.get(id)!).filter(Boolean);
+      const blockingNotInSprint = blockingStories.filter(
+        (bs) => bs.status !== 'pending' && bs.status !== 'in_progress',
+      );
+
+      if (blockingNotInSprint.length > 0) {
+        warnings.push({
+          type: 'missing_dependency',
+          message: `Story "${story.title}" depends on stories not in the current sprint: ${blockingNotInSprint.map((s) => s.title).join(', ')}`,
+          storyId: story.id,
+          storyTitle: story.title,
+          blockedByStoryIds: blockingNotInSprint.map((s) => s.id),
+          blockedByStoryTitles: blockingNotInSprint.map((s) => s.title),
+        });
+      }
+
+      // Always warn about blocked stories
+      warnings.push({
+        type: 'blocked_story',
+        message: `Story "${story.title}" is blocked by: ${blockingStories.map((s) => s.title).join(', ')}. Ensure these are completed first.`,
+        storyId: story.id,
+        storyTitle: story.title,
+        blockedByStoryIds: blockingStories.map((s) => s.id),
+        blockedByStoryTitles: blockingStories.map((s) => s.title),
+      });
+    }
+  }
+
+  // Check for circular dependencies
+  const depsMap = new Map<string, Set<string>>();
+  for (const s of stories) {
+    depsMap.set(s.id, new Set(s.dependsOn.filter((id) => storyMap.has(id))));
+  }
+  const circularPairs = detectCircularDependencies(depsMap);
+  if (circularPairs.length > 0) {
+    const involvedIds = new Set<string>();
+    for (const [from, to] of circularPairs) {
+      involvedIds.add(from);
+      involvedIds.add(to);
+    }
+    for (const storyId of involvedIds) {
+      const story = storyMap.get(storyId);
+      if (story) {
+        warnings.push({
+          type: 'circular_dependency',
+          message: `Story "${story.title}" is part of a circular dependency chain. This will prevent execution.`,
+          storyId: story.id,
+          storyTitle: story.title,
+        });
+      }
+    }
+  }
+
+  return {
+    valid: warnings.length === 0,
+    warnings,
+  };
+}
 
 // --- Row mappers ---
 

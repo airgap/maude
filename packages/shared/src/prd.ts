@@ -207,6 +207,82 @@ export interface RefineStoryResponse {
   improvements?: string[]; // list of what was improved and how
 }
 
+// --- Dependency Types ---
+
+export type DependencyType = 'blocks' | 'blocked_by';
+
+/** A directional dependency edge between two stories */
+export interface StoryDependency {
+  fromStoryId: string; // this story...
+  toStoryId: string;   // ...depends on / blocks this story
+  type: DependencyType; // relationship direction
+  reason?: string;     // why this dependency exists
+  autoDetected: boolean; // was this found by AI analysis?
+}
+
+/** Full dependency graph for a PRD */
+export interface DependencyGraph {
+  prdId: string;
+  nodes: DependencyNode[];
+  edges: DependencyEdge[];
+  warnings: DependencyWarning[];
+}
+
+export interface DependencyNode {
+  storyId: string;
+  title: string;
+  status: StoryStatus;
+  priority: StoryPriority;
+  /** Number of stories this one blocks (downstream dependents) */
+  blocksCount: number;
+  /** Number of stories blocking this one (upstream dependencies) */
+  blockedByCount: number;
+  /** Whether all upstream dependencies are satisfied (completed) */
+  isReady: boolean;
+  /** Depth in the dependency chain (0 = no dependencies) */
+  depth: number;
+}
+
+export interface DependencyEdge {
+  from: string; // story ID that blocks
+  to: string;   // story ID that is blocked
+  reason?: string;
+}
+
+export interface DependencyWarning {
+  type: 'circular' | 'missing_dependency' | 'unresolved_blocker' | 'orphan_dependency';
+  message: string;
+  storyIds: string[];
+}
+
+/** Request for AI-powered dependency analysis */
+export interface AnalyzeDependenciesRequest {
+  /** If true, replace existing auto-detected dependencies. Manual ones are preserved. */
+  replaceAutoDetected?: boolean;
+}
+
+/** Response from dependency analysis */
+export interface AnalyzeDependenciesResponse {
+  prdId: string;
+  dependencies: StoryDependency[];
+  graph: DependencyGraph;
+}
+
+/** Sprint plan validation result */
+export interface SprintValidation {
+  valid: boolean;
+  warnings: SprintValidationWarning[];
+}
+
+export interface SprintValidationWarning {
+  type: 'missing_dependency' | 'blocked_story' | 'circular_dependency';
+  message: string;
+  storyId: string;
+  storyTitle: string;
+  blockedByStoryIds?: string[];
+  blockedByStoryTitles?: string[];
+}
+
 // --- Stream Events for Loop ---
 
 export interface StreamLoopEvent {

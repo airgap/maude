@@ -1,4 +1,4 @@
-import type { PRD, LoopState, IterationLogEntry, StreamLoopEvent, LoopConfig, PlanMode, EditMode, GeneratedStory, RefinementQuestion, RefineStoryResponse } from '@maude/shared';
+import type { PRD, LoopState, IterationLogEntry, StreamLoopEvent, LoopConfig, PlanMode, EditMode, GeneratedStory, RefinementQuestion, RefineStoryResponse, DependencyGraph, SprintValidation, SprintValidationWarning } from '@maude/shared';
 import { api, getBaseUrl, getAuthToken } from '../api/client';
 
 function createLoopStore() {
@@ -31,6 +31,13 @@ function createLoopStore() {
   let refinementImprovements = $state<string[]>([]);
   let refinementUpdatedStory = $state<RefineStoryResponse['updatedStory'] | null>(null);
   let refinementRound = $state(0);
+
+  // Dependency state
+  let dependencyGraph = $state<DependencyGraph | null>(null);
+  let dependencyLoading = $state(false);
+  let dependencyError = $state<string | null>(null);
+  let sprintValidation = $state<SprintValidation | null>(null);
+  let analyzingDependencies = $state(false);
 
   return {
     get activeLoop() {
@@ -122,6 +129,28 @@ function createLoopStore() {
     },
     get refinementRound() {
       return refinementRound;
+    },
+    get dependencyGraph() {
+      return dependencyGraph;
+    },
+    get dependencyLoading() {
+      return dependencyLoading;
+    },
+    get dependencyError() {
+      return dependencyError;
+    },
+    get sprintValidation() {
+      return sprintValidation;
+    },
+    get analyzingDependencies() {
+      return analyzingDependencies;
+    },
+    get hasBlockedStories() {
+      if (!dependencyGraph) return false;
+      return dependencyGraph.nodes.some((n) => n.blockedByCount > 0 && !n.isReady && n.status === 'pending');
+    },
+    get sprintWarnings(): SprintValidationWarning[] {
+      return sprintValidation?.warnings || [];
     },
 
     // --- Setters ---
@@ -505,6 +534,108 @@ function createLoopStore() {
       } finally {
         refining = false;
       }
+    },
+
+    // --- Sprint planning ---
+
+    // --- Dependency management ---
+
+    async loadDependencyGraph(prdId: string): Promise<void> {
+      dependencyLoading = true;
+      dependencyError = null;
+      try {
+        const res = await api.prds.getDependencyGraph(prdId);
+        if (res.ok) {
+          dependencyGraph = res.data;
+        } else {
+          dependencyError = (res as any).error || 'Failed to load dependency graph';
+        }
+      } catch (err) {
+        dependencyError = String(err);
+      } finally {
+        dependencyLoading = false;
+      }
+    },
+
+    async addDependency(
+      prdId: string,
+      fromStoryId: string,
+      toStoryId: string,
+      reason?: string,
+    ): Promise<{ ok: boolean; error?: string }> {
+      try {
+        const res = await api.prds.addDependency(prdId, fromStoryId, toStoryId, reason);
+        if (res.ok) {
+          dependencyGraph = res.data;
+          // Reload PRD to reflect updated dependsOn arrays
+          await this.loadPrd(prdId);
+          return { ok: true };
+        }
+        return { ok: false, error: (res as any).error || 'Failed to add dependency' };
+      } catch (err) {
+        return { ok: false, error: String(err) };
+      }
+    },
+
+    async removeDependency(
+      prdId: string,
+      fromStoryId: string,
+      toStoryId: string,
+    ): Promise<{ ok: boolean; error?: string }> {
+      try {
+        const res = await api.prds.removeDependency(prdId, fromStoryId, toStoryId);
+        if (res.ok) {
+          dependencyGraph = res.data;
+          await this.loadPrd(prdId);
+          return { ok: true };
+        }
+        return { ok: false, error: (res as any).error || 'Failed to remove dependency' };
+      } catch (err) {
+        return { ok: false, error: String(err) };
+      }
+    },
+
+    async analyzeDependencies(
+      prdId: string,
+      replaceAutoDetected?: boolean,
+    ): Promise<{ ok: boolean; error?: string }> {
+      analyzingDependencies = true;
+      dependencyError = null;
+      try {
+        const res = await api.prds.analyzeDependencies(prdId, replaceAutoDetected);
+        if (res.ok) {
+          dependencyGraph = res.data.graph;
+          await this.loadPrd(prdId);
+          return { ok: true };
+        }
+        dependencyError = (res as any).error || 'Analysis failed';
+        return { ok: false, error: dependencyError ?? undefined };
+      } catch (err) {
+        dependencyError = String(err);
+        return { ok: false, error: dependencyError ?? undefined };
+      } finally {
+        analyzingDependencies = false;
+      }
+    },
+
+    async validateSprint(prdId: string): Promise<SprintValidation | null> {
+      try {
+        const res = await api.prds.validateSprint(prdId);
+        if (res.ok) {
+          sprintValidation = res.data;
+          return res.data;
+        }
+        return null;
+      } catch {
+        return null;
+      }
+    },
+
+    clearDependencyState() {
+      dependencyGraph = null;
+      dependencyError = null;
+      sprintValidation = null;
+      analyzingDependencies = false;
     },
 
     // --- Sprint planning ---

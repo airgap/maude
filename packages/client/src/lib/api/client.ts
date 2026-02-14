@@ -560,6 +560,41 @@ export const api = {
         method: 'POST',
         body: JSON.stringify({ storyId, answers }),
       }),
+    // --- Dependencies ---
+    getDependencyGraph: (prdId: string) =>
+      request<{
+        ok: boolean;
+        data: import('@maude/shared').DependencyGraph;
+      }>(`/prds/${prdId}/dependencies`),
+    addDependency: (prdId: string, fromStoryId: string, toStoryId: string, reason?: string) =>
+      request<{
+        ok: boolean;
+        data: import('@maude/shared').DependencyGraph;
+      }>(`/prds/${prdId}/dependencies`, {
+        method: 'POST',
+        body: JSON.stringify({ fromStoryId, toStoryId, reason }),
+      }),
+    removeDependency: (prdId: string, fromStoryId: string, toStoryId: string) =>
+      request<{
+        ok: boolean;
+        data: import('@maude/shared').DependencyGraph;
+      }>(`/prds/${prdId}/dependencies`, {
+        method: 'DELETE',
+        body: JSON.stringify({ fromStoryId, toStoryId }),
+      }),
+    analyzeDependencies: (prdId: string, replaceAutoDetected?: boolean) =>
+      request<{
+        ok: boolean;
+        data: import('@maude/shared').AnalyzeDependenciesResponse;
+      }>(`/prds/${prdId}/dependencies/analyze`, {
+        method: 'POST',
+        body: JSON.stringify({ replaceAutoDetected }),
+      }),
+    validateSprint: (prdId: string) =>
+      request<{
+        ok: boolean;
+        data: import('@maude/shared').SprintValidation;
+      }>(`/prds/${prdId}/dependencies/validate`),
   },
 
   // --- Loops ---

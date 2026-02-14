@@ -8,6 +8,7 @@
   import { sendAndStream } from '$lib/api/sse';
   import { onMount } from 'svelte';
   import type { PlanMode } from '@maude/shared';
+  import DependencyView from '$lib/components/planning/DependencyView.svelte';
 
   let projectPath = $derived(settingsStore.projectPath || '');
   let importJson = $state('');
@@ -167,6 +168,15 @@
   }
 
   let planning = $state(false);
+  let showDependencies = $state(false);
+
+  // Auto-validate sprint when PRD is selected/changed
+  $effect(() => {
+    const prdId = loopStore.selectedPrdId;
+    if (prdId && loopStore.selectedPrd?.stories?.length) {
+      loopStore.validateSprint(prdId);
+    }
+  });
 
   function openGenerateModal() {
     uiStore.openModal('story-generate');
@@ -321,6 +331,7 @@
         <h4>Stories ({loopStore.selectedPrd.stories?.length || 0})</h4>
         <div class="header-actions">
           <button class="icon-btn" title="Add story" onclick={() => showAddStory = !showAddStory}>+</button>
+          <button class="icon-btn" class:active-btn={showDependencies} title="Dependencies" onclick={() => showDependencies = !showDependencies}>🔗</button>
           <button class="icon-btn" title="Delete PRD" onclick={handleDeletePrd}>🗑</button>
         </div>
       </div>
@@ -358,6 +369,11 @@
                   <button class="delete-btn" onclick={() => handleDeleteStory(story.id)}>×</button>
                 {/if}
               </div>
+              {#if story.dependsOn?.length > 0}
+                <span class="dep-badge" title="Depends on {story.dependsOn.length} story(ies)">
+                  ↑{story.dependsOn.length}
+                </span>
+              {/if}
               {#if story.attempts > 0}
                 <span class="attempts-badge">
                   {story.attempts}/{story.maxAttempts} attempts
@@ -367,7 +383,28 @@
           {/each}
         {/if}
       </div>
+
+      <!-- Dependency View (collapsible) -->
+      {#if showDependencies && loopStore.selectedPrdId}
+        <DependencyView prdId={loopStore.selectedPrdId} />
+      {/if}
     </div>
+
+    <!-- Sprint Validation Warnings -->
+    {#if loopStore.sprintWarnings.length > 0 && !loopStore.isActive}
+      <div class="sprint-warnings">
+        <div class="section-header">
+          <h4>⚠ Sprint Warnings ({loopStore.sprintWarnings.length})</h4>
+        </div>
+        <div class="warning-list">
+          {#each loopStore.sprintWarnings as warning}
+            <div class="sprint-warning-item" class:blocking={warning.type === 'blocked_story'} class:circular={warning.type === 'circular_dependency'}>
+              <span class="warning-msg">{warning.message}</span>
+            </div>
+          {/each}
+        </div>
+      </div>
+    {/if}
   {/if}
 
   <!-- Loop Controls -->
@@ -594,10 +631,59 @@
     color: var(--accent-error);
   }
 
+  .dep-badge {
+    font-size: 8px;
+    padding: 0 3px;
+    border-radius: 2px;
+    background: rgba(239, 68, 68, 0.15);
+    color: var(--accent-error);
+    font-weight: 700;
+    flex-shrink: 0;
+  }
+
+  .active-btn {
+    background: var(--accent-primary) !important;
+    color: var(--text-on-accent) !important;
+    border-color: var(--accent-primary) !important;
+  }
+
   .attempts-badge {
     font-size: 9px;
     color: var(--text-tertiary);
     margin-left: 20px;
+  }
+
+  .sprint-warnings {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .warning-list {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    max-height: 100px;
+    overflow-y: auto;
+  }
+  .sprint-warning-item {
+    padding: 4px 6px;
+    font-size: 10px;
+    color: var(--text-secondary);
+    border-radius: var(--radius-sm);
+    background: rgba(230, 168, 23, 0.08);
+    border-left: 2px solid var(--accent-warning, #e6a817);
+    line-height: 1.3;
+  }
+  .sprint-warning-item.blocking {
+    border-left-color: var(--accent-error);
+    background: rgba(239, 68, 68, 0.08);
+  }
+  .sprint-warning-item.circular {
+    border-left-color: var(--accent-error);
+    background: rgba(239, 68, 68, 0.12);
+  }
+  .warning-msg {
+    word-break: break-word;
   }
 
   .controls-section {

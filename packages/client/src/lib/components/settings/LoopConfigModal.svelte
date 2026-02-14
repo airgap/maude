@@ -69,6 +69,22 @@
     checks = checks.map(c => c.id === id ? { ...c, enabled: !c.enabled } : c);
   }
 
+  let depWarnings = $state<Array<{ type: string; message: string; storyId: string; storyTitle: string }>>([]);
+  let validatingDeps = $state(false);
+
+  onMount(async () => {
+    // Also validate dependencies when modal opens
+    const prdId = loopStore.selectedPrdId;
+    if (prdId) {
+      validatingDeps = true;
+      const result = await loopStore.validateSprint(prdId);
+      if (result) {
+        depWarnings = result.warnings;
+      }
+      validatingDeps = false;
+    }
+  });
+
   async function startLoop() {
     const prdId = loopStore.selectedPrdId;
     const projectPath = settingsStore.projectPath;
@@ -225,10 +241,30 @@
       </div>
     </div>
 
+    {#if depWarnings.length > 0}
+      <div class="dep-warnings-section">
+        <div class="dep-warnings-header">
+          <span class="dep-warnings-icon">⚠️</span>
+          <span class="dep-warnings-title">Dependency Warnings ({depWarnings.length})</span>
+        </div>
+        <div class="dep-warnings-list">
+          {#each depWarnings as warning}
+            <div class="dep-warning-item">
+              <span class="dep-warning-msg">{warning.message}</span>
+            </div>
+          {/each}
+        </div>
+        <p class="dep-warnings-note">
+          The loop will respect dependency order and only run stories whose dependencies are met.
+          Blocked stories will be deferred automatically.
+        </p>
+      </div>
+    {/if}
+
     <div class="modal-footer">
       <button class="btn-cancel" onclick={close}>Cancel</button>
       <button class="btn-start" onclick={startLoop}>
-        ▶ Start Loop
+        {depWarnings.length > 0 ? '▶ Start Loop (with warnings)' : '▶ Start Loop'}
       </button>
     </div>
   </div>
@@ -484,5 +520,52 @@
     background: var(--accent-primary);
     color: var(--text-on-accent);
     font-weight: 600;
+  }
+
+  .dep-warnings-section {
+    margin: 0 20px 0;
+    padding: 12px;
+    background: rgba(230, 168, 23, 0.08);
+    border: 1px solid rgba(230, 168, 23, 0.3);
+    border-radius: var(--radius-sm);
+  }
+  .dep-warnings-header {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 8px;
+  }
+  .dep-warnings-icon {
+    font-size: 14px;
+  }
+  .dep-warnings-title {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--accent-warning, #e6a817);
+  }
+  .dep-warnings-list {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    max-height: 100px;
+    overflow-y: auto;
+  }
+  .dep-warning-item {
+    padding: 4px 8px;
+    background: rgba(230, 168, 23, 0.05);
+    border-radius: var(--radius-sm);
+    border-left: 2px solid var(--accent-warning, #e6a817);
+  }
+  .dep-warning-msg {
+    font-size: 11px;
+    color: var(--text-secondary);
+    line-height: 1.3;
+  }
+  .dep-warnings-note {
+    font-size: 10px;
+    color: var(--text-tertiary);
+    margin-top: 8px;
+    margin-bottom: 0;
+    font-style: italic;
   }
 </style>
