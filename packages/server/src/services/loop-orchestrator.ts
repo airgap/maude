@@ -847,6 +847,7 @@ function storyFromRow(row: any): UserStory {
     acceptanceCriteria: JSON.parse(row.acceptance_criteria || '[]'),
     priority: row.priority,
     dependsOn: JSON.parse(row.depends_on || '[]'),
+    dependencyReasons: JSON.parse(row.dependency_reasons || '{}'),
     status: row.status,
     taskId: row.task_id,
     agentId: row.agent_id,

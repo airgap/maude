@@ -582,6 +582,14 @@ export const api = {
         method: 'DELETE',
         body: JSON.stringify({ fromStoryId, toStoryId }),
       }),
+    editDependency: (prdId: string, fromStoryId: string, toStoryId: string, reason: string) =>
+      request<{
+        ok: boolean;
+        data: import('@maude/shared').DependencyGraph;
+      }>(`/prds/${prdId}/dependencies`, {
+        method: 'PATCH',
+        body: JSON.stringify({ fromStoryId, toStoryId, reason }),
+      }),
     analyzeDependencies: (prdId: string, replaceAutoDetected?: boolean) =>
       request<{
         ok: boolean;

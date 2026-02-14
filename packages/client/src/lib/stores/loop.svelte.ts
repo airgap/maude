@@ -665,6 +665,25 @@ function createLoopStore() {
       }
     },
 
+    async editDependency(
+      prdId: string,
+      fromStoryId: string,
+      toStoryId: string,
+      reason: string,
+    ): Promise<{ ok: boolean; error?: string }> {
+      try {
+        const res = await api.prds.editDependency(prdId, fromStoryId, toStoryId, reason);
+        if (res.ok) {
+          dependencyGraph = res.data;
+          await this.loadPrd(prdId);
+          return { ok: true };
+        }
+        return { ok: false, error: (res as any).error || 'Failed to edit dependency' };
+      } catch (err) {
+        return { ok: false, error: String(err) };
+      }
+    },
+
     async analyzeDependencies(
       prdId: string,
       replaceAutoDetected?: boolean,

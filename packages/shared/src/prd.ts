@@ -18,6 +18,7 @@ export interface UserStory {
   acceptanceCriteria: AcceptanceCriterion[];
   priority: StoryPriority;
   dependsOn: string[]; // story IDs this story depends on
+  dependencyReasons: Record<string, string>; // storyId -> reason for dependency
   status: StoryStatus;
   taskId?: string; // linked Maude task ID
   agentId?: string; // agent that last worked on this

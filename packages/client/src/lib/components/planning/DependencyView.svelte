@@ -9,6 +9,11 @@
   let addingDep = $state(false);
   let fromStoryId = $state('');
   let toStoryId = $state('');
+  let addReason = $state('');
+
+  // Edit state
+  let editingEdgeKey = $state<string | null>(null);
+  let editReason = $state('');
 
   let graph = $derived(loopStore.dependencyGraph);
   let stories = $derived(loopStore.selectedPrd?.stories || []);
@@ -31,11 +36,12 @@
 
   async function handleAddDependency() {
     if (!fromStoryId || !toStoryId || fromStoryId === toStoryId) return;
-    const result = await loopStore.addDependency(prdId, fromStoryId, toStoryId);
+    const result = await loopStore.addDependency(prdId, fromStoryId, toStoryId, addReason || undefined);
     if (result.ok) {
       addingDep = false;
       fromStoryId = '';
       toStoryId = '';
+      addReason = '';
       uiStore.toast('Dependency added', 'success');
     } else {
       uiStore.toast(`Failed: ${result.error}`, 'error');
@@ -46,6 +52,28 @@
     const result = await loopStore.removeDependency(prdId, from, to);
     if (result.ok) {
       uiStore.toast('Dependency removed', 'success');
+    } else {
+      uiStore.toast(`Failed: ${result.error}`, 'error');
+    }
+  }
+
+  function startEditing(edge: DependencyEdge) {
+    editingEdgeKey = `${edge.from}-${edge.to}`;
+    editReason = edge.reason || '';
+  }
+
+  function cancelEditing() {
+    editingEdgeKey = null;
+    editReason = '';
+  }
+
+  async function handleSaveEdit(edge: DependencyEdge) {
+    // edge.from = blocker, edge.to = blocked story (fromStoryId in API = the story that depends on)
+    const result = await loopStore.editDependency(prdId, edge.to, edge.from, editReason);
+    if (result.ok) {
+      editingEdgeKey = null;
+      editReason = '';
+      uiStore.toast('Dependency updated', 'success');
     } else {
       uiStore.toast(`Failed: ${result.error}`, 'error');
     }
@@ -153,9 +181,14 @@
           {/each}
         </select>
       </div>
+      <div class="dep-field">
+        <!-- svelte-ignore a11y_label_has_associated_control -->
+        <label>Reason (optional)</label>
+        <input type="text" class="dep-reason-input" bind:value={addReason} placeholder="Why this dependency exists..." />
+      </div>
       <div class="dep-form-actions">
         <button class="btn-sm btn-primary" onclick={handleAddDependency} disabled={!fromStoryId || !toStoryId || fromStoryId === toStoryId}>Add</button>
-        <button class="btn-sm btn-ghost" onclick={() => { addingDep = false; fromStoryId = ''; toStoryId = ''; }}>Cancel</button>
+        <button class="btn-sm btn-ghost" onclick={() => { addingDep = false; fromStoryId = ''; toStoryId = ''; addReason = ''; }}>Cancel</button>
       </div>
     </div>
   {/if}
@@ -188,16 +221,41 @@
     <!-- List View -->
     <div class="dep-list">
       {#each graph.edges as edge (edge.from + '-' + edge.to)}
-        <div class="dep-edge-item">
-          <div class="dep-edge-content">
-            <span class="dep-story-name">{storyTitle(edge.to)}</span>
-            <span class="dep-arrow-inline">→ blocked by →</span>
-            <span class="dep-story-name">{storyTitle(edge.from)}</span>
-          </div>
-          {#if edge.reason}
-            <span class="dep-reason">{edge.reason}</span>
+        {@const edgeKey = `${edge.from}-${edge.to}`}
+        <div class="dep-edge-item" class:editing={editingEdgeKey === edgeKey}>
+          {#if editingEdgeKey === edgeKey}
+            <!-- Edit mode -->
+            <div class="dep-edit-form">
+              <div class="dep-edge-content">
+                <span class="dep-story-name">{storyTitle(edge.to)}</span>
+                <span class="dep-arrow-inline">→ blocked by →</span>
+                <span class="dep-story-name">{storyTitle(edge.from)}</span>
+              </div>
+              <div class="dep-edit-reason-row">
+                <input
+                  type="text"
+                  class="dep-reason-input"
+                  bind:value={editReason}
+                  placeholder="Reason for this dependency..."
+                  onkeydown={(e) => { if (e.key === 'Enter') handleSaveEdit(edge); if (e.key === 'Escape') cancelEditing(); }}
+                />
+                <button class="btn-sm btn-primary" onclick={() => handleSaveEdit(edge)} title="Save">✓</button>
+                <button class="btn-sm btn-ghost" onclick={cancelEditing} title="Cancel">✗</button>
+              </div>
+            </div>
+          {:else}
+            <!-- Display mode -->
+            <div class="dep-edge-content">
+              <span class="dep-story-name">{storyTitle(edge.to)}</span>
+              <span class="dep-arrow-inline">→ blocked by →</span>
+              <span class="dep-story-name">{storyTitle(edge.from)}</span>
+            </div>
+            {#if edge.reason}
+              <span class="dep-reason" title={edge.reason}>{edge.reason}</span>
+            {/if}
+            <button class="dep-edit-btn" onclick={() => startEditing(edge)} title="Edit reason">✎</button>
+            <button class="dep-remove-btn" onclick={() => handleRemoveDependency(edge.to, edge.from)} title="Remove dependency">×</button>
           {/if}
-          <button class="dep-remove-btn" onclick={() => handleRemoveDependency(edge.to, edge.from)} title="Remove dependency">×</button>
         </div>
       {/each}
     </div>
@@ -310,6 +368,7 @@
   .btn-primary {
     background: var(--accent-primary);
     color: var(--text-on-accent);
+    border: 1px solid var(--accent-primary);
   }
   .btn-ghost {
     background: transparent;
@@ -348,6 +407,19 @@
     color: var(--text-primary);
     border: 1px solid var(--border-primary);
     border-radius: var(--radius-sm);
+  }
+
+  .dep-reason-input {
+    width: 100%;
+    padding: 4px 6px;
+    font-size: 11px;
+    background: var(--bg-secondary, var(--bg-primary));
+    color: var(--text-primary);
+    border: 1px solid var(--border-primary);
+    border-radius: var(--radius-sm);
+  }
+  .dep-reason-input::placeholder {
+    color: var(--text-tertiary);
   }
 
   .dep-arrow {
@@ -419,7 +491,7 @@
     display: flex;
     flex-direction: column;
     gap: 2px;
-    max-height: 150px;
+    max-height: 200px;
     overflow-y: auto;
   }
 
@@ -430,6 +502,30 @@
     padding: 4px 6px;
     background: var(--bg-tertiary);
     border-radius: var(--radius-sm);
+  }
+
+  .dep-edge-item.editing {
+    flex-direction: column;
+    align-items: stretch;
+    padding: 6px;
+    border: 1px solid var(--accent-primary);
+  }
+
+  .dep-edit-form {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    width: 100%;
+  }
+
+  .dep-edit-reason-row {
+    display: flex;
+    gap: 4px;
+    align-items: center;
+  }
+
+  .dep-edit-reason-row .dep-reason-input {
+    flex: 1;
   }
 
   .dep-edge-content {
@@ -465,7 +561,7 @@
     max-width: 80px;
   }
 
-  .dep-remove-btn {
+  .dep-edit-btn, .dep-remove-btn {
     font-size: 12px;
     padding: 0 4px;
     color: var(--text-tertiary);
@@ -476,8 +572,15 @@
     cursor: pointer;
     flex-shrink: 0;
   }
+  .dep-edge-item:hover .dep-edit-btn,
   .dep-edge-item:hover .dep-remove-btn {
     opacity: 1;
+  }
+  .dep-edit-btn {
+    font-size: 11px;
+  }
+  .dep-edit-btn:hover {
+    color: var(--accent-primary);
   }
   .dep-remove-btn:hover {
     color: var(--accent-error);

@@ -1096,11 +1096,24 @@ app.post('/:id/dependencies', async (c) => {
 
   // fromStoryId depends on toStoryId (toStoryId blocks fromStoryId)
   const dependsOn: string[] = JSON.parse(fromStory.depends_on || '[]');
+  const reasons: Record<string, string> = JSON.parse(fromStory.dependency_reasons || '{}');
+  const now = Date.now();
+
+  let changed = false;
   if (!dependsOn.includes(toStoryId)) {
     dependsOn.push(toStoryId);
-    const now = Date.now();
-    db.query('UPDATE prd_stories SET depends_on = ?, updated_at = ? WHERE id = ?')
-      .run(JSON.stringify(dependsOn), now, fromStoryId);
+    changed = true;
+  }
+
+  // Store or update reason
+  if (reason) {
+    reasons[toStoryId] = reason;
+    changed = true;
+  }
+
+  if (changed) {
+    db.query('UPDATE prd_stories SET depends_on = ?, dependency_reasons = ?, updated_at = ? WHERE id = ?')
+      .run(JSON.stringify(dependsOn), JSON.stringify(reasons), now, fromStoryId);
     db.query('UPDATE prds SET updated_at = ? WHERE id = ?').run(now, prdId);
   }
 
@@ -1131,14 +1144,62 @@ app.delete('/:id/dependencies', async (c) => {
   if (!fromStory) return c.json({ ok: false, error: `Story ${fromStoryId} not found in this PRD` }, 404);
 
   const dependsOn: string[] = JSON.parse(fromStory.depends_on || '[]');
+  const reasons: Record<string, string> = JSON.parse(fromStory.dependency_reasons || '{}');
   const filtered = dependsOn.filter((id) => id !== toStoryId);
 
   if (filtered.length !== dependsOn.length) {
+    // Also remove the reason for this dependency
+    delete reasons[toStoryId];
     const now = Date.now();
-    db.query('UPDATE prd_stories SET depends_on = ?, updated_at = ? WHERE id = ?')
-      .run(JSON.stringify(filtered), now, fromStoryId);
+    db.query('UPDATE prd_stories SET depends_on = ?, dependency_reasons = ?, updated_at = ? WHERE id = ?')
+      .run(JSON.stringify(filtered), JSON.stringify(reasons), now, fromStoryId);
     db.query('UPDATE prds SET updated_at = ? WHERE id = ?').run(now, prdId);
   }
+
+  // Return the updated graph
+  const stories = db
+    .query('SELECT * FROM prd_stories WHERE prd_id = ? ORDER BY sort_order ASC, created_at ASC')
+    .all(prdId) as any[];
+  const graph = buildDependencyGraph(stories.map(storyFromRow), prdId);
+
+  return c.json({ ok: true, data: graph });
+});
+
+// Edit a dependency's reason
+app.patch('/:id/dependencies', async (c) => {
+  const db = getDb();
+  const prdId = c.req.param('id');
+  const body = await c.req.json();
+
+  const prdRow = db.query('SELECT * FROM prds WHERE id = ?').get(prdId);
+  if (!prdRow) return c.json({ ok: false, error: 'PRD not found' }, 404);
+
+  const { fromStoryId, toStoryId, reason } = body;
+  if (!fromStoryId || !toStoryId) {
+    return c.json({ ok: false, error: 'fromStoryId and toStoryId required' }, 400);
+  }
+
+  const fromStory = db.query('SELECT * FROM prd_stories WHERE id = ? AND prd_id = ?').get(fromStoryId, prdId) as any;
+  if (!fromStory) return c.json({ ok: false, error: `Story ${fromStoryId} not found in this PRD` }, 404);
+
+  const dependsOn: string[] = JSON.parse(fromStory.depends_on || '[]');
+  if (!dependsOn.includes(toStoryId)) {
+    return c.json({ ok: false, error: 'Dependency does not exist' }, 404);
+  }
+
+  const reasons: Record<string, string> = JSON.parse(fromStory.dependency_reasons || '{}');
+  if (reason !== undefined && reason !== null) {
+    if (reason === '') {
+      delete reasons[toStoryId];
+    } else {
+      reasons[toStoryId] = reason;
+    }
+  }
+
+  const now = Date.now();
+  db.query('UPDATE prd_stories SET dependency_reasons = ?, updated_at = ? WHERE id = ?')
+    .run(JSON.stringify(reasons), now, fromStoryId);
+  db.query('UPDATE prds SET updated_at = ? WHERE id = ?').run(now, prdId);
 
   // Return the updated graph
   const stories = db
@@ -1314,17 +1375,48 @@ Which stories must be completed before others can start? Return the dependency l
       }
     }
 
+    // Build reasons map from AI analysis
+    const aiReasonsMap: Map<string, Record<string, string>> = new Map();
+    for (const dep of validDeps) {
+      if (dep.reason) {
+        if (!aiReasonsMap.has(dep.fromStoryId)) {
+          aiReasonsMap.set(dep.fromStoryId, {});
+        }
+        aiReasonsMap.get(dep.fromStoryId)![dep.toStoryId] = dep.reason;
+      }
+    }
+
     // Persist to database
     const now = Date.now();
     for (const [storyId, deps] of newDepsMap) {
-      const currentRow = db.query('SELECT depends_on FROM prd_stories WHERE id = ?').get(storyId) as any;
+      const currentRow = db.query('SELECT depends_on, dependency_reasons FROM prd_stories WHERE id = ?').get(storyId) as any;
       const currentDeps = JSON.parse(currentRow?.depends_on || '[]');
+      const currentReasons: Record<string, string> = JSON.parse(currentRow?.dependency_reasons || '{}');
       const newDeps = Array.from(deps);
 
+      // Merge AI reasons into existing reasons (preserve manual overrides)
+      const newReasons = { ...currentReasons };
+      const aiReasons = aiReasonsMap.get(storyId) || {};
+      for (const [depId, reason] of Object.entries(aiReasons)) {
+        // Only set AI reason if no manual reason already exists, or if replacing
+        if (!newReasons[depId] || body.replaceAutoDetected) {
+          newReasons[depId] = reason;
+        }
+      }
+
+      // Remove reasons for deps that no longer exist
+      for (const key of Object.keys(newReasons)) {
+        if (!newDeps.includes(key)) {
+          delete newReasons[key];
+        }
+      }
+
       // Only update if changed
-      if (JSON.stringify(currentDeps.sort()) !== JSON.stringify(newDeps.sort())) {
-        db.query('UPDATE prd_stories SET depends_on = ?, updated_at = ? WHERE id = ?')
-          .run(JSON.stringify(newDeps), now, storyId);
+      const depsChanged = JSON.stringify(currentDeps.sort()) !== JSON.stringify(newDeps.sort());
+      const reasonsChanged = JSON.stringify(currentReasons) !== JSON.stringify(newReasons);
+      if (depsChanged || reasonsChanged) {
+        db.query('UPDATE prd_stories SET depends_on = ?, dependency_reasons = ?, updated_at = ? WHERE id = ?')
+          .run(JSON.stringify(newDeps), JSON.stringify(newReasons), now, storyId);
       }
     }
 
@@ -1398,7 +1490,7 @@ function buildDependencyGraph(stories: UserStory[], prdId: string): DependencyGr
         edges.push({
           from: depId,
           to: story.id,
-          reason: undefined, // reason not stored in depends_on array, only in AI analysis
+          reason: story.dependencyReasons?.[depId],
         });
         blocksMap.get(depId)?.add(story.id);
         blockedByMap.get(story.id)?.add(depId);
@@ -2785,6 +2877,7 @@ function storyFromRow(row: any) {
     acceptanceCriteria: JSON.parse(row.acceptance_criteria || '[]'),
     priority: row.priority,
     dependsOn: JSON.parse(row.depends_on || '[]'),
+    dependencyReasons: JSON.parse(row.dependency_reasons || '{}'),
     status: row.status,
     taskId: row.task_id,
     agentId: row.agent_id,
