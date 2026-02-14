@@ -7,6 +7,7 @@
   import { settingsStore } from '$lib/stores/settings.svelte';
   import { conversationStore } from '$lib/stores/conversation.svelte';
   import { projectStore } from '$lib/stores/projects.svelte';
+  import { getWsBase } from '$lib/api/client';
   import '@xterm/xterm/css/xterm.css';
 
   let containerEl: HTMLDivElement;
@@ -14,6 +15,8 @@
   let fitAddon: FitAddon | null = null;
   let ws: WebSocket | null = null;
   let resizeObserver: ResizeObserver | null = null;
+  let readyTimeout: ReturnType<typeof setTimeout>;
+  let messageBuffer: string[] = [];
 
   function getWsUrl(): string {
     const cwd =
@@ -21,12 +24,7 @@
       conversationStore.active?.projectPath ||
       settingsStore.projectPath ||
       '.';
-    const host =
-      typeof window !== 'undefined' && (window as any).__TAURI__
-        ? 'localhost:3002'
-        : window.location.host;
-    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    return `${protocol}//${host}/api/terminal/ws?cwd=${encodeURIComponent(cwd)}&cols=80&rows=24`;
+    return `${getWsBase()}/terminal/ws?cwd=${encodeURIComponent(cwd)}&cols=80&rows=24`;
   }
 
   function connect() {
@@ -79,6 +77,18 @@
 
     const url = getWsUrl();
     ws = new WebSocket(url);
+    
+    // Ensure terminal is ready before receiving messages
+    // This is a workaround for a race condition where data arrives before terminal is fully rendered
+    let isReady = false;
+    readyTimeout = setTimeout(() => {
+      isReady = true;
+      // Flush any buffered messages
+      if (messageBuffer.length > 0) {
+        messageBuffer.forEach((msg) => terminal?.write(msg));
+        messageBuffer.length = 0;
+      }
+    }, 100);
 
     ws.onopen = () => {
       terminalStore.setConnected(true);
@@ -88,9 +98,14 @@
         ws?.send(`\x01${terminal.cols},${terminal.rows}`);
       }
     };
-
+    
     ws.onmessage = (e) => {
-      terminal?.write(e.data);
+      if (isReady) {
+        terminal?.write(e.data);
+      } else {
+        // Buffer messages until terminal is ready
+        messageBuffer.push(e.data);
+      }
     };
 
     ws.onclose = () => {
@@ -121,6 +136,8 @@
   }
 
   function disconnect() {
+    clearTimeout(readyTimeout);
+    messageBuffer.length = 0;
     resizeObserver?.disconnect();
     resizeObserver = null;
     ws?.close();
