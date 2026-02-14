@@ -31,6 +31,10 @@ import type {
   StorySize,
   EstimateConfidence,
   EstimationFactor,
+  SprintPlanRequest,
+  SprintPlanResponse,
+  SprintRecommendation,
+  SprintStoryAssignment,
 } from '@maude/shared';
 import { readFileSync } from 'fs';
 import { join } from 'path';
@@ -2345,6 +2349,392 @@ Provide relative complexity estimates for all stories that need estimation.`;
       500,
     );
   }
+});
+
+// --- Sprint Plan Recommendations ---
+
+// Generate AI-recommended sprint assignments for all stories in a PRD
+app.post('/:id/sprint-plan', async (c) => {
+  const db = getDb();
+  const prdId = c.req.param('id');
+  const body = (await c.req.json()) as SprintPlanRequest;
+
+  // Validate capacity
+  const capacity = body.capacity;
+  const capacityMode = body.capacityMode || 'points';
+  if (!capacity || typeof capacity !== 'number' || capacity <= 0) {
+    return c.json({ ok: false, error: 'capacity must be a positive number' }, 400);
+  }
+
+  const prdRow = db.query('SELECT * FROM prds WHERE id = ?').get(prdId) as any;
+  if (!prdRow) return c.json({ ok: false, error: 'PRD not found' }, 404);
+
+  const stories = db
+    .query('SELECT * FROM prd_stories WHERE prd_id = ? ORDER BY sort_order ASC, created_at ASC')
+    .all(prdId) as any[];
+
+  if (stories.length === 0) {
+    return c.json({ ok: false, error: 'No stories in this PRD' }, 400);
+  }
+
+  const mappedStories = stories.map(storyFromRow);
+
+  // Separate stories into plannable vs. unassignable
+  const completedOrSkipped = mappedStories.filter(
+    (s) => s.status === 'completed' || s.status === 'skipped',
+  );
+  const pendingStories = mappedStories.filter(
+    (s) => s.status !== 'completed' && s.status !== 'skipped',
+  );
+  const unestimated = pendingStories.filter((s) => !s.estimate);
+  const estimatedPending = pendingStories.filter((s) => s.estimate);
+
+  // Build the unassigned list for stories we can't plan
+  const unassignedStories: SprintPlanResponse['unassignedStories'] = [];
+
+  for (const s of completedOrSkipped) {
+    unassignedStories.push({
+      storyId: s.id,
+      title: s.title,
+      reason: `Already ${s.status}`,
+    });
+  }
+  for (const s of unestimated) {
+    unassignedStories.push({
+      storyId: s.id,
+      title: s.title,
+      reason: 'No estimate — estimate the story first',
+    });
+  }
+
+  if (estimatedPending.length === 0) {
+    return c.json({
+      ok: true,
+      data: {
+        prdId,
+        sprints: [],
+        totalPoints: 0,
+        totalSprints: 0,
+        unassignedStories,
+        summary: 'No pending estimated stories to plan.',
+      } satisfies SprintPlanResponse,
+    });
+  }
+
+  // Build context for AI
+  const priorityOrder: Record<string, number> = { critical: 0, high: 1, medium: 2, low: 3 };
+
+  // Build a list of stories for the AI to plan
+  let storiesContext = '';
+  for (const s of estimatedPending) {
+    const deps = s.dependsOn || [];
+    const depTitles = deps
+      .map((depId: string) => {
+        const dep = mappedStories.find((ms) => ms.id === depId);
+        return dep ? `"${dep.title}" (${dep.status})` : depId;
+      })
+      .join(', ');
+    const criteria = s.acceptanceCriteria
+      .map((ac: any) => `  - ${ac.description}`)
+      .join('\n');
+
+    storiesContext += `
+### Story: ${s.title}
+- ID: ${s.id}
+- Priority: ${s.priority}
+- Story Points: ${s.estimate!.storyPoints}
+- Size: ${s.estimate!.size}
+- Status: ${s.status}
+- Dependencies: ${deps.length > 0 ? depTitles : 'None'}
+${s.description ? `- Description: ${s.description}` : ''}
+${criteria ? `- Acceptance Criteria:\n${criteria}` : ''}
+`;
+  }
+
+  // Get project memory for context
+  let memoryContext = '';
+  try {
+    const memories = db
+      .query('SELECT category, key, content FROM project_memories WHERE project_path = ? ORDER BY category, key')
+      .all(prdRow.project_path) as any[];
+    if (memories.length > 0) {
+      memoryContext = '\n\n## Project Context\n';
+      for (const m of memories.slice(0, 10)) {
+        memoryContext += `- [${m.category}] ${m.key}: ${m.content}\n`;
+      }
+    }
+  } catch { /* no project memory */ }
+
+  const systemPrompt = `You are a sprint planning expert helping to assign user stories to sprints optimally.
+
+## Rules
+1. Sprint capacity: ${capacity} ${capacityMode === 'count' ? 'stories' : 'story points'} per sprint
+2. Respect dependency ordering: If story A depends on story B, B must be in an earlier sprint (or the same sprint if B is already completed)
+3. Schedule high-priority and critical stories in earlier sprints when possible
+4. Balance sprint workload — try to fill sprints close to capacity but never exceed it
+5. Group related stories together when it makes sense (e.g., stories that share the same feature area)
+6. Consider story dependencies completed in earlier sprints as resolved
+
+## PRD: ${prdRow.name}
+${prdRow.description || '(No description)'}
+
+## Stories to Plan
+${storiesContext}
+${memoryContext}
+
+You MUST respond with ONLY a valid JSON object. No markdown, no explanation, no code fences.
+
+{
+  "sprints": [
+    {
+      "sprintNumber": 1,
+      "storyIds": ["id1", "id2"],
+      "rationale": "Why these stories were grouped in this sprint"
+    }
+  ],
+  "summary": "Overall explanation of the sprint plan strategy"
+}
+
+IMPORTANT:
+- Every story ID from the input MUST appear in exactly one sprint
+- Never exceed sprint capacity (${capacity} ${capacityMode === 'count' ? 'stories' : 'points'})
+- A story's dependencies must be in earlier sprints or already completed
+- Prioritize critical/high priority stories in earlier sprints
+- Provide clear rationale for each sprint grouping
+- sprintNumber starts at 1 and increments sequentially`;
+
+  const userPrompt = `Plan sprints for these ${estimatedPending.length} stories with a capacity of ${capacity} ${capacityMode === 'count' ? 'stories' : 'story points'} per sprint. Respect dependencies and prioritize critical/high-priority items first.`;
+
+  try {
+    const auth = getAnthropicAuth();
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+      'anthropic-version': '2023-06-01',
+    };
+    if (auth.type === 'oauth') {
+      headers['Authorization'] = `Bearer ${auth.token}`;
+    } else {
+      headers['x-api-key'] = auth.token;
+    }
+
+    const apiResponse = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-5-20250929',
+        max_tokens: 4096,
+        system: systemPrompt,
+        messages: [{ role: 'user', content: userPrompt }],
+      }),
+    });
+
+    if (!apiResponse.ok) {
+      const errBody = await apiResponse.text().catch(() => 'Unknown error');
+      return c.json(
+        { ok: false, error: `AI sprint planning failed (${apiResponse.status}): ${errBody}` },
+        502,
+      );
+    }
+
+    const result = (await apiResponse.json()) as any;
+    const textContent = result.content?.find((ct: any) => ct.type === 'text');
+    if (!textContent?.text) {
+      return c.json({ ok: false, error: 'AI returned no text content' }, 502);
+    }
+
+    // Parse JSON response
+    let rawText = textContent.text.trim();
+    if (rawText.startsWith('```')) {
+      rawText = rawText.replace(/^```(?:json)?\s*\n?/, '').replace(/\n?```\s*$/, '');
+    }
+
+    let parsed: any;
+    try {
+      parsed = JSON.parse(rawText);
+    } catch {
+      return c.json(
+        { ok: false, error: 'Failed to parse AI sprint plan response as JSON. Try again.' },
+        502,
+      );
+    }
+
+    // Build the story lookup for validation
+    const storyMap = new Map(estimatedPending.map((s) => [s.id, s]));
+
+    // Validate and build sprint recommendations
+    const sprints: SprintRecommendation[] = [];
+    const assignedIds = new Set<string>();
+    let overallTotalPoints = 0;
+
+    if (!Array.isArray(parsed.sprints)) {
+      return c.json({ ok: false, error: 'AI response missing sprints array. Try again.' }, 502);
+    }
+
+    for (const ps of parsed.sprints) {
+      const sprintNum = typeof ps.sprintNumber === 'number' ? ps.sprintNumber : sprints.length + 1;
+      const storyIds: string[] = Array.isArray(ps.storyIds) ? ps.storyIds : [];
+
+      const sprintStories: SprintStoryAssignment[] = [];
+      let sprintPoints = 0;
+
+      for (const sid of storyIds) {
+        const story = storyMap.get(sid);
+        if (!story || assignedIds.has(sid)) continue;
+
+        assignedIds.add(sid);
+        const pts = story.estimate?.storyPoints ?? 0;
+        sprintPoints += pts;
+        overallTotalPoints += pts;
+
+        sprintStories.push({
+          storyId: sid,
+          title: story.title,
+          storyPoints: pts,
+          priority: story.priority,
+          reason: `${story.priority} priority, ${pts}pts${story.dependsOn?.length ? `, depends on ${story.dependsOn.length} story(ies)` : ''}`,
+        });
+      }
+
+      if (sprintStories.length > 0) {
+        sprints.push({
+          sprintNumber: sprintNum,
+          stories: sprintStories,
+          totalPoints: sprintPoints,
+          rationale: (ps.rationale || `Sprint ${sprintNum} stories`).trim(),
+        });
+      }
+    }
+
+    // Add any stories the AI missed to additional sprints
+    for (const s of estimatedPending) {
+      if (!assignedIds.has(s.id)) {
+        const pts = s.estimate?.storyPoints ?? 0;
+
+        // Find a sprint with room, or create a new one
+        let placed = false;
+        for (const sprint of sprints) {
+          const sprintCap = capacityMode === 'count' ? sprint.stories.length : sprint.totalPoints;
+          const storyWeight = capacityMode === 'count' ? 1 : pts;
+          if (sprintCap + storyWeight <= capacity) {
+            sprint.stories.push({
+              storyId: s.id,
+              title: s.title,
+              storyPoints: pts,
+              priority: s.priority,
+              reason: 'Added to fill remaining capacity',
+            });
+            sprint.totalPoints += pts;
+            overallTotalPoints += pts;
+            placed = true;
+            break;
+          }
+        }
+
+        if (!placed) {
+          // Create a new sprint
+          overallTotalPoints += pts;
+          sprints.push({
+            sprintNumber: sprints.length + 1,
+            stories: [{
+              storyId: s.id,
+              title: s.title,
+              storyPoints: pts,
+              priority: s.priority,
+              reason: 'Added to overflow sprint',
+            }],
+            totalPoints: pts,
+            rationale: 'Overflow sprint for remaining stories',
+          });
+        }
+      }
+    }
+
+    // Renumber sprints sequentially
+    sprints.forEach((s, i) => { s.sprintNumber = i + 1; });
+
+    const response: SprintPlanResponse = {
+      prdId,
+      sprints,
+      totalPoints: overallTotalPoints,
+      totalSprints: sprints.length,
+      unassignedStories,
+      summary: (parsed.summary || `Planned ${estimatedPending.length} stories across ${sprints.length} sprints.`).trim(),
+    };
+
+    return c.json({ ok: true, data: response });
+  } catch (err) {
+    return c.json(
+      { ok: false, error: `Sprint planning failed: ${(err as Error).message}` },
+      500,
+    );
+  }
+});
+
+// Save a manually adjusted sprint plan (user can move stories between sprints)
+app.put('/:id/sprint-plan', async (c) => {
+  const db = getDb();
+  const prdId = c.req.param('id');
+  const body = await c.req.json();
+
+  const prdRow = db.query('SELECT * FROM prds WHERE id = ?').get(prdId);
+  if (!prdRow) return c.json({ ok: false, error: 'PRD not found' }, 404);
+
+  // Validate the body has the right shape
+  if (!body.sprints || !Array.isArray(body.sprints)) {
+    return c.json({ ok: false, error: 'sprints array required' }, 400);
+  }
+
+  const stories = db
+    .query('SELECT * FROM prd_stories WHERE prd_id = ? ORDER BY sort_order ASC, created_at ASC')
+    .all(prdId) as any[];
+  const mappedStories = stories.map(storyFromRow);
+  const storyMap = new Map(mappedStories.map((s) => [s.id, s]));
+
+  // Rebuild the sprint plan from the adjusted input
+  const sprints: SprintRecommendation[] = [];
+  let totalPoints = 0;
+
+  for (const ps of body.sprints) {
+    const sprintStories: SprintStoryAssignment[] = [];
+    let sprintPoints = 0;
+
+    for (const sa of (ps.stories || [])) {
+      const story = storyMap.get(sa.storyId);
+      if (!story) continue;
+
+      const pts = story.estimate?.storyPoints ?? sa.storyPoints ?? 0;
+      sprintPoints += pts;
+      totalPoints += pts;
+
+      sprintStories.push({
+        storyId: sa.storyId,
+        title: story.title,
+        storyPoints: pts,
+        priority: story.priority,
+        reason: sa.reason || 'Manually assigned',
+      });
+    }
+
+    if (sprintStories.length > 0) {
+      sprints.push({
+        sprintNumber: sprints.length + 1,
+        stories: sprintStories,
+        totalPoints: sprintPoints,
+        rationale: ps.rationale || `Sprint ${sprints.length + 1} (manually adjusted)`,
+      });
+    }
+  }
+
+  const response: SprintPlanResponse = {
+    prdId,
+    sprints,
+    totalPoints,
+    totalSprints: sprints.length,
+    unassignedStories: body.unassignedStories || [],
+    summary: body.summary || `Manually adjusted plan with ${sprints.length} sprints.`,
+  };
+
+  return c.json({ ok: true, data: response });
 });
 
 function buildEstimateSummary(prdId: string, estimates: StoryEstimate[]): EstimatePrdResponse {

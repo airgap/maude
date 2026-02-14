@@ -397,6 +397,47 @@ export interface EstimatePrdResponse {
   };
 }
 
+// --- Sprint Planning Recommendation Types ---
+
+/** A single sprint in a recommended plan */
+export interface SprintRecommendation {
+  sprintNumber: number;
+  stories: SprintStoryAssignment[];
+  totalPoints: number;
+  rationale: string; // Why these stories were grouped together
+}
+
+/** A story assigned to a specific sprint */
+export interface SprintStoryAssignment {
+  storyId: string;
+  title: string;
+  storyPoints: number;
+  priority: StoryPriority;
+  reason: string; // Why this story is in this sprint
+}
+
+/** Request to generate sprint plan recommendations */
+export interface SprintPlanRequest {
+  /** Sprint capacity in story points (required) */
+  capacity: number;
+  /** Optional: use 'points' (default) or 'count' for capacity mode */
+  capacityMode?: 'points' | 'count';
+}
+
+/** Response from sprint plan recommendation */
+export interface SprintPlanResponse {
+  prdId: string;
+  sprints: SprintRecommendation[];
+  totalPoints: number;
+  totalSprints: number;
+  unassignedStories: Array<{
+    storyId: string;
+    title: string;
+    reason: string; // Why it couldn't be assigned (e.g., no estimate, already completed)
+  }>;
+  summary: string; // Overall rationale for the plan
+}
+
 // --- Stream Events for Loop ---
 
 export interface StreamLoopEvent {

@@ -1,4 +1,4 @@
-import type { PRD, LoopState, IterationLogEntry, StreamLoopEvent, LoopConfig, PlanMode, EditMode, GeneratedStory, RefinementQuestion, RefineStoryResponse, DependencyGraph, SprintValidation, SprintValidationWarning, ValidateACResponse, ACOverride, StoryEstimate, EstimatePrdResponse } from '@maude/shared';
+import type { PRD, LoopState, IterationLogEntry, StreamLoopEvent, LoopConfig, PlanMode, EditMode, GeneratedStory, RefinementQuestion, RefineStoryResponse, DependencyGraph, SprintValidation, SprintValidationWarning, ValidateACResponse, ACOverride, StoryEstimate, EstimatePrdResponse, SprintPlanResponse } from '@maude/shared';
 import { api, getBaseUrl, getAuthToken } from '../api/client';
 
 function createLoopStore() {
@@ -53,6 +53,13 @@ function createLoopStore() {
   let estimationError = $state<string | null>(null);
   let estimatingPrd = $state(false);
   let prdEstimationResult = $state<EstimatePrdResponse | null>(null);
+
+  // Sprint plan recommendation state
+  let generatingSprintPlan = $state(false);
+  let sprintPlanResult = $state<SprintPlanResponse | null>(null);
+  let sprintPlanError = $state<string | null>(null);
+  let sprintPlanCapacity = $state<number>(20);
+  let sprintPlanCapacityMode = $state<'points' | 'count'>('points');
 
   return {
     get activeLoop() {
@@ -199,6 +206,21 @@ function createLoopStore() {
     },
     get prdEstimationResult() {
       return prdEstimationResult;
+    },
+    get generatingSprintPlan() {
+      return generatingSprintPlan;
+    },
+    get sprintPlanResult() {
+      return sprintPlanResult;
+    },
+    get sprintPlanError() {
+      return sprintPlanError;
+    },
+    get sprintPlanCapacity() {
+      return sprintPlanCapacity;
+    },
+    get sprintPlanCapacityMode() {
+      return sprintPlanCapacityMode;
     },
 
     // --- Setters ---
@@ -880,7 +902,97 @@ function createLoopStore() {
       }
     },
 
-    // --- Sprint planning ---
+    // --- Sprint Plan Recommendations ---
+
+    setSprintPlanCapacity(value: number) {
+      sprintPlanCapacity = value;
+    },
+
+    setSprintPlanCapacityMode(mode: 'points' | 'count') {
+      sprintPlanCapacityMode = mode;
+    },
+
+    clearSprintPlan() {
+      generatingSprintPlan = false;
+      sprintPlanResult = null;
+      sprintPlanError = null;
+    },
+
+    async generateSprintPlan(
+      prdId: string,
+      capacity?: number,
+      capacityMode?: 'points' | 'count',
+    ): Promise<{ ok: boolean; error?: string }> {
+      generatingSprintPlan = true;
+      sprintPlanError = null;
+      sprintPlanResult = null;
+      const cap = capacity ?? sprintPlanCapacity;
+      const mode = capacityMode ?? sprintPlanCapacityMode;
+      try {
+        const res = await api.prds.generateSprintPlan(prdId, cap, mode);
+        if (res.ok) {
+          sprintPlanResult = res.data;
+          return { ok: true };
+        }
+        sprintPlanError = (res as any).error || 'Sprint planning failed';
+        return { ok: false, error: sprintPlanError ?? undefined };
+      } catch (err) {
+        sprintPlanError = String(err);
+        return { ok: false, error: sprintPlanError ?? undefined };
+      } finally {
+        generatingSprintPlan = false;
+      }
+    },
+
+    /** Move a story from one sprint to another within the current plan */
+    moveStoryInPlan(storyId: string, fromSprintIndex: number, toSprintIndex: number) {
+      if (!sprintPlanResult) return;
+
+      const plan = { ...sprintPlanResult };
+      const sprints = [...plan.sprints];
+
+      // Find and remove the story from the source sprint
+      const fromSprint = { ...sprints[fromSprintIndex] };
+      const storyIdx = fromSprint.stories.findIndex((s) => s.storyId === storyId);
+      if (storyIdx === -1) return;
+
+      const [story] = fromSprint.stories.splice(storyIdx, 1);
+      story.reason = 'Manually moved';
+      fromSprint.totalPoints -= story.storyPoints;
+      sprints[fromSprintIndex] = { ...fromSprint, stories: [...fromSprint.stories] };
+
+      // Add to the destination sprint
+      const toSprint = { ...sprints[toSprintIndex] };
+      toSprint.stories = [...toSprint.stories, story];
+      toSprint.totalPoints += story.storyPoints;
+      sprints[toSprintIndex] = toSprint;
+
+      // Remove empty sprints and renumber
+      const filtered = sprints.filter((s) => s.stories.length > 0);
+      filtered.forEach((s, i) => { s.sprintNumber = i + 1; });
+
+      sprintPlanResult = {
+        ...plan,
+        sprints: filtered,
+        totalSprints: filtered.length,
+      };
+    },
+
+    async saveAdjustedPlan(prdId: string): Promise<{ ok: boolean; error?: string }> {
+      if (!sprintPlanResult) return { ok: false, error: 'No plan to save' };
+      try {
+        const res = await api.prds.saveAdjustedSprintPlan(prdId, sprintPlanResult);
+        if (res.ok) {
+          sprintPlanResult = res.data;
+          return { ok: true };
+        }
+        return { ok: false, error: (res as any).error || 'Failed to save adjusted plan' };
+      } catch (err) {
+        return { ok: false, error: String(err) };
+      }
+    },
+
+    // --- Sprint planning (chat) ---
 
     async startPlanning(
       prdId: string,

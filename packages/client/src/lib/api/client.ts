@@ -629,6 +629,23 @@ export const api = {
         method: 'POST',
         body: JSON.stringify({ reEstimate }),
       }),
+    // --- Sprint Plan Recommendations ---
+    generateSprintPlan: (prdId: string, capacity: number, capacityMode?: 'points' | 'count') =>
+      request<{
+        ok: boolean;
+        data: import('@maude/shared').SprintPlanResponse;
+      }>(`/prds/${prdId}/sprint-plan`, {
+        method: 'POST',
+        body: JSON.stringify({ capacity, capacityMode }),
+      }),
+    saveAdjustedSprintPlan: (prdId: string, plan: import('@maude/shared').SprintPlanResponse) =>
+      request<{
+        ok: boolean;
+        data: import('@maude/shared').SprintPlanResponse;
+      }>(`/prds/${prdId}/sprint-plan`, {
+        method: 'PUT',
+        body: JSON.stringify(plan),
+      }),
   },
 
   // --- Loops ---

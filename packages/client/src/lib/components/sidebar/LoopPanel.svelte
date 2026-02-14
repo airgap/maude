@@ -200,6 +200,11 @@
     uiStore.openModal('story-estimate');
   }
 
+  function openSprintPlanModal() {
+    loopStore.clearSprintPlan();
+    uiStore.openModal('sprint-plan');
+  }
+
   let estimatingAll = $state(false);
 
   async function estimateAllStories() {
@@ -390,6 +395,7 @@
           <button class="icon-btn" title="Estimate all stories" onclick={estimateAllStories} disabled={estimatingAll}>
             {#if estimatingAll}<span class="spinner-sm"></span>{:else}📊{/if}
           </button>
+          <button class="icon-btn" title="Sprint plan recommendations" onclick={openSprintPlanModal}>📅</button>
           <button class="icon-btn" class:active-btn={showDependencies} title="Dependencies" onclick={() => showDependencies = !showDependencies}>🔗</button>
           <button class="icon-btn" title="Delete PRD" onclick={handleDeletePrd}>🗑</button>
         </div>

@@ -131,4 +131,8 @@ export type {
   EstimateStoryResponse,
   EstimatePrdRequest,
   EstimatePrdResponse,
+  SprintRecommendation,
+  SprintStoryAssignment,
+  SprintPlanRequest,
+  SprintPlanResponse,
 } from './prd.js';

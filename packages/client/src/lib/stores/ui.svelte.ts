@@ -21,6 +21,7 @@ type ModalId =
   | 'story-refine'
   | 'criteria-validation'
   | 'story-estimate'
+  | 'sprint-plan'
   | null;
 type FocusedPane = 'chat' | 'editor';
 

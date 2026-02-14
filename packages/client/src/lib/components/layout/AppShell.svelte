@@ -14,6 +14,7 @@
   import StoryRefineModal from '../settings/StoryRefineModal.svelte';
   import CriteriaValidationModal from '../settings/CriteriaValidationModal.svelte';
   import StoryEstimateModal from '../settings/StoryEstimateModal.svelte';
+  import SprintPlanModal from '../settings/SprintPlanModal.svelte';
   import CommandPalette from '../common/CommandPalette.svelte';
   import ToastContainer from '../common/ToastContainer.svelte';
   import QuickOpen from '../editor/QuickOpen.svelte';
@@ -209,6 +210,10 @@
 
   {#if uiStore.activeModal === 'story-estimate'}
     <StoryEstimateModal />
+  {/if}
+
+  {#if uiStore.activeModal === 'sprint-plan'}
+    <SprintPlanModal />
   {/if}
 
   {#if uiStore.activeModal === 'command-palette'}
