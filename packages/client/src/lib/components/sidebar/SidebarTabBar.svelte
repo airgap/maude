@@ -7,6 +7,177 @@
   let showMenu = $state(false);
   let contextMenu = $state<{ tabId: SidebarTab; x: number; y: number } | null>(null);
 
+  // --- Drag-to-reorder state ---
+  const DRAG_THRESHOLD = 5; // pixels before drag activates (distinguishes click from drag)
+
+  interface DragState {
+    tabId: SidebarTab;
+    startIndex: number;
+    startX: number;
+    currentX: number;
+    isDragging: boolean; // true once threshold exceeded
+    tabWidths: number[]; // cached widths of each pinned tab button
+    tabOffsets: number[]; // cached left offsets relative to container
+    order: SidebarTab[]; // working copy of tab order during drag
+  }
+
+  let drag = $state<DragState | null>(null);
+  let tabBtnEls: HTMLButtonElement[] = [];
+
+  function handleDragStart(tabId: SidebarTab, index: number, e: MouseEvent) {
+    // Only left mouse button
+    if (e.button !== 0) return;
+
+    // Cache tab button geometries
+    const widths: number[] = [];
+    const offsets: number[] = [];
+    for (let i = 0; i < tabBtnEls.length; i++) {
+      const el = tabBtnEls[i];
+      if (el) {
+        const rect = el.getBoundingClientRect();
+        widths.push(rect.width);
+        offsets.push(rect.left);
+      }
+    }
+
+    drag = {
+      tabId,
+      startIndex: index,
+      startX: e.clientX,
+      currentX: e.clientX,
+      isDragging: false,
+      tabWidths: widths,
+      tabOffsets: offsets,
+      order: [...sidebarLayoutStore.pinnedTabIds],
+    };
+
+    document.addEventListener('mousemove', handleDragMove);
+    document.addEventListener('mouseup', handleDragEnd);
+  }
+
+  function handleDragMove(e: MouseEvent) {
+    if (!drag) return;
+
+    const deltaX = e.clientX - drag.startX;
+
+    // Check threshold before activating drag
+    if (!drag.isDragging) {
+      if (Math.abs(deltaX) < DRAG_THRESHOLD) return;
+      drag.isDragging = true;
+      e.preventDefault();
+    }
+
+    drag.currentX = e.clientX;
+
+    // Determine where the dragged tab's center currently is
+    const draggedOriginalIndex = drag.startIndex;
+    const draggedWidth = drag.tabWidths[draggedOriginalIndex];
+    const draggedCenter =
+      drag.tabOffsets[draggedOriginalIndex] + draggedWidth / 2 + deltaX;
+
+    // Find current position of dragged tab in the working order
+    const currentDragIndex = drag.order.indexOf(drag.tabId);
+
+    // Check if we should swap with adjacent tabs
+    let newOrder = [...drag.order];
+    let swapped = true;
+    while (swapped) {
+      swapped = false;
+      const idx = newOrder.indexOf(drag.tabId);
+
+      // Check swap with right neighbor
+      if (idx < newOrder.length - 1) {
+        const rightOrigIndex = sidebarLayoutStore.pinnedTabIds.indexOf(newOrder[idx + 1]);
+        if (rightOrigIndex >= 0 && rightOrigIndex < drag.tabOffsets.length) {
+          const rightMid =
+            drag.tabOffsets[rightOrigIndex] + drag.tabWidths[rightOrigIndex] / 2;
+          if (draggedCenter > rightMid) {
+            // Swap
+            [newOrder[idx], newOrder[idx + 1]] = [newOrder[idx + 1], newOrder[idx]];
+            swapped = true;
+            continue;
+          }
+        }
+      }
+
+      // Check swap with left neighbor
+      if (idx > 0) {
+        const leftOrigIndex = sidebarLayoutStore.pinnedTabIds.indexOf(newOrder[idx - 1]);
+        if (leftOrigIndex >= 0 && leftOrigIndex < drag.tabOffsets.length) {
+          const leftMid =
+            drag.tabOffsets[leftOrigIndex] + drag.tabWidths[leftOrigIndex] / 2;
+          if (draggedCenter < leftMid) {
+            [newOrder[idx - 1], newOrder[idx]] = [newOrder[idx], newOrder[idx - 1]];
+            swapped = true;
+            continue;
+          }
+        }
+      }
+    }
+
+    drag.order = newOrder;
+  }
+
+  function handleDragEnd() {
+    document.removeEventListener('mousemove', handleDragMove);
+    document.removeEventListener('mouseup', handleDragEnd);
+
+    if (!drag) return;
+
+    if (drag.isDragging) {
+      // Commit the reorder
+      sidebarLayoutStore.reorderPinnedTabs(drag.order);
+    } else {
+      // Was a click, not a drag — switch tabs
+      handleTabClick(drag.tabId);
+    }
+
+    drag = null;
+  }
+
+  /**
+   * Compute the CSS translateX for a tab during drag.
+   * - The dragged tab follows the mouse.
+   * - Other tabs shift to fill the gap left by the dragged tab.
+   */
+  function getDragTransform(tabId: SidebarTab, index: number): string {
+    if (!drag || !drag.isDragging) return '';
+
+    if (tabId === drag.tabId) {
+      // Dragged tab follows mouse
+      return `translateX(${drag.currentX - drag.startX}px)`;
+    }
+
+    // For non-dragged tabs: compute shift based on position change in working order
+    const originalIndex = sidebarLayoutStore.pinnedTabIds.indexOf(tabId);
+    const newIndex = drag.order.indexOf(tabId);
+    if (originalIndex === newIndex) return '';
+
+    // This tab has shifted. Calculate the pixel offset it needs to move.
+    // If the dragged tab was originally at startIndex and is now at a different
+    // position, other tabs shift by the dragged tab's width in the appropriate direction.
+    const draggedWidth = drag.tabWidths[drag.startIndex];
+    const direction = newIndex > originalIndex ? 1 : -1;
+    // Each shifted tab moves by the dragged tab's width (including gap)
+    const gap = 1; // matches CSS gap: 1px
+    const shift = direction * (draggedWidth + gap);
+    return `translateX(${shift}px)`;
+  }
+
+  function getDragStyle(tabId: SidebarTab, index: number): string {
+    const transform = getDragTransform(tabId, index);
+    if (!transform) return '';
+
+    if (drag && tabId === drag.tabId) {
+      return `transform: ${transform}; opacity: 0.7; z-index: 10;`;
+    }
+
+    // Non-dragged tabs get smooth transition
+    return `transform: ${transform}; transition: transform 150ms ease;`;
+  }
+
+  // --- End drag-to-reorder ---
+
   function toggleMenu() {
     showMenu = !showMenu;
   }
@@ -64,14 +235,17 @@
   }
 </script>
 
-<nav class="sidebar-tabs">
-  {#each sidebarLayoutStore.pinnedTabs as tab (tab.id)}
+<nav class="sidebar-tabs" class:dragging={drag?.isDragging}>
+  {#each sidebarLayoutStore.pinnedTabs as tab, i (tab.id)}
     <button
+      bind:this={tabBtnEls[i]}
       class="tab-btn"
       class:active={uiStore.sidebarTab === tab.id}
       class:floating={isFloating(tab.id)}
-      onclick={() => handleTabClick(tab.id)}
+      class:drag-source={drag?.isDragging && drag.tabId === tab.id}
+      onmousedown={(e) => handleDragStart(tab.id, i, e)}
       oncontextmenu={(e) => handleContextMenu(tab.id, e)}
+      style={getDragStyle(tab.id, i)}
       title={tab.label}
     >
       <svg
@@ -239,6 +413,16 @@
   }
   .tab-btn.floating {
     color: var(--text-secondary);
+  }
+
+  /* Drag-to-reorder styles */
+  .sidebar-tabs.dragging {
+    user-select: none;
+    cursor: grabbing;
+  }
+  .tab-btn.drag-source {
+    opacity: 0.7;
+    z-index: 10;
   }
 
   .floating-dot {
