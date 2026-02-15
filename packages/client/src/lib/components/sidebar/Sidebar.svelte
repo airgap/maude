@@ -1,15 +1,7 @@
 <script lang="ts">
   import { uiStore } from '$lib/stores/ui.svelte';
   import { SIDEBAR_TABS } from '$lib/config/sidebarTabs';
-  import ConversationList from './ConversationList.svelte';
-  import TaskPanel from './TaskPanel.svelte';
-  import FileTree from './FileTree.svelte';
-  import MemoryPanel from './MemoryPanel.svelte';
-  import AgentPanel from './AgentPanel.svelte';
-  import SearchPanel from './SearchPanel.svelte';
-  import SymbolOutline from '../editor/SymbolOutline.svelte';
-  import McpPanel from './McpPanel.svelte';
-  import LoopPanel from './LoopPanel.svelte';
+  import SidebarTabContent from './SidebarTabContent.svelte';
 </script>
 
 <div class="sidebar-container">
@@ -36,25 +28,7 @@
   </nav>
 
   <div class="sidebar-content">
-    {#if uiStore.sidebarTab === 'conversations'}
-      <ConversationList />
-    {:else if uiStore.sidebarTab === 'files'}
-      <FileTree />
-    {:else if uiStore.sidebarTab === 'search'}
-      <SearchPanel />
-    {:else if uiStore.sidebarTab === 'symbols'}
-      <SymbolOutline />
-    {:else if uiStore.sidebarTab === 'tasks'}
-      <TaskPanel />
-    {:else if uiStore.sidebarTab === 'memory'}
-      <MemoryPanel />
-    {:else if uiStore.sidebarTab === 'agents'}
-      <AgentPanel />
-    {:else if uiStore.sidebarTab === 'mcp'}
-      <McpPanel />
-    {:else if uiStore.sidebarTab === 'loop'}
-      <LoopPanel />
-    {/if}
+    <SidebarTabContent tabId={uiStore.sidebarTab} />
   </div>
 </div>
 
