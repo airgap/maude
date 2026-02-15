@@ -7,8 +7,14 @@ import { projectStore } from './projects.svelte';
 import { conversationStore } from './conversation.svelte';
 import { gitStore } from './git.svelte';
 import { settingsStore } from './settings.svelte';
+import { sidebarLayoutStore, type FloatingPanelState } from './sidebarLayout.svelte';
 
 const STORAGE_KEY = 'maude-workspaces';
+
+export interface SidebarLayoutSnapshot {
+  pinnedTabs: SidebarTab[];
+  floatingPanels: FloatingPanelState[];
+}
 
 export interface WorkspaceSnapshot {
   editorTabs: EditorTab[];
@@ -24,6 +30,7 @@ export interface WorkspaceSnapshot {
   searchIsRegex: boolean;
   terminalOpen: boolean;
   terminalHeight: number;
+  sidebarLayout?: SidebarLayoutSnapshot;
 }
 
 export interface Workspace {
@@ -68,6 +75,7 @@ interface PersistedWorkspace {
     searchIsRegex: boolean;
     terminalOpen: boolean;
     terminalHeight: number;
+    sidebarLayout?: SidebarLayoutSnapshot;
   };
 }
 
@@ -108,6 +116,7 @@ function saveToStorage(workspaces: Workspace[], activeId: string | null) {
           searchIsRegex: w.snapshot.searchIsRegex,
           terminalOpen: w.snapshot.terminalOpen,
           terminalHeight: w.snapshot.terminalHeight,
+          sidebarLayout: w.snapshot.sidebarLayout,
         },
       })),
     };
@@ -125,6 +134,7 @@ function createWorkspaceStore() {
   const hasWorkspaces = $derived(workspaces.length > 0);
 
   function captureSnapshot(): WorkspaceSnapshot {
+    const layoutState = sidebarLayoutStore.captureState();
     return {
       editorTabs: [...editorStore.tabs],
       activeEditorTabId: editorStore.activeTabId,
@@ -139,6 +149,10 @@ function createWorkspaceStore() {
       searchIsRegex: searchStore.isRegex,
       terminalOpen: terminalStore.isOpen,
       terminalHeight: terminalStore.panelHeight,
+      sidebarLayout: {
+        pinnedTabs: layoutState.pinnedTabIds,
+        floatingPanels: layoutState.floatingPanels,
+      },
     };
   }
 
@@ -167,6 +181,14 @@ function createWorkspaceStore() {
       isOpen: snapshot.terminalOpen,
       panelHeight: snapshot.terminalHeight,
     });
+
+    // Restore sidebar layout if present (backward compatible with old snapshots)
+    if (snapshot.sidebarLayout) {
+      sidebarLayoutStore.restoreState({
+        pinnedTabIds: snapshot.sidebarLayout.pinnedTabs,
+        floatingPanels: snapshot.sidebarLayout.floatingPanels,
+      });
+    }
   }
 
   function persist() {
