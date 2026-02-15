@@ -101,8 +101,8 @@
   .language-label {
     font-size: 11px;
     color: var(--text-tertiary);
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
+    text-transform: var(--ht-label-transform);
+    letter-spacing: var(--ht-label-spacing);
   }
 
   .code-actions {

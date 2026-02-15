@@ -1,12 +1,14 @@
 import type { ThemeId, CliProvider, Keybinding, PermissionMode } from '@maude/shared';
 import { convertVsCodeSnippets, type ConvertedSnippet } from '$lib/utils/vscode-snippet-converter';
 import { convertVsCodeTheme, type ConvertedTheme } from '$lib/utils/vscode-theme-converter';
+import { findHypertheme, getDefaultHypertheme } from '$lib/config/hyperthemes';
 import { getBaseUrl } from '$lib/api/client';
 
 const STORAGE_KEY = 'maude-settings';
 
 interface SettingsState {
   theme: ThemeId;
+  hypertheme: string;
   cliProvider: CliProvider;
   model: string;
   permissionMode: PermissionMode;
@@ -35,6 +37,7 @@ interface SettingsState {
 
 const defaults: SettingsState = {
   theme: 'dark',
+  hypertheme: 'tech',
   cliProvider: 'claude',
   model: 'claude-sonnet-4-5-20250929',
   permissionMode: 'safe',
@@ -82,6 +85,10 @@ function loadFromStorage(): SettingsState {
       if (!parsed.fontFamilySans) {
         parsed.fontFamilySans = defaults.fontFamilySans;
       }
+      // Migrate: ensure hypertheme exists
+      if (!parsed.hypertheme) {
+        parsed.hypertheme = defaults.hypertheme;
+      }
       return parsed;
     }
   } catch {}
@@ -98,6 +105,7 @@ function createSettingsStore() {
     if (typeof window === 'undefined') return;
     localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
     applyTheme(state.theme);
+    applyHypertheme(state.hypertheme);
   }
 
   function syncToServer(partial: Partial<SettingsState>) {
@@ -119,10 +127,10 @@ function createSettingsStore() {
   function applyTheme(theme: ThemeId) {
     if (typeof document === 'undefined') return;
 
-    // Clear any previously applied custom CSS vars
+    // Clear any previously applied custom CSS vars (but preserve --ht-* vars)
     const root = document.documentElement;
     for (const key of Array.from(root.style)) {
-      if (key.startsWith('--')) root.style.removeProperty(key);
+      if (key.startsWith('--') && !key.startsWith('--ht-')) root.style.removeProperty(key);
     }
 
     if (theme.startsWith('custom-') && state.customThemes[theme]) {
@@ -138,14 +146,44 @@ function createSettingsStore() {
     }
   }
 
-  // Apply theme on load
+  function applyHypertheme(hyperthemeId: string) {
+    if (typeof document === 'undefined') return;
+    const root = document.documentElement;
+    const ht = findHypertheme(hyperthemeId) || getDefaultHypertheme();
+
+    // Set data attribute for CSS selectors
+    root.setAttribute('data-hypertheme', ht.id);
+
+    // Clear old --ht-* vars and apply new ones
+    for (const key of Array.from(root.style)) {
+      if (key.startsWith('--ht-')) root.style.removeProperty(key);
+    }
+    for (const [varName, value] of Object.entries(ht.cssVars)) {
+      root.style.setProperty(varName, value);
+    }
+
+    // Apply color overrides for magic hyperthemes.
+    // applyTheme() runs first in persist() and clears non-ht inline vars,
+    // so we can safely layer color overrides on top here.
+    if (ht.colorOverrides) {
+      for (const [varName, value] of Object.entries(ht.colorOverrides)) {
+        root.style.setProperty(varName, value);
+      }
+    }
+  }
+
+  // Apply theme + hypertheme on load
   if (typeof window !== 'undefined') {
     applyTheme(state.theme);
+    applyHypertheme(state.hypertheme);
   }
 
   return {
     get theme() {
       return state.theme;
+    },
+    get hypertheme() {
+      return state.hypertheme;
     },
     get cliProvider() {
       return state.cliProvider;
@@ -210,6 +248,10 @@ function createSettingsStore() {
 
     setTheme(theme: ThemeId) {
       state.theme = theme;
+      persist();
+    },
+    setHypertheme(hyperthemeId: string) {
+      state.hypertheme = hyperthemeId;
       persist();
     },
     setModel(model: string) {

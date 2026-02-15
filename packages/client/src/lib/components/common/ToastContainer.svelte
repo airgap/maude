@@ -42,12 +42,45 @@
     gap: 10px;
     padding: 10px 14px;
     background: var(--bg-elevated);
-    border: 1px solid var(--border-primary);
+    border: var(--ht-card-border-width) var(--ht-card-border-style) var(--border-primary);
     border-radius: var(--radius);
     box-shadow: var(--shadow-lg);
     font-size: 13px;
     color: var(--text-primary);
-    animation: slideIn 200ms ease;
+    animation: toastSlideTech var(--ht-transition-speed) ease;
+  }
+
+  /* Hypertheme toast styles — radically different shapes */
+  :global([data-hypertheme='arcane']) .toast {
+    animation: toastMaterialize 250ms ease;
+    border: 3px double var(--border-primary);
+    padding: 14px 18px;
+  }
+  :global([data-hypertheme='ethereal']) .toast {
+    animation: toastFloat 300ms ease;
+    border: none;
+    border-radius: var(--radius-xl);
+    box-shadow:
+      0 8px 32px rgba(0, 0, 0, 0.3),
+      0 0 0 1px var(--border-secondary);
+    padding: 14px 20px;
+    backdrop-filter: blur(8px);
+  }
+  :global([data-hypertheme='study']) .toast {
+    animation: toastUnfold 200ms ease;
+    border: 2px solid var(--border-primary);
+    box-shadow:
+      var(--shadow-lg),
+      inset 0 1px 3px rgba(0, 0, 0, 0.12);
+    padding: 14px 18px;
+  }
+  :global([data-hypertheme='astral']) .toast {
+    animation: toastPhaseIn 350ms ease;
+    border: 1px solid var(--border-secondary);
+    box-shadow:
+      var(--shadow-lg),
+      0 0 15px rgba(140, 160, 220, 0.06);
+    padding: 12px 18px;
   }
 
   .toast-info {
@@ -63,6 +96,34 @@
     border-left: 3px solid var(--accent-warning);
   }
 
+  /* Ethereal toasts: no left border, use bottom accent line instead */
+  :global([data-hypertheme='ethereal']) .toast-info,
+  :global([data-hypertheme='ethereal']) .toast-success,
+  :global([data-hypertheme='ethereal']) .toast-error,
+  :global([data-hypertheme='ethereal']) .toast-warning {
+    border-left: none;
+  }
+  :global([data-hypertheme='ethereal']) .toast-info {
+    box-shadow:
+      0 8px 32px rgba(0, 0, 0, 0.3),
+      inset 0 -2px 0 var(--accent-info);
+  }
+  :global([data-hypertheme='ethereal']) .toast-success {
+    box-shadow:
+      0 8px 32px rgba(0, 0, 0, 0.3),
+      inset 0 -2px 0 var(--accent-secondary);
+  }
+  :global([data-hypertheme='ethereal']) .toast-error {
+    box-shadow:
+      0 8px 32px rgba(0, 0, 0, 0.3),
+      inset 0 -2px 0 var(--accent-error);
+  }
+  :global([data-hypertheme='ethereal']) .toast-warning {
+    box-shadow:
+      0 8px 32px rgba(0, 0, 0, 0.3),
+      inset 0 -2px 0 var(--accent-warning);
+  }
+
   .toast-message {
     flex: 1;
   }
@@ -70,22 +131,11 @@
   .toast-dismiss {
     color: var(--text-tertiary);
     padding: 2px;
-    border-radius: 3px;
+    border-radius: var(--radius-sm);
     flex-shrink: 0;
   }
   .toast-dismiss:hover {
     background: var(--bg-hover);
     color: var(--text-primary);
-  }
-
-  @keyframes slideIn {
-    from {
-      transform: translateX(100%);
-      opacity: 0;
-    }
-    to {
-      transform: translateX(0);
-      opacity: 1;
-    }
   }
 </style>

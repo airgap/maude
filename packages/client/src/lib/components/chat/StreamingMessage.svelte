@@ -154,7 +154,7 @@
     max-width: 900px;
     margin: 0 auto;
     animation: fadeIn 0.2s linear;
-    border-radius: 0;
+    border-radius: var(--radius-sm);
   }
 
   .message.assistant {
@@ -188,10 +188,10 @@
   .role-label {
     font-weight: 700;
     font-size: 13px;
-    letter-spacing: 1.5px;
-    text-transform: uppercase;
+    letter-spacing: var(--ht-label-spacing);
+    text-transform: var(--ht-label-transform);
     color: var(--accent-secondary);
-    text-shadow: 0 0 8px rgba(0, 255, 136, 0.3);
+    text-shadow: var(--shadow-glow-sm);
   }
 
   .streaming-indicator {
@@ -202,9 +202,9 @@
   .dot {
     width: 4px;
     height: 4px;
-    border-radius: 0;
+    border-radius: var(--radius-sm);
     background: var(--accent-primary);
-    box-shadow: 0 0 4px rgba(0, 180, 255, 0.4);
+    box-shadow: var(--shadow-glow-sm);
     animation: hudPulse 1.2s infinite linear;
   }
   .dot:nth-child(1) {
@@ -226,7 +226,7 @@
     50% {
       opacity: 1;
       transform: scale(1);
-      box-shadow: 0 0 8px rgba(0, 180, 255, 0.6);
+      box-shadow: var(--shadow-glow);
     }
   }
 
@@ -248,7 +248,7 @@
     width: 100%;
     height: 3px;
     margin-top: 8px;
-    border-radius: 0;
+    border-radius: var(--radius-sm);
     background: linear-gradient(
       in oklab 90deg,
       oklch(var(--rainbow-l) 0.2 0),

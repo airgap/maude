@@ -9,16 +9,49 @@
   --font-size: 14px;
   --font-family: 'Share Tech Mono', 'JetBrains Mono', 'Fira Code', monospace;
   --font-family-sans: 'Rajdhani', 'Segoe UI', 'Roboto Condensed', sans-serif;
-  --radius: 2px;
-  --radius-sm: 1px;
-  --radius-lg: 3px;
-  --radius-xl: 4px;
-  --transition: 150ms linear;
-  --transition-slow: 300ms linear;
   --sidebar-width: 280px;
   --topbar-height: 48px;
   --statusbar-height: 28px;
   --input-min-height: 80px;
+
+  /* Hypertheme defaults (tech) — overridden by JS via applyHypertheme() */
+  --ht-radius: 2px;
+  --ht-radius-sm: 1px;
+  --ht-radius-lg: 3px;
+  --ht-radius-xl: 4px;
+  --ht-label-transform: uppercase;
+  --ht-label-spacing: 1.5px;
+  --ht-brand-spacing: 3px;
+  --ht-brand-transform: uppercase;
+  --ht-transition-speed: 150ms;
+  --ht-hover-scale: 1;
+  --ht-overlay: grid;
+  --ht-topbar-accent: scanlines;
+  /* Structural personality */
+  --ht-border-style: solid;
+  --ht-border-width: 1px;
+  --ht-msg-border-width: 2px;
+  --ht-msg-border-style: solid;
+  --ht-msg-padding: 16px 28px;
+  --ht-card-border-width: 1px;
+  --ht-card-border-style: solid;
+  --ht-input-border-width: 1px;
+  --ht-input-border-style: solid;
+  --ht-input-padding: 12px 16px;
+  --ht-badge-border-style: solid;
+  --ht-separator: 1px solid var(--border-primary);
+  --ht-item-padding: 10px 12px;
+  --ht-item-indicator: 2px;
+  --ht-prose-heading-weight: 700;
+  --ht-body-weight: 500;
+
+  /* Derive base vars from hypertheme vars so everything responds */
+  --radius: var(--ht-radius);
+  --radius-sm: var(--ht-radius-sm);
+  --radius-lg: var(--ht-radius-lg);
+  --radius-xl: var(--ht-radius-xl);
+  --transition: var(--ht-transition-speed) linear;
+  --transition-slow: calc(var(--ht-transition-speed) * 2) linear;
 }
 
 /* ---- DARK (default) ---- */
@@ -1250,7 +1283,7 @@ body {
   overflow: hidden;
   font-family: var(--font-family-sans);
   font-size: var(--font-size);
-  font-weight: 500;
+  font-weight: var(--ht-body-weight);
   color: var(--text-primary);
   background: var(--bg-primary);
   -webkit-font-smoothing: antialiased;
@@ -1327,10 +1360,10 @@ textarea,
 select {
   font-family: var(--font-family-sans);
   font-size: var(--font-size);
-  font-weight: 500;
+  font-weight: var(--ht-body-weight);
   color: var(--text-primary);
   background: var(--bg-input);
-  border: 1px solid var(--border-primary);
+  border: var(--ht-input-border-width) var(--ht-input-border-style) var(--border-primary);
   border-radius: var(--radius-sm);
   padding: 8px 12px;
   letter-spacing: 0.3px;
@@ -1448,4 +1481,424 @@ select:focus {
   50% {
     box-shadow: var(--shadow-glow);
   }
+}
+
+/* ============================================
+   HYPERTHEME KEYFRAMES
+   Overlay & idle animations per visual style.
+   ============================================ */
+
+/* Arcane: slow rotation for runic sigil overlay */
+@keyframes runeRotate {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+/* Arcane: shimmer sweep — diagonal highlight */
+@keyframes shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+/* Arcane: glow pulse for borders */
+@keyframes glowPulse {
+  0%,
+  100% {
+    box-shadow: 0 0 8px rgba(139, 92, 246, 0.1);
+  }
+  50% {
+    box-shadow:
+      0 0 20px rgba(139, 92, 246, 0.25),
+      0 0 40px rgba(139, 92, 246, 0.08);
+  }
+}
+/* Arcane: floating effect */
+@keyframes arcaneFloat {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-4px);
+  }
+}
+/* Arcane: rune flicker for subtle text effects */
+@keyframes runeFlicker {
+  0%,
+  93%,
+  100% {
+    opacity: 1;
+  }
+  94% {
+    opacity: 0.6;
+  }
+  96% {
+    opacity: 0.9;
+  }
+  98% {
+    opacity: 0.5;
+  }
+}
+
+/* Ethereal: gentle drift for particle field */
+@keyframes particleDrift {
+  0%,
+  100% {
+    transform: translate(0, 0) scale(1);
+  }
+  25% {
+    transform: translate(2%, -1%) scale(1.02);
+  }
+  50% {
+    transform: translate(-1%, 2%) scale(1);
+  }
+  75% {
+    transform: translate(1%, 1%) scale(0.98);
+  }
+}
+
+/* Astral: twinkling starfield */
+@keyframes starTwinkle {
+  0%,
+  100% {
+    opacity: 0.6;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+/* Toast: tech slide-in (sharp) */
+@keyframes toastSlideTech {
+  from {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+/* Toast: arcane materialize (fade + scale) */
+@keyframes toastMaterialize {
+  from {
+    transform: scale(0.9);
+    opacity: 0;
+    filter: blur(4px);
+  }
+  to {
+    transform: scale(1);
+    opacity: 1;
+    filter: blur(0);
+  }
+}
+
+/* Toast: ethereal float-up */
+@keyframes toastFloat {
+  from {
+    transform: translateY(20px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+/* Toast: study gentle unfold */
+@keyframes toastUnfold {
+  from {
+    transform: scaleY(0.8);
+    opacity: 0;
+    transform-origin: top;
+  }
+  to {
+    transform: scaleY(1);
+    opacity: 1;
+    transform-origin: top;
+  }
+}
+
+/* Toast: astral phase-in */
+@keyframes toastPhaseIn {
+  0% {
+    opacity: 0;
+    transform: translateY(-10px) scale(0.95);
+  }
+  60% {
+    opacity: 1;
+    transform: translateY(2px) scale(1.01);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+/* Scrollbar thumb radius per hypertheme */
+[data-hypertheme='tech'] ::-webkit-scrollbar-thumb {
+  border-radius: 0;
+}
+[data-hypertheme='arcane'] ::-webkit-scrollbar-thumb {
+  border-radius: 2px;
+}
+[data-hypertheme='ethereal'] ::-webkit-scrollbar-thumb {
+  border-radius: 4px;
+}
+[data-hypertheme='study'] ::-webkit-scrollbar-thumb {
+  border-radius: 3px;
+}
+[data-hypertheme='astral'] ::-webkit-scrollbar-thumb {
+  border-radius: 2px;
+}
+
+/* ============================================
+   HYPERTHEME ELEMENT STYLES
+   Each hypertheme is a radically different UI.
+   ============================================ */
+
+/* ──────────── TECH ─────────────────────────────
+   Military HUD. Razor edges. Scanline tension.
+   Everything uppercase, clipped, precise.        */
+
+[data-hypertheme='tech'] :focus-visible {
+  outline: 1px solid var(--border-focus);
+  outline-offset: 1px;
+}
+[data-hypertheme='tech'] code {
+  border-left: 2px solid var(--accent-primary);
+}
+[data-hypertheme='tech'] pre {
+  border-left: 3px solid var(--accent-primary);
+  border-top: none;
+  border-right: none;
+  border-bottom: none;
+}
+[data-hypertheme='tech'] blockquote {
+  border-left-width: 3px;
+  border-left-style: solid;
+}
+
+/* ──────────── ARCANE ───────────────────────────
+   Mystical grimoire. Ornate double borders. Runes.
+   Deep purple, cyan glow, sigil canvas overlay.
+   Vignette, grain texture, glow-pulse animations.  */
+
+[data-hypertheme='arcane'] body {
+  letter-spacing: 0.5px;
+  line-height: 1.7;
+}
+[data-hypertheme='arcane'] input,
+[data-hypertheme='arcane'] textarea,
+[data-hypertheme='arcane'] select {
+  border-width: 2px;
+  border-style: solid;
+  padding: var(--ht-input-padding);
+  background-image: linear-gradient(0deg, rgba(139, 92, 246, 0.03), transparent 40%);
+}
+[data-hypertheme='arcane'] input:focus,
+[data-hypertheme='arcane'] textarea:focus,
+[data-hypertheme='arcane'] select:focus {
+  box-shadow:
+    0 0 12px rgba(139, 92, 246, 0.2),
+    inset 0 0 12px rgba(139, 92, 246, 0.04);
+  animation: glowPulse 3s ease-in-out infinite;
+}
+[data-hypertheme='arcane'] code {
+  border: 1px dashed var(--border-primary);
+  background-image: linear-gradient(0deg, rgba(139, 92, 246, 0.03), transparent);
+}
+[data-hypertheme='arcane'] pre {
+  border: 3px double var(--border-primary);
+}
+[data-hypertheme='arcane'] :focus-visible {
+  outline: 1px dashed var(--border-focus);
+  outline-offset: 3px;
+}
+[data-hypertheme='arcane'] ::selection {
+  background: rgba(139, 92, 246, 0.35);
+  color: #f0e6ff;
+}
+[data-hypertheme='arcane'] hr {
+  border: none;
+  border-top: 3px double var(--border-primary);
+}
+/* Arcane: purple glow on hover for interactive elements */
+[data-hypertheme='arcane'] button:hover,
+[data-hypertheme='arcane'] a:hover {
+  text-shadow: 0 0 10px rgba(167, 139, 250, 0.4);
+}
+/* Arcane: vignette overlay — darkens edges */
+[data-hypertheme='arcane'] body::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 9999;
+  background: radial-gradient(ellipse at 50% 50%, transparent 60%, rgba(0, 0, 0, 0.25) 100%);
+}
+/* Arcane: noise grain overlay for atmosphere */
+[data-hypertheme='arcane'] body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 9998;
+  opacity: 0.025;
+  mix-blend-mode: overlay;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  background-size: 200px 200px;
+}
+
+/* ──────────── ETHEREAL ─────────────────────────
+   Dreamy, soft, floating. Pill shapes everywhere.
+   No hard borders on messages — just glow halos.
+   Everything lifted, blurred, iridescent.         */
+
+[data-hypertheme='ethereal'] body {
+  letter-spacing: 0.15px;
+  line-height: 1.8;
+}
+[data-hypertheme='ethereal'] input,
+[data-hypertheme='ethereal'] textarea,
+[data-hypertheme='ethereal'] select {
+  border-radius: var(--radius-lg);
+  padding: var(--ht-input-padding);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+}
+[data-hypertheme='ethereal'] input:focus,
+[data-hypertheme='ethereal'] textarea:focus,
+[data-hypertheme='ethereal'] select:focus {
+  box-shadow:
+    0 0 0 3px rgba(160, 120, 240, 0.12),
+    0 4px 16px rgba(0, 0, 0, 0.15),
+    0 0 20px rgba(160, 120, 240, 0.08);
+}
+[data-hypertheme='ethereal'] code {
+  border: none;
+  box-shadow: inset 0 0 0 1px var(--border-secondary);
+  border-radius: var(--radius);
+}
+[data-hypertheme='ethereal'] pre {
+  border: none;
+  box-shadow:
+    inset 0 0 0 1px var(--border-secondary),
+    0 4px 20px rgba(0, 0, 0, 0.2);
+  border-radius: var(--radius-lg);
+}
+[data-hypertheme='ethereal'] :focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(160, 120, 240, 0.25);
+}
+[data-hypertheme='ethereal'] ::selection {
+  background: rgba(160, 120, 240, 0.3);
+  color: #fff;
+}
+[data-hypertheme='ethereal'] hr {
+  border: none;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--border-primary), transparent);
+}
+[data-hypertheme='ethereal'] button {
+  border-radius: var(--radius);
+}
+
+/* ──────────── STUDY ────────────────────────────
+   Leather-bound book. Thick page borders.
+   Inset embossed panels. Ruled-paper lines.
+   Heavy, warm, tactile.                          */
+
+[data-hypertheme='study'] body {
+  letter-spacing: 0.05px;
+  line-height: 1.8;
+}
+[data-hypertheme='study'] input,
+[data-hypertheme='study'] textarea,
+[data-hypertheme='study'] select {
+  border-width: 2px;
+  padding: var(--ht-input-padding);
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.15);
+}
+[data-hypertheme='study'] input:focus,
+[data-hypertheme='study'] textarea:focus,
+[data-hypertheme='study'] select:focus {
+  box-shadow:
+    inset 0 2px 4px rgba(0, 0, 0, 0.15),
+    0 0 0 2px rgba(218, 165, 50, 0.2);
+}
+[data-hypertheme='study'] code {
+  border: 2px solid var(--border-primary);
+  font-style: italic;
+}
+[data-hypertheme='study'] pre {
+  border: 2px solid var(--border-primary);
+  box-shadow: inset 0 2px 8px rgba(0, 0, 0, 0.2);
+  background-image: repeating-linear-gradient(
+    0deg,
+    transparent,
+    transparent 27px,
+    rgba(180, 130, 60, 0.04) 27px,
+    rgba(180, 130, 60, 0.04) 28px
+  );
+}
+[data-hypertheme='study'] :focus-visible {
+  outline: 2px solid var(--border-focus);
+  outline-offset: 2px;
+}
+[data-hypertheme='study'] ::selection {
+  background: rgba(218, 165, 50, 0.3);
+}
+[data-hypertheme='study'] hr {
+  border: none;
+  border-top: 2px solid var(--border-primary);
+  margin: 24px 0;
+}
+
+/* ──────────── ASTRAL ──────────────────────────
+   Deep space observatory. Thin luminous borders.
+   Wide letter-spacing. Geometric precision.
+   Slow, deliberate transitions. Cool serenity.   */
+
+[data-hypertheme='astral'] body {
+  letter-spacing: 0.4px;
+  line-height: 1.7;
+}
+[data-hypertheme='astral'] input,
+[data-hypertheme='astral'] textarea,
+[data-hypertheme='astral'] select {
+  padding: var(--ht-input-padding);
+}
+[data-hypertheme='astral'] input:focus,
+[data-hypertheme='astral'] textarea:focus,
+[data-hypertheme='astral'] select:focus {
+  box-shadow:
+    0 0 0 1px var(--border-focus),
+    0 0 15px rgba(140, 160, 220, 0.1);
+}
+[data-hypertheme='astral'] code {
+  border: 1px solid var(--border-primary);
+  letter-spacing: 0.5px;
+}
+[data-hypertheme='astral'] pre {
+  border: 1px solid var(--border-primary);
+  position: relative;
+}
+[data-hypertheme='astral'] :focus-visible {
+  outline: 1px solid var(--border-focus);
+  outline-offset: 3px;
+}
+[data-hypertheme='astral'] ::selection {
+  background: rgba(140, 160, 220, 0.3);
+}
+[data-hypertheme='astral'] hr {
+  border: none;
+  height: 1px;
+  background: var(--border-primary);
 }

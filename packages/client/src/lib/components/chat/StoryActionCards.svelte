@@ -195,8 +195,8 @@
   .actions-label {
     font-size: 10px;
     font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.8px;
+    text-transform: var(--ht-label-transform);
+    letter-spacing: var(--ht-label-spacing);
     color: var(--text-tertiary);
   }
   .btn-apply-all {
@@ -278,7 +278,7 @@
     transition: all var(--transition);
   }
   .btn-apply:hover:not(:disabled) {
-    background: rgba(0, 180, 255, 0.1);
+    background: var(--bg-active);
   }
   .btn-apply:disabled {
     opacity: 0.4;

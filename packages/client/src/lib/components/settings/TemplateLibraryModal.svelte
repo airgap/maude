@@ -669,7 +669,7 @@
   }
   .card-category[data-cat='feature'] {
     color: var(--accent-primary);
-    background: rgba(0, 180, 255, 0.1);
+    background: var(--bg-active);
   }
   .card-category[data-cat='bug'] {
     color: var(--accent-error);
@@ -755,7 +755,7 @@
   }
   .priority-tag[data-priority='medium'] {
     color: var(--accent-primary);
-    background: rgba(0, 180, 255, 0.1);
+    background: var(--bg-active);
   }
   .priority-tag[data-priority='low'] {
     color: var(--text-tertiary);
@@ -1020,7 +1020,7 @@
     cursor: pointer;
   }
   .btn-create-new:hover {
-    background: rgba(0, 180, 255, 0.1);
+    background: var(--bg-active);
   }
   .no-prd-hint {
     font-size: 11px;

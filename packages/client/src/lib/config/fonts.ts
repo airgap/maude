@@ -204,6 +204,13 @@ export const SANS_FONTS: FontOption[] = [
     category: 'sans',
   },
   {
+    id: 'crimson-pro',
+    label: 'Crimson Pro',
+    family: "'Crimson Pro', Georgia, serif",
+    googleFont: 'Crimson+Pro:wght@400;500;600;700',
+    category: 'sans',
+  },
+  {
     id: 'system-sans',
     label: 'System Sans',
     family: "-apple-system, 'Segoe UI', 'Helvetica Neue', Arial, sans-serif",

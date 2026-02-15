@@ -201,8 +201,8 @@
     font-size: 11px;
     font-weight: 600;
     color: var(--text-secondary);
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
+    text-transform: var(--ht-label-transform);
+    letter-spacing: var(--ht-label-spacing);
   }
 
   .conn-dot {
@@ -214,7 +214,7 @@
   }
   .conn-dot.connected {
     background: var(--accent-secondary, #00ff88);
-    box-shadow: 0 0 6px rgba(0, 255, 136, 0.4);
+    box-shadow: var(--shadow-glow-sm);
   }
 
   .terminal-close {

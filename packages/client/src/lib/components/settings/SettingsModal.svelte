@@ -5,6 +5,7 @@
   import { onMount } from 'svelte';
   import type { ThemeId, CliProvider } from '@maude/shared';
   import { MONO_FONTS, SANS_FONTS, findFont } from '$lib/config/fonts';
+  import { HYPERTHEMES } from '$lib/config/hyperthemes';
 
   const cliProviders: { id: CliProvider; label: string; desc: string }[] = [
     { id: 'claude', label: 'Claude Code', desc: 'Anthropic Claude CLI' },
@@ -353,6 +354,23 @@
             </label>
           </div>
         {:else if activeTab === 'appearance'}
+          <div class="setting-group">
+            <label class="setting-label">Visual Style</label>
+            <div class="hypertheme-grid">
+              {#each HYPERTHEMES as ht}
+                <button
+                  class="hypertheme-option"
+                  class:active={settingsStore.hypertheme === ht.id}
+                  onclick={() => settingsStore.setHypertheme(ht.id)}
+                >
+                  <span class="ht-icon">{ht.icon}</span>
+                  <span class="ht-label">{ht.label}</span>
+                  <span class="ht-desc">{ht.description}</span>
+                </button>
+              {/each}
+            </div>
+          </div>
+
           <div class="setting-group">
             <label class="setting-label">Theme</label>
             <div class="theme-grid">
@@ -849,6 +867,47 @@
     transform: translateX(18px);
   }
 
+  /* Hypertheme grid */
+  .hypertheme-grid {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 8px;
+  }
+  .hypertheme-option {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    padding: 10px 6px;
+    border: 2px solid var(--border-secondary);
+    border-radius: var(--radius);
+    transition: all var(--transition);
+    text-align: center;
+  }
+  .hypertheme-option:hover {
+    border-color: var(--border-primary);
+    background: var(--bg-hover);
+  }
+  .hypertheme-option.active {
+    border-color: var(--accent-primary);
+    background: var(--bg-active);
+  }
+  .ht-icon {
+    font-size: 20px;
+    line-height: 1;
+  }
+  .ht-label {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: var(--ht-label-spacing);
+    color: var(--text-primary);
+  }
+  .ht-desc {
+    font-size: 9px;
+    color: var(--text-tertiary);
+    line-height: 1.2;
+  }
+
   /* Theme grid */
   .theme-grid {
     display: grid;
@@ -1035,7 +1094,7 @@
   .snippet-lang {
     font-size: 13px;
     font-weight: 600;
-    text-transform: uppercase;
+    text-transform: var(--ht-label-transform);
     color: var(--text-primary);
     min-width: 90px;
   }
@@ -1146,8 +1205,8 @@
     font-weight: 700;
     padding: 1px 8px;
     border-radius: var(--radius-sm);
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
+    text-transform: var(--ht-label-transform);
+    letter-spacing: var(--ht-label-spacing);
     margin-left: auto;
   }
   .api-key-badge.configured {

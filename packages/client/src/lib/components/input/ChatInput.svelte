@@ -588,7 +588,7 @@
     color: var(--text-primary);
   }
   .context-chip.active {
-    background: rgba(0, 180, 255, 0.15);
+    background: var(--bg-active);
     border-color: var(--accent-primary);
     color: var(--accent-primary);
     font-weight: 600;
@@ -599,15 +599,15 @@
     align-items: flex-end;
     gap: 10px;
     background: var(--bg-input);
-    border: 1px solid var(--border-primary);
+    border: var(--ht-input-border-width) var(--ht-input-border-style) var(--border-primary);
     border-radius: var(--radius);
-    padding: 12px 16px;
+    padding: var(--ht-input-padding);
     transition: all var(--transition);
     cursor: text;
   }
   .input-wrapper:focus-within {
     border-color: var(--accent-primary);
-    box-shadow: 0 0 10px rgba(0, 180, 255, 0.15);
+    box-shadow: var(--shadow-glow-sm);
   }
   .input-wrapper.plan-active {
     border-color: var(--accent-warning);
@@ -616,6 +616,64 @@
   .input-wrapper.plan-active:focus-within {
     border-color: var(--accent-warning);
     box-shadow: 0 0 14px rgba(255, 170, 0, 0.25);
+  }
+
+  /* ── Hypertheme input variants ── */
+
+  /* Ethereal: floating pill, soft glow ring */
+  :global([data-hypertheme='ethereal']) .input-wrapper {
+    border-radius: var(--radius-xl);
+    border: 1px solid var(--border-secondary);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+  }
+  :global([data-hypertheme='ethereal']) .input-wrapper:focus-within {
+    border-color: transparent;
+    box-shadow:
+      0 0 0 2px rgba(160, 120, 240, 0.2),
+      0 4px 20px rgba(0, 0, 0, 0.2),
+      0 0 30px rgba(160, 120, 240, 0.06);
+  }
+
+  /* Arcane: double border, inner glow */
+  :global([data-hypertheme='arcane']) .input-wrapper {
+    border: 3px double var(--border-primary);
+    background-image: linear-gradient(0deg, rgba(139, 92, 246, 0.03), transparent 30%);
+  }
+  :global([data-hypertheme='arcane']) .input-wrapper:focus-within {
+    border-color: var(--accent-primary);
+    box-shadow:
+      inset 0 0 15px rgba(139, 92, 246, 0.06),
+      0 0 10px rgba(139, 92, 246, 0.15);
+  }
+
+  /* Study: thick inset border, book-page */
+  :global([data-hypertheme='study']) .input-wrapper {
+    border: 2px solid var(--border-primary);
+    box-shadow: inset 0 2px 6px rgba(0, 0, 0, 0.15);
+    background-image: repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 27px,
+      rgba(180, 130, 60, 0.03) 27px,
+      rgba(180, 130, 60, 0.03) 28px
+    );
+  }
+  :global([data-hypertheme='study']) .input-wrapper:focus-within {
+    border-color: var(--accent-primary);
+    box-shadow:
+      inset 0 2px 6px rgba(0, 0, 0, 0.15),
+      0 0 0 2px rgba(218, 165, 50, 0.15);
+  }
+
+  /* Astral: thin border, wide glow ring on focus */
+  :global([data-hypertheme='astral']) .input-wrapper {
+    border: 1px solid var(--border-secondary);
+  }
+  :global([data-hypertheme='astral']) .input-wrapper:focus-within {
+    border-color: var(--accent-primary);
+    box-shadow:
+      0 0 0 1px var(--border-focus),
+      0 0 20px rgba(140, 160, 220, 0.08);
   }
 
   textarea {
@@ -658,11 +716,11 @@
     font-size: 10px;
     font-weight: 700;
     padding: 2px 10px;
-    border-radius: 0;
+    border-radius: var(--radius-sm);
     background: var(--accent-warning);
     color: var(--text-on-accent);
-    letter-spacing: 1.5px;
-    text-transform: uppercase;
+    letter-spacing: var(--ht-label-spacing);
+    text-transform: var(--ht-label-transform);
   }
 
   .btn-action {
@@ -686,8 +744,8 @@
   .btn-action.send:hover:not(:disabled) {
     color: var(--accent-primary);
     border-color: var(--accent-primary);
-    background: rgba(0, 180, 255, 0.08);
-    box-shadow: 0 0 10px rgba(0, 180, 255, 0.2);
+    background: var(--bg-hover);
+    box-shadow: var(--shadow-glow-sm);
   }
 
   .btn-action.cancel {
@@ -695,7 +753,7 @@
   }
   .btn-action.cancel:hover {
     border-color: var(--accent-error);
-    background: rgba(255, 51, 68, 0.1);
-    box-shadow: 0 0 10px rgba(255, 51, 68, 0.2);
+    background: var(--bg-hover);
+    box-shadow: var(--shadow-glow-sm);
   }
 </style>

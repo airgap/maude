@@ -118,25 +118,48 @@
     justify-content: space-between;
     padding: 0 16px;
     background: var(--bg-glass);
-    border-bottom: 1px solid var(--border-primary);
+    border-bottom: var(--ht-separator);
     gap: 12px;
     flex-shrink: 0;
     z-index: 10;
     position: relative;
   }
-  /* Scanline overlay */
+  /* Topbar accent overlay — varies per hypertheme */
   .topbar::after {
     content: '';
     position: absolute;
     inset: 0;
+    /* Tech default: scanlines */
     background: repeating-linear-gradient(
       0deg,
       transparent,
       transparent 2px,
-      rgba(0, 180, 255, 0.015) 2px,
-      rgba(0, 180, 255, 0.015) 4px
+      var(--border-secondary) 2px,
+      var(--border-secondary) 4px
     );
     pointer-events: none;
+  }
+
+  :global([data-hypertheme='arcane']) .topbar::after {
+    background: linear-gradient(180deg, transparent 90%, var(--border-primary) 100%);
+  }
+
+  :global([data-hypertheme='ethereal']) .topbar::after {
+    background: linear-gradient(180deg, transparent 92%, var(--border-secondary) 100%);
+  }
+
+  :global([data-hypertheme='study']) .topbar::after {
+    background: none;
+    border-bottom: 1px double var(--border-primary);
+  }
+
+  :global([data-hypertheme='astral']) .topbar::after {
+    background:
+      radial-gradient(0.5px 0.5px at 10% 50%, var(--border-primary), transparent),
+      radial-gradient(0.5px 0.5px at 30% 30%, var(--border-secondary), transparent),
+      radial-gradient(0.5px 0.5px at 50% 70%, var(--border-primary), transparent),
+      radial-gradient(0.5px 0.5px at 70% 40%, var(--border-secondary), transparent),
+      radial-gradient(0.5px 0.5px at 90% 60%, var(--border-primary), transparent);
   }
 
   .topbar-left,
@@ -155,20 +178,18 @@
   .brand {
     font-weight: 700;
     font-size: 17px;
-    letter-spacing: 3px;
-    text-transform: uppercase;
+    letter-spacing: var(--ht-brand-spacing);
+    text-transform: var(--ht-brand-transform);
     color: var(--accent-primary);
-    text-shadow:
-      0 0 10px rgba(0, 180, 255, 0.4),
-      0 0 20px rgba(0, 180, 255, 0.1);
+    text-shadow: var(--shadow-glow-sm);
   }
 
   .conv-title {
     color: var(--text-secondary);
     font-size: 13px;
     font-weight: 600;
-    letter-spacing: 1px;
-    text-transform: uppercase;
+    letter-spacing: var(--ht-label-spacing);
+    text-transform: var(--ht-label-transform);
   }
 
   .icon-btn {
@@ -193,14 +214,14 @@
     padding: 5px 10px;
     font-size: 12px;
     font-weight: 600;
-    letter-spacing: 0.5px;
+    letter-spacing: var(--ht-label-spacing);
     border-radius: var(--radius-sm);
     background: var(--bg-tertiary);
     border: 1px solid var(--border-primary);
     color: var(--accent-primary);
     cursor: pointer;
     transition: all var(--transition);
-    text-transform: uppercase;
+    text-transform: var(--ht-label-transform);
   }
   .model-select:hover {
     border-color: var(--accent-primary);
@@ -214,8 +235,8 @@
     border-radius: var(--radius);
     background: var(--accent-warning);
     color: var(--text-on-accent);
-    letter-spacing: 1.5px;
-    text-transform: uppercase;
+    letter-spacing: var(--ht-label-spacing);
+    text-transform: var(--ht-label-transform);
     animation: hudBlink 3s infinite;
   }
 
@@ -237,15 +258,15 @@
   }
   .plan-toggle.active {
     color: var(--accent-warning);
-    background: rgba(255, 154, 0, 0.1);
-    border-color: rgba(255, 154, 0, 0.3);
+    background: var(--bg-hover);
+    border-color: var(--border-primary);
   }
 
   .context-meter {
     width: 64px;
     height: 3px;
     background: var(--bg-tertiary);
-    border-radius: 0;
+    border-radius: var(--radius-sm);
     overflow: hidden;
     position: relative;
     border: 1px solid var(--border-secondary);
@@ -253,8 +274,8 @@
   .context-meter-fill {
     height: 100%;
     background: var(--accent-primary);
-    border-radius: 0;
+    border-radius: var(--radius-sm);
     transition: width 500ms linear;
-    box-shadow: 0 0 6px rgba(0, 180, 255, 0.4);
+    box-shadow: var(--shadow-glow-sm);
   }
 </style>

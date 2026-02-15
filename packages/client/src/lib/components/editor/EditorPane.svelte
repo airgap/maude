@@ -95,7 +95,7 @@
   .terminal-resize-handle:hover,
   .resizing-terminal .terminal-resize-handle {
     background: var(--accent-primary);
-    box-shadow: 0 0 8px rgba(0, 180, 255, 0.4);
+    box-shadow: var(--shadow-glow-sm);
   }
 
   .empty-state {

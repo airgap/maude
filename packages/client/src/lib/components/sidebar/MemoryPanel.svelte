@@ -311,8 +311,8 @@
     padding: 6px 8px;
     font-size: 10px;
     font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
+    text-transform: var(--ht-label-transform);
+    letter-spacing: var(--ht-label-spacing);
     color: var(--text-tertiary);
     background: var(--bg-tertiary);
     border: none;
@@ -363,8 +363,8 @@
     border: 1px solid var(--border-primary);
     color: var(--text-tertiary);
     cursor: pointer;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
+    text-transform: var(--ht-label-transform);
+    letter-spacing: var(--ht-label-spacing);
     transition: all var(--transition);
   }
   .filter-chip:hover {
@@ -374,7 +374,7 @@
   .filter-chip.active {
     color: var(--accent-primary);
     border-color: var(--accent-primary);
-    background: rgba(0, 180, 255, 0.08);
+    background: var(--bg-hover);
   }
   .add-btn {
     width: 22px;
@@ -436,8 +436,8 @@
     color: var(--bg-primary);
     border: none;
     font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
+    text-transform: var(--ht-label-transform);
+    letter-spacing: var(--ht-label-spacing);
     cursor: pointer;
   }
   .save-btn:hover {
@@ -470,8 +470,8 @@
   .pm-category {
     font-size: 9px;
     font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
+    text-transform: var(--ht-label-transform);
+    letter-spacing: var(--ht-label-spacing);
   }
   .pm-meta {
     display: flex;
@@ -481,11 +481,11 @@
   .pm-source {
     font-size: 8px;
     padding: 0 4px;
-    background: rgba(0, 180, 255, 0.1);
-    border: 1px solid rgba(0, 180, 255, 0.2);
+    background: var(--bg-active);
+    border: 1px solid var(--border-primary);
     color: var(--accent-primary);
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
+    text-transform: var(--ht-label-transform);
+    letter-spacing: var(--ht-label-spacing);
   }
   .pm-confidence {
     font-size: 9px;

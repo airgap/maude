@@ -29,6 +29,12 @@ type ModalId =
   | null;
 type FocusedPane = 'chat' | 'editor';
 
+/** Callback for sidebar layout integration (avoids circular import) */
+let _onSidebarTabChange: ((tab: SidebarTab) => void) | null = null;
+export function onSidebarTabChange(cb: (tab: SidebarTab) => void) {
+  _onSidebarTabChange = cb;
+}
+
 function createUIStore() {
   let sidebarOpen = $state(true);
   let sidebarTab = $state<SidebarTab>('conversations');
@@ -78,6 +84,9 @@ function createUIStore() {
     setSidebarTab(tab: SidebarTab) {
       sidebarTab = tab;
       sidebarOpen = true;
+      // Notify the layout store to focus the tab wherever it lives.
+      // Uses a callback to avoid circular import (sidebarLayout imports SidebarTab type from here).
+      _onSidebarTabChange?.(tab);
     },
     setSidebarWidth(w: number) {
       sidebarWidth = Math.max(200, Math.min(500, w));

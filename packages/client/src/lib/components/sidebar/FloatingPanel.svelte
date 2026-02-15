@@ -1,6 +1,5 @@
 <script lang="ts" module>
   // Shared z-index counter across all FloatingPanel instances.
-  // Incrementing this on click ensures the clicked panel appears on top.
   let zCounter = 0;
   export function nextZIndex(): number {
     return ++zCounter;
@@ -9,12 +8,10 @@
 
 <script lang="ts">
   import type { SidebarTab } from '$lib/stores/ui.svelte';
-  import { uiStore } from '$lib/stores/ui.svelte';
   import { sidebarLayoutStore } from '$lib/stores/sidebarLayout.svelte';
+  import { panelDragStore } from '$lib/stores/panelDrag.svelte';
   import { getTabDef } from '$lib/config/sidebarTabs';
   import SidebarTabContent from './SidebarTabContent.svelte';
-
-  import type { PanelDockMode } from '$lib/stores/sidebarLayout.svelte';
 
   interface Props {
     tabId: SidebarTab;
@@ -22,15 +19,14 @@
     y: number;
     width: number;
     height: number;
-    docked: PanelDockMode;
   }
 
-  let { tabId, x, y, width, height, docked }: Props = $props();
+  let { tabId, x, y, width, height }: Props = $props();
 
   const MIN_WIDTH = 200;
   const MIN_HEIGHT = 200;
   const BASE_Z_INDEX = 800;
-  const SNAP_THRESHOLD = 40; // px from right edge to trigger snap hint
+  const SNAP_THRESHOLD = 40;
 
   const tabDef = $derived(getTabDef(tabId));
 
@@ -43,6 +39,7 @@
 
   // --- Drag state ---
   let dragging = $state(false);
+  let crossDragging = $state(false);
   let snapEdge = $state<'left' | 'right' | null>(null);
   let dragStartX = 0;
   let dragStartY = 0;
@@ -51,11 +48,11 @@
 
   function handleDragStart(e: MouseEvent) {
     if (e.button !== 0) return;
-    if (docked === 'left' || docked === 'right') return; // edge-docked panels aren't draggable
     e.preventDefault();
     bringToFront();
 
     dragging = true;
+    crossDragging = false;
     snapEdge = null;
     dragStartX = e.clientX;
     dragStartY = e.clientY;
@@ -69,15 +66,25 @@
   function handleDragMove(e: MouseEvent) {
     if (!dragging) return;
 
-    let newX = dragStartPanelX + (e.clientX - dragStartX);
-    let newY = dragStartPanelY + (e.clientY - dragStartY);
+    const deltaX = e.clientX - dragStartX;
+    const deltaY = e.clientY - dragStartY;
 
-    // Clamp to viewport bounds
+    let newX = dragStartPanelX + deltaX;
+    let newY = dragStartPanelY + deltaY;
+
     newX = Math.max(0, Math.min(window.innerWidth - width, newX));
     newY = Math.max(0, Math.min(window.innerHeight - height, newY));
 
     x = newX;
     y = newY;
+
+    // Start shared drag so drop zones appear in columns
+    if (!crossDragging) {
+      crossDragging = true;
+      panelDragStore.startDrag(tabId, { type: 'floating' }, e.clientX, e.clientY);
+    } else {
+      panelDragStore.updatePosition(e.clientX, e.clientY);
+    }
 
     // Detect snap-to-edge hints
     if (newX <= SNAP_THRESHOLD) {
@@ -94,18 +101,43 @@
     document.removeEventListener('mousemove', handleDragMove);
     document.removeEventListener('mouseup', handleDragEnd);
 
-    // If released near an edge, dock there
-    if (snapEdge) {
-      const edge = snapEdge;
-      snapEdge = null;
-      sidebarLayoutStore.dockToEdge(tabId, edge);
-    } else {
-      sidebarLayoutStore.updatePanelPosition(tabId, x, y);
+    if (crossDragging) {
+      const result = panelDragStore.endDrag();
+      crossDragging = false;
+
+      if (result && result.target) {
+        const { target } = result;
+        if (target.type === 'tab-bar') {
+          sidebarLayoutStore.moveTabToGroup(
+            tabId,
+            target.column,
+            target.groupIndex,
+            target.insertIndex,
+          );
+        } else if (target.type === 'split') {
+          sidebarLayoutStore.createSplit(tabId, target.column, target.insertGroupAtIndex);
+        } else if (target.type === 'column') {
+          sidebarLayoutStore.addTabToColumn(tabId, target.column);
+        }
+        return;
+      }
+
+      // Fall back to snap-to-edge if no specific drop target
+      if (snapEdge) {
+        const edge = snapEdge;
+        snapEdge = null;
+        sidebarLayoutStore.dockFloatingTab(tabId, edge);
+        return;
+      }
     }
+
+    // Just moved the floating panel — update position
+    snapEdge = null;
+    sidebarLayoutStore.updatePanelPosition(tabId, x, y);
   }
 
   // --- Resize state ---
-  type ResizeDirection = 'e' | 's' | 'se' | 'w';
+  type ResizeDirection = 'e' | 's' | 'se';
   let resizing = $state(false);
   let resizeDir: ResizeDirection = 'se';
   let resizeStartX = 0;
@@ -132,16 +164,11 @@
 
   function handleResizeMove(e: MouseEvent) {
     if (!resizing) return;
-
     const deltaX = e.clientX - resizeStartX;
     const deltaY = e.clientY - resizeStartY;
 
     if (resizeDir === 'e' || resizeDir === 'se') {
       width = Math.max(MIN_WIDTH, resizeStartWidth + deltaX);
-    }
-    if (resizeDir === 'w') {
-      // Left-edge resize for right-docked panels: dragging left = wider
-      width = Math.max(MIN_WIDTH, resizeStartWidth - deltaX);
     }
     if (resizeDir === 's' || resizeDir === 'se') {
       height = Math.max(MIN_HEIGHT, resizeStartHeight + deltaY);
@@ -155,183 +182,110 @@
     sidebarLayoutStore.updatePanelSize(tabId, width, height);
   }
 
-  // --- Panel click (bring to front) ---
+  // --- Panel actions ---
   function handlePanelMouseDown() {
     bringToFront();
   }
 
-  // --- Dock button: returns panel to sidebar ---
-  function handleDock() {
-    sidebarLayoutStore.dockTab(tabId);
-    uiStore.setSidebarTab(tabId);
+  function handleDockToColumn(column: 'left' | 'right') {
+    sidebarLayoutStore.dockFloatingTab(tabId, column);
   }
 
-  // --- Edge-docking toggles ---
-  function handleUndock() {
-    sidebarLayoutStore.undockFromEdge(tabId);
-  }
-
-  function handleDockRight() {
-    sidebarLayoutStore.dockToRight(tabId);
-  }
-
-  function handleDockLeft() {
-    sidebarLayoutStore.dockToLeft(tabId);
+  function handleClose() {
+    sidebarLayoutStore.closeFloatingPanel(tabId);
   }
 </script>
 
-{#if docked === 'left' || docked === 'right'}
-  <!-- Edge-docked panel: rendered as a sidebar column -->
-  <div
-    class="docked-panel"
-    class:docked-left={docked === 'left'}
-    class:docked-right={docked === 'right'}
-    style="width: {width}px;"
-    onmousedown={handlePanelMouseDown}
-  >
-    <div class="title-bar">
-      <svg
-        class="title-icon"
-        width="14"
-        height="14"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        stroke-width="2"
-      >
-        <path d={tabDef.icon} />
-      </svg>
-      <span class="title-label">{tabDef.label}</span>
-      <button class="title-action" title="Undock from edge" onclick={handleUndock}>
-        <svg
-          width="12"
-          height="12"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="2"
-        >
-          <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6M15 3h6v6M10 14L21 3" />
-        </svg>
-      </button>
-      <button class="title-action" title="Dock panel back to sidebar" onclick={handleDock}>
-        <svg
-          width="12"
-          height="12"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="2"
-        >
-          <path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7" />
-        </svg>
-      </button>
-    </div>
-    <div class="panel-content">
-      <SidebarTabContent {tabId} />
-    </div>
-    <!-- Inward resize handle: right edge for left-docked, left edge for right-docked -->
-    <!-- svelte-ignore a11y_no_static_element_interactions -->
-    {#if docked === 'left'}
-      <div class="resize-handle resize-e-dock" onmousedown={(e) => handleResizeStart('e', e)}></div>
-    {:else}
-      <div class="resize-handle resize-w" onmousedown={(e) => handleResizeStart('w', e)}></div>
-    {/if}
-  </div>
-{:else}
-  <!-- Free-floating panel -->
+<!-- svelte-ignore a11y_no_static_element_interactions -->
+<div
+  class="floating-panel"
+  class:dragging
+  class:resizing
+  class:snap-left={snapEdge === 'left'}
+  class:snap-right={snapEdge === 'right'}
+  style="left: {x}px; top: {y}px; width: {width}px; height: {height}px; z-index: {zIndex};"
+  onmousedown={handlePanelMouseDown}
+>
   <!-- svelte-ignore a11y_no_static_element_interactions -->
-  <div
-    class="floating-panel"
-    class:dragging
-    class:resizing
-    class:snap-left={snapEdge === 'left'}
-    class:snap-right={snapEdge === 'right'}
-    style="left: {x}px; top: {y}px; width: {width}px; height: {height}px; z-index: {zIndex};"
-    onmousedown={handlePanelMouseDown}
-  >
-    <!-- svelte-ignore a11y_no_static_element_interactions -->
-    <div class="title-bar" onmousedown={handleDragStart}>
+  <div class="title-bar" onmousedown={handleDragStart}>
+    <svg
+      class="title-icon"
+      width="14"
+      height="14"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      stroke-width="2"
+    >
+      <path d={tabDef.icon} />
+    </svg>
+    <span class="title-label">{tabDef.label}</span>
+    <button
+      class="title-action"
+      title="Move to left column"
+      onclick={() => handleDockToColumn('left')}
+      onmousedown={(e) => e.stopPropagation()}
+    >
       <svg
-        class="title-icon"
-        width="14"
-        height="14"
+        width="12"
+        height="12"
         viewBox="0 0 24 24"
         fill="none"
         stroke="currentColor"
         stroke-width="2"
       >
-        <path d={tabDef.icon} />
+        <path d="M3 3h6a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H3M11 3h10v18H11z" />
       </svg>
-      <span class="title-label">{tabDef.label}</span>
-      <button
-        class="title-action"
-        title="Dock to left edge"
-        onclick={handleDockLeft}
-        onmousedown={(e) => e.stopPropagation()}
+    </button>
+    <button
+      class="title-action"
+      title="Move to right column"
+      onclick={() => handleDockToColumn('right')}
+      onmousedown={(e) => e.stopPropagation()}
+    >
+      <svg
+        width="12"
+        height="12"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
       >
-        <svg
-          width="12"
-          height="12"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="2"
-        >
-          <path d="M3 3h6a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H3M11 3h10v18H11z" />
-        </svg>
-      </button>
-      <button
-        class="title-action"
-        title="Dock to right edge"
-        onclick={handleDockRight}
-        onmousedown={(e) => e.stopPropagation()}
+        <path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4M3 3h12v18H3z" />
+      </svg>
+    </button>
+    <button
+      class="title-action"
+      title="Close panel"
+      onclick={handleClose}
+      onmousedown={(e) => e.stopPropagation()}
+    >
+      <svg
+        width="12"
+        height="12"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
       >
-        <svg
-          width="12"
-          height="12"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="2"
-        >
-          <path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4M3 3h12v18H3z" />
-        </svg>
-      </button>
-      <button
-        class="title-action"
-        title="Dock panel back to sidebar"
-        onclick={handleDock}
-        onmousedown={(e) => e.stopPropagation()}
-      >
-        <svg
-          width="12"
-          height="12"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="2"
-        >
-          <path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7" />
-        </svg>
-      </button>
-    </div>
-
-    <div class="panel-content">
-      <SidebarTabContent {tabId} />
-    </div>
-
-    <!-- svelte-ignore a11y_no_static_element_interactions -->
-    <div class="resize-handle resize-e" onmousedown={(e) => handleResizeStart('e', e)}></div>
-    <!-- svelte-ignore a11y_no_static_element_interactions -->
-    <div class="resize-handle resize-s" onmousedown={(e) => handleResizeStart('s', e)}></div>
-    <!-- svelte-ignore a11y_no_static_element_interactions -->
-    <div class="resize-handle resize-se" onmousedown={(e) => handleResizeStart('se', e)}></div>
+        <path d="M18 6L6 18M6 6l12 12" />
+      </svg>
+    </button>
   </div>
-{/if}
+
+  <div class="panel-content">
+    <SidebarTabContent {tabId} />
+  </div>
+
+  <!-- svelte-ignore a11y_no_static_element_interactions -->
+  <div class="resize-handle resize-e" onmousedown={(e) => handleResizeStart('e', e)}></div>
+  <!-- svelte-ignore a11y_no_static_element_interactions -->
+  <div class="resize-handle resize-s" onmousedown={(e) => handleResizeStart('s', e)}></div>
+  <!-- svelte-ignore a11y_no_static_element_interactions -->
+  <div class="resize-handle resize-se" onmousedown={(e) => handleResizeStart('se', e)}></div>
+</div>
 
 <style>
-  /* --- Free-floating panel --- */
   .floating-panel {
     position: fixed;
     display: flex;
@@ -339,7 +293,7 @@
     background: var(--bg-secondary);
     border: 1px solid var(--border-primary);
     box-shadow: var(--shadow-lg);
-    border-radius: 0;
+    border-radius: var(--radius);
     overflow: hidden;
   }
 
@@ -350,42 +304,18 @@
 
   .floating-panel.snap-left {
     border-left: 2px solid var(--accent-primary);
-    box-shadow:
-      var(--shadow-lg),
-      0 0 12px rgba(0, 180, 255, 0.3);
+    box-shadow: var(--shadow-lg), var(--shadow-glow-sm);
   }
 
   .floating-panel.snap-right {
     border-right: 2px solid var(--accent-primary);
-    box-shadow:
-      var(--shadow-lg),
-      0 0 12px rgba(0, 180, 255, 0.3);
+    box-shadow: var(--shadow-lg), var(--shadow-glow-sm);
   }
 
   .floating-panel.dragging .title-bar {
     cursor: grabbing;
   }
 
-  /* --- Edge-docked panel (left or right) --- */
-  .docked-panel {
-    display: flex;
-    flex-direction: column;
-    height: 100%;
-    flex-shrink: 0;
-    background: var(--bg-secondary);
-    overflow: hidden;
-    position: relative;
-  }
-
-  .docked-panel.docked-left {
-    border-right: 1px solid var(--border-primary);
-  }
-
-  .docked-panel.docked-right {
-    border-left: 1px solid var(--border-primary);
-  }
-
-  /* --- Shared title bar --- */
   .title-bar {
     display: flex;
     align-items: center;
@@ -397,10 +327,6 @@
     border-bottom: 1px solid var(--border-primary);
     min-height: 28px;
     user-select: none;
-  }
-
-  .docked-panel .title-bar {
-    cursor: default;
   }
 
   .title-icon {
@@ -435,7 +361,6 @@
     color: var(--accent-primary);
   }
 
-  /* Content area */
   .panel-content {
     flex: 1;
     overflow-y: auto;
@@ -443,7 +368,6 @@
     min-height: 0;
   }
 
-  /* Resize handles */
   .resize-handle {
     position: absolute;
   }
@@ -470,31 +394,5 @@
     width: 12px;
     height: 12px;
     cursor: nwse-resize;
-  }
-
-  /* Left-edge resize for right-docked panels */
-  .resize-w {
-    top: 0;
-    left: -3px;
-    width: 6px;
-    height: 100%;
-    cursor: ew-resize;
-  }
-  .resize-w:hover {
-    background: var(--accent-primary);
-    box-shadow: 0 0 8px rgba(0, 180, 255, 0.4);
-  }
-
-  /* Right-edge resize for left-docked panels */
-  .resize-e-dock {
-    top: 0;
-    right: -3px;
-    width: 6px;
-    height: 100%;
-    cursor: ew-resize;
-  }
-  .resize-e-dock:hover {
-    background: var(--accent-primary);
-    box-shadow: 0 0 8px rgba(0, 180, 255, 0.4);
   }
 </style>

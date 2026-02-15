@@ -142,26 +142,23 @@
   .empty-state h2 {
     font-size: 36px;
     font-weight: 700;
-    letter-spacing: 8px;
-    text-transform: uppercase;
+    letter-spacing: var(--ht-brand-spacing);
+    text-transform: var(--ht-brand-transform);
     color: var(--accent-primary);
-    text-shadow:
-      0 0 20px rgba(0, 180, 255, 0.4),
-      0 0 40px rgba(0, 180, 255, 0.1);
+    text-shadow: var(--shadow-glow);
   }
   .empty-state p {
     font-size: 15px;
     max-width: 420px;
     color: var(--text-secondary);
     line-height: 1.6;
-    letter-spacing: 0.5px;
+    letter-spacing: 0.2px;
     font-weight: 500;
   }
   .empty-icon {
     color: var(--accent-primary);
     opacity: 0.5;
-    filter: drop-shadow(0 0 12px rgba(0, 180, 255, 0.6))
-      drop-shadow(0 0 24px rgba(0, 180, 255, 0.3));
+    filter: drop-shadow(var(--shadow-glow));
   }
   .shortcuts {
     display: flex;
@@ -169,13 +166,13 @@
     font-size: 12px;
     margin-top: 12px;
     color: var(--text-secondary);
-    letter-spacing: 0.5px;
+    letter-spacing: var(--ht-label-spacing);
     font-weight: 600;
   }
   .shortcuts kbd {
     background: var(--bg-tertiary);
     padding: 2px 8px;
-    border-radius: 0;
+    border-radius: var(--radius-sm);
     font-size: 11px;
     font-family: var(--font-family);
     margin-right: 5px;
@@ -213,7 +210,7 @@
     transform: translateX(-50%);
     width: 32px;
     height: 32px;
-    border-radius: 0;
+    border-radius: var(--radius);
     background: var(--bg-elevated);
     border: 1px solid var(--border-primary);
     display: flex;
@@ -226,7 +223,7 @@
   .scroll-bottom:hover {
     background: var(--bg-active);
     border-color: var(--accent-primary);
-    box-shadow: 0 0 10px rgba(0, 180, 255, 0.3);
+    box-shadow: var(--shadow-glow-sm);
     transform: translateX(-50%);
   }
 </style>

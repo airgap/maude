@@ -117,7 +117,7 @@
   .split-handle:hover,
   .resizing .split-handle {
     background: var(--accent-primary);
-    box-shadow: 0 0 8px rgba(0, 180, 255, 0.4);
+    box-shadow: var(--shadow-glow-sm);
   }
 
   /* Prevent text selection while resizing */

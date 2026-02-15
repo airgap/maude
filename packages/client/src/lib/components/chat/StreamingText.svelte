@@ -45,12 +45,7 @@
     left: 0;
     right: 0;
     bottom: 0;
-    background: linear-gradient(
-      90deg,
-      transparent 0%,
-      rgba(0, 180, 255, 0.1) 50%,
-      transparent 100%
-    );
+    background: linear-gradient(90deg, transparent 0%, var(--bg-hover) 50%, transparent 100%);
     background-size: 200% 100%;
     animation: textGlowWave 1.5s ease-in-out infinite;
     pointer-events: none;
@@ -64,7 +59,7 @@
     animation:
       cursorBlink 0.8s step-end infinite,
       cursorGlow 2s ease-in-out infinite;
-    text-shadow: 0 0 8px rgba(0, 180, 255, 0.8);
+    text-shadow: var(--shadow-glow);
     font-weight: bold;
   }
 
@@ -104,16 +99,11 @@
   @keyframes cursorGlow {
     0%,
     100% {
-      text-shadow:
-        0 0 8px rgba(0, 180, 255, 0.8),
-        0 0 12px rgba(0, 180, 255, 0.4);
+      text-shadow: var(--shadow-glow-sm);
       transform: scaleY(1);
     }
     50% {
-      text-shadow:
-        0 0 16px rgba(0, 180, 255, 1),
-        0 0 24px rgba(0, 180, 255, 0.6),
-        0 0 32px rgba(0, 255, 255, 0.3);
+      text-shadow: var(--shadow-glow);
       transform: scaleY(1.1);
     }
   }

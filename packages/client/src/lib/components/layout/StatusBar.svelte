@@ -203,15 +203,21 @@
     justify-content: space-between;
     padding: 0 16px;
     background: var(--bg-secondary);
-    border-top: 1px solid var(--border-primary);
+    border-top: var(--ht-separator);
     font-size: 11px;
     font-weight: 600;
     color: var(--text-tertiary);
     flex-shrink: 0;
-    letter-spacing: 0.5px;
-    text-transform: uppercase;
+    letter-spacing: var(--ht-label-spacing);
+    text-transform: var(--ht-label-transform);
     position: relative;
     z-index: 1;
+  }
+  /* Let canvas effects bleed through in magic hyperthemes */
+  :global([data-hypertheme='arcane']) .statusbar,
+  :global([data-hypertheme='ethereal']) .statusbar,
+  :global([data-hypertheme='astral']) .statusbar {
+    background: var(--bg-glass);
   }
 
   .statusbar-left,
@@ -230,7 +236,7 @@
   .status-dot {
     width: 6px;
     height: 6px;
-    border-radius: 0;
+    border-radius: var(--radius-sm);
     transition: all var(--transition);
   }
   .status-dot.idle {
@@ -240,7 +246,7 @@
     background: var(--accent-secondary);
     box-shadow:
       0 0 6px var(--accent-secondary),
-      0 0 12px rgba(0, 255, 136, 0.2);
+      var(--shadow-glow-sm);
     animation: pulse 1.2s infinite;
   }
   .status-dot.pending {
@@ -287,11 +293,12 @@
     padding: 1px 8px;
     background: var(--bg-tertiary);
     border: 1px solid var(--border-secondary);
+    border-radius: var(--radius-sm);
     color: var(--text-secondary);
     cursor: pointer;
     transition: all var(--transition);
-    letter-spacing: 0.5px;
-    text-transform: uppercase;
+    letter-spacing: var(--ht-label-spacing);
+    text-transform: var(--ht-label-transform);
     font-weight: 700;
   }
   .layout-toggle:hover {
@@ -307,8 +314,9 @@
   }
   .cost-badge {
     padding: 0 4px;
-    background: rgba(0, 180, 255, 0.15);
-    border: 1px solid rgba(0, 180, 255, 0.3);
+    background: var(--bg-active);
+    border: 1px solid var(--border-primary);
+    border-radius: var(--radius-sm);
     font-weight: 700;
     font-size: 9px;
     margin-left: 4px;
@@ -329,12 +337,12 @@
   }
 
   .mode {
-    text-transform: uppercase;
-    letter-spacing: 1px;
+    text-transform: var(--ht-label-transform);
+    letter-spacing: var(--ht-label-spacing);
     padding: 1px 8px;
     background: var(--bg-tertiary);
     border: 1px solid var(--border-secondary);
-    border-radius: 0;
+    border-radius: var(--radius-sm);
     font-size: 10px;
     font-weight: 700;
     color: var(--text-secondary);
@@ -349,7 +357,7 @@
     display: inline-block;
     width: 6px;
     height: 6px;
-    border-radius: 0;
+    border-radius: var(--radius-sm);
   }
   .lsp-dot.connected {
     background: var(--accent-secondary);
@@ -368,11 +376,12 @@
     padding: 1px 8px;
     background: var(--bg-tertiary);
     border: 1px solid var(--accent-primary);
+    border-radius: var(--radius-sm);
     color: var(--accent-primary);
     cursor: pointer;
     transition: all var(--transition);
-    letter-spacing: 0.5px;
-    text-transform: uppercase;
+    letter-spacing: var(--ht-label-spacing);
+    text-transform: var(--ht-label-transform);
     font-weight: 700;
   }
   .lsp-install:hover {

@@ -7,13 +7,22 @@ import { projectStore } from './projects.svelte';
 import { conversationStore } from './conversation.svelte';
 import { gitStore } from './git.svelte';
 import { settingsStore } from './settings.svelte';
-import { sidebarLayoutStore, type FloatingPanelState } from './sidebarLayout.svelte';
+import {
+  sidebarLayoutStore,
+  type FloatingPanelState,
+  type PanelColumn,
+} from './sidebarLayout.svelte';
 
 const STORAGE_KEY = 'maude-workspaces';
 
 export interface SidebarLayoutSnapshot {
-  pinnedTabs: SidebarTab[];
+  // V2 format
+  version?: 2;
+  leftColumn?: PanelColumn | null;
+  rightColumn?: PanelColumn | null;
   floatingPanels: FloatingPanelState[];
+  // V1 compat (old snapshots may have this)
+  pinnedTabs?: SidebarTab[];
 }
 
 export interface WorkspaceSnapshot {
@@ -150,7 +159,9 @@ function createWorkspaceStore() {
       terminalOpen: terminalStore.isOpen,
       terminalHeight: terminalStore.panelHeight,
       sidebarLayout: {
-        pinnedTabs: layoutState.pinnedTabIds,
+        version: 2,
+        leftColumn: layoutState.leftColumn,
+        rightColumn: layoutState.rightColumn,
         floatingPanels: layoutState.floatingPanels,
       },
     };
@@ -182,12 +193,24 @@ function createWorkspaceStore() {
       panelHeight: snapshot.terminalHeight,
     });
 
-    // Restore sidebar layout if present (backward compatible with old snapshots)
+    // Restore sidebar layout if present (backward compatible with old V1 snapshots)
     if (snapshot.sidebarLayout) {
-      sidebarLayoutStore.restoreState({
-        pinnedTabIds: snapshot.sidebarLayout.pinnedTabs,
-        floatingPanels: snapshot.sidebarLayout.floatingPanels,
-      });
+      const sl = snapshot.sidebarLayout;
+      if (sl.version === 2) {
+        // New V2 format
+        sidebarLayoutStore.restoreState({
+          version: 2,
+          leftColumn: sl.leftColumn ?? null,
+          rightColumn: sl.rightColumn ?? null,
+          floatingPanels: sl.floatingPanels ?? [],
+        });
+      } else if (sl.pinnedTabs) {
+        // Old V1 format — migration handled by restoreState
+        sidebarLayoutStore.restoreState({
+          pinnedTabIds: sl.pinnedTabs,
+          floatingPanels: sl.floatingPanels ?? [],
+        });
+      }
     }
   }
 

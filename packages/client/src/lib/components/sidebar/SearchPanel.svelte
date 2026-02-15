@@ -192,7 +192,7 @@
   .regex-toggle.active {
     color: var(--accent-primary);
     border-color: var(--accent-primary);
-    background: rgba(0, 180, 255, 0.1);
+    background: var(--bg-active);
   }
 
   .search-status {

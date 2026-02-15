@@ -143,7 +143,7 @@ When streaming works correctly, you'll see:
 ```javascript
 // Show only streaming logs
 localStorage.debug = // Or filter by pressing Ctrl+F in console and typing:
-'[sse]*,[streamStore]*,[StreamingMessage]*'[streamStore][StreamingMessage];
+  '[sse]*,[streamStore]*,[StreamingMessage]*'[streamStore][StreamingMessage];
 ```
 
 ## Performance Expectations

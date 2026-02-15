@@ -200,12 +200,12 @@
 
 <style>
   .message {
-    padding: 16px 28px;
+    padding: var(--ht-msg-padding);
     max-width: 900px;
     margin: 0 auto;
     animation: fadeIn 0.2s linear;
-    border-radius: 0;
-    transition: background var(--transition);
+    border-radius: var(--radius-sm);
+    transition: all var(--transition);
     position: relative;
   }
 
@@ -214,7 +214,7 @@
     margin-left: 28px;
     margin-right: 28px;
     margin-bottom: 2px;
-    border-left: 2px solid rgba(0, 180, 255, 0.2);
+    border-left: var(--ht-msg-border-width) var(--ht-msg-border-style) var(--border-primary);
   }
   .message.user:hover {
     background: var(--bg-hover);
@@ -226,11 +226,69 @@
     margin-left: 28px;
     margin-right: 28px;
     margin-bottom: 2px;
-    border-left: 2px solid rgba(0, 180, 255, 0.1);
+    border-left: var(--ht-msg-border-width) var(--ht-msg-border-style) var(--border-secondary);
   }
   .message.assistant:hover {
     background: var(--bg-hover);
     border-left-color: var(--accent-primary);
+  }
+
+  /* ── Hypertheme message variants ── */
+
+  /* Ethereal: no left border, floating card with glow halo */
+  :global([data-hypertheme='ethereal']) .message {
+    border-radius: var(--radius-lg);
+    border-left: none !important;
+    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.15);
+  }
+  :global([data-hypertheme='ethereal']) .message:hover {
+    box-shadow:
+      0 4px 20px rgba(0, 0, 0, 0.2),
+      0 0 20px rgba(160, 120, 240, 0.06);
+    transform: translateY(-1px);
+  }
+
+  /* Arcane: thick double left border, ornate feel */
+  :global([data-hypertheme='arcane']) .message {
+    border: 1px solid var(--border-secondary);
+    border-left: 3px double var(--border-primary);
+  }
+  :global([data-hypertheme='arcane']) .message:hover {
+    border-color: var(--border-primary);
+    border-left-color: var(--accent-primary);
+    box-shadow: inset 0 0 20px rgba(139, 92, 246, 0.04);
+  }
+
+  /* Study: thick left border, inset book-page feel */
+  :global([data-hypertheme='study']) .message {
+    border: 2px solid var(--border-secondary);
+    border-left: 4px solid var(--border-primary);
+    box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.1);
+  }
+  :global([data-hypertheme='study']) .message:hover {
+    border-left-color: var(--accent-primary);
+    box-shadow:
+      inset 0 1px 3px rgba(0, 0, 0, 0.1),
+      0 0 8px rgba(218, 165, 50, 0.08);
+  }
+
+  /* Astral: thin luminous top-border, clean geometric */
+  :global([data-hypertheme='astral']) .message {
+    border-left: none;
+    border-top: 1px solid var(--border-secondary);
+    border-bottom: none;
+  }
+  :global([data-hypertheme='astral']) .message.user {
+    border-left: none;
+    border-top-color: var(--border-primary);
+  }
+  :global([data-hypertheme='astral']) .message.assistant {
+    border-left: none;
+    border-top-color: var(--border-secondary);
+  }
+  :global([data-hypertheme='astral']) .message:hover {
+    border-top-color: var(--accent-primary);
+    box-shadow: 0 0 15px rgba(140, 160, 220, 0.05);
   }
 
   .message-header {
@@ -244,28 +302,28 @@
   .role-label {
     font-weight: 700;
     font-size: 13px;
-    letter-spacing: 1.5px;
-    text-transform: uppercase;
+    letter-spacing: var(--ht-label-spacing);
+    text-transform: var(--ht-label-transform);
   }
   .user .role-label {
     color: var(--accent-primary);
-    text-shadow: 0 0 8px rgba(0, 180, 255, 0.3);
+    text-shadow: var(--shadow-glow-sm);
   }
   .assistant .role-label {
     color: var(--accent-secondary);
-    text-shadow: 0 0 8px rgba(0, 255, 136, 0.3);
+    text-shadow: var(--shadow-glow-sm);
   }
 
   .model-label {
     color: var(--text-tertiary);
     font-size: 10px;
     font-weight: 600;
-    letter-spacing: 0.5px;
+    letter-spacing: var(--ht-label-spacing);
     padding: 1px 8px;
     background: var(--bg-tertiary);
     border: 1px solid var(--border-secondary);
-    border-radius: 0;
-    text-transform: uppercase;
+    border-radius: var(--radius-sm);
+    text-transform: var(--ht-label-transform);
   }
 
   .timestamp {
@@ -314,20 +372,20 @@
     margin: 20px 0 10px;
     font-family: var(--font-family-sans);
     color: var(--accent-primary);
-    letter-spacing: 1px;
-    text-transform: uppercase;
+    letter-spacing: var(--ht-label-spacing);
+    text-transform: var(--ht-label-transform);
   }
   .prose :global(h1) {
     font-size: 1.4em;
-    font-weight: 700;
+    font-weight: var(--ht-prose-heading-weight);
   }
   .prose :global(h2) {
     font-size: 1.2em;
-    font-weight: 700;
+    font-weight: var(--ht-prose-heading-weight);
   }
   .prose :global(h3) {
     font-size: 1.05em;
-    font-weight: 600;
+    font-weight: var(--ht-prose-heading-weight);
   }
   .prose :global(blockquote) {
     border-left: 2px solid var(--accent-primary);
@@ -350,8 +408,8 @@
   .prose :global(th) {
     background: var(--bg-tertiary);
     font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
+    text-transform: var(--ht-label-transform);
+    letter-spacing: var(--ht-label-spacing);
     font-size: 12px;
   }
   .prose :global(hr) {

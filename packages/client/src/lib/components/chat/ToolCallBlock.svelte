@@ -202,8 +202,8 @@
 
   .detail-label {
     font-size: 10px;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
+    text-transform: var(--ht-label-transform);
+    letter-spacing: var(--ht-label-spacing);
     color: var(--text-tertiary);
     display: block;
     margin-bottom: 4px;

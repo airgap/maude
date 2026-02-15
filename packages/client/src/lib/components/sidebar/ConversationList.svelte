@@ -188,15 +188,15 @@
     font-size: 12px;
     font-weight: 600;
     padding: 7px 10px;
-    border-radius: 0;
+    border-radius: var(--radius-sm);
     background: var(--bg-tertiary);
     border: 1px solid var(--border-secondary);
-    letter-spacing: 0.5px;
+    letter-spacing: var(--ht-label-spacing);
   }
   .search-input:focus {
     border-color: var(--accent-primary);
     background: var(--bg-input);
-    box-shadow: 0 0 8px rgba(0, 180, 255, 0.15);
+    box-shadow: var(--shadow-glow-sm);
   }
 
   .new-btn {
@@ -205,7 +205,7 @@
     justify-content: center;
     width: 34px;
     height: 34px;
-    border-radius: 0;
+    border-radius: var(--radius-sm);
     color: var(--accent-primary);
     transition: all var(--transition);
     background: var(--bg-tertiary);
@@ -213,8 +213,8 @@
   }
   .new-btn:hover {
     border-color: var(--accent-primary);
-    box-shadow: 0 0 10px rgba(0, 180, 255, 0.25);
-    background: rgba(0, 180, 255, 0.08);
+    box-shadow: var(--shadow-glow-sm);
+    background: var(--bg-hover);
   }
 
   .conv-items {
@@ -227,22 +227,83 @@
     display: block;
     width: 100%;
     text-align: left;
-    padding: 10px 12px;
-    border-radius: 0;
+    padding: var(--ht-item-padding);
+    border-radius: var(--radius-sm);
     transition: all var(--transition);
     position: relative;
     margin-bottom: 1px;
     cursor: pointer;
-    border-left: 2px solid transparent;
+    border-left: var(--ht-item-indicator) solid transparent;
   }
   .conv-item:hover {
     background: var(--bg-hover);
-    border-left-color: rgba(0, 180, 255, 0.3);
+    border-left-color: var(--border-primary);
   }
   .conv-item.active {
     background: var(--bg-active);
     border-left-color: var(--accent-primary);
-    box-shadow: inset 0 0 20px rgba(0, 180, 255, 0.03);
+    box-shadow: inset 0 0 20px var(--bg-hover);
+  }
+
+  /* ── Hypertheme list item variants ── */
+
+  :global([data-hypertheme='ethereal']) .conv-item {
+    border-left: none;
+    border-radius: var(--radius);
+    margin-bottom: 4px;
+  }
+  :global([data-hypertheme='ethereal']) .conv-item:hover {
+    border-left: none;
+    transform: translateX(2px);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  }
+  :global([data-hypertheme='ethereal']) .conv-item.active {
+    border-left: none;
+    box-shadow:
+      0 2px 12px rgba(0, 0, 0, 0.15),
+      inset 0 0 0 1px var(--border-primary);
+  }
+
+  :global([data-hypertheme='arcane']) .conv-item {
+    border-left: 3px double transparent;
+    margin-bottom: 2px;
+  }
+  :global([data-hypertheme='arcane']) .conv-item:hover {
+    border-left-color: var(--border-primary);
+  }
+  :global([data-hypertheme='arcane']) .conv-item.active {
+    border-left-color: var(--accent-primary);
+    border: 1px solid var(--border-secondary);
+    border-left: 3px double var(--accent-primary);
+  }
+
+  :global([data-hypertheme='study']) .conv-item {
+    border-left: 4px solid transparent;
+    margin-bottom: 0;
+    border-bottom: 1px solid var(--border-secondary);
+    border-radius: 0;
+  }
+  :global([data-hypertheme='study']) .conv-item:hover {
+    border-left-color: var(--border-primary);
+  }
+  :global([data-hypertheme='study']) .conv-item.active {
+    border-left-color: var(--accent-primary);
+    box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.1);
+  }
+
+  :global([data-hypertheme='astral']) .conv-item {
+    border-left: none;
+    border-bottom: 1px solid var(--border-secondary);
+    border-radius: 0;
+    margin-bottom: 0;
+  }
+  :global([data-hypertheme='astral']) .conv-item:hover {
+    border-left: none;
+    border-bottom-color: var(--accent-primary);
+  }
+  :global([data-hypertheme='astral']) .conv-item.active {
+    border-left: none;
+    border-bottom-color: var(--accent-primary);
   }
 
   .conv-title {
@@ -253,7 +314,7 @@
   }
   .conv-item.active .conv-title {
     color: var(--accent-primary);
-    text-shadow: 0 0 8px rgba(0, 180, 255, 0.2);
+    text-shadow: var(--shadow-glow-sm);
   }
 
   .conv-meta {
@@ -261,9 +322,9 @@
     gap: 8px;
     font-size: 10px;
     color: var(--text-tertiary);
-    letter-spacing: 0.5px;
+    letter-spacing: var(--ht-label-spacing);
     font-weight: 600;
-    text-transform: uppercase;
+    text-transform: var(--ht-label-transform);
   }
 
   .conv-delete {
@@ -272,7 +333,7 @@
     right: 10px;
     width: 22px;
     height: 22px;
-    border-radius: 0;
+    border-radius: var(--radius-sm);
     display: none;
     align-items: center;
     justify-content: center;
@@ -286,7 +347,7 @@
   .conv-delete:hover {
     color: var(--accent-error);
     border-color: var(--accent-error);
-    background: rgba(255, 51, 68, 0.1);
+    background: var(--bg-hover);
   }
 
   .empty {
@@ -294,9 +355,9 @@
     text-align: center;
     color: var(--text-tertiary);
     font-size: 13px;
-    letter-spacing: 0.5px;
+    letter-spacing: var(--ht-label-spacing);
     font-weight: 600;
-    text-transform: uppercase;
+    text-transform: var(--ht-label-transform);
   }
 
   .project-filter {
@@ -309,8 +370,8 @@
     padding: 4px 8px;
     font-size: 11px;
     font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
+    text-transform: var(--ht-label-transform);
+    letter-spacing: var(--ht-label-spacing);
     color: var(--text-tertiary);
     border-radius: var(--radius-sm);
     transition: all var(--transition);
