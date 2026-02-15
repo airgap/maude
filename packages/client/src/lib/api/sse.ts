@@ -3,6 +3,7 @@ import { streamStore } from '$lib/stores/stream.svelte';
 import { conversationStore } from '$lib/stores/conversation.svelte';
 import { projectMemoryStore } from '$lib/stores/project-memory.svelte';
 import { api } from './client';
+import { uuid } from '$lib/utils/uuid';
 
 /**
  * Connect to SSE stream for a conversation.
@@ -37,7 +38,7 @@ export async function sendAndStream(conversationId: string, content: string): Pr
 
   // Add user message to the target conversation
   conversationStore.addMessageTo(targetConversation, {
-    id: crypto.randomUUID(),
+    id: uuid(),
     role: 'user',
     content: [{ type: 'text', text: content }],
     timestamp: Date.now(),
@@ -71,7 +72,7 @@ export async function sendAndStream(conversationId: string, content: string): Pr
     }
 
     // Add empty assistant message to the target conversation
-    const assistantMsgId = crypto.randomUUID();
+    const assistantMsgId = uuid();
     conversationStore.addMessageTo(targetConversation, {
       id: assistantMsgId,
       role: 'assistant',
@@ -230,7 +231,7 @@ export async function reconnectActiveStream(): Promise<string | null> {
 
     // Add empty assistant message placeholder that we'll build up from replayed events
     conversationStore.addMessageTo(targetConversation, {
-      id: crypto.randomUUID(),
+      id: uuid(),
       role: 'assistant',
       content: [],
       timestamp: Date.now(),

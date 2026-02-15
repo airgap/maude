@@ -3,6 +3,7 @@ import { conversationStore } from '$lib/stores/conversation.svelte';
 import { streamStore } from '$lib/stores/stream.svelte';
 import { uiStore } from '$lib/stores/ui.svelte';
 import { api } from '$lib/api/client';
+import { uuid } from '$lib/utils/uuid';
 
 export interface SlashCommandContext {
   conversationId: string | null;
@@ -39,7 +40,7 @@ const commands: SlashCommand[] = [
       const helpText = COMMANDS.map((c) => `/${c.name} — ${c.description}`).join('\n');
       if (conversationStore.active) {
         conversationStore.addMessage({
-          id: crypto.randomUUID(),
+          id: uuid(),
           role: 'system',
           content: [{ type: 'text', text: `Available commands:\n${helpText}` }],
           timestamp: Date.now(),
@@ -154,7 +155,7 @@ const commands: SlashCommand[] = [
           const d = res.data;
           const msg = `Token usage: ${d.totalTokens.toLocaleString()} total (${d.inputTokens.toLocaleString()} in / ${d.outputTokens.toLocaleString()} out)\nEstimated cost: $${d.estimatedCostUsd.toFixed(4)}\nModel: ${d.model}`;
           conversationStore.addMessage({
-            id: crypto.randomUUID(),
+            id: uuid(),
             role: 'system',
             content: [{ type: 'text', text: msg }],
             timestamp: Date.now(),
@@ -185,7 +186,7 @@ const commands: SlashCommand[] = [
         }
       }
       conversationStore.addMessage({
-        id: crypto.randomUUID(),
+        id: uuid(),
         role: 'system',
         content: [{ type: 'text', text: parts.join('\n') }],
         timestamp: Date.now(),

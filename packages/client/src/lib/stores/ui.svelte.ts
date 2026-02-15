@@ -1,3 +1,5 @@
+import { uuid } from '$lib/utils/uuid';
+
 export type SidebarTab =
   | 'conversations'
   | 'files'
@@ -110,7 +112,7 @@ function createUIStore() {
       type: 'info' | 'success' | 'error' | 'warning' = 'info',
       timeout = 4000,
     ) {
-      const id = crypto.randomUUID();
+      const id = uuid();
       toasts = [...toasts, { id, message, type, timeout }];
       if (timeout > 0) {
         setTimeout(() => {

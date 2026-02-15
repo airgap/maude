@@ -23,6 +23,7 @@
       shortcut: 'Ctrl+N',
       action: () => {
         conversationStore.setActive(null);
+        conversationStore.createDraft();
         close();
       },
     },

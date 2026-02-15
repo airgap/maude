@@ -216,7 +216,8 @@
   /* Let canvas effects bleed through in magic hyperthemes */
   :global([data-hypertheme='arcane']) .statusbar,
   :global([data-hypertheme='ethereal']) .statusbar,
-  :global([data-hypertheme='astral']) .statusbar {
+  :global([data-hypertheme='astral']) .statusbar,
+  :global([data-hypertheme='astral-midnight']) .statusbar {
     background: var(--bg-glass);
   }
 

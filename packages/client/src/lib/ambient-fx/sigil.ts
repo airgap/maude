@@ -1,6 +1,12 @@
 /**
  * Sigil Effect — 3D magical circles with Elder Futhark runes
  * Adapted from lyku/ambient-fx for Maude's Arcane hypertheme
+ *
+ * Performance optimizations:
+ * - Pre-renders all 24 rune glyphs to offscreen canvases at init time
+ * - No shadowBlur (extremely expensive) — uses pre-baked glow via double-render
+ * - Skips sigils/runes with very low alpha
+ * - Batches ring segments into single path where possible
  */
 import type { AmbientEffect, AmbientThemeColors } from './types';
 
@@ -130,206 +136,230 @@ const ARCHETYPES = [
 ];
 
 /**
- * Draw an Elder Futhark rune glyph
+ * Pre-render a single Elder Futhark rune to a Path2D.
+ * This avoids calling moveTo/lineTo hundreds of times per frame.
  */
-function drawElderFuthark(
-  ctx: CanvasRenderingContext2D,
-  runeIndex: number,
-  size: number,
-  r: number,
-  g: number,
-  b: number,
-  alpha: number,
-  lineWidth: number,
-): void {
-  ctx.strokeStyle = `rgba(${r}, ${g}, ${b}, ${alpha})`;
-  ctx.lineWidth = lineWidth * 0.9;
-  ctx.lineCap = 'round';
-  ctx.lineJoin = 'round';
-
+function createRunePath(runeIndex: number, size: number): Path2D {
+  const path = new Path2D();
   const s = size;
-  ctx.beginPath();
+
   switch (runeIndex % 24) {
     case 0: // ᚠ Fehu
-      ctx.moveTo(0, s);
-      ctx.lineTo(0, -s);
-      ctx.moveTo(0, -s);
-      ctx.lineTo(s * 0.6, -s * 0.4);
-      ctx.moveTo(0, -s * 0.2);
-      ctx.lineTo(s * 0.6, s * 0.2);
+      path.moveTo(0, s);
+      path.lineTo(0, -s);
+      path.moveTo(0, -s);
+      path.lineTo(s * 0.6, -s * 0.4);
+      path.moveTo(0, -s * 0.2);
+      path.lineTo(s * 0.6, s * 0.2);
       break;
     case 1: // ᚢ Uruz
-      ctx.moveTo(-s * 0.3, s);
-      ctx.lineTo(-s * 0.3, -s);
-      ctx.lineTo(s * 0.3, -s * 0.2);
-      ctx.lineTo(s * 0.3, s);
+      path.moveTo(-s * 0.3, s);
+      path.lineTo(-s * 0.3, -s);
+      path.lineTo(s * 0.3, -s * 0.2);
+      path.lineTo(s * 0.3, s);
       break;
     case 2: // ᚦ Thurisaz
-      ctx.moveTo(0, s);
-      ctx.lineTo(0, -s);
-      ctx.moveTo(0, -s);
-      ctx.lineTo(s * 0.5, -s * 0.4);
-      ctx.lineTo(0, s * 0.1);
+      path.moveTo(0, s);
+      path.lineTo(0, -s);
+      path.moveTo(0, -s);
+      path.lineTo(s * 0.5, -s * 0.4);
+      path.lineTo(0, s * 0.1);
       break;
     case 3: // ᚨ Ansuz
-      ctx.moveTo(0, s);
-      ctx.lineTo(0, -s);
-      ctx.moveTo(0, -s * 0.6);
-      ctx.lineTo(s * 0.5, -s * 0.2);
-      ctx.moveTo(0, -s * 0.1);
-      ctx.lineTo(s * 0.5, s * 0.3);
+      path.moveTo(0, s);
+      path.lineTo(0, -s);
+      path.moveTo(0, -s * 0.6);
+      path.lineTo(s * 0.5, -s * 0.2);
+      path.moveTo(0, -s * 0.1);
+      path.lineTo(s * 0.5, s * 0.3);
       break;
     case 4: // ᚱ Raidho
-      ctx.moveTo(-s * 0.2, s);
-      ctx.lineTo(-s * 0.2, -s);
-      ctx.moveTo(-s * 0.2, -s);
-      ctx.lineTo(s * 0.4, -s * 0.4);
-      ctx.lineTo(-s * 0.2, s * 0.1);
-      ctx.moveTo(-s * 0.2, s * 0.1);
-      ctx.lineTo(s * 0.4, s);
+      path.moveTo(-s * 0.2, s);
+      path.lineTo(-s * 0.2, -s);
+      path.moveTo(-s * 0.2, -s);
+      path.lineTo(s * 0.4, -s * 0.4);
+      path.lineTo(-s * 0.2, s * 0.1);
+      path.moveTo(-s * 0.2, s * 0.1);
+      path.lineTo(s * 0.4, s);
       break;
     case 5: // ᚲ Kenaz
-      ctx.moveTo(-s * 0.3, -s);
-      ctx.lineTo(s * 0.3, 0);
-      ctx.lineTo(-s * 0.3, s);
+      path.moveTo(-s * 0.3, -s);
+      path.lineTo(s * 0.3, 0);
+      path.lineTo(-s * 0.3, s);
       break;
     case 6: // ᚷ Gebo
-      ctx.moveTo(-s * 0.5, -s * 0.7);
-      ctx.lineTo(s * 0.5, s * 0.7);
-      ctx.moveTo(s * 0.5, -s * 0.7);
-      ctx.lineTo(-s * 0.5, s * 0.7);
+      path.moveTo(-s * 0.5, -s * 0.7);
+      path.lineTo(s * 0.5, s * 0.7);
+      path.moveTo(s * 0.5, -s * 0.7);
+      path.lineTo(-s * 0.5, s * 0.7);
       break;
     case 7: // ᚹ Wunjo
-      ctx.moveTo(-s * 0.2, s);
-      ctx.lineTo(-s * 0.2, -s);
-      ctx.moveTo(-s * 0.2, -s);
-      ctx.lineTo(s * 0.4, -s * 0.3);
-      ctx.lineTo(-s * 0.2, s * 0.3);
+      path.moveTo(-s * 0.2, s);
+      path.lineTo(-s * 0.2, -s);
+      path.moveTo(-s * 0.2, -s);
+      path.lineTo(s * 0.4, -s * 0.3);
+      path.lineTo(-s * 0.2, s * 0.3);
       break;
     case 8: // ᚺ Hagalaz
-      ctx.moveTo(-s * 0.4, -s);
-      ctx.lineTo(-s * 0.4, s);
-      ctx.moveTo(s * 0.4, -s);
-      ctx.lineTo(s * 0.4, s);
-      ctx.moveTo(-s * 0.4, s * 0.1);
-      ctx.lineTo(s * 0.4, -s * 0.4);
+      path.moveTo(-s * 0.4, -s);
+      path.lineTo(-s * 0.4, s);
+      path.moveTo(s * 0.4, -s);
+      path.lineTo(s * 0.4, s);
+      path.moveTo(-s * 0.4, s * 0.1);
+      path.lineTo(s * 0.4, -s * 0.4);
       break;
     case 9: // ᚾ Nauthiz
-      ctx.moveTo(0, -s);
-      ctx.lineTo(0, s);
-      ctx.moveTo(-s * 0.4, -s * 0.2);
-      ctx.lineTo(s * 0.4, s * 0.2);
+      path.moveTo(0, -s);
+      path.lineTo(0, s);
+      path.moveTo(-s * 0.4, -s * 0.2);
+      path.lineTo(s * 0.4, s * 0.2);
       break;
     case 10: // ᛁ Isa
-      ctx.moveTo(0, -s);
-      ctx.lineTo(0, s);
+      path.moveTo(0, -s);
+      path.lineTo(0, s);
       break;
     case 11: // ᛃ Jera
-      ctx.moveTo(s * 0.1, -s);
-      ctx.lineTo(s * 0.4, -s * 0.4);
-      ctx.lineTo(s * 0.1, 0);
-      ctx.moveTo(-s * 0.1, s);
-      ctx.lineTo(-s * 0.4, s * 0.4);
-      ctx.lineTo(-s * 0.1, 0);
+      path.moveTo(s * 0.1, -s);
+      path.lineTo(s * 0.4, -s * 0.4);
+      path.lineTo(s * 0.1, 0);
+      path.moveTo(-s * 0.1, s);
+      path.lineTo(-s * 0.4, s * 0.4);
+      path.lineTo(-s * 0.1, 0);
       break;
     case 12: // ᛇ Eihwaz
-      ctx.moveTo(0, -s);
-      ctx.lineTo(0, s);
-      ctx.moveTo(0, -s * 0.5);
-      ctx.lineTo(s * 0.4, -s * 0.8);
-      ctx.moveTo(0, s * 0.5);
-      ctx.lineTo(-s * 0.4, s * 0.8);
+      path.moveTo(0, -s);
+      path.lineTo(0, s);
+      path.moveTo(0, -s * 0.5);
+      path.lineTo(s * 0.4, -s * 0.8);
+      path.moveTo(0, s * 0.5);
+      path.lineTo(-s * 0.4, s * 0.8);
       break;
     case 13: // ᛈ Perthro
-      ctx.moveTo(-s * 0.3, s);
-      ctx.lineTo(-s * 0.3, -s);
-      ctx.moveTo(-s * 0.3, -s);
-      ctx.lineTo(s * 0.3, -s * 0.4);
-      ctx.moveTo(-s * 0.3, s);
-      ctx.lineTo(s * 0.3, s * 0.4);
+      path.moveTo(-s * 0.3, s);
+      path.lineTo(-s * 0.3, -s);
+      path.moveTo(-s * 0.3, -s);
+      path.lineTo(s * 0.3, -s * 0.4);
+      path.moveTo(-s * 0.3, s);
+      path.lineTo(s * 0.3, s * 0.4);
       break;
     case 14: // ᛉ Algiz
-      ctx.moveTo(0, s);
-      ctx.lineTo(0, -s * 0.2);
-      ctx.moveTo(0, -s * 0.2);
-      ctx.lineTo(-s * 0.5, -s);
-      ctx.moveTo(0, -s * 0.2);
-      ctx.lineTo(s * 0.5, -s);
-      ctx.moveTo(0, -s * 0.2);
-      ctx.lineTo(0, -s);
+      path.moveTo(0, s);
+      path.lineTo(0, -s * 0.2);
+      path.moveTo(0, -s * 0.2);
+      path.lineTo(-s * 0.5, -s);
+      path.moveTo(0, -s * 0.2);
+      path.lineTo(s * 0.5, -s);
+      path.moveTo(0, -s * 0.2);
+      path.lineTo(0, -s);
       break;
     case 15: // ᛊ Sowilo
-      ctx.moveTo(-s * 0.4, -s);
-      ctx.lineTo(s * 0.1, -s * 0.2);
-      ctx.lineTo(-s * 0.1, s * 0.2);
-      ctx.lineTo(s * 0.4, s);
+      path.moveTo(-s * 0.4, -s);
+      path.lineTo(s * 0.1, -s * 0.2);
+      path.lineTo(-s * 0.1, s * 0.2);
+      path.lineTo(s * 0.4, s);
       break;
     case 16: // ᛏ Tiwaz
-      ctx.moveTo(0, s);
-      ctx.lineTo(0, -s);
-      ctx.moveTo(-s * 0.5, -s);
-      ctx.lineTo(0, -s * 0.4);
-      ctx.lineTo(s * 0.5, -s);
+      path.moveTo(0, s);
+      path.lineTo(0, -s);
+      path.moveTo(-s * 0.5, -s);
+      path.lineTo(0, -s * 0.4);
+      path.lineTo(s * 0.5, -s);
       break;
     case 17: // ᛒ Berkano
-      ctx.moveTo(-s * 0.2, s);
-      ctx.lineTo(-s * 0.2, -s);
-      ctx.moveTo(-s * 0.2, -s);
-      ctx.lineTo(s * 0.3, -s * 0.5);
-      ctx.lineTo(-s * 0.2, 0);
-      ctx.moveTo(-s * 0.2, 0);
-      ctx.lineTo(s * 0.3, s * 0.5);
-      ctx.lineTo(-s * 0.2, s);
+      path.moveTo(-s * 0.2, s);
+      path.lineTo(-s * 0.2, -s);
+      path.moveTo(-s * 0.2, -s);
+      path.lineTo(s * 0.3, -s * 0.5);
+      path.lineTo(-s * 0.2, 0);
+      path.moveTo(-s * 0.2, 0);
+      path.lineTo(s * 0.3, s * 0.5);
+      path.lineTo(-s * 0.2, s);
       break;
     case 18: // ᛖ Ehwaz
-      ctx.moveTo(-s * 0.3, s);
-      ctx.lineTo(-s * 0.3, -s);
-      ctx.moveTo(s * 0.3, s);
-      ctx.lineTo(s * 0.3, -s);
-      ctx.moveTo(-s * 0.3, 0);
-      ctx.lineTo(s * 0.3, -s * 0.4);
-      ctx.moveTo(-s * 0.3, s * 0.4);
-      ctx.lineTo(s * 0.3, 0);
+      path.moveTo(-s * 0.3, s);
+      path.lineTo(-s * 0.3, -s);
+      path.moveTo(s * 0.3, s);
+      path.lineTo(s * 0.3, -s);
+      path.moveTo(-s * 0.3, 0);
+      path.lineTo(s * 0.3, -s * 0.4);
+      path.moveTo(-s * 0.3, s * 0.4);
+      path.lineTo(s * 0.3, 0);
       break;
     case 19: // ᛗ Mannaz
-      ctx.moveTo(-s * 0.4, s);
-      ctx.lineTo(-s * 0.4, -s);
-      ctx.lineTo(0, -s * 0.3);
-      ctx.lineTo(s * 0.4, -s);
-      ctx.lineTo(s * 0.4, s);
-      ctx.moveTo(-s * 0.4, -s * 0.3);
-      ctx.lineTo(0, s * 0.1);
-      ctx.lineTo(s * 0.4, -s * 0.3);
+      path.moveTo(-s * 0.4, s);
+      path.lineTo(-s * 0.4, -s);
+      path.lineTo(0, -s * 0.3);
+      path.lineTo(s * 0.4, -s);
+      path.lineTo(s * 0.4, s);
+      path.moveTo(-s * 0.4, -s * 0.3);
+      path.lineTo(0, s * 0.1);
+      path.lineTo(s * 0.4, -s * 0.3);
       break;
     case 20: // ᛚ Laguz
-      ctx.moveTo(-s * 0.2, s);
-      ctx.lineTo(-s * 0.2, -s);
-      ctx.lineTo(s * 0.4, -s * 0.3);
+      path.moveTo(-s * 0.2, s);
+      path.lineTo(-s * 0.2, -s);
+      path.lineTo(s * 0.4, -s * 0.3);
       break;
     case 21: // ᛝ Ingwaz
-      ctx.moveTo(0, -s * 0.7);
-      ctx.lineTo(s * 0.5, 0);
-      ctx.lineTo(0, s * 0.7);
-      ctx.lineTo(-s * 0.5, 0);
-      ctx.closePath();
+      path.moveTo(0, -s * 0.7);
+      path.lineTo(s * 0.5, 0);
+      path.lineTo(0, s * 0.7);
+      path.lineTo(-s * 0.5, 0);
+      path.closePath();
       break;
     case 22: // ᛞ Dagaz
-      ctx.moveTo(-s * 0.4, -s * 0.7);
-      ctx.lineTo(s * 0.4, -s * 0.7);
-      ctx.lineTo(-s * 0.4, s * 0.7);
-      ctx.lineTo(s * 0.4, s * 0.7);
+      path.moveTo(-s * 0.4, -s * 0.7);
+      path.lineTo(s * 0.4, -s * 0.7);
+      path.lineTo(-s * 0.4, s * 0.7);
+      path.lineTo(s * 0.4, s * 0.7);
       break;
     case 23: // ᛟ Othala
-      ctx.moveTo(-s * 0.4, s);
-      ctx.lineTo(-s * 0.4, s * 0.1);
-      ctx.lineTo(0, -s * 0.7);
-      ctx.lineTo(s * 0.4, s * 0.1);
-      ctx.lineTo(s * 0.4, s);
-      ctx.moveTo(-s * 0.4, s * 0.1);
-      ctx.lineTo(s * 0.4, s * 0.1);
+      path.moveTo(-s * 0.4, s);
+      path.lineTo(-s * 0.4, s * 0.1);
+      path.lineTo(0, -s * 0.7);
+      path.lineTo(s * 0.4, s * 0.1);
+      path.lineTo(s * 0.4, s);
+      path.moveTo(-s * 0.4, s * 0.1);
+      path.lineTo(s * 0.4, s * 0.1);
       break;
   }
-  ctx.stroke();
+  return path;
+}
+
+/**
+ * Pre-rendered rune sprite — an offscreen canvas with a rune drawn on it.
+ * We create one per color per rune index at a fixed size, then drawImage()
+ * with scaling at render time, which is FAR cheaper than stroking paths.
+ */
+interface RuneSprite {
+  canvas: OffscreenCanvas;
+  size: number; // logical size of the rune within the sprite
+}
+
+const SPRITE_SIZE = 32; // Runes are rendered at this base size
+const SPRITE_PAD = 8; // Padding for glow bleed
+
+function createRuneSprite(runeIndex: number, r: number, g: number, b: number): RuneSprite {
+  const dim = (SPRITE_SIZE + SPRITE_PAD) * 2;
+  const oc = new OffscreenCanvas(dim, dim);
+  const octx = oc.getContext('2d')!;
+  const path = createRunePath(runeIndex, SPRITE_SIZE);
+
+  octx.translate(dim / 2, dim / 2);
+  octx.lineCap = 'round';
+  octx.lineJoin = 'round';
+
+  // Render a faint wider stroke underneath for glow effect (replaces shadowBlur)
+  octx.lineWidth = 3.5;
+  octx.strokeStyle = `rgba(${r}, ${g}, ${b}, 0.3)`;
+  octx.stroke(path);
+
+  // Main crisp stroke on top
+  octx.lineWidth = 1.4;
+  octx.strokeStyle = `rgba(${r}, ${g}, ${b}, 1)`;
+  octx.stroke(path);
+
+  return { canvas: oc, size: SPRITE_SIZE };
 }
 
 /**
@@ -343,6 +373,11 @@ export class SigilEffect implements AmbientEffect {
   private lineWidth = 1;
   private startTime = 0;
   private scrollOffset = 0;
+
+  // Pre-rendered rune sprites per color
+  private runeSprites: Map<string, RuneSprite[]> = new Map();
+  // Pre-computed rune Path2Ds for fragment rendering (less frequent, can afford stroke)
+  private runePaths: Path2D[] = [];
 
   constructor(
     private config: { count: number },
@@ -363,6 +398,26 @@ export class SigilEffect implements AmbientEffect {
       this.colors.particleColor2,
       this.colors.particleColor3,
     ];
+
+    // Pre-render all 24 rune glyphs for each color
+    this.runeSprites.clear();
+    for (const cs of colorStrings) {
+      const { r, g, b } = parseColor(cs);
+      const key = `${r},${g},${b}`;
+      if (!this.runeSprites.has(key)) {
+        const sprites: RuneSprite[] = [];
+        for (let i = 0; i < 24; i++) {
+          sprites.push(createRuneSprite(i, r, g, b));
+        }
+        this.runeSprites.set(key, sprites);
+      }
+    }
+
+    // Pre-compute Path2D for all 24 runes (used for fragments)
+    this.runePaths = [];
+    for (let i = 0; i < 24; i++) {
+      this.runePaths.push(createRunePath(i, 1)); // unit size, scale at render
+    }
 
     const spellsByRings: Record<number, typeof SPELLS> = {};
     for (const spell of SPELLS) {
@@ -565,8 +620,8 @@ export class SigilEffect implements AmbientEffect {
   render(ctx: CanvasRenderingContext2D): void {
     const time = (performance.now() - this.startTime) * 0.001;
 
-    // Enable glow for all sigil strokes
-    ctx.shadowBlur = 6;
+    // NO shadowBlur — glow is baked into the pre-rendered rune sprites
+    ctx.shadowBlur = 0;
 
     for (const sigil of this.sigils) {
       const { r, g, b } = sigil;
@@ -575,11 +630,15 @@ export class SigilEffect implements AmbientEffect {
       const parallaxY = this.scrollOffset * (0.0005 + sigil.z * 0.006);
       const pulse = 0.85 + Math.sin(time * sigil.pulseSpeed + sigil.pulsePhase) * 0.15;
       const alpha = Math.min(1, sigil.opacity * pulse * depthAlpha);
+
+      // Skip very faint sigils entirely
+      if (alpha < 0.03) continue;
+
       const scaledSize = sigil.size * depthScale;
 
       ctx.save();
       ctx.translate(sigil.x, sigil.y - (parallaxY % this.height));
-      ctx.shadowColor = `rgba(${r}, ${g}, ${b}, ${alpha * 0.5})`;
+      ctx.globalAlpha = alpha;
 
       const tiltFactor = Math.cos(sigil.tiltX);
 
@@ -594,7 +653,7 @@ export class SigilEffect implements AmbientEffect {
         return 0;
       };
 
-      // Draw rings
+      // Draw rings — batch segments into fewer strokes
       for (let ri = 0; ri < sigil.rings.length; ri++) {
         const ring = sigil.rings[ri];
         const ringRadius = ring.radius * scaledSize;
@@ -614,7 +673,7 @@ export class SigilEffect implements AmbientEffect {
           const segAlpha = getTraceAlpha(midAngle, tracePos);
           if (segAlpha < 0.05) continue;
 
-          ctx.strokeStyle = `rgba(${r}, ${g}, ${b}, ${alpha * 0.8 * segAlpha})`;
+          ctx.strokeStyle = `rgba(${r}, ${g}, ${b}, ${0.8 * segAlpha})`;
           ctx.beginPath();
           ctx.arc(0, 0, ringRadius, startAngle, endAngle);
           ctx.stroke();
@@ -623,58 +682,65 @@ export class SigilEffect implements AmbientEffect {
         ctx.restore();
       }
 
-      // Draw runes
+      // Draw runes using pre-rendered sprites (massive perf win)
       ctx.save();
       ctx.scale(1, Math.max(0.25, Math.abs(tiltFactor)));
       const diskRotation = time * 0.08;
       ctx.rotate(diskRotation + sigil.tiltY);
 
-      for (const rune of sigil.runes) {
-        const traceSpeed = 1.5 / (0.5 + rune.radius);
-        const ringIndex = Math.round(rune.radius * (sigil.rings.length - 1));
-        const tracePos = (time * traceSpeed + ringIndex * 0.8) % (Math.PI * 2);
-        const traceAlpha = getTraceAlpha(rune.angle, tracePos);
-        if (traceAlpha < 0.05) continue;
+      const spriteKey = `${r},${g},${b}`;
+      const sprites = this.runeSprites.get(spriteKey);
 
-        const localX = Math.cos(rune.angle) * rune.radius * scaledSize;
-        const localY = Math.sin(rune.angle) * rune.radius * scaledSize;
+      if (sprites) {
+        for (const rune of sigil.runes) {
+          const traceSpeed = 1.5 / (0.5 + rune.radius);
+          const ringIndex = Math.round(rune.radius * (sigil.rings.length - 1));
+          const tracePos = (time * traceSpeed + ringIndex * 0.8) % (Math.PI * 2);
+          const traceAlpha = getTraceAlpha(rune.angle, tracePos);
+          if (traceAlpha < 0.05) continue;
 
-        ctx.save();
-        ctx.translate(localX, localY);
-        ctx.rotate(rune.angle + Math.PI / 2);
+          const localX = Math.cos(rune.angle) * rune.radius * scaledSize;
+          const localY = Math.sin(rune.angle) * rune.radius * scaledSize;
 
-        const traceScale = 0.9 + traceAlpha * 0.3;
-        const runeSize = scaledSize * 0.05 * traceScale;
-        drawElderFuthark(
-          ctx,
-          rune.symbol,
-          runeSize,
-          r,
-          g,
-          b,
-          alpha * 0.9 * traceAlpha,
-          this.lineWidth,
-        );
+          ctx.save();
+          ctx.translate(localX, localY);
+          ctx.rotate(rune.angle + Math.PI / 2);
+          ctx.globalAlpha = alpha * 0.9 * traceAlpha;
 
-        ctx.restore();
+          const traceScale = 0.9 + traceAlpha * 0.3;
+          const runeSize = scaledSize * 0.05 * traceScale;
+          const scale = runeSize / SPRITE_SIZE;
+          const sprite = sprites[rune.symbol % 24];
+          const dim = (SPRITE_SIZE + SPRITE_PAD) * 2;
+
+          // drawImage from offscreen canvas — hardware accelerated
+          ctx.drawImage(
+            sprite.canvas,
+            -dim * scale * 0.5,
+            -dim * scale * 0.5,
+            dim * scale,
+            dim * scale,
+          );
+
+          ctx.restore();
+        }
       }
 
       ctx.restore();
       ctx.restore();
     }
 
-    // Render floating fragments
+    // Render floating fragments (fewer of these, can afford simple strokes)
+    ctx.globalAlpha = 1;
     for (let fi = 0; fi < this.fragments.length; fi++) {
       const frag = this.fragments[fi];
 
-      // Flicker effect
+      // Deterministic flicker (no Math.random() per frame)
       const flickerSeed = fi * 7.31;
       const flickerCycle = time * 0.5 + flickerSeed;
       const flickerChance =
         Math.sin(flickerCycle * 3.7) * Math.sin(flickerCycle * 5.3) * Math.sin(flickerCycle * 2.1);
-      const isFlickering = flickerChance > 0.85;
-      const flickerIntensity = isFlickering ? (Math.random() > 0.5 ? 0 : 2.5) : 1;
-      if (flickerIntensity === 0) continue;
+      if (flickerChance > 0.85) continue; // Skip flickered-out fragments
 
       const { r: fr, g: fg, b: fb } = frag;
       const depthScale = 0.5 + frag.z * 0.5;
@@ -682,10 +748,11 @@ export class SigilEffect implements AmbientEffect {
       const tiltFactor = Math.cos(frag.tiltX) * Math.cos(frag.tiltY);
       const fragParallaxY = this.scrollOffset * (0.0003 + frag.z * 0.004);
 
-      const alpha = Math.min(
+      const fragAlpha = Math.min(
         1,
-        frag.opacity * depthAlpha * Math.max(0.2, Math.abs(tiltFactor)) * flickerIntensity,
+        frag.opacity * depthAlpha * Math.max(0.2, Math.abs(tiltFactor)),
       );
+      if (fragAlpha < 0.03) continue;
 
       ctx.save();
       ctx.translate(frag.x, frag.y - (fragParallaxY % this.height));
@@ -693,6 +760,7 @@ export class SigilEffect implements AmbientEffect {
       ctx.scale(depthScale, depthScale * Math.max(0.3, Math.abs(tiltFactor)));
       ctx.lineWidth = this.lineWidth * 0.8;
       ctx.lineCap = 'round';
+      ctx.globalAlpha = fragAlpha;
 
       if (
         frag.type === 'arc' &&
@@ -702,18 +770,29 @@ export class SigilEffect implements AmbientEffect {
       ) {
         ctx.beginPath();
         ctx.arc(0, 0, frag.arcRadius, frag.arcStart, frag.arcEnd);
-        ctx.strokeStyle = `rgba(${fr}, ${fg}, ${fb}, ${alpha * 0.6})`;
+        ctx.strokeStyle = `rgba(${fr}, ${fg}, ${fb}, 0.6)`;
         ctx.stroke();
       } else if (frag.type === 'rune' && frag.symbol !== undefined && frag.runeSize) {
-        drawElderFuthark(ctx, frag.symbol, frag.runeSize, fr, fg, fb, alpha * 0.7, this.lineWidth);
+        // Use pre-computed Path2D for fragments
+        const path = this.runePaths[frag.symbol % 24];
+        ctx.save();
+        ctx.scale(frag.runeSize, frag.runeSize);
+        ctx.strokeStyle = `rgba(${fr}, ${fg}, ${fb}, 0.7)`;
+        ctx.lineWidth = this.lineWidth / frag.runeSize;
+        ctx.stroke(path);
+        ctx.restore();
       }
 
       ctx.restore();
     }
+
+    ctx.globalAlpha = 1;
   }
 
   destroy(): void {
     this.sigils = [];
     this.fragments = [];
+    this.runeSprites.clear();
+    this.runePaths = [];
   }
 }

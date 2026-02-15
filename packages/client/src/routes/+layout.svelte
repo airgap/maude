@@ -6,7 +6,7 @@
   import { streamStore, STREAM_CONTEXT_KEY } from '$lib/stores/stream.svelte';
   import { settingsStore } from '$lib/stores/settings.svelte';
   import { findFont, buildGoogleFontsUrl, type FontOption } from '$lib/config/fonts';
-  import { onMount, setContext } from 'svelte';
+  import { onMount, setContext, tick } from 'svelte';
 
   // Set stream store in context for proper Svelte 5 reactivity tracking
   setContext(STREAM_CONTEXT_KEY, streamStore);
@@ -52,6 +52,15 @@
   let authenticated = $state(false);
   let checking = $state(true);
 
+  /** Dismiss the HTML splash screen with a fade-out */
+  function dismissSplash() {
+    const el = document.getElementById('splash');
+    if (!el) return;
+    el.classList.add('dismissed');
+    // Remove from DOM after transition
+    setTimeout(() => el.remove(), 350);
+  }
+
   onMount(async () => {
     try {
       const status = await api.auth.status();
@@ -72,19 +81,19 @@
       authenticated = true;
     }
     checking = false;
+
+    // Wait for the DOM to settle after state change, then dismiss splash
+    await tick();
+    // Give one extra frame for layout to stabilize
+    requestAnimationFrame(() => dismissSplash());
   });
 </script>
 
-{#if checking}
-  <div
-    style="display:flex;align-items:center;justify-content:center;height:100vh;background:var(--bg-primary);color:var(--text-tertiary);font-size:14px;"
-  >
-    Loading...
-  </div>
-{:else if authRequired && !authenticated}
+{#if !checking && authRequired && !authenticated}
   <LoginPage
     onAuthenticated={() => {
       authenticated = true;
+      tick().then(() => requestAnimationFrame(() => dismissSplash()));
     }}
   />
 {:else}

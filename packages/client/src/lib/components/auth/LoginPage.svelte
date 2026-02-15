@@ -1,5 +1,6 @@
 <script lang="ts">
   import { api, setAuthToken } from '$lib/api/client';
+  import SpriteAnimation from '$lib/components/ui/SpriteAnimation.svelte';
 
   let mode = $state<'login' | 'register'>('login');
   let username = $state('');
@@ -32,7 +33,7 @@
 <div class="login-container">
   <div class="login-card">
     <div class="login-header">
-      <h1 class="logo">MAUDE</h1>
+      <SpriteAnimation size={64} class="logo-sprite" />
       <p class="tagline">AI Development Environment</p>
     </div>
 
@@ -104,12 +105,9 @@
     text-align: center;
     margin-bottom: 32px;
   }
-  .logo {
-    font-size: 28px;
-    font-weight: 900;
-    letter-spacing: 8px;
-    color: var(--accent-primary);
-    margin: 0;
+  :global(.logo-sprite) {
+    margin: 0 auto;
+    filter: drop-shadow(0 0 8px var(--accent-primary));
   }
   .tagline {
     font-size: 11px;

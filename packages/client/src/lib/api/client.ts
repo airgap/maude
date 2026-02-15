@@ -6,7 +6,9 @@ export function getBaseUrl(): string {
 
 export function getWsBase(): string {
   const host = typeof window !== 'undefined' ? window.location.host : 'localhost:3002';
-  return `ws://${host}/api`;
+  const wsProtocol =
+    typeof window !== 'undefined' && window.location.protocol === 'https:' ? 'wss' : 'ws';
+  return `${wsProtocol}://${host}/api`;
 }
 
 export function setServerPort(_port: number) {

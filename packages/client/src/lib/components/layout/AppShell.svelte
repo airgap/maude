@@ -315,6 +315,7 @@
     display: flex;
     flex-direction: column;
     height: 100vh;
+    height: 100dvh;
     overflow: hidden;
     position: relative;
   }
@@ -337,7 +338,8 @@
   /* Canvas-based hyperthemes: hide CSS overlay, canvas handles it */
   :global([data-hypertheme='arcane']) .app-shell::before,
   :global([data-hypertheme='ethereal']) .app-shell::before,
-  :global([data-hypertheme='astral']) .app-shell::before {
+  :global([data-hypertheme='astral']) .app-shell::before,
+  :global([data-hypertheme='astral-midnight']) .app-shell::before {
     display: none;
   }
 
@@ -425,7 +427,8 @@
   /* Let canvas effects bleed through in magic hyperthemes */
   :global([data-hypertheme='arcane']) .main-content,
   :global([data-hypertheme='ethereal']) .main-content,
-  :global([data-hypertheme='astral']) .main-content {
+  :global([data-hypertheme='astral']) .main-content,
+  :global([data-hypertheme='astral-midnight']) .main-content {
     background: var(--bg-glass, rgba(14, 10, 8, 0.85));
   }
 </style>

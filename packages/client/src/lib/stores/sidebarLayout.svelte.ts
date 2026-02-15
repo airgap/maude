@@ -1,6 +1,7 @@
 import type { SidebarTab } from './ui.svelte';
 import { onSidebarTabChange } from './ui.svelte';
 import { SIDEBAR_TABS, type TabDefinition } from '$lib/config/sidebarTabs';
+import { uuid } from '$lib/utils/uuid';
 
 const STORAGE_KEY = 'maude-sidebar-layout';
 
@@ -76,10 +77,7 @@ function allTabIds(): SidebarTab[] {
 }
 
 function makeGroupId(): string {
-  if (typeof crypto !== 'undefined' && crypto.randomUUID) {
-    return crypto.randomUUID();
-  }
-  return `g-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  return uuid();
 }
 
 /** Remove invalid tabs from a group, return null if empty */

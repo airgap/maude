@@ -2,6 +2,7 @@
   import { uiStore } from '$lib/stores/ui.svelte';
   import { loopStore } from '$lib/stores/loop.svelte';
   import { settingsStore } from '$lib/stores/settings.svelte';
+  import { uuid } from '$lib/utils/uuid';
   import type { QualityCheckConfig, LoopConfig } from '@maude/shared';
   import { onMount } from 'svelte';
 
@@ -29,7 +30,7 @@
       // Provide sensible defaults based on common project setups
       checks = [
         {
-          id: crypto.randomUUID().slice(0, 8),
+          id: uuid().slice(0, 8),
           type: 'typecheck',
           name: 'Typecheck',
           command: 'bun run check',
@@ -46,7 +47,7 @@
     checks = [
       ...checks,
       {
-        id: crypto.randomUUID().slice(0, 8),
+        id: uuid().slice(0, 8),
         type: newCheckType,
         name: newCheckName,
         command: newCheckCommand,

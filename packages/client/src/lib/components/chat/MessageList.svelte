@@ -4,8 +4,10 @@
   import MessageBubble from './MessageBubble.svelte';
   import StreamingMessage from './StreamingMessage.svelte';
   import StoryActionCards from './StoryActionCards.svelte';
+  import SpriteAnimation from '$lib/components/ui/SpriteAnimation.svelte';
   import { streamStore } from '$lib/stores/stream.svelte';
   import { loopStore } from '$lib/stores/loop.svelte';
+  import { scrollStore } from '$lib/stores/scroll.svelte';
   import { hasStoryActions } from '$lib/utils/story-parser';
   import { tick } from 'svelte';
 
@@ -24,6 +26,8 @@
     if (!scrollContainer || scrollPending) return;
     const { scrollTop, scrollHeight, clientHeight } = scrollContainer;
     userScrolled = scrollHeight - scrollTop - clientHeight > 60;
+    // Broadcast scroll offset for ambient effects (star sphere rotation)
+    scrollStore.set(scrollTop);
   }
 
   async function scrollToBottom() {
@@ -38,12 +42,24 @@
     scrollPending = false;
   }
 
-  // Single effect that watches both messages and streaming content
+  // Track the conversation ID so we can detect actual switches
+  let lastConversationId: string | null | undefined = undefined;
+
+  // Single effect that watches conversation identity, messages, and streaming content
   $effect(() => {
     // Touch reactive deps
+    const id = conversationStore.active?.id ?? null;
     const _msgs = conversationStore.active?.messages?.length;
     const _blocks = streamStore.contentBlocks.length;
     const _status = streamStore.status;
+
+    // When the conversation actually changes, reset scroll state
+    if (id !== lastConversationId) {
+      lastConversationId = id;
+      userScrolled = false;
+      scrollPending = false;
+    }
+
     scrollToBottom();
   });
 </script>
@@ -52,19 +68,8 @@
   {#if !conversationStore.active || conversationStore.active.messages.length === 0}
     <div class="empty-state">
       <div class="empty-icon">
-        <svg
-          width="48"
-          height="48"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="1.5"
-        >
-          <path d="M4 4 L12 2 L20 4 L20 14 L12 22 L4 14 Z" />
-          <path d="M8 8 L12 6 L16 8 L16 13 L12 17 L8 13 Z" />
-        </svg>
+        <SpriteAnimation size={48} class="empty-sprite" />
       </div>
-      <h2>MAUDE</h2>
       <p>Start a conversation to begin.</p>
       <div class="shortcuts">
         <kbd>Ctrl+K</kbd> PALETTE
@@ -139,14 +144,6 @@
     padding: 20px;
     animation: fadeIn 0.5s linear;
   }
-  .empty-state h2 {
-    font-size: 36px;
-    font-weight: 700;
-    letter-spacing: var(--ht-brand-spacing);
-    text-transform: var(--ht-brand-transform);
-    color: var(--accent-primary);
-    text-shadow: var(--shadow-glow);
-  }
   .empty-state p {
     font-size: 15px;
     max-width: 420px;
@@ -156,7 +153,6 @@
     font-weight: 500;
   }
   .empty-icon {
-    color: var(--accent-primary);
     opacity: 0.5;
     filter: drop-shadow(var(--shadow-glow));
   }

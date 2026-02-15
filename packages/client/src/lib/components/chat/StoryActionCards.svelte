@@ -3,6 +3,7 @@
   import { parseStoryActions, type StoryAction } from '$lib/utils/story-parser';
   import { loopStore } from '$lib/stores/loop.svelte';
   import { uiStore } from '$lib/stores/ui.svelte';
+  import { uuid } from '$lib/utils/uuid';
   import { api } from '$lib/api/client';
 
   let { message } = $props<{ message: Message }>();
@@ -94,7 +95,7 @@
         if (action.priority) updates.priority = action.priority;
         if (action.acceptanceCriteria && action.acceptanceCriteria.length > 0) {
           updates.acceptanceCriteria = action.acceptanceCriteria.map((desc) => ({
-            id: crypto.randomUUID().slice(0, 8),
+            id: uuid().slice(0, 8),
             description: desc,
             passed: false,
           }));

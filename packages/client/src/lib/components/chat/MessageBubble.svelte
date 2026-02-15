@@ -273,20 +273,24 @@
   }
 
   /* Astral: thin luminous top-border, clean geometric */
-  :global([data-hypertheme='astral']) .message {
+  :global([data-hypertheme='astral']) .message,
+  :global([data-hypertheme='astral-midnight']) .message {
     border-left: none;
     border-top: 1px solid var(--border-secondary);
     border-bottom: none;
   }
-  :global([data-hypertheme='astral']) .message.user {
+  :global([data-hypertheme='astral']) .message.user,
+  :global([data-hypertheme='astral-midnight']) .message.user {
     border-left: none;
     border-top-color: var(--border-primary);
   }
-  :global([data-hypertheme='astral']) .message.assistant {
+  :global([data-hypertheme='astral']) .message.assistant,
+  :global([data-hypertheme='astral-midnight']) .message.assistant {
     border-left: none;
     border-top-color: var(--border-secondary);
   }
-  :global([data-hypertheme='astral']) .message:hover {
+  :global([data-hypertheme='astral']) .message:hover,
+  :global([data-hypertheme='astral-midnight']) .message:hover {
     border-top-color: var(--accent-primary);
     box-shadow: 0 0 15px rgba(140, 160, 220, 0.05);
   }

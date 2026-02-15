@@ -88,11 +88,21 @@
     <div class="message assistant streaming">
       <div class="message-header">
         <span class="role-label">Claude</span>
-        <span class="streaming-indicator">
-          <span class="dot"></span>
-          <span class="dot"></span>
-          <span class="dot"></span>
-        </span>
+        {#if settingsStore.streamingIndicator === 'dots'}
+          <span class="streaming-indicator">
+            <span class="dot"></span>
+            <span class="dot"></span>
+            <span class="dot"></span>
+          </span>
+        {:else if settingsStore.streamingIndicator === 'spinner'}
+          <span class="streaming-indicator">
+            <span class="spinner"></span>
+          </span>
+        {:else if settingsStore.streamingIndicator === 'pulse'}
+          <span class="streaming-indicator">
+            <span class="pulse-orb"></span>
+          </span>
+        {/if}
       </div>
 
       <div class="message-body">
@@ -143,7 +153,9 @@
         {/each}
       </div>
 
-      <div class="rainbow-throbber" aria-hidden="true"></div>
+      {#if settingsStore.streamingProgressBar !== 'none'}
+        <div class="progress-bar {settingsStore.streamingProgressBar}" aria-hidden="true"></div>
+      {/if}
     </div>
   {/snippet}
 </MessageAnimation>
@@ -199,6 +211,8 @@
     gap: 3px;
     align-items: center;
   }
+
+  /* Dots variant */
   .dot {
     width: 4px;
     height: 4px;
@@ -230,6 +244,44 @@
     }
   }
 
+  /* Spinner variant */
+  .spinner {
+    width: 12px;
+    height: 12px;
+    border: 2px solid var(--border-secondary);
+    border-top-color: var(--accent-primary);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
+  @keyframes spin {
+    to {
+      transform: rotate(360deg);
+    }
+  }
+
+  /* Pulse variant */
+  .pulse-orb {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--accent-primary);
+    box-shadow: var(--shadow-glow-sm);
+    animation: pulseOrb 1.5s ease-in-out infinite;
+  }
+  @keyframes pulseOrb {
+    0%,
+    100% {
+      opacity: 0.3;
+      transform: scale(0.8);
+      box-shadow: none;
+    }
+    50% {
+      opacity: 1;
+      transform: scale(1.2);
+      box-shadow: var(--shadow-glow);
+    }
+  }
+
   .message-body {
     display: flex;
     flex-direction: column;
@@ -244,11 +296,16 @@
     font-weight: 500;
   }
 
-  .rainbow-throbber {
+  /* Progress bar base */
+  .progress-bar {
     width: 100%;
     height: 3px;
     margin-top: 8px;
     border-radius: var(--radius-sm);
+  }
+
+  /* Rainbow variant */
+  .progress-bar.rainbow {
     background: linear-gradient(
       in oklab 90deg,
       oklch(var(--rainbow-l) 0.2 0),
@@ -262,13 +319,43 @@
     background-size: 200% 100%;
     animation: rainbowSlide 2s linear infinite;
   }
-
   @keyframes rainbowSlide {
     0% {
       background-position: 0% 0%;
     }
     100% {
       background-position: 200% 0%;
+    }
+  }
+
+  /* Accent variant */
+  .progress-bar.accent {
+    background: linear-gradient(90deg, transparent, var(--accent-primary), transparent);
+    background-size: 200% 100%;
+    animation: accentSlide 1.5s ease-in-out infinite;
+  }
+  @keyframes accentSlide {
+    0% {
+      background-position: -200% 0%;
+    }
+    100% {
+      background-position: 200% 0%;
+    }
+  }
+
+  /* Pulse variant */
+  .progress-bar.pulse {
+    background: var(--accent-primary);
+    animation: barPulse 2s ease-in-out infinite;
+  }
+  @keyframes barPulse {
+    0%,
+    100% {
+      opacity: 0.15;
+    }
+    50% {
+      opacity: 0.6;
+      box-shadow: 0 0 8px var(--accent-primary);
     }
   }
 

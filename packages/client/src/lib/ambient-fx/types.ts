@@ -30,6 +30,10 @@ export interface AmbientEffect {
   update(deltaTime: number): void;
   render(ctx: CanvasRenderingContext2D): void;
   destroy(): void;
+  /** Feed page scroll offset for parallax / sphere rotation */
+  setScrollOffset?(offset: number): void;
+  /** Feed pointer position for interactive constellation reveal */
+  setPointerPosition?(x: number, y: number): void;
 }
 
 /**
@@ -80,23 +84,43 @@ export const HYPERTHEME_EFFECTS: Record<
     },
   },
   astral: {
-    type: 'stars',
+    type: 'constellation',
     config: {
-      count: 120,
-      sizeMin: 0.5,
-      sizeMax: 3,
+      count: 150,
+      sizeMin: 2,
+      sizeMax: 6,
       speedMin: 0,
-      speedMax: 0.2,
-      opacity: 0.8,
+      speedMax: 0.5,
+      opacity: 0.9,
       drift: 0,
       blur: 0,
     },
     colors: {
-      particleColor1: 'rgba(200, 210, 230, 0.7)',
-      particleColor2: 'rgba(170, 190, 220, 0.5)',
-      particleColor3: 'rgba(140, 170, 210, 0.4)',
-      glowColor: 'rgba(180, 195, 225, 0.3)',
-      backgroundColor: '#06080e',
+      particleColor1: 'rgba(255, 255, 255, 0.95)',
+      particleColor2: 'rgba(147, 197, 253, 0.9)',
+      particleColor3: 'rgba(251, 191, 36, 0.8)',
+      glowColor: 'rgba(96, 165, 250, 0.6)',
+      backgroundColor: '#020817',
+    },
+  },
+  'astral-midnight': {
+    type: 'constellation',
+    config: {
+      count: 150,
+      sizeMin: 2,
+      sizeMax: 6,
+      speedMin: 0,
+      speedMax: 0.5,
+      opacity: 0.95,
+      drift: 0,
+      blur: 0,
+    },
+    colors: {
+      particleColor1: 'rgba(255, 255, 255, 0.95)',
+      particleColor2: 'rgba(180, 200, 255, 0.9)',
+      particleColor3: 'rgba(100, 150, 255, 0.8)',
+      glowColor: 'rgba(80, 120, 200, 0.4)',
+      backgroundColor: '#000000',
     },
   },
 };

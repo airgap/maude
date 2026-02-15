@@ -29,6 +29,12 @@ import { resolve } from 'path';
 
 const app = new Hono();
 
+// TLS configuration — set TLS_CERT and TLS_KEY env vars to enable HTTPS
+const tlsCert = process.env.TLS_CERT;
+const tlsKey = process.env.TLS_KEY;
+const tls = tlsCert && tlsKey ? { cert: Bun.file(tlsCert), key: Bun.file(tlsKey) } : undefined;
+const protocol = tls ? 'https' : 'http';
+
 // Middleware
 app.use(
   '*',
@@ -36,6 +42,8 @@ app.use(
     origin: (origin) => {
       // No origin: same-origin request, Tauri on Linux (webkit sends empty origin), or tools
       if (!origin) return '*';
+      // When TLS is enabled, allow the request's own origin (e.g. Tailscale hostname)
+      if (tls) return origin;
       // Allow any localhost port (dev mode, Tauri on other platforms)
       if (/^https?:\/\/localhost(:\d+)?$/.test(origin)) return origin;
       if (origin === 'tauri://localhost' || origin === 'https://tauri.localhost') return origin;
@@ -95,17 +103,18 @@ if (requestedPort === 0) {
     port: 0,
     fetch: app.fetch,
     websocket,
+    tls,
     idleTimeout: 120,
   });
   // Machine-parseable line for Tauri to read the actual port
   console.log(`MAUDE_PORT=${server.port}`);
-  console.log(`Maude server running on http://localhost:${server.port}`);
+  console.log(`Maude server running on ${protocol}://localhost:${server.port}`);
 } else {
   console.log(`MAUDE_PORT=${requestedPort}`);
-  console.log(`Maude server running on http://localhost:${requestedPort}`);
+  console.log(`Maude server running on ${protocol}://localhost:${requestedPort}`);
 }
 
 // Used by Bun's module loader when requestedPort !== 0 (supports --hot reload in dev)
 export default requestedPort !== 0
-  ? { port: requestedPort, fetch: app.fetch, websocket, idleTimeout: 120 }
+  ? { port: requestedPort, fetch: app.fetch, websocket, tls, idleTimeout: 120 }
   : undefined;

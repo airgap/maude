@@ -1,5 +1,6 @@
 import { api } from '$lib/api/client';
 import { uiStore } from './ui.svelte';
+import { uuid } from '$lib/utils/uuid';
 import type { EditorConfigProps } from '@maude/shared';
 
 export interface EditorTab {
@@ -169,7 +170,7 @@ function createEditorStore() {
 
       const fileName = filePath.split('/').pop() ?? filePath;
       const language = detectLanguage(fileName);
-      const id = crypto.randomUUID();
+      const id = uuid();
 
       // Fetch editorconfig (non-blocking — don't fail the open if this errors)
       let editorConfig: EditorConfigProps | undefined;

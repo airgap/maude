@@ -109,6 +109,17 @@ app.post('/:conversationId', async (c) => {
 
   let sessionId = c.req.header('x-session-id') || null;
 
+  // Validate that a reused session belongs to this conversation.
+  // If the client sends a stale session ID from a previous conversation,
+  // discard it and create a fresh session to prevent the assistant
+  // response from being persisted to the wrong conversation.
+  if (sessionId) {
+    const existing = claudeManager.getSession(sessionId);
+    if (!existing || existing.conversationId !== conversationId) {
+      sessionId = null;
+    }
+  }
+
   try {
     if (!sessionId) {
       sessionId = await claudeManager.createSession(conversationId, getSessionOpts(conv));

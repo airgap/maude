@@ -1379,6 +1379,16 @@ select:focus {
   outline: none;
 }
 
+/* Chat input textarea: no border/outline in any state or hypertheme */
+.chat-input-container textarea,
+.chat-input-container textarea:focus,
+[data-hypertheme] .chat-input-container textarea,
+[data-hypertheme] .chat-input-container textarea:focus {
+  border: none;
+  outline: none;
+  box-shadow: none;
+}
+
 .sr-only {
   position: absolute;
   width: 1px;
@@ -1655,7 +1665,8 @@ select:focus {
 [data-hypertheme='study'] ::-webkit-scrollbar-thumb {
   border-radius: 3px;
 }
-[data-hypertheme='astral'] ::-webkit-scrollbar-thumb {
+[data-hypertheme='astral'] ::-webkit-scrollbar-thumb,
+[data-hypertheme='astral-midnight'] ::-webkit-scrollbar-thumb {
   border-radius: 2px;
 }
 
@@ -1709,7 +1720,7 @@ select:focus {
   box-shadow:
     0 0 12px rgba(139, 92, 246, 0.2),
     inset 0 0 12px rgba(139, 92, 246, 0.04);
-  animation: glowPulse 3s ease-in-out infinite;
+  /* Removed infinite glowPulse animation — continuous box-shadow animation is expensive */
 }
 [data-hypertheme='arcane'] code {
   border: 1px dashed var(--border-primary);
@@ -1744,17 +1755,17 @@ select:focus {
   z-index: 9999;
   background: radial-gradient(ellipse at 50% 50%, transparent 60%, rgba(0, 0, 0, 0.25) 100%);
 }
-/* Arcane: noise grain overlay for atmosphere */
+/* Arcane: subtle grain overlay — uses a tiny base64 noise PNG instead of
+   expensive SVG feTurbulence filter which was causing continuous repaints */
 [data-hypertheme='arcane'] body::before {
   content: '';
   position: fixed;
   inset: 0;
   pointer-events: none;
   z-index: 9998;
-  opacity: 0.025;
-  mix-blend-mode: overlay;
-  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
-  background-size: 200px 200px;
+  opacity: 0.03;
+  background-image: url('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAADAAAAAwCAYAAABXAvmHAAAABGdBTUEAALGPC/xhBQAAAMBJREFUaEPtk0EOgCAMRLn/pXUDEqgzlMYFxPj+BmmZTksIYRiGYTja5Odc2+Y3t+n3dapNf/+mtu+BuvSq+77OpqD7FNRekrpt1B7YaF/Vno/AemB7sS1jO/Dcg3rgqdrz7IH1wCLYDhxjP9ie0sL2Q/DcA2XsBH4B/AxKi7aTvjiwHlgIb8h3oMxQ4WuO3XqgjPAIjwPXPcqQIzwC44DyFLAPuB6YDxQYKnw9sA9Y+LsHZu2BvhqG4Y9CeAELFRPW1SZAIYAAAAASUVORK5CYII=');
+  background-size: 48px 48px;
 }
 
 /* ──────────── ETHEREAL ─────────────────────────
@@ -1866,38 +1877,50 @@ select:focus {
    Wide letter-spacing. Geometric precision.
    Slow, deliberate transitions. Cool serenity.   */
 
-[data-hypertheme='astral'] body {
+[data-hypertheme='astral'] body,
+[data-hypertheme='astral-midnight'] body {
   letter-spacing: 0.4px;
   line-height: 1.7;
 }
 [data-hypertheme='astral'] input,
 [data-hypertheme='astral'] textarea,
-[data-hypertheme='astral'] select {
+[data-hypertheme='astral'] select,
+[data-hypertheme='astral-midnight'] input,
+[data-hypertheme='astral-midnight'] textarea,
+[data-hypertheme='astral-midnight'] select {
   padding: var(--ht-input-padding);
 }
 [data-hypertheme='astral'] input:focus,
 [data-hypertheme='astral'] textarea:focus,
-[data-hypertheme='astral'] select:focus {
+[data-hypertheme='astral'] select:focus,
+[data-hypertheme='astral-midnight'] input:focus,
+[data-hypertheme='astral-midnight'] textarea:focus,
+[data-hypertheme='astral-midnight'] select:focus {
   box-shadow:
     0 0 0 1px var(--border-focus),
     0 0 15px rgba(140, 160, 220, 0.1);
 }
-[data-hypertheme='astral'] code {
+[data-hypertheme='astral'] code,
+[data-hypertheme='astral-midnight'] code {
   border: 1px solid var(--border-primary);
   letter-spacing: 0.5px;
 }
-[data-hypertheme='astral'] pre {
+[data-hypertheme='astral'] pre,
+[data-hypertheme='astral-midnight'] pre {
   border: 1px solid var(--border-primary);
   position: relative;
 }
-[data-hypertheme='astral'] :focus-visible {
+[data-hypertheme='astral'] :focus-visible,
+[data-hypertheme='astral-midnight'] :focus-visible {
   outline: 1px solid var(--border-focus);
   outline-offset: 3px;
 }
-[data-hypertheme='astral'] ::selection {
+[data-hypertheme='astral'] ::selection,
+[data-hypertheme='astral-midnight'] ::selection {
   background: rgba(140, 160, 220, 0.3);
 }
-[data-hypertheme='astral'] hr {
+[data-hypertheme='astral'] hr,
+[data-hypertheme='astral-midnight'] hr {
   border: none;
   height: 1px;
   background: var(--border-primary);

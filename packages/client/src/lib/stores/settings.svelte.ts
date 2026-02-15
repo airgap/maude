@@ -33,6 +33,10 @@ interface SettingsState {
     string,
     { name: string; type: 'dark' | 'light'; cssVars: Record<string, string> }
   >;
+  streamingIndicator: 'dots' | 'spinner' | 'pulse' | 'none';
+  streamingProgressBar: 'rainbow' | 'accent' | 'pulse' | 'none';
+  streamingCursor: 'block' | 'line' | 'underscore' | 'none';
+  sendWithEnter: boolean;
 }
 
 const defaults: SettingsState = {
@@ -42,7 +46,7 @@ const defaults: SettingsState = {
   model: 'claude-sonnet-4-5-20250929',
   permissionMode: 'safe',
   keybindings: [
-    { keys: 'Ctrl+Enter', action: 'send', context: 'input', description: 'Send message' },
+    { keys: 'Enter', action: 'send', context: 'input', description: 'Send message' },
     {
       keys: 'Shift+Tab Shift+Tab',
       action: 'togglePlanMode',
@@ -70,6 +74,10 @@ const defaults: SettingsState = {
   sessionBudgetUsd: null,
   customSnippets: {},
   customThemes: {},
+  streamingIndicator: 'dots',
+  streamingProgressBar: 'rainbow',
+  streamingCursor: 'block',
+  sendWithEnter: true,
 };
 
 function loadFromStorage(): SettingsState {
@@ -241,6 +249,18 @@ function createSettingsStore() {
     },
     get sessionBudgetUsd() {
       return state.sessionBudgetUsd;
+    },
+    get streamingIndicator() {
+      return state.streamingIndicator;
+    },
+    get streamingProgressBar() {
+      return state.streamingProgressBar;
+    },
+    get streamingCursor() {
+      return state.streamingCursor;
+    },
+    get sendWithEnter() {
+      return state.sendWithEnter;
     },
     get all() {
       return state;

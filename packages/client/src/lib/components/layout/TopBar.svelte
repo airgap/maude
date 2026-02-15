@@ -4,6 +4,7 @@
   import { streamStore } from '$lib/stores/stream.svelte';
   import { uiStore } from '$lib/stores/ui.svelte';
   import WorkspaceTabBar from './WorkspaceTabBar.svelte';
+  import SpriteAnimation from '$lib/components/ui/SpriteAnimation.svelte';
 
   const models = [
     { id: 'claude-opus-4-6', label: 'Opus 4.6' },
@@ -36,7 +37,7 @@
         <line x1="9" y1="3" x2="9" y2="21" />
       </svg>
     </button>
-    <span class="brand">Maude</span>
+    <SpriteAnimation size={24} class="brand-sprite" />
     <WorkspaceTabBar />
   </div>
 
@@ -153,7 +154,8 @@
     border-bottom: 1px double var(--border-primary);
   }
 
-  :global([data-hypertheme='astral']) .topbar::after {
+  :global([data-hypertheme='astral']) .topbar::after,
+  :global([data-hypertheme='astral-midnight']) .topbar::after {
     background:
       radial-gradient(0.5px 0.5px at 10% 50%, var(--border-primary), transparent),
       radial-gradient(0.5px 0.5px at 30% 30%, var(--border-secondary), transparent),
@@ -175,13 +177,9 @@
     min-width: 0;
   }
 
-  .brand {
-    font-weight: 700;
-    font-size: 17px;
-    letter-spacing: var(--ht-brand-spacing);
-    text-transform: var(--ht-brand-transform);
-    color: var(--accent-primary);
-    text-shadow: var(--shadow-glow-sm);
+  :global(.brand-sprite) {
+    flex-shrink: 0;
+    filter: drop-shadow(0 0 4px var(--accent-primary));
   }
 
   .conv-title {

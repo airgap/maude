@@ -74,7 +74,8 @@
       inset 0 1px 3px rgba(0, 0, 0, 0.12);
     padding: 14px 18px;
   }
-  :global([data-hypertheme='astral']) .toast {
+  :global([data-hypertheme='astral']) .toast,
+  :global([data-hypertheme='astral-midnight']) .toast {
     animation: toastPhaseIn 350ms ease;
     border: 1px solid var(--border-secondary);
     box-shadow:

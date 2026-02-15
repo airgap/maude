@@ -21,7 +21,7 @@
   let dirScopeEl: HTMLDivElement;
   let editingPath = $state(false);
   let pathInputValue = $state('');
-  let pathInput: HTMLInputElement;
+  let pathInput = $state<HTMLInputElement>();
   let contextFiles = $state<Set<string>>(new Set());
 
   function toggleContextFile(tabId: string) {
@@ -202,11 +202,23 @@
   }
 
   function handleKeydown(e: KeyboardEvent) {
-    // Ctrl+Enter or Cmd+Enter: send
-    if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
-      e.preventDefault();
-      send();
-      return;
+    // Send: Enter (default) or Ctrl+Enter depending on setting
+    if (e.key === 'Enter') {
+      if (settingsStore.sendWithEnter) {
+        // Enter sends, Shift+Enter for newline
+        if (!e.shiftKey && !e.ctrlKey && !e.metaKey && !e.altKey) {
+          e.preventDefault();
+          send();
+          return;
+        }
+      } else {
+        // Ctrl/Cmd+Enter sends, plain Enter for newline
+        if (e.ctrlKey || e.metaKey) {
+          e.preventDefault();
+          send();
+          return;
+        }
+      }
     }
 
     // Shift+Tab x2: toggle plan mode
@@ -404,7 +416,7 @@
       oninput={handleInput}
       placeholder={conversationStore.active?.planMode || localPlanMode
         ? 'Describe what you want to plan...'
-        : 'Message Claude... (Ctrl+Enter to send, / for commands)'}
+        : 'Message Claude...'}
       rows="1"
       disabled={streamStore.status === 'tool_pending'}
     ></textarea>
@@ -436,7 +448,7 @@
           class="btn-action send"
           onclick={send}
           disabled={!inputText.trim()}
-          title="Send (Ctrl+Enter)"
+          title={settingsStore.sendWithEnter ? 'Send (Enter)' : 'Send (Ctrl+Enter)'}
         >
           <svg
             width="16"
@@ -460,6 +472,13 @@
     padding: 12px 28px 20px;
     background: var(--bg-primary);
     z-index: 1;
+  }
+  /* Let stars show through in canvas-based hyperthemes */
+  :global([data-hypertheme='arcane']) .chat-input-container,
+  :global([data-hypertheme='ethereal']) .chat-input-container,
+  :global([data-hypertheme='astral']) .chat-input-container,
+  :global([data-hypertheme='astral-midnight']) .chat-input-container {
+    background: transparent;
   }
 
   .dir-scope {
@@ -536,16 +555,6 @@
     z-index: 10;
     box-shadow: var(--shadow-lg);
   }
-  .dir-picker-header {
-    padding: 6px 10px;
-    font-size: 11px;
-    color: var(--text-tertiary);
-    border-bottom: 1px solid var(--border-secondary);
-    margin-bottom: 4px;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
   .dir-option {
     display: block;
     width: 100%;
@@ -599,57 +608,49 @@
     align-items: flex-end;
     gap: 10px;
     background: var(--bg-input);
-    border: var(--ht-input-border-width) var(--ht-input-border-style) var(--border-primary);
+    border: none;
     border-radius: var(--radius);
     padding: var(--ht-input-padding);
     transition: all var(--transition);
     cursor: text;
+    outline: none;
   }
   .input-wrapper:focus-within {
-    border-color: var(--accent-primary);
-    box-shadow: var(--shadow-glow-sm);
+    border: none;
+    box-shadow: none;
+    outline: none;
   }
   .input-wrapper.plan-active {
-    border-color: var(--accent-warning);
-    box-shadow: 0 0 10px rgba(255, 170, 0, 0.15);
+    border: none;
+    box-shadow: none;
+    outline: none;
   }
   .input-wrapper.plan-active:focus-within {
-    border-color: var(--accent-warning);
-    box-shadow: 0 0 14px rgba(255, 170, 0, 0.25);
+    border: none;
+    box-shadow: none;
+    outline: none;
   }
 
   /* ── Hypertheme input variants ── */
 
-  /* Ethereal: floating pill, soft glow ring */
+  /* Ethereal */
   :global([data-hypertheme='ethereal']) .input-wrapper {
     border-radius: var(--radius-xl);
-    border: 1px solid var(--border-secondary);
-    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
-  }
-  :global([data-hypertheme='ethereal']) .input-wrapper:focus-within {
-    border-color: transparent;
-    box-shadow:
-      0 0 0 2px rgba(160, 120, 240, 0.2),
-      0 4px 20px rgba(0, 0, 0, 0.2),
-      0 0 30px rgba(160, 120, 240, 0.06);
   }
 
-  /* Arcane: double border, inner glow */
+  /* Arcane */
   :global([data-hypertheme='arcane']) .input-wrapper {
-    border: 3px double var(--border-primary);
     background-image: linear-gradient(0deg, rgba(139, 92, 246, 0.03), transparent 30%);
   }
-  :global([data-hypertheme='arcane']) .input-wrapper:focus-within {
-    border-color: var(--accent-primary);
-    box-shadow:
-      inset 0 0 15px rgba(139, 92, 246, 0.06),
-      0 0 10px rgba(139, 92, 246, 0.15);
+
+  /* Astral — don't stack another opaque layer on top of the glass parent */
+  :global([data-hypertheme='astral']) .input-wrapper,
+  :global([data-hypertheme='astral-midnight']) .input-wrapper {
+    background: transparent;
   }
 
-  /* Study: thick inset border, book-page */
+  /* Study */
   :global([data-hypertheme='study']) .input-wrapper {
-    border: 2px solid var(--border-primary);
-    box-shadow: inset 0 2px 6px rgba(0, 0, 0, 0.15);
     background-image: repeating-linear-gradient(
       0deg,
       transparent,
@@ -657,23 +658,6 @@
       rgba(180, 130, 60, 0.03) 27px,
       rgba(180, 130, 60, 0.03) 28px
     );
-  }
-  :global([data-hypertheme='study']) .input-wrapper:focus-within {
-    border-color: var(--accent-primary);
-    box-shadow:
-      inset 0 2px 6px rgba(0, 0, 0, 0.15),
-      0 0 0 2px rgba(218, 165, 50, 0.15);
-  }
-
-  /* Astral: thin border, wide glow ring on focus */
-  :global([data-hypertheme='astral']) .input-wrapper {
-    border: 1px solid var(--border-secondary);
-  }
-  :global([data-hypertheme='astral']) .input-wrapper:focus-within {
-    border-color: var(--accent-primary);
-    box-shadow:
-      0 0 0 1px var(--border-focus),
-      0 0 20px rgba(140, 160, 220, 0.08);
   }
 
   textarea {
@@ -686,9 +670,9 @@
     font-weight: 500;
     line-height: 1.5;
     color: var(--text-primary);
-    min-height: 24px;
+    min-height: 34px;
     max-height: 300px;
-    padding: 0;
+    padding: 5px 0;
     outline: none;
     box-shadow: none;
     letter-spacing: 0.3px;

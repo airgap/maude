@@ -1,5 +1,9 @@
 /**
  * Motes Effect — Floating luminous particles for Ethereal hypertheme
+ *
+ * Performance optimization: pre-renders each mote's glow to an offscreen
+ * canvas sprite at init time, then uses drawImage() instead of creating
+ * new radial gradients every frame.
  */
 import type { AmbientEffect, AmbientThemeColors, ParticleConfig } from './types';
 
@@ -18,6 +22,9 @@ interface Mote {
   drift: number;
   phase: number;
   phaseSpeed: number;
+  /** Pre-rendered glow sprite */
+  sprite: OffscreenCanvas;
+  spriteSize: number;
 }
 
 function parseColor(color: string): { r: number; g: number; b: number } {
@@ -27,6 +34,40 @@ function parseColor(color: string): { r: number; g: number; b: number } {
     return { r: parts[0], g: parts[1], b: parts[2] };
   }
   return { r: 180, g: 160, b: 220 };
+}
+
+/**
+ * Pre-render a mote's glow + core to an offscreen canvas.
+ * The sprite includes the radial gradient glow and bright center dot.
+ */
+function createMoteSprite(
+  r: number,
+  g: number,
+  b: number,
+  maxSize: number,
+): { canvas: OffscreenCanvas; size: number } {
+  const glowRadius = maxSize * 3;
+  const dim = Math.ceil(glowRadius * 2) + 2;
+  const oc = new OffscreenCanvas(dim, dim);
+  const ctx = oc.getContext('2d')!;
+  const cx = dim / 2;
+  const cy = dim / 2;
+
+  // Glow
+  const gradient = ctx.createRadialGradient(cx, cy, 0, cx, cy, glowRadius);
+  gradient.addColorStop(0, `rgba(${r}, ${g}, ${b}, 0.6)`);
+  gradient.addColorStop(0.4, `rgba(${r}, ${g}, ${b}, 0.2)`);
+  gradient.addColorStop(1, `rgba(${r}, ${g}, ${b}, 0)`);
+  ctx.fillStyle = gradient;
+  ctx.fillRect(0, 0, dim, dim);
+
+  // Core
+  ctx.fillStyle = `rgba(${r}, ${g}, ${b}, 1)`;
+  ctx.beginPath();
+  ctx.arc(cx, cy, maxSize * 0.5, 0, Math.PI * 2);
+  ctx.fill();
+
+  return { canvas: oc, size: dim };
 }
 
 export class MotesEffect implements AmbientEffect {
@@ -50,11 +91,22 @@ export class MotesEffect implements AmbientEffect {
       this.colors.particleColor3,
     ];
 
+    // Pre-render sprites per color
+    const spriteCache = new Map<string, { canvas: OffscreenCanvas; size: number }>();
+
     this.motes = Array.from({ length: this.config.count }, (_, i) => {
       const colorStr = colorStrings[i % colorStrings.length];
       const { r, g, b } = parseColor(colorStr);
       const baseSize =
         this.config.sizeMin + Math.random() * (this.config.sizeMax - this.config.sizeMin);
+
+      // Get or create sprite for this color at max size
+      const spriteKey = `${r},${g},${b}`;
+      let spriteData = spriteCache.get(spriteKey);
+      if (!spriteData) {
+        spriteData = createMoteSprite(r, g, b, this.config.sizeMax);
+        spriteCache.set(spriteKey, spriteData);
+      }
 
       return {
         x: Math.random() * width,
@@ -71,6 +123,8 @@ export class MotesEffect implements AmbientEffect {
         drift: (Math.random() - 0.5) * this.config.drift,
         phase: Math.random() * Math.PI * 2,
         phaseSpeed: 0.3 + Math.random() * 0.7,
+        sprite: spriteData.canvas,
+        spriteSize: spriteData.size,
       };
     });
   }
@@ -115,23 +169,19 @@ export class MotesEffect implements AmbientEffect {
     for (const mote of this.motes) {
       if (mote.opacity < 0.02) continue;
 
-      // Draw glow
-      const gradient = ctx.createRadialGradient(mote.x, mote.y, 0, mote.x, mote.y, mote.size * 3);
-      gradient.addColorStop(0, `rgba(${mote.r}, ${mote.g}, ${mote.b}, ${mote.opacity * 0.6})`);
-      gradient.addColorStop(0.4, `rgba(${mote.r}, ${mote.g}, ${mote.b}, ${mote.opacity * 0.2})`);
-      gradient.addColorStop(1, `rgba(${mote.r}, ${mote.g}, ${mote.b}, 0)`);
-
-      ctx.fillStyle = gradient;
-      ctx.beginPath();
-      ctx.arc(mote.x, mote.y, mote.size * 3, 0, Math.PI * 2);
-      ctx.fill();
-
-      // Draw core
-      ctx.fillStyle = `rgba(${mote.r}, ${mote.g}, ${mote.b}, ${mote.opacity})`;
-      ctx.beginPath();
-      ctx.arc(mote.x, mote.y, mote.size * 0.5, 0, Math.PI * 2);
-      ctx.fill();
+      // Draw pre-rendered sprite with current opacity and size scaling
+      const scale = mote.size / this.config.sizeMax;
+      const drawSize = mote.spriteSize * scale;
+      ctx.globalAlpha = mote.opacity;
+      ctx.drawImage(
+        mote.sprite,
+        mote.x - drawSize * 0.5,
+        mote.y - drawSize * 0.5,
+        drawSize,
+        drawSize,
+      );
     }
+    ctx.globalAlpha = 1;
   }
 
   destroy(): void {

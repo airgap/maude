@@ -318,6 +318,19 @@
             </label>
           </div>
           <div class="setting-group">
+            <label class="setting-label">Send with Enter</label>
+            <label class="toggle">
+              <input
+                type="checkbox"
+                checked={settingsStore.sendWithEnter}
+                onchange={() =>
+                  settingsStore.update({ sendWithEnter: !settingsStore.sendWithEnter })}
+              />
+              <span class="toggle-slider"></span>
+            </label>
+            <p class="setting-desc">When off, use Ctrl+Enter to send</p>
+          </div>
+          <div class="setting-group">
             <label class="setting-label">Show thinking blocks</label>
             <label class="toggle">
               <input
@@ -523,6 +536,57 @@
               />
               <span class="toggle-slider"></span>
             </label>
+          </div>
+
+          <div class="setting-group">
+            <label class="setting-label">Streaming Animations</label>
+            <div class="streaming-options">
+              <div class="streaming-option-row">
+                <span class="streaming-option-label">Header indicator</span>
+                <select
+                  value={settingsStore.streamingIndicator}
+                  onchange={(e) =>
+                    settingsStore.update({
+                      streamingIndicator: (e.target as HTMLSelectElement).value as any,
+                    })}
+                >
+                  <option value="dots">Dots</option>
+                  <option value="spinner">Spinner</option>
+                  <option value="pulse">Pulse</option>
+                  <option value="none">None</option>
+                </select>
+              </div>
+              <div class="streaming-option-row">
+                <span class="streaming-option-label">Progress bar</span>
+                <select
+                  value={settingsStore.streamingProgressBar}
+                  onchange={(e) =>
+                    settingsStore.update({
+                      streamingProgressBar: (e.target as HTMLSelectElement).value as any,
+                    })}
+                >
+                  <option value="rainbow">Rainbow</option>
+                  <option value="accent">Accent</option>
+                  <option value="pulse">Pulse</option>
+                  <option value="none">None</option>
+                </select>
+              </div>
+              <div class="streaming-option-row">
+                <span class="streaming-option-label">Text cursor</span>
+                <select
+                  value={settingsStore.streamingCursor}
+                  onchange={(e) =>
+                    settingsStore.update({
+                      streamingCursor: (e.target as HTMLSelectElement).value as any,
+                    })}
+                >
+                  <option value="block">Block &#x258A;</option>
+                  <option value="line">Line |</option>
+                  <option value="underscore">Underscore _</option>
+                  <option value="none">None</option>
+                </select>
+              </div>
+            </div>
           </div>
         {:else if activeTab === 'editor'}
           <div class="setting-group">
@@ -870,7 +934,7 @@
   /* Hypertheme grid */
   .hypertheme-grid {
     display: grid;
-    grid-template-columns: repeat(5, 1fr);
+    grid-template-columns: repeat(3, 1fr);
     gap: 8px;
   }
   .hypertheme-option {
@@ -1311,6 +1375,40 @@
     font-family: var(--font-family);
   }
   .sandbox-path-input:focus {
+    border-color: var(--accent-primary);
+    outline: none;
+  }
+
+  /* Streaming animation options */
+  .streaming-options {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .streaming-option-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 6px 10px;
+    background: var(--bg-tertiary);
+    border-radius: var(--radius-sm);
+  }
+  .streaming-option-label {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-secondary);
+  }
+  .streaming-option-row select {
+    width: 130px;
+    padding: 4px 8px;
+    font-size: 12px;
+    background: var(--bg-input);
+    border: 1px solid var(--border-secondary);
+    border-radius: var(--radius-sm);
+    color: var(--text-primary);
+  }
+  .streaming-option-row select:focus {
     border-color: var(--accent-primary);
     outline: none;
   }

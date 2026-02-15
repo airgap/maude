@@ -9,9 +9,87 @@
       rel="icon"
       href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⚡</text></svg>"
     />
+    <script>
+      // Set --bg-primary from saved theme BEFORE first paint so splash isn't grey
+      try {
+        var s = JSON.parse(localStorage.getItem('maude-settings') || '{}');
+        var bg = {
+          tech: '#0c0c0c',
+          arcane: '#0d0818',
+          ethereal: '#0c0a08',
+          astral: '#020817',
+          'astral-midnight': '#000000',
+          study: '#1a1410',
+        }[s.hypertheme];
+        if (bg) document.documentElement.style.setProperty('--bg-primary', bg);
+      } catch (e) {}
+    </script>
+    <style>
+      /* Splash screen — renders immediately, before any JS */
+      #splash {
+        position: fixed;
+        inset: 0;
+        z-index: 99999;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: var(--bg-primary, #0a0a0a);
+        transition:
+          opacity 0.3s ease,
+          visibility 0.3s ease;
+      }
+      #splash.dismissed {
+        opacity: 0;
+        visibility: hidden;
+        pointer-events: none;
+      }
+      #splash canvas {
+        image-rendering: pixelated;
+        image-rendering: crisp-edges;
+      }
+    </style>
     %sveltekit.head%
   </head>
   <body data-sveltekit-preload-data="hover">
+    <!-- Splash screen: E logo centered, visible instantly -->
+    <div id="splash">
+      <canvas id="splash-e" width="64" height="64" style="width: 64px; height: 64px"></canvas>
+    </div>
+    <script>
+      // Animate E sprite immediately — no framework needed
+      (function () {
+        var canvas = document.getElementById('splash-e');
+        var ctx = canvas && canvas.getContext('2d');
+        if (!ctx) return;
+        var img = new Image();
+        img.src = '/E.png';
+        var frame = 0,
+          total = 11,
+          fw = 32,
+          fh = 32;
+        ctx.imageSmoothingEnabled = false;
+        img.onload = function () {
+          function draw() {
+            ctx.clearRect(0, 0, 64, 64);
+            ctx.drawImage(img, frame * fw, 0, fw, fh, 0, 0, 64, 64);
+            // Tint with accent cyan
+            ctx.globalCompositeOperation = 'source-atop';
+            ctx.fillStyle = '#00b4ff';
+            ctx.fillRect(0, 0, 64, 64);
+            ctx.globalCompositeOperation = 'source-over';
+          }
+          draw();
+          var iv = setInterval(function () {
+            frame++;
+            if (frame >= total) {
+              clearInterval(iv);
+              frame = total - 1;
+            }
+            draw();
+          }, 30);
+        };
+      })();
+    </script>
     <div style="display: contents">%sveltekit.body%</div>
   </body>
 </html>

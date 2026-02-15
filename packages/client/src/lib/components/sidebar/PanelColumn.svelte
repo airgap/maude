@@ -192,7 +192,8 @@
   /* Let canvas effects bleed through in magic hyperthemes */
   :global([data-hypertheme='arcane']) .panel-column,
   :global([data-hypertheme='ethereal']) .panel-column,
-  :global([data-hypertheme='astral']) .panel-column {
+  :global([data-hypertheme='astral']) .panel-column,
+  :global([data-hypertheme='astral-midnight']) .panel-column {
     background: var(--bg-glass, rgba(14, 10, 8, 0.85));
   }
 

@@ -323,6 +323,7 @@ function createStreamStore() {
 
     reset() {
       status = 'idle';
+      sessionId = null;
       conversationId = null;
       partialText = '';
       partialThinking = '';

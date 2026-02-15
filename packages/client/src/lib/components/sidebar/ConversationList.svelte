@@ -24,6 +24,9 @@
       .filter((c) => c.title.toLowerCase().includes(search.toLowerCase())),
   );
 
+  /** Whether the draft placeholder should appear (new conversation, nothing typed yet). */
+  let showDraft = $derived(conversationStore.draft !== null && !conversationStore.active);
+
   onMount(async () => {
     try {
       const res = await api.conversations.list();
@@ -53,6 +56,7 @@
 
   async function selectConversation(id: string) {
     if (conversationStore.activeId === id) return;
+    conversationStore.clearDraft();
     conversationStore.setLoading(true);
     try {
       const res = await api.conversations.get(id);
@@ -71,6 +75,7 @@
 
   async function newConversation() {
     conversationStore.setActive(null);
+    conversationStore.createDraft();
     // Only reset if no active stream is running for another conversation
     if (!streamStore.isStreaming) {
       streamStore.reset();
@@ -135,6 +140,14 @@
   {/if}
 
   <div class="conv-items">
+    {#if showDraft}
+      <div class="conv-item active draft">
+        <div class="conv-title truncate">New conversation</div>
+        <div class="conv-meta">
+          <span>Now</span>
+        </div>
+      </div>
+    {/if}
     {#each filtered as conv (conv.id)}
       <!-- svelte-ignore a11y_no_static_element_interactions -->
       <div
@@ -163,9 +176,11 @@
         </button>
       </div>
     {:else}
-      <div class="empty">
-        {search ? 'No matching conversations' : 'No conversations yet'}
-      </div>
+      {#if !showDraft}
+        <div class="empty">
+          {search ? 'No matching conversations' : 'No conversations yet'}
+        </div>
+      {/if}
     {/each}
   </div>
 </div>
@@ -291,19 +306,27 @@
     box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.1);
   }
 
-  :global([data-hypertheme='astral']) .conv-item {
+  :global([data-hypertheme='astral']) .conv-item,
+  :global([data-hypertheme='astral-midnight']) .conv-item {
     border-left: none;
     border-bottom: 1px solid var(--border-secondary);
     border-radius: 0;
     margin-bottom: 0;
   }
-  :global([data-hypertheme='astral']) .conv-item:hover {
+  :global([data-hypertheme='astral']) .conv-item:hover,
+  :global([data-hypertheme='astral-midnight']) .conv-item:hover {
     border-left: none;
     border-bottom-color: var(--accent-primary);
   }
-  :global([data-hypertheme='astral']) .conv-item.active {
+  :global([data-hypertheme='astral']) .conv-item.active,
+  :global([data-hypertheme='astral-midnight']) .conv-item.active {
     border-left: none;
     border-bottom-color: var(--accent-primary);
+  }
+
+  .conv-item.draft .conv-title {
+    font-style: italic;
+    opacity: 0.7;
   }
 
   .conv-title {

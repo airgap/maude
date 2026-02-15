@@ -1,5 +1,6 @@
 <script lang="ts">
   import { renderMarkdownPartial } from '$lib/utils/markdown';
+  import { settingsStore } from '$lib/stores/settings.svelte';
 
   interface Props {
     text: string;
@@ -7,6 +8,12 @@
   }
 
   let { text, streaming = false }: Props = $props();
+
+  const cursorChars: Record<string, string> = {
+    block: '\u258A',
+    line: '|',
+    underscore: '_',
+  };
 
   // Render text directly — no intermediate $state needed.
   // CSS handles the streaming animation.
@@ -16,8 +23,10 @@
   <div class="prose" class:streaming>
     {@html renderMarkdownPartial(text)}
   </div>
-  {#if streaming}
-    <span class="cursor">▊</span>
+  {#if streaming && settingsStore.streamingCursor !== 'none'}
+    <span class="cursor {settingsStore.streamingCursor}"
+      >{cursorChars[settingsStore.streamingCursor]}</span
+    >
   {/if}
 </div>
 
@@ -61,6 +70,14 @@
       cursorGlow 2s ease-in-out infinite;
     text-shadow: var(--shadow-glow);
     font-weight: bold;
+  }
+  .cursor.line {
+    font-weight: 300;
+    margin-left: 0;
+  }
+  .cursor.underscore {
+    vertical-align: baseline;
+    margin-left: 0;
   }
 
   @keyframes textPulseIn {
