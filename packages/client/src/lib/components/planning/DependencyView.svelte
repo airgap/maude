@@ -104,11 +104,11 @@
 
   function warningIcon(type: string): string {
     switch (type) {
-      case 'circular': return '🔄';
-      case 'missing_dependency': return '⚠️';
-      case 'unresolved_blocker': return '🚫';
-      case 'orphan_dependency': return '👻';
-      default: return '⚠️';
+      case 'circular': return '⟳';
+      case 'missing_dependency': return '△';
+      case 'unresolved_blocker': return '⊘';
+      case 'orphan_dependency': return '◌';
+      default: return '△';
     }
   }
 
@@ -145,7 +145,7 @@
         disabled={loopStore.analyzingDependencies || stories.length < 2}
         title="AI-analyze story content to find dependencies"
       >
-        {loopStore.analyzingDependencies ? '⏳ Analyzing...' : '🔍 Analyze'}
+        {loopStore.analyzingDependencies ? '◴ Analyzing...' : '⌕ Analyze'}
       </button>
       <button
         class="btn-sm dep-btn"

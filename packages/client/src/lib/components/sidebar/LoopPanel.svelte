@@ -148,7 +148,7 @@
       failed: '✗',
       committed: '⟨⟩',
       quality_check: '⚙',
-      learning: '💡',
+      learning: '※',
       skipped: '⊘',
     };
     return map[action] || action;
@@ -228,6 +228,15 @@
 
   let estimatingAll = $state(false);
   let recommendingAllPriorities = $state(false);
+  let showStoriesMenu = $state(false);
+
+  function closeStoriesMenu() {
+    showStoriesMenu = false;
+  }
+
+  function toggleStoriesMenu() {
+    showStoriesMenu = !showStoriesMenu;
+  }
 
   async function recommendAllPriorities() {
     const prdId = loopStore.selectedPrdId;
@@ -422,7 +431,7 @@
           : loopStore.editMode === 'propose'
             ? 'Claude will propose structured edits for your approval'
             : 'Claude will apply edits automatically'}>
-        <span class="lock-icon">{loopStore.editMode === 'locked' ? '🔒' : loopStore.editMode === 'propose' ? '📋' : '🔓'}</span>
+        <span class="lock-icon">{loopStore.editMode === 'locked' ? '▣' : loopStore.editMode === 'propose' ? '▥' : '▢'}</span>
         <span class="lock-label">{loopStore.editMode === 'locked' ? 'Locked' : loopStore.editMode === 'propose' ? 'Propose' : 'Unlocked'}</span>
       </button>
     </div>
@@ -435,18 +444,31 @@
         <h4>Stories ({loopStore.selectedPrd.stories?.length || 0}){#if totalStoryPoints > 0}<span class="total-points" title="{estimatedCount} of {loopStore.selectedPrd.stories?.length || 0} estimated"> · {totalStoryPoints}pts</span>{/if}</h4>
         <div class="header-actions">
           <button class="icon-btn" title="Add story" onclick={() => showAddStory = !showAddStory}>+</button>
-          <button class="icon-btn" title="Estimate all stories" onclick={estimateAllStories} disabled={estimatingAll}>
-            {#if estimatingAll}<span class="spinner-sm"></span>{:else}📊{/if}
-          </button>
-          <button class="icon-btn" title="Recommend priorities for all stories" onclick={recommendAllPriorities} disabled={recommendingAllPriorities}>
-            {#if recommendingAllPriorities}<span class="spinner-sm"></span>{:else}🎯{/if}
-          </button>
-          <button class="icon-btn" title="Sprint plan recommendations" onclick={openSprintPlanModal}>📅</button>
-          <button class="icon-btn" title="Effort vs Value matrix" onclick={openEffortValueMatrix}>📈</button>
-          <button class="icon-btn" title="PRD completeness analysis" onclick={openCompletenessModal}>🔍</button>
-          <button class="icon-btn" title="Story templates" onclick={openTemplateLibrary}>📄</button>
-          <button class="icon-btn" class:active-btn={showDependencies} title="Dependencies" onclick={() => showDependencies = !showDependencies}>🔗</button>
-          <button class="icon-btn" title="Delete PRD" onclick={handleDeletePrd}>🗑</button>
+          <div class="stories-menu-wrap">
+            <button class="icon-btn" class:active-btn={showStoriesMenu} title="Actions" onclick={toggleStoriesMenu}>⋯</button>
+            {#if showStoriesMenu}
+              <!-- svelte-ignore a11y_no_static_element_interactions a11y_click_events_have_key_events -->
+              <div class="stories-menu-backdrop" onclick={closeStoriesMenu}></div>
+              <div class="stories-menu">
+                <button class="menu-item" onclick={() => { closeStoriesMenu(); estimateAllStories(); }} disabled={estimatingAll}>
+                  {#if estimatingAll}<span class="spinner-sm"></span>{:else}Estimate all{/if}
+                </button>
+                <button class="menu-item" onclick={() => { closeStoriesMenu(); recommendAllPriorities(); }} disabled={recommendingAllPriorities}>
+                  {#if recommendingAllPriorities}<span class="spinner-sm"></span>{:else}Prioritize all{/if}
+                </button>
+                <div class="menu-divider"></div>
+                <button class="menu-item" onclick={() => { closeStoriesMenu(); openSprintPlanModal(); }}>Sprint plan</button>
+                <button class="menu-item" onclick={() => { closeStoriesMenu(); openEffortValueMatrix(); }}>Effort / Value matrix</button>
+                <button class="menu-item" onclick={() => { closeStoriesMenu(); openCompletenessModal(); }}>PRD completeness</button>
+                <button class="menu-item" onclick={() => { closeStoriesMenu(); openTemplateLibrary(); }}>Story templates</button>
+                <button class="menu-item" class:active-btn={showDependencies} onclick={() => { closeStoriesMenu(); showDependencies = !showDependencies; }}>
+                  {showDependencies ? 'Hide dependencies' : 'Dependencies'}
+                </button>
+                <div class="menu-divider"></div>
+                <button class="menu-item menu-item-danger" onclick={() => { closeStoriesMenu(); handleDeletePrd(); }}>Delete PRD</button>
+              </div>
+            {/if}
+          </div>
         </div>
       </div>
 
@@ -480,9 +502,9 @@
                 {/if}
                 {#if !loopStore.isActive}
                   <button class="validate-btn" title="Validate acceptance criteria" onclick={() => openValidateModal(story.id)}>✓</button>
-                  <button class="refine-btn" title="Refine story" onclick={() => openRefineModal(story.id)}>⚡</button>
-                  <button class="estimate-btn" title="Estimate complexity" onclick={() => openEstimateModal(story.id)}>📊</button>
-                  <button class="priority-btn" title="Recommend priority" onclick={() => openPriorityModal(story.id)}>🎯</button>
+                  <button class="refine-btn" title="Refine story" onclick={() => openRefineModal(story.id)}>↻</button>
+                  <button class="estimate-btn" title="Estimate complexity" onclick={() => openEstimateModal(story.id)}>⚖</button>
+                  <button class="priority-btn" title="Recommend priority" onclick={() => openPriorityModal(story.id)}>⇅</button>
                   <button class="delete-btn" onclick={() => handleDeleteStory(story.id)}>×</button>
                 {/if}
               </div>
@@ -494,7 +516,7 @@
                 {/if}
                 {#if story.priorityRecommendation && story.priorityRecommendation.suggestedPriority !== story.priority && !story.priorityRecommendation.isManualOverride}
                   <span class="priority-rec-badge" title="AI suggests: {story.priorityRecommendation.suggestedPriority}">
-                    🎯{story.priorityRecommendation.suggestedPriority[0].toUpperCase()}
+                    ⇅{story.priorityRecommendation.suggestedPriority[0].toUpperCase()}
                   </span>
                 {/if}
                 {#if story.dependsOn?.length > 0}
@@ -619,6 +641,65 @@
   .header-actions {
     display: flex;
     gap: 4px;
+  }
+
+  .stories-menu-wrap {
+    position: relative;
+  }
+  .stories-menu-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 99;
+  }
+  .stories-menu {
+    position: absolute;
+    top: 100%;
+    right: 0;
+    z-index: 100;
+    min-width: 170px;
+    margin-top: 4px;
+    padding: 4px 0;
+    background: var(--bg-primary);
+    border: 1px solid var(--border-primary);
+    border-radius: var(--radius-sm);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
+  }
+  .menu-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    width: 100%;
+    padding: 5px 12px;
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--text-secondary);
+    background: none;
+    border: none;
+    text-align: left;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  .menu-item:hover:not(:disabled) {
+    background: var(--bg-hover);
+    color: var(--text-primary);
+  }
+  .menu-item:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+  }
+  .menu-item.active-btn {
+    color: var(--accent-primary);
+    font-weight: 600;
+    background: none !important;
+    border: none !important;
+  }
+  .menu-item-danger:hover:not(:disabled) {
+    color: var(--accent-error);
+  }
+  .menu-divider {
+    height: 1px;
+    margin: 4px 8px;
+    background: var(--border-primary);
   }
 
   .loop-badge {

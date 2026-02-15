@@ -9,10 +9,10 @@
   let hoveredStory = $state<string | null>(null);
 
   const quadrantLabels: Record<MatrixQuadrant, { label: string; description: string; icon: string }> = {
-    quick_wins: { label: 'Quick Wins', description: 'High value, low effort', icon: '⚡' },
-    major_projects: { label: 'Major Projects', description: 'High value, high effort', icon: '🏗' },
-    fill_ins: { label: 'Fill-ins', description: 'Low value, low effort', icon: '📝' },
-    low_priority: { label: 'Low Priority', description: 'Low value, high effort', icon: '⏳' },
+    quick_wins: { label: 'Quick Wins', description: 'High value, low effort', icon: '↯' },
+    major_projects: { label: 'Major Projects', description: 'High value, high effort', icon: '▩' },
+    fill_ins: { label: 'Fill-ins', description: 'Low value, low effort', icon: '▤' },
+    low_priority: { label: 'Low Priority', description: 'Low value, high effort', icon: '◴' },
   };
 
   const quadrantColors: Record<MatrixQuadrant, string> = {
@@ -177,16 +177,16 @@
           <div class="matrix-grid" bind:this={matrixEl}>
             <!-- Quadrant backgrounds -->
             <div class="quadrant-bg quick-wins" style:background={quadrantColors.quick_wins}>
-              <span class="quadrant-label">⚡ Quick Wins</span>
+              <span class="quadrant-label">↯ Quick Wins</span>
             </div>
             <div class="quadrant-bg major-projects" style:background={quadrantColors.major_projects}>
-              <span class="quadrant-label">🏗 Major Projects</span>
+              <span class="quadrant-label">▩ Major Projects</span>
             </div>
             <div class="quadrant-bg fill-ins" style:background={quadrantColors.fill_ins}>
-              <span class="quadrant-label">📝 Fill-ins</span>
+              <span class="quadrant-label">▤ Fill-ins</span>
             </div>
             <div class="quadrant-bg low-priority" style:background={quadrantColors.low_priority}>
-              <span class="quadrant-label">⏳ Low Priority</span>
+              <span class="quadrant-label">◴ Low Priority</span>
             </div>
 
             <!-- Axis lines -->

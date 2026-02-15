@@ -37,9 +37,9 @@
 
   function severityIcon(severity: PRDSectionSeverity): string {
     switch (severity) {
-      case 'critical': return '🔴';
-      case 'warning': return '🟡';
-      case 'info': return '🔵';
+      case 'critical': return '●';
+      case 'warning': return '●';
+      case 'info': return '●';
     }
   }
 

@@ -75,20 +75,20 @@
 
   function priorityIcon(priority: string): string {
     switch (priority) {
-      case 'critical': return '🔴';
-      case 'high': return '🟠';
-      case 'medium': return '🟡';
-      case 'low': return '🟢';
-      default: return '⚪';
+      case 'critical': return '●';
+      case 'high': return '●';
+      case 'medium': return '●';
+      case 'low': return '●';
+      default: return '○';
     }
   }
 
   function categoryIcon(category: string): string {
     switch (category) {
-      case 'dependency': return '🔗';
-      case 'risk': return '⚠️';
-      case 'scope': return '📐';
-      case 'user_impact': return '👤';
+      case 'dependency': return '⊟';
+      case 'risk': return '△';
+      case 'scope': return '∟';
+      case 'user_impact': return '⊕';
       default: return '•';
     }
   }

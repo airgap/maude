@@ -244,7 +244,7 @@
     {#if depWarnings.length > 0}
       <div class="dep-warnings-section">
         <div class="dep-warnings-header">
-          <span class="dep-warnings-icon">⚠️</span>
+          <span class="dep-warnings-icon">△</span>
           <span class="dep-warnings-title">Dependency Warnings ({depWarnings.length})</span>
         </div>
         <div class="dep-warnings-list">

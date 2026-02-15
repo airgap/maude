@@ -215,7 +215,7 @@
         <!-- Suggested Breakdown (for large stories) -->
         {#if currentEstimate.suggestedBreakdown && currentEstimate.suggestedBreakdown.length > 0}
           <div class="breakdown-section">
-            <h4 class="section-label">💡 Suggested Breakdown</h4>
+            <h4 class="section-label">※ Suggested Breakdown</h4>
             <p class="breakdown-hint">This story is large. Consider breaking it into:</p>
             <ul class="breakdown-list">
               {#each currentEstimate.suggestedBreakdown as task}
