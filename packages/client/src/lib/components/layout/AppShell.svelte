@@ -3,10 +3,12 @@
   import { editorStore } from '$lib/stores/editor.svelte';
   import { terminalStore } from '$lib/stores/terminal.svelte';
   import { workspaceStore } from '$lib/stores/workspace.svelte';
+  import { sidebarLayoutStore } from '$lib/stores/sidebarLayout.svelte';
   import TopBar from './TopBar.svelte';
   import StatusBar from './StatusBar.svelte';
   import MainContent from './MainContent.svelte';
   import Sidebar from '../sidebar/Sidebar.svelte';
+  import FloatingPanelContainer from '../sidebar/FloatingPanelContainer.svelte';
   import SettingsModal from '../settings/SettingsModal.svelte';
   import SnapshotModal from '../settings/SnapshotModal.svelte';
   import LoopConfigModal from '../settings/LoopConfigModal.svelte';
@@ -32,6 +34,7 @@
   onMount(() => {
     waitForServer().then(async () => {
       workspaceStore.init();
+      sidebarLayoutStore.init();
 
       // Check for in-flight streaming sessions and reconnect if found.
       // This handles page reloads during active Claude responses.
@@ -187,6 +190,8 @@
   </div>
 
   <StatusBar />
+
+  <FloatingPanelContainer />
 
   {#if uiStore.activeModal === 'settings'}
     <SettingsModal />
