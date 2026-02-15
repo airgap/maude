@@ -102,7 +102,10 @@
 
   async function send() {
     const text = inputText.trim();
-    if (!text || streamStore.isStreaming) return;
+    // Block sending if this conversation has an active stream
+    const isStreamingHere =
+      streamStore.isStreaming && streamStore.conversationId === conversationStore.activeId;
+    if (!text || isStreamingHere) return;
 
     // Intercept `cd` as directory navigation
     if (text === 'cd' || text.startsWith('cd ')) {
@@ -233,7 +236,11 @@
     if (e.key === 'Escape') {
       if (showSlashMenu) {
         showSlashMenu = false;
-      } else if (streamStore.isStreaming && conversationStore.activeId) {
+      } else if (
+        streamStore.isStreaming &&
+        streamStore.conversationId === conversationStore.activeId &&
+        conversationStore.activeId
+      ) {
         cancelStream(conversationStore.activeId);
       }
     }
@@ -407,7 +414,7 @@
         <span class="plan-indicator">PLAN</span>
       {/if}
 
-      {#if streamStore.isStreaming}
+      {#if streamStore.isStreaming && streamStore.conversationId === conversationStore.activeId}
         <button
           class="btn-action cancel"
           onclick={() => conversationStore.activeId && cancelStream(conversationStore.activeId)}

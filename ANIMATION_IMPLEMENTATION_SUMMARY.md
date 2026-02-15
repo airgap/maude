@@ -7,9 +7,11 @@ A complete, production-ready message animation system for Claude's replies with 
 ## Files Created
 
 ### 1. **MessageAnimation.svelte** (351 lines)
+
 New component that wraps messages and applies animations based on user settings.
 
 **Features:**
+
 - 15 different animation styles
 - Responsive to settings store
 - Uses Svelte snippets for flexible rendering
@@ -17,6 +19,7 @@ New component that wraps messages and applies animations based on user settings.
 - No JavaScript animations for performance
 
 **Animations included:**
+
 1. None (instant)
 2. Fade In (0.4s) - smooth opacity + movement
 3. Slide In Left (0.5s) - horizontal entry from left
@@ -36,17 +39,20 @@ New component that wraps messages and applies animations based on user settings.
 ## Files Modified
 
 ### 1. **settings.svelte.ts**
+
 - Added `messageAnimation` to `SettingsState` interface with union type of all 15 options
 - Set default to `'fadeIn'`
 - Added getter `get messageAnimation()` to public API
 - All changes backward compatible
 
 ### 2. **StreamingMessage.svelte**
+
 - Imported `MessageAnimation` component
 - Wrapped the entire message div with `<MessageAnimation>` using Svelte snippet syntax
 - No other logic changes - animation is transparent to streaming behavior
 
 ### 3. **MessageBubble.svelte**
+
 - Imported `MessageAnimation` component
 - Wrapped assistant messages with animation (user messages don't animate)
 - Added conditional: only assistant messages use `<MessageAnimation>`
@@ -54,6 +60,7 @@ New component that wraps messages and applies animations based on user settings.
 - No other logic changes
 
 ### 4. **SettingsModal.svelte**
+
 - Added new setting group in "Appearance" tab
 - Created `<select>` dropdown with all 15 animation options
 - Connected to settings store: `settingsStore.messageAnimation`
@@ -63,7 +70,9 @@ New component that wraps messages and applies animations based on user settings.
 ## Documentation Created
 
 ### 1. **ANIMATION_GUIDE.md** (258 lines)
+
 Comprehensive user guide covering:
+
 - Overview of animation system
 - Detailed description of each animation
 - How to change animations
@@ -74,7 +83,9 @@ Comprehensive user guide covering:
 - Future enhancements
 
 ### 2. **ANIMATION_QUICK_REFERENCE.md** (82 lines)
+
 Quick reference card with:
+
 - Table of all 15 animations
 - Duration and vibe summary
 - How to change animations
@@ -85,29 +96,34 @@ Quick reference card with:
 ## Key Design Decisions
 
 ### 1. **Component Architecture**
+
 - Created separate `MessageAnimation.svelte` component for single responsibility
 - Uses Svelte snippets (modern pattern) for clean rendering
 - Transparent to parent components - no prop drilling
 
 ### 2. **Performance**
+
 - Pure CSS3 keyframe animations (no JS overhead)
 - GPU-accelerated transforms for smooth performance
 - No motion on scroll or other expensive operations
 - Option for "None" to completely disable animations
 
 ### 3. **Settings Integration**
+
 - Stored in same `SettingsState` as other UI preferences
 - Automatically persisted to localStorage
 - Responsive - changes apply immediately to new messages
 - Respects all existing theme/color system
 
 ### 4. **Animation Application**
+
 - Wraps both `StreamingMessage` (live messages) and `MessageBubble` (completed messages)
 - Only applies to assistant messages (user messages don't animate)
 - Works with all message content types (text, thinking, tool calls, agents)
 - Nested content inherits animation from parent wrapper
 
 ### 5. **Browser Compatibility**
+
 - Uses only standard CSS3 features
 - Supported on all modern browsers (Chrome 90+, Firefox 88+, Safari 14+, Edge 90+)
 - Graceful degradation - animations simply won't run on older browsers
@@ -115,6 +131,7 @@ Quick reference card with:
 ## Testing Recommendations
 
 ### Functional Testing
+
 - [ ] All 15 animations work and display correctly
 - [ ] Animation persists across page refreshes
 - [ ] Switching animations applies to new messages
@@ -122,11 +139,13 @@ Quick reference card with:
 - [ ] All message types (text, thinking, tool, agents) animate
 
 ### Performance Testing
+
 - [ ] No frame drops during animation on modern hardware
 - [ ] CPU/GPU usage is minimal
 - [ ] Animation performance is consistent across themes
 
 ### Compatibility Testing
+
 - [ ] Chrome (latest)
 - [ ] Firefox (latest)
 - [ ] Safari (latest)
@@ -134,6 +153,7 @@ Quick reference card with:
 - [ ] Mobile browsers
 
 ### User Testing
+
 - [ ] Settings UI is intuitive
 - [ ] Animation descriptions match actual behavior
 - [ ] No accessibility issues
@@ -172,6 +192,7 @@ Quick reference card with:
 ## Installation & Setup
 
 No additional dependencies needed! The system uses:
+
 - Svelte 5+ (already in project)
 - Pure CSS3 (no additional libraries)
 - Existing settings store infrastructure

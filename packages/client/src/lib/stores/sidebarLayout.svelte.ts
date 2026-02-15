@@ -5,12 +5,15 @@ const STORAGE_KEY = 'maude-sidebar-layout';
 
 const DEFAULT_PINNED: SidebarTab[] = ['conversations', 'files', 'search', 'tasks'];
 
+export type PanelDockMode = 'float' | 'left' | 'right';
+
 export interface FloatingPanelState {
   tabId: SidebarTab;
   x: number;
   y: number;
   width: number;
   height: number;
+  docked: PanelDockMode;
 }
 
 interface PersistedState {
@@ -53,6 +56,21 @@ function createSidebarLayoutStore() {
     SIDEBAR_TABS.filter((t) => !pinnedTabIds.includes(t.id)),
   );
 
+  /** Panels docked to the left edge (stacked below the main sidebar) */
+  const leftDockedPanels = $derived<FloatingPanelState[]>(
+    floatingPanels.filter((p) => p.docked === 'left'),
+  );
+
+  /** Panels docked to the right edge (rendered as a right sidebar) */
+  const rightDockedPanels = $derived<FloatingPanelState[]>(
+    floatingPanels.filter((p) => p.docked === 'right'),
+  );
+
+  /** Free-floating panels (rendered as overlays) */
+  const freeFloatingPanels = $derived<FloatingPanelState[]>(
+    floatingPanels.filter((p) => p.docked === 'float'),
+  );
+
   function persist() {
     saveToStorage({ pinnedTabIds, floatingPanels });
   }
@@ -70,6 +88,15 @@ function createSidebarLayoutStore() {
     },
     get floatingPanels() {
       return floatingPanels;
+    },
+    get leftDockedPanels() {
+      return leftDockedPanels;
+    },
+    get rightDockedPanels() {
+      return rightDockedPanels;
+    },
+    get freeFloatingPanels() {
+      return freeFloatingPanels;
     },
 
     // --- Pinning ---
@@ -101,8 +128,12 @@ function createSidebarLayoutStore() {
       persist();
     },
 
-    // --- Floating panels (stubs for future implementation) ---
-    popOutTab(tabId: SidebarTab, position?: { x: number; y: number }) {
+    // --- Floating / docked panels ---
+    popOutTab(
+      tabId: SidebarTab,
+      position?: { x: number; y: number },
+      mode: PanelDockMode = 'float',
+    ) {
       // Don't allow duplicate floating panels for the same tab
       if (floatingPanels.some((p) => p.tabId === tabId)) return;
       const panel: FloatingPanelState = {
@@ -111,13 +142,47 @@ function createSidebarLayoutStore() {
         y: position?.y ?? 100,
         width: 320,
         height: 400,
+        docked: mode,
       };
       floatingPanels = [...floatingPanels, panel];
       persist();
     },
 
+    /** Remove panel entirely (back to sidebar only) */
     dockTab(tabId: SidebarTab) {
       floatingPanels = floatingPanels.filter((p) => p.tabId !== tabId);
+      persist();
+    },
+
+    /** Snap a floating panel to the left edge (below sidebar) */
+    dockToLeft(tabId: SidebarTab) {
+      floatingPanels = floatingPanels.map((p) =>
+        p.tabId === tabId ? { ...p, docked: 'left' as PanelDockMode } : p,
+      );
+      persist();
+    },
+
+    /** Snap a floating panel to the right edge */
+    dockToRight(tabId: SidebarTab) {
+      floatingPanels = floatingPanels.map((p) =>
+        p.tabId === tabId ? { ...p, docked: 'right' as PanelDockMode } : p,
+      );
+      persist();
+    },
+
+    /** Dock to a specific edge */
+    dockToEdge(tabId: SidebarTab, edge: 'left' | 'right') {
+      floatingPanels = floatingPanels.map((p) =>
+        p.tabId === tabId ? { ...p, docked: edge as PanelDockMode } : p,
+      );
+      persist();
+    },
+
+    /** Undock from any edge back to free-floating */
+    undockFromEdge(tabId: SidebarTab) {
+      floatingPanels = floatingPanels.map((p) =>
+        p.tabId === tabId ? { ...p, docked: 'float' as PanelDockMode, x: 100, y: 100 } : p,
+      );
       persist();
     },
 
@@ -127,9 +192,7 @@ function createSidebarLayoutStore() {
     },
 
     updatePanelSize(tabId: SidebarTab, width: number, height: number) {
-      floatingPanels = floatingPanels.map((p) =>
-        p.tabId === tabId ? { ...p, width, height } : p,
-      );
+      floatingPanels = floatingPanels.map((p) => (p.tabId === tabId ? { ...p, width, height } : p));
       persist();
     },
 
@@ -141,9 +204,9 @@ function createSidebarLayoutStore() {
         const valid = allTabIds();
         const restored = saved.pinnedTabIds.filter((id) => valid.includes(id));
         pinnedTabIds = restored.length > 0 ? restored : [...DEFAULT_PINNED];
-        floatingPanels = (saved.floatingPanels ?? []).filter((p) =>
-          valid.includes(p.tabId),
-        );
+        floatingPanels = (saved.floatingPanels ?? [])
+          .filter((p) => valid.includes(p.tabId))
+          .map((p) => ({ ...p, docked: p.docked ?? ('float' as PanelDockMode) }));
       }
     },
 
@@ -161,9 +224,9 @@ function createSidebarLayoutStore() {
       const valid = allTabIds();
       const restored = state.pinnedTabIds.filter((id) => valid.includes(id));
       pinnedTabIds = restored.length > 0 ? restored : [...DEFAULT_PINNED];
-      floatingPanels = (state.floatingPanels ?? []).filter((p) =>
-        valid.includes(p.tabId),
-      );
+      floatingPanels = (state.floatingPanels ?? [])
+        .filter((p) => valid.includes(p.tabId))
+        .map((p) => ({ ...p, docked: p.docked ?? ('float' as PanelDockMode) }));
     },
   };
 }

@@ -3,6 +3,7 @@
 ## The Problem
 
 When Claude executed responses with **many tool calls** (10-20+), users experienced:
+
 - ❌ Blank/empty message until entire response finished
 - ❌ No visual feedback on progress
 - ❌ No indication of what's happening
@@ -13,6 +14,7 @@ When Claude executed responses with **many tool calls** (10-20+), users experien
 ## The Solution
 
 Added a **real-time Tool Call Tracker** that shows:
+
 - ✅ Live progress bar (0-100%)
 - ✅ Tool count (X/Y completed)
 - ✅ Individual tool status (running, completed, error)
@@ -25,6 +27,7 @@ Added a **real-time Tool Call Tracker** that shows:
 ### New Component
 
 **ToolCallTracker.svelte** (314 lines)
+
 - Real-time tool progress visualization
 - Reactive data from stream store
 - Responsive to theme changes
@@ -33,16 +36,17 @@ Added a **real-time Tool Call Tracker** that shows:
 ### Modified Component
 
 **StreamingMessage.svelte** (254 lines)
+
 - Added import for ToolCallTracker
 - Added `<ToolCallTracker />` to message body
 - Displays tracker at top of message during streaming
 
 ### Files
 
-| File | Type | Lines | Purpose |
-|------|------|-------|---------|
-| ToolCallTracker.svelte | New | 314 | Tracker component |
-| StreamingMessage.svelte | Modified | 254 | Includes tracker |
+| File                    | Type     | Lines | Purpose           |
+| ----------------------- | -------- | ----- | ----------------- |
+| ToolCallTracker.svelte  | New      | 314   | Tracker component |
+| StreamingMessage.svelte | Modified | 254   | Includes tracker  |
 
 ## User Experience Before & After
 
@@ -59,6 +63,7 @@ User clicks "Send"
 ↓
 Finally: "Here's what I found..."
 ```
+
 ❌ Users frustrated, unsure if it's working
 
 ### After (New UI)
@@ -76,9 +81,10 @@ Progress updates live:
 ↓
 Completes:
   "TOOL EXECUTION                         20/20" (100%)
-  
+
 Text content appears below tracker
 ```
+
 ✅ Users know progress is being made!
 
 ## Visual Examples
@@ -126,6 +132,7 @@ Text content appears below tracker
    - Otherwise: tool is pending
 
 3. **Progress Calculation**
+
    ```
    Progress % = (Completed / Total) × 100
    ```
@@ -137,7 +144,7 @@ Text content appears below tracker
 
 5. **Smart Display**
    - ≤5 tools: Shows each tool individually
-   - >5 tools: Shows compact summary
+   - > 5 tools: Shows compact summary
 
 ### Reactive Properties
 
@@ -145,64 +152,69 @@ Text content appears below tracker
 let toolCalls = $derived.by(() => {
   // Automatically updates when contentBlocks changes
   // Returns current state of all tools
-})
+});
 
 let progressPercent = $derived(
   // Automatically updates when tool status changes
-  totalTools > 0 ? (completedTools / totalTools) * 100 : 0
-)
+  totalTools > 0 ? (completedTools / totalTools) * 100 : 0,
+);
 ```
 
 ## Color Scheme
 
-| Status | Icon | Color | Meaning |
-|--------|------|-------|---------|
-| Completed | ✓ | Green | Tool succeeded |
-| Running | ⟳ | Blue | Tool executing |
-| Error | ✕ | Red | Tool failed |
-| Pending | ○ | Gray | Not started |
+| Status    | Icon | Color | Meaning        |
+| --------- | ---- | ----- | -------------- |
+| Completed | ✓    | Green | Tool succeeded |
+| Running   | ⟳    | Blue  | Tool executing |
+| Error     | ✕    | Red   | Tool failed    |
+| Pending   | ○    | Gray  | Not started    |
 
 ## Features
 
 ### Progress Bar
+
 - Smooth gradient (primary → secondary accent)
 - Animated transitions
 - Percentage label when >10% width
 - Responsive width to progress
 
 ### Status Icons
+
 - Unicode symbols (✓, ⟳, ✕, ○)
 - Color coded for accessibility
 - Spinning animation for running state
 - Immediate feedback on status changes
 
 ### Tool Details (Compact View ≤5)
+
 - Tool name
 - Status icon
 - Execution duration (if available)
 - Color coded background for errors
 
 ### Summary Stats (Large View >5)
+
 - Total completed count
 - Running count
 - Error count
 - Individual metric boxes
 
 ### Overall Info
+
 - Tool count (X/Y)
 - Progress percentage
 - Error count indicator (if any)
 
 ## Performance Metrics
 
-| Metric | Value |
-|--------|-------|
-| Component Size | 314 lines (including styles) |
-| Render Performance | O(n) where n = tool count |
-| DOM Elements | O(1) for >5 tools (compact view) |
-| Memory Impact | Minimal (derives from store) |
-| Animation Type | CSS3 (GPU-accelerated) |
-| Animation FPS | 60+ (smooth) |
+| Metric             | Value                            |
+| ------------------ | -------------------------------- |
+| Component Size     | 314 lines (including styles)     |
+| Render Performance | O(n) where n = tool count        |
+| DOM Elements       | O(1) for >5 tools (compact view) |
+| Memory Impact      | Minimal (derives from store)     |
+| Animation Type     | CSS3 (GPU-accelerated)           |
+| Animation FPS      | 60+ (smooth)                     |
 
 ### Performance with Large Tool Counts
 
@@ -235,6 +247,7 @@ let progressPercent = $derived(
 ### Automatic Display
 
 The tracker is:
+
 - **Automatically shown** during streaming
 - **Only visible** when tools are executing
 - **No configuration needed**
@@ -243,11 +256,12 @@ The tracker is:
 ### How It Appears
 
 In `StreamingMessage.svelte`:
+
 ```svelte
 <div class="message-body">
   <!-- Tool progress tracker (automatic) -->
   <ToolCallTracker />
-  
+
   <!-- Existing content below -->
   {#each grouped as entry}
     ...
@@ -258,6 +272,7 @@ In `StreamingMessage.svelte`:
 ### Reactive Updates
 
 Updates triggered by changes to:
+
 - `streamStore.contentBlocks` (new tool detected)
 - `streamStore.toolResults` (tool completed)
 - `streamStore.status` (streaming started/stopped)
@@ -267,6 +282,7 @@ Updates triggered by changes to:
 ### Change Compact View Threshold
 
 In ToolCallTracker.svelte, line ~180:
+
 ```svelte
 {#if totalTools > 5}  {/* Change 5 to your value */}
   <!-- Compact view -->
@@ -278,26 +294,28 @@ In ToolCallTracker.svelte, line ~180:
 ### Modify Colors
 
 Edit these CSS variables:
+
 ```css
 /* For completed tools */
 .summary-stat.completed {
-  color: var(--accent-secondary, #00ff88);  /* Change this */
+  color: var(--accent-secondary, #00ff88); /* Change this */
 }
 
 /* For running tools */
 .summary-stat.running {
-  color: var(--accent-primary, #00b4ff);  /* Change this */
+  color: var(--accent-primary, #00b4ff); /* Change this */
 }
 
 /* For errors */
 .summary-stat.error {
-  color: var(--accent-error, #ff3344);  /* Change this */
+  color: var(--accent-error, #ff3344); /* Change this */
 }
 ```
 
 ### Disable Tracker
 
 Remove from StreamingMessage.svelte:
+
 ```svelte
 <!-- Comment this out to hide tracker -->
 <ToolCallTracker />
@@ -347,6 +365,7 @@ Remove from StreamingMessage.svelte:
 ### Tracker not visible
 
 **Check:**
+
 - Are tools actually being executed? (look for tool_use blocks)
 - Is streaming active?
 - Check browser console for errors
@@ -354,6 +373,7 @@ Remove from StreamingMessage.svelte:
 ### Wrong tool count
 
 **Note:** Only `type: 'tool_use'` blocks are counted
+
 - Agent tasks (Task tool_use) are included
 - Text/thinking blocks are not counted
 - Tool results must have matching ID
@@ -361,6 +381,7 @@ Remove from StreamingMessage.svelte:
 ### Progress stuck at 0%
 
 **Verify:**
+
 - Tool results are being stored: `streamStore.toolResults.get(toolId)`
 - `tool_result` events are firing
 - No errors in SSE stream
@@ -368,6 +389,7 @@ Remove from StreamingMessage.svelte:
 ### Colors not showing correctly
 
 **Check:**
+
 - Theme variables are defined
 - CSS is not being overridden elsewhere
 - Browser dark mode not interfering
@@ -423,22 +445,24 @@ User sees progress!
 
 ### Complete File List
 
-| Path | Lines | Type | Status |
-|------|-------|------|--------|
-| packages/client/src/lib/components/chat/ToolCallTracker.svelte | 314 | New Component | ✅ Created |
-| packages/client/src/lib/components/chat/StreamingMessage.svelte | 254 | Updated | ✅ Modified |
-| STREAMING_VISIBILITY_GUIDE.md | 312 | Documentation | ✅ Created |
-| TOOL_TRACKER_QUICK_GUIDE.md | 204 | Quick Ref | ✅ Created |
+| Path                                                            | Lines | Type          | Status      |
+| --------------------------------------------------------------- | ----- | ------------- | ----------- |
+| packages/client/src/lib/components/chat/ToolCallTracker.svelte  | 314   | New Component | ✅ Created  |
+| packages/client/src/lib/components/chat/StreamingMessage.svelte | 254   | Updated       | ✅ Modified |
+| STREAMING_VISIBILITY_GUIDE.md                                   | 312   | Documentation | ✅ Created  |
+| TOOL_TRACKER_QUICK_GUIDE.md                                     | 204   | Quick Ref     | ✅ Created  |
 
 ## Impact Summary
 
 ### Before Implementation
+
 - Long responses with tools = no feedback
 - Users confused during execution
 - No progress indication
 - Poor perceived performance
 
 ### After Implementation
+
 - Immediate visual feedback
 - Clear progress indication
 - Tool execution transparency
@@ -446,6 +470,7 @@ User sees progress!
 - Professional appearance
 
 ### User Benefits
+
 ✅ See progress immediately
 ✅ Know what's happening
 ✅ Understand tool execution

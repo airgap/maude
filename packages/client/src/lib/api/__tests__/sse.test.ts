@@ -7,14 +7,26 @@ const { mockStreamStore, mockConversationStore, mockSend, mockCancel } = vi.hois
     startStream: vi.fn(),
     handleEvent: vi.fn(),
     setSessionId: vi.fn(),
+    isStreaming: false,
     sessionId: 'session-1' as string | null,
+    conversationId: null as string | null,
     contentBlocks: [] as any[],
     cancel: vi.fn(),
   },
   mockConversationStore: {
     addMessage: vi.fn(),
+    addMessageTo: vi.fn(),
     updateLastAssistantMessage: vi.fn(),
-    active: { model: 'claude-sonnet-4-5-20250929' },
+    updateLastAssistantMessageIn: vi.fn(),
+    reload: vi.fn().mockResolvedValue(undefined),
+    reloadById: vi.fn().mockResolvedValue(undefined),
+    active: {
+      id: 'conv-1',
+      model: 'claude-sonnet-4-5-20250929',
+      projectPath: null,
+      messages: [],
+    } as any,
+    activeId: 'conv-1' as string | null,
   },
   mockSend: vi.fn(),
   mockCancel: vi.fn(),
@@ -28,11 +40,20 @@ vi.mock('$lib/stores/conversation.svelte', () => ({
   conversationStore: mockConversationStore,
 }));
 
+vi.mock('$lib/stores/project-memory.svelte', () => ({
+  projectMemoryStore: {
+    extractFromConversation: vi.fn().mockResolvedValue(undefined),
+  },
+}));
+
 vi.mock('../client', () => ({
   api: {
     stream: {
       send: mockSend,
       cancel: mockCancel,
+    },
+    git: {
+      snapshot: vi.fn().mockResolvedValue(undefined),
     },
   },
 }));
@@ -43,6 +64,15 @@ beforeEach(() => {
   vi.clearAllMocks();
   mockStreamStore.contentBlocks = [];
   mockStreamStore.sessionId = 'session-1';
+  mockStreamStore.conversationId = null;
+  mockStreamStore.isStreaming = false;
+  mockConversationStore.active = {
+    id: 'conv-1',
+    model: 'claude-sonnet-4-5-20250929',
+    projectPath: null,
+    messages: [],
+  };
+  mockConversationStore.activeId = 'conv-1';
 });
 
 function createMockResponse(body: string, ok = true, headers: Record<string, string> = {}) {
@@ -70,8 +100,9 @@ describe('sendAndStream', () => {
     await sendAndStream('conv-1', 'Hello');
 
     expect(mockStreamStore.setAbortController).toHaveBeenCalled();
-    expect(mockStreamStore.startStream).toHaveBeenCalled();
-    expect(mockConversationStore.addMessage).toHaveBeenCalledWith(
+    expect(mockStreamStore.startStream).toHaveBeenCalledWith('conv-1');
+    expect(mockConversationStore.addMessageTo).toHaveBeenCalledWith(
+      mockConversationStore.active,
       expect.objectContaining({
         role: 'user',
         content: [{ type: 'text', text: 'Hello' }],
@@ -105,8 +136,9 @@ describe('sendAndStream', () => {
 
     await sendAndStream('conv-1', 'Hello');
 
-    expect(mockConversationStore.addMessage).toHaveBeenCalledTimes(2);
-    expect(mockConversationStore.addMessage).toHaveBeenCalledWith(
+    expect(mockConversationStore.addMessageTo).toHaveBeenCalledTimes(2);
+    expect(mockConversationStore.addMessageTo).toHaveBeenCalledWith(
+      mockConversationStore.active,
       expect.objectContaining({
         role: 'assistant',
         content: [],
@@ -190,7 +222,7 @@ describe('sendAndStream', () => {
 
     await sendAndStream('conv-1', 'Hello');
 
-    expect(mockConversationStore.updateLastAssistantMessage).toHaveBeenCalled();
+    expect(mockConversationStore.updateLastAssistantMessageIn).toHaveBeenCalled();
   });
 });
 

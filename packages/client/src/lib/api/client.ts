@@ -508,11 +508,14 @@ export const api = {
         },
       ),
     export: (id: string) => request<{ ok: boolean; data: any }>(`/prds/${id}/export`),
-    plan: (prdId: string, body: { mode: string; editMode: string; userPrompt?: string; model?: string }) =>
-      request<{ ok: boolean; data: { conversationId: string; prdId: string; mode: string; editMode: string } }>(
-        `/prds/${prdId}/plan`,
-        { method: 'POST', body: JSON.stringify(body) },
-      ),
+    plan: (
+      prdId: string,
+      body: { mode: string; editMode: string; userPrompt?: string; model?: string },
+    ) =>
+      request<{
+        ok: boolean;
+        data: { conversationId: string; prdId: string; mode: string; editMode: string };
+      }>(`/prds/${prdId}/plan`, { method: 'POST', body: JSON.stringify(body) }),
     generate: (prdId: string, body: { description: string; context?: string; count?: number }) =>
       request<{
         ok: boolean;
@@ -529,12 +532,24 @@ export const api = {
         method: 'POST',
         body: JSON.stringify(body),
       }),
-    acceptGenerated: (prdId: string, stories: Array<{ title: string; description: string; acceptanceCriteria: string[]; priority: 'critical' | 'high' | 'medium' | 'low' }>) =>
+    acceptGenerated: (
+      prdId: string,
+      stories: Array<{
+        title: string;
+        description: string;
+        acceptanceCriteria: string[];
+        priority: 'critical' | 'high' | 'medium' | 'low';
+      }>,
+    ) =>
       request<{ ok: boolean; data: { storyIds: string[]; accepted: number } }>(
         `/prds/${prdId}/generate/accept`,
         { method: 'POST', body: JSON.stringify({ stories }) },
       ),
-    refineStory: (prdId: string, storyId: string, answers?: Array<{ questionId: string; answer: string }>) =>
+    refineStory: (
+      prdId: string,
+      storyId: string,
+      answers?: Array<{ questionId: string; answer: string }>,
+    ) =>
       request<{
         ok: boolean;
         data: {
@@ -604,7 +619,13 @@ export const api = {
         data: import('@maude/shared').SprintValidation;
       }>(`/prds/${prdId}/dependencies/validate`),
     // --- Acceptance Criteria Validation ---
-    validateCriteria: (prdId: string, storyId: string, criteria: string[], storyTitle?: string, storyDescription?: string) =>
+    validateCriteria: (
+      prdId: string,
+      storyId: string,
+      criteria: string[],
+      storyTitle?: string,
+      storyDescription?: string,
+    ) =>
       request<{
         ok: boolean;
         data: import('@maude/shared').ValidateACResponse;
@@ -621,7 +642,11 @@ export const api = {
         method: 'POST',
         body: JSON.stringify({ storyId }),
       }),
-    saveManualEstimate: (prdId: string, storyId: string, body: { size: string; storyPoints: number; reasoning?: string }) =>
+    saveManualEstimate: (
+      prdId: string,
+      storyId: string,
+      body: { size: string; storyPoints: number; reasoning?: string },
+    ) =>
       request<{
         ok: boolean;
         data: import('@maude/shared').EstimateStoryResponse;
@@ -684,7 +709,10 @@ export const api = {
         method: 'POST',
         body: JSON.stringify(body),
       }),
-    updateTemplate: (templateId: string, body: Partial<import('@maude/shared').CreateTemplateRequest>) =>
+    updateTemplate: (
+      templateId: string,
+      body: Partial<import('@maude/shared').CreateTemplateRequest>,
+    ) =>
       request<{
         ok: boolean;
         data: import('@maude/shared').StoryTemplate;
@@ -694,7 +722,11 @@ export const api = {
       }),
     deleteTemplate: (templateId: string) =>
       request<{ ok: boolean }>(`/prds/templates/${templateId}`, { method: 'DELETE' }),
-    createStoryFromTemplate: (prdId: string, templateId: string, variables?: Record<string, string>) =>
+    createStoryFromTemplate: (
+      prdId: string,
+      templateId: string,
+      variables?: Record<string, string>,
+    ) =>
       request<{
         ok: boolean;
         data: import('@maude/shared').CreateStoryFromTemplateResponse;

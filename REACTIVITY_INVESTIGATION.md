@@ -3,6 +3,7 @@
 ## The Problem
 
 Messages from Claude are not appearing in the browser in real-time during streaming. Instead, they only appear after:
+
 1. The entire response finishes (or after ~5 minutes timeout)
 2. The user manually reloads the page
 
@@ -13,22 +14,26 @@ This is blocking the core feature of showing real-time streaming responses.
 Through extensive debugging, we've confirmed:
 
 ✅ **Network Layer**: SSE stream is working perfectly
+
 - Server sends chunks immediately
 - Client receives them with streaming parser
 - Browser console shows `[sse] Received event:...` logs confirming chunks arrive in real-time
 
 ✅ **Store Event Handler**: Events are reaching the store
+
 - Console shows `[sse] Received event: message_start`, `content_block_delta`, etc.
 - `streamStore.handleEvent()` is being called for every event
 - State reassignments are executing (`contentBlocks = [...]`)
 
 ✅ **Conversation Sync**: Messages eventually appear after reload
+
 - This proves events are being processed and saved to the database
 - The issue is NOT with event loss or server-side state management
 
 ## What's Broken
 
 ❌ **UI Reactivity**: Components not re-rendering when store state changes
+
 - SSE events arrive → Store updates happen → UI should update → **doesn't happen**
 - After reload, messages appear because they're loaded from database, not because streaming is working
 - The ToolCallTracker component we added shows real-time progress because it uses `conversationStore` (synced separately)
@@ -56,6 +61,7 @@ The problem: When a component reads `streamStore.contentBlocks`, it gets the val
 ### Why This Matters
 
 When `contentBlocks = [...]` executes in the store:
+
 1. The $state variable is reassigned ✓
 2. Svelte should notify reactive dependents ✗
 3. But the notification isn't reaching the component's `$derived`
@@ -66,6 +72,7 @@ When `contentBlocks = [...]` executes in the store:
 ## Evidence from Logs
 
 From your console logs:
+
 ```
 [sse] Reading chunk...
 [sse] Decoded buffer length: 650 contains: data: {"type":"message_start"...
@@ -81,14 +88,18 @@ These logs prove the SSE pipeline is working. But there are NO logs showing mess
 The fix is to **refactor the store to export reactive state directly** instead of through getters.
 
 ### Current Pattern (Broken)
+
 ```typescript
 let contentBlocks = $state<MessageContent[]>([]);
-return { 
-  get contentBlocks() { return contentBlocks; }
-}
+return {
+  get contentBlocks() {
+    return contentBlocks;
+  },
+};
 ```
 
 ### Corrected Pattern (Will Fix)
+
 ```typescript
 export const streamState = {
   contentBlocks: $state<MessageContent[]>([]),
@@ -98,7 +109,7 @@ export const streamState = {
 // Components read directly
 import { streamState } from '$lib/stores/stream.svelte';
 let grouped = $derived.by(() => {
-  const blocks = streamState.contentBlocks;  // Direct access to $state
+  const blocks = streamState.contentBlocks; // Direct access to $state
   // ...
 });
 ```
@@ -110,14 +121,17 @@ This ensures Svelte's reactivity system can properly track the dependency on `co
 We've added comprehensive logging to pinpoint exactly which step is breaking:
 
 ### In stream.svelte.ts
+
 - `handleEvent()` logs what event type is being processed
 - Block creation logs when new blocks are added
 - Block update logs when streamed text is appended
 
 ### In StreamingMessage.svelte
+
 - `$derived.by()` logs when it recalculates
 
 ### In browser console
+
 - All logs are prefixed with `[streamStore]`, `[StreamingMessage]`, etc. for easy filtering
 
 ## How to Verify the Fix
@@ -147,12 +161,14 @@ Two guides are included:
 ## Impact Assessment
 
 **If we fix this**, real-time streaming will work immediately:
+
 - Messages appear character-by-character as Claude types
 - Tool calls show real-time progress
 - Better UX for long-running operations
 - No more 5-minute wait for responses to appear
 
 **Current Workaround** (what users must do now):
+
 - Wait for entire response to finish OR wait 5 minutes
 - Reload page to see what was actually sent
 - Use the ToolCallTracker for any progress visibility (which works because it syncs to conversationStore separately)

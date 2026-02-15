@@ -7,6 +7,7 @@ Previously, when Claude made responses with many tool calls (10+, 20+, etc.), us
 ## Solution Implemented
 
 A new **Tool Call Tracker** component that provides real-time visual feedback as Claude executes tools, showing:
+
 - Live progress bar (0-100%)
 - Count of completed/pending/running/errored tools
 - Individual tool status (✓ completed, ⟳ running, ✕ error)
@@ -16,30 +17,37 @@ A new **Tool Call Tracker** component that provides real-time visual feedback as
 ## New Component: ToolCallTracker.svelte
 
 ### Location
+
 `packages/client/src/lib/components/chat/ToolCallTracker.svelte` (314 lines)
 
 ### Features
 
 #### 1. **Real-Time Progress Bar**
+
 - Shows completion percentage (0-100%)
 - Gradient color (primary → secondary accent)
 - Updates as tools complete
 - Smooth animated transitions
 
 #### 2. **Tool Count Display**
+
 - Shows "X/Y" completed
 - Displays error count in red
 - Updates live as tools finish
 
 #### 3. **Detailed View (≤5 tools)**
+
 Shows individual tool items with:
+
 - Tool name
 - Status icon (✓, ⟳, ✕, ○)
 - Execution duration (in seconds)
 - Individual status coloring
 
 #### 4. **Compact View (>5 tools)**
+
 Shows summary stats instead of full list:
+
 - ✓ Completed: X
 - ⟳ Running: X
 - ✕ Errors: X
@@ -47,6 +55,7 @@ Shows summary stats instead of full list:
 ### Visual Design
 
 **Styling:**
+
 - Uses existing Maude theme variables
 - Matches application color scheme
 - Left border accent (primary color)
@@ -54,6 +63,7 @@ Shows summary stats instead of full list:
 - Smooth slide-in animation on appearance
 
 **Color Coding:**
+
 - Green (✓): Completed tools
 - Blue (⟳): Running/pending tools
 - Red (✕): Tools with errors
@@ -89,18 +99,20 @@ Updated on each: tool_result, content_block_start, content_block_stop
 ## User Experience
 
 ### Scenario 1: Few Tools (2-5)
+
 ```
 TOOL EXECUTION                          2/5
 ████░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░ 40%
 
 ✓ read_file                      0.2s
-⟳ analyze_code                   
+⟳ analyze_code
 ✕ format_result                  error
 ○ git_status
 ○ create_commit
 ```
 
 ### Scenario 2: Many Tools (20+)
+
 ```
 TOOL EXECUTION                         18/20
 ██████████████████░░░░░░░░░░░░░░░░░░░░ 90%
@@ -122,6 +134,7 @@ TOOL EXECUTION                         18/20
 ### Automatic Display
 
 ToolCallTracker is always present but:
+
 - Only renders when `totalTools > 0`
 - Updates reactively as streaming progresses
 - No configuration needed
@@ -154,6 +167,7 @@ ToolCallTracker is always present but:
 ### Changing Compact Threshold
 
 In `ToolCallTracker.svelte`, change this line:
+
 ```typescript
 {#if totalTools > 5}  // Change 5 to your preferred threshold
 ```
@@ -161,6 +175,7 @@ In `ToolCallTracker.svelte`, change this line:
 ### Styling
 
 All animations and colors use CSS variables, responding to theme changes automatically:
+
 - `--accent-primary` (running indicator)
 - `--accent-secondary` (completion indicator)
 - `--accent-error` (error indicator)
@@ -169,15 +184,17 @@ All animations and colors use CSS variables, responding to theme changes automat
 ### Custom Icons
 
 Replace status icons in the template:
+
 ```svelte
 {#if tool.status === 'completed'}
-  ✓  <!-- Change this -->
+  ✓ <!-- Change this -->
 {/if}
 ```
 
 ## Browser Compatibility
 
 All animations use standard CSS3:
+
 - Chrome 90+
 - Firefox 88+
 - Safari 14+
@@ -189,7 +206,8 @@ All animations use standard CSS3:
 
 **Issue**: Tool execution happening but no tracker visible
 
-**Solution**: 
+**Solution**:
+
 - Ensure `streamStore.contentBlocks` contains tool_use blocks
 - Check browser console for errors
 - Verify streaming is active (`streamStore.isStreaming === true`)
@@ -199,6 +217,7 @@ All animations use standard CSS3:
 **Issue**: Tool count doesn't match expected
 
 **Solution**:
+
 - Only counts `type === 'tool_use'` blocks
 - Agent group tasks also appear as tool_use
 - Check `contentBlocks` in Svelte DevTools
@@ -208,6 +227,7 @@ All animations use standard CSS3:
 **Issue**: Progress bar not updating
 
 **Solution**:
+
 - Verify tool results are being stored: `streamStore.toolResults.get(toolId)`
 - Check that `tool_result` events are firing
 - Look for errors in tool execution
@@ -269,6 +289,7 @@ All animations use standard CSS3:
 ### Automated Testing
 
 Properties to test:
+
 - Tool count calculation
 - Status determination logic
 - Progress percentage accuracy
@@ -284,16 +305,17 @@ let toolCalls = $derived.by(() => {
   // Derived state: scan contentBlocks for tool_use
   // Determine status from toolResults map
   // Return sorted array of tool info
-})
+});
 
 let progressPercent = $derived(
-  totalTools > 0 ? Math.round((completedTools / totalTools) * 100) : 0
-)
+  totalTools > 0 ? Math.round((completedTools / totalTools) * 100) : 0,
+);
 ```
 
 ### Reactive Tracking
 
 All metrics are derived reactively:
+
 - Updates when `streamStore.contentBlocks` changes
 - Updates when `streamStore.toolResults` changes
 - Updates when `streamStore.status` changes

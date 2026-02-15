@@ -1,9 +1,11 @@
 # Svelte 5 Reactivity Fix: The Real Solution
 
 ## Problem
+
 The refactored approach of exporting $state variables in an object literal failed because Svelte 5 syntax rules don't allow $state() outside of variable declarations and class fields.
 
 ## Key Insight
+
 The issue isn't actually with the store pattern itself. The real issue is that Svelte 5 properly tracks `$state` through the closure scope within `createStreamStore()`, but we need to ensure components are reading the state in a way that Svelte can track.
 
 ## The Actual Fix
@@ -18,14 +20,14 @@ Instead of trying to export $state directly (which violates Svelte syntax), we s
 
 ```typescript
 function createStreamStore() {
-  let contentBlocks = $state<MessageContent[]>([]);  // $state declared in closure
-  
+  let contentBlocks = $state<MessageContent[]>([]); // $state declared in closure
+
   return {
     get contentBlocks() {
-      return contentBlocks;  // Returns the $state variable
+      return contentBlocks; // Returns the $state variable
     },
     // ... methods that reassign contentBlocks
-  }
+  };
 }
 ```
 
@@ -37,7 +39,7 @@ In StreamingMessage.svelte, when we do:
 
 ```typescript
 let grouped = $derived.by(() => {
-  const blocks = streamStore.contentBlocks;  // Getting value through getter
+  const blocks = streamStore.contentBlocks; // Getting value through getter
   // ... use blocks
 });
 ```
@@ -47,18 +49,19 @@ The issue is that `streamStore.contentBlocks` returns the VALUE at that moment, 
 ## The Solution: Two Approaches
 
 ### Approach 1: Force Re-evaluation (Quick Fix)
+
 Keep streamStore as-is, but explicitly touch reactive dependencies in components:
 
 ```svelte
 <script>
   let _trigger = $state(0);
-  
+
   let grouped = $derived.by(() => {
     _trigger; // Just reading it forces Svelte to track
     const blocks = streamStore.contentBlocks;
     // ...
   });
-  
+
   // Increment _trigger whenever we need components to re-render
 </script>
 ```
@@ -66,6 +69,7 @@ Keep streamStore as-is, but explicitly touch reactive dependencies in components
 This is hacky but would work immediately.
 
 ### Approach 2: Use Svelte's Context API (Proper Fix)
+
 Use Svelte's built-in context system for reactive stores:
 
 ```typescript
@@ -89,13 +93,14 @@ let grouped = $derived.by(() => {
 ```
 
 ### Approach 3: Manual Subscription Pattern (Most Robust)
+
 Similar to Svelte stores, create a subscription system:
 
 ```typescript
 export function createStreamStore() {
   let subscribers: Set<() => void> = new Set();
   let contentBlocks = $state<MessageContent[]>([]);
-  
+
   return {
     subscribe(fn: () => void) {
       subscribers.add(fn);
@@ -107,9 +112,9 @@ export function createStreamStore() {
     // On mutations:
     handleEvent(event) {
       contentBlocks = [...contentBlocks, newBlock];
-      subscribers.forEach(fn => fn());  // Notify subscribers
-    }
-  }
+      subscribers.forEach((fn) => fn()); // Notify subscribers
+    },
+  };
 }
 
 // Component:
@@ -129,6 +134,7 @@ let grouped = $derived.by(() => {
 ## Recommended Fix
 
 Use **Approach 2 (Context API)** because:
+
 1. ✅ It's the Svelte 5 recommended pattern
 2. ✅ It's built-in and requires no changes to stream.svelte.ts structure
 3. ✅ It properly tracks dependencies through Svelte's reactivity system
@@ -137,29 +143,32 @@ Use **Approach 2 (Context API)** because:
 ## Implementation Steps for Context API Fix
 
 1. In stream.svelte.ts, export the store and mark it for context:
+
 ```typescript
 export const streamStore = createStreamStore();
 export const STREAM_CONTEXT_KEY = 'streamStore';
 ```
 
 2. In the root layout or app component, set context:
+
 ```svelte
 <script>
   import { streamStore, STREAM_CONTEXT_KEY } from '$lib/stores/stream.svelte';
   import { setContext } from 'svelte';
-  
+
   setContext(STREAM_CONTEXT_KEY, streamStore);
 </script>
 ```
 
 3. In components that need reactive streaming:
+
 ```svelte
 <script>
   import { getContext } from 'svelte';
   import { STREAM_CONTEXT_KEY } from '$lib/stores/stream.svelte';
-  
+
   const streamStore = getContext(STREAM_CONTEXT_KEY);
-  
+
   let grouped = $derived.by(() => {
     const blocks = streamStore.contentBlocks;
     // Svelte now properly tracks this as depending on streamStore
@@ -171,6 +180,7 @@ export const STREAM_CONTEXT_KEY = 'streamStore';
 ## Why This Fixes the Streaming Issue
 
 With the Context API:
+
 1. Components properly subscribe to the store object
 2. When `streamStore.contentBlocks = [...]` executes, Svelte marks the context value as changed
 3. Any component using getContext() is notified

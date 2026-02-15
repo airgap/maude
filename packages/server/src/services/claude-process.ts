@@ -787,7 +787,9 @@ class ClaudeProcessManager {
         if (isComplete) {
           try {
             controller.close();
-          } catch { /* already closed */ }
+          } catch {
+            /* already closed */
+          }
           return;
         }
 
@@ -823,7 +825,9 @@ class ClaudeProcessManager {
             clearInterval(pingInterval);
             try {
               controller.close();
-            } catch { /* already closed */ }
+            } catch {
+              /* already closed */
+            }
           }
         }, 100); // Poll every 100ms for new events
 

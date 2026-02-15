@@ -22,17 +22,23 @@
 
   function actionTypeLabel(action: StoryAction): string {
     switch (action.type) {
-      case 'add': return 'ADD';
-      case 'edit': return 'EDIT';
-      case 'remove': return 'REMOVE';
+      case 'add':
+        return 'ADD';
+      case 'edit':
+        return 'EDIT';
+      case 'remove':
+        return 'REMOVE';
     }
   }
 
   function actionTypeColor(action: StoryAction): string {
     switch (action.type) {
-      case 'add': return 'var(--accent-secondary, #22c55e)';
-      case 'edit': return 'var(--accent-primary)';
-      case 'remove': return 'var(--accent-error)';
+      case 'add':
+        return 'var(--accent-secondary, #22c55e)';
+      case 'edit':
+        return 'var(--accent-primary)';
+      case 'remove':
+        return 'var(--accent-error)';
     }
   }
 
@@ -134,7 +140,9 @@
 {#if actions.length > 0}
   <div class="story-actions">
     <div class="actions-header">
-      <span class="actions-label">{loopStore.editMode === 'unlocked' ? 'Applied' : 'Proposed'} Changes ({actions.length})</span>
+      <span class="actions-label"
+        >{loopStore.editMode === 'unlocked' ? 'Applied' : 'Proposed'} Changes ({actions.length})</span
+      >
       {#if actions.length > 1 && appliedActions.size < actions.length}
         <button class="btn-apply-all" onclick={applyAll} disabled={applyingIndex !== null}>
           Apply All
@@ -154,8 +162,11 @@
           {#if appliedActions.has(i)}
             <span class="applied-badge">Applied</span>
           {:else}
-            <button class="btn-apply" onclick={() => applyAction(action, i)}
-              disabled={applyingIndex !== null}>
+            <button
+              class="btn-apply"
+              onclick={() => applyAction(action, i)}
+              disabled={applyingIndex !== null}
+            >
               {applyingIndex === i ? '...' : 'Apply'}
             </button>
           {/if}

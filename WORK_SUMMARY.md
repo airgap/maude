@@ -6,13 +6,15 @@ This session focused on diagnosing and fixing a critical reactivity issue preven
 
 ## The Problem
 
-**User Experience Issue**: 
+**User Experience Issue**:
+
 - Messages from Claude don't appear in the browser during streaming
 - Users must wait for the entire response to finish (5+ minutes for long responses)
 - OR reload the page to see what was actually sent
 - **This breaks the core feature of real-time streaming**
 
 **Technical Investigation Revealed**:
+
 - ✅ Network layer working: SSE chunks arrive in real-time
 - ✅ Client receiving: Browser console shows `[sse] Received event:...` logs
 - ✅ Store processing: `streamStore.handleEvent()` called, state reassigned
@@ -37,12 +39,18 @@ UI should update with new text  ✗ (DOESN'T HAPPEN)
 
 **Why It Broke**:
 When components read `streamStore.contentBlocks` through a getter function:
+
 ```typescript
-const streamStore = { get contentBlocks() { return contentBlocks } }
+const streamStore = {
+  get contentBlocks() {
+    return contentBlocks;
+  },
+};
 // Component reads: streamStore.contentBlocks
 ```
 
 Svelte 5's `$derived.by()` couldn't track that the underlying `$state` variable changed, because:
+
 1. The component accesses a getter method (not direct state)
 2. Svelte's reactivity tracking doesn't automatically follow getter returns
 3. The dependency tracking chain was broken
@@ -54,11 +62,13 @@ Svelte 5's `$derived.by()` couldn't track that the underlying `$state` variable 
 Instead of exporting store through getters, we use Svelte's built-in context system:
 
 1. **Store exports context key** (stream.svelte.ts):
+
    ```typescript
    export const STREAM_CONTEXT_KEY = Symbol('streamStore');
    ```
 
 2. **Root layout sets context** (+layout.svelte):
+
    ```typescript
    import { streamStore, STREAM_CONTEXT_KEY } from '$lib/stores/stream.svelte';
    setContext(STREAM_CONTEXT_KEY, streamStore);
@@ -68,12 +78,13 @@ Instead of exporting store through getters, we use Svelte's built-in context sys
    ```typescript
    const streamStore = getContext(STREAM_CONTEXT_KEY);
    let grouped = $derived.by(() => {
-     const blocks = streamStore.contentBlocks;  // Now Svelte properly tracks this
+     const blocks = streamStore.contentBlocks; // Now Svelte properly tracks this
      return buildGrouped(blocks);
    });
    ```
 
 **Why This Works**:
+
 - Svelte's context system is built to support reactive stores
 - Components that use `getContext()` are marked as depending on the context value
 - When store properties change, Svelte notifies all context users
@@ -83,6 +94,7 @@ Instead of exporting store through getters, we use Svelte's built-in context sys
 ## Files Modified
 
 ### Core Changes
+
 1. **stream.svelte.ts**
    - Added `export const STREAM_CONTEXT_KEY = Symbol('streamStore');`
    - No changes to store structure needed
@@ -99,6 +111,7 @@ Instead of exporting store through getters, we use Svelte's built-in context sys
    - `$derived.by()` now properly tracks streamStore as dependency
 
 ### Documentation Added
+
 1. **REACTIVITY_INVESTIGATION.md**
    - Detailed problem analysis
    - Root cause explanation
@@ -130,7 +143,9 @@ Instead of exporting store through getters, we use Svelte's built-in context sys
    - Success criteria
 
 ### Diagnostic Logging
+
 Added console logs to help diagnose streaming in production:
+
 - `[streamStore.handleEvent]`: Logs when events are processed
 - `[streamStore]`: Logs when blocks added/updated
 - `[StreamingMessage]`: Logs when component re-renders
@@ -146,6 +161,7 @@ The fix includes comprehensive logging to validate:
 3. **UI level**: Confirm message appears in browser
 
 **Expected Behavior After Fix**:
+
 - Messages appear character-by-character in real-time
 - No page reload required
 - Smooth 60fps updates
@@ -154,6 +170,7 @@ The fix includes comprehensive logging to validate:
 ## Impact
 
 **This fix enables**:
+
 - Real-time streaming messages (core feature)
 - Immediate visual feedback while Claude thinks/types
 - Tool execution progress tracking
@@ -166,6 +183,7 @@ The fix includes comprehensive logging to validate:
 ## Build Status
 
 ✅ **Build succeeds** without errors or critical warnings
+
 - No TypeScript errors
 - No Svelte compilation errors
 - Only unrelated accessibility warnings (pre-existing)
@@ -191,10 +209,11 @@ The fix includes comprehensive logging to validate:
 ### Why Previous Attempts Failed
 
 We tried exporting $state directly in an object:
+
 ```typescript
 export const streamState = {
   contentBlocks: $state<MessageContent[]>([]),
-}
+};
 ```
 
 **This failed** because Svelte 5 syntax rules don't allow `$state()` initializers in object literals - only in variable declarations and class field initializations.
@@ -202,6 +221,7 @@ export const streamState = {
 ### Why Context API Is Correct
 
 Svelte's context API is the recommended pattern for:
+
 - Making reactive stores available throughout app
 - Ensuring dependency tracking works
 - Avoiding prop drilling
@@ -212,11 +232,13 @@ It's what Svelte's built-in stores and SvelteKit use internally.
 ## Files Status
 
 **Modified**:
+
 - packages/client/src/lib/stores/stream.svelte.ts
-- packages/client/src/routes/+layout.svelte  
+- packages/client/src/routes/+layout.svelte
 - packages/client/src/lib/components/chat/StreamingMessage.svelte
 
 **Created**:
+
 - REACTIVITY_INVESTIGATION.md
 - STREAMING_FIX_NOTES/svelte5-reactivity-solution.md
 - REACTIVITY_DEBUG.md

@@ -39,7 +39,12 @@
     const prdId = loopStore.selectedPrdId;
     if (!prdId || !description.trim()) return;
 
-    const result = await loopStore.generateStories(prdId, description.trim(), context.trim() || undefined, storyCount);
+    const result = await loopStore.generateStories(
+      prdId,
+      description.trim(),
+      context.trim() || undefined,
+      storyCount,
+    );
     if (result.ok) {
       reviewStories = [...loopStore.generatedStories];
     } else {
@@ -142,7 +147,14 @@
     <div class="modal-header">
       <h2>{phase === 'input' ? 'Generate Stories from PRD' : 'Review Generated Stories'}</h2>
       <button class="close-btn" onclick={close}>
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <svg
+          width="16"
+          height="16"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+        >
           <line x1="18" y1="6" x2="6" y2="18"></line>
           <line x1="6" y1="6" x2="18" y2="18"></line>
         </svg>
@@ -200,7 +212,12 @@
                 <!-- Editing mode -->
                 <div class="edit-form">
                   <input class="edit-title" bind:value={editTitle} placeholder="Story title" />
-                  <textarea class="edit-desc" bind:value={editDescription} placeholder="Description" rows="2"></textarea>
+                  <textarea
+                    class="edit-desc"
+                    bind:value={editDescription}
+                    placeholder="Description"
+                    rows="2"
+                  ></textarea>
                   <div class="edit-priority-row">
                     <label class="field-label-inline">Priority:</label>
                     <select bind:value={editPriority}>
@@ -227,13 +244,31 @@
                   </span>
                   <div class="card-actions">
                     <button class="card-btn" title="Edit story" onclick={() => startEditing(i)}>
-                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <svg
+                        width="12"
+                        height="12"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                      >
                         <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
                         <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
                       </svg>
                     </button>
-                    <button class="card-btn card-btn-danger" title="Remove story" onclick={() => removeStory(i)}>
-                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <button
+                      class="card-btn card-btn-danger"
+                      title="Remove story"
+                      onclick={() => removeStory(i)}
+                    >
+                      <svg
+                        width="12"
+                        height="12"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                      >
                         <line x1="18" y1="6" x2="6" y2="18"></line>
                         <line x1="6" y1="6" x2="18" y2="18"></line>
                       </svg>
@@ -280,7 +315,8 @@
           onclick={handleAccept}
           disabled={loopStore.loading || reviewStories.length === 0}
         >
-          Accept {reviewStories.length} {reviewStories.length === 1 ? 'Story' : 'Stories'}
+          Accept {reviewStories.length}
+          {reviewStories.length === 1 ? 'Story' : 'Stories'}
         </button>
       {/if}
     </div>

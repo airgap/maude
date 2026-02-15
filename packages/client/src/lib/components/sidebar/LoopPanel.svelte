@@ -38,20 +38,29 @@
 
   function statusIcon(status: string): string {
     switch (status) {
-      case 'completed': return '✓';
-      case 'in_progress': return '●';
-      case 'failed': return '✗';
-      case 'skipped': return '⊘';
-      default: return '○';
+      case 'completed':
+        return '✓';
+      case 'in_progress':
+        return '●';
+      case 'failed':
+        return '✗';
+      case 'skipped':
+        return '⊘';
+      default:
+        return '○';
     }
   }
 
   function statusColor(status: string): string {
     switch (status) {
-      case 'completed': return 'var(--accent-secondary)';
-      case 'in_progress': return 'var(--accent-primary)';
-      case 'failed': return 'var(--accent-error)';
-      default: return 'var(--text-tertiary)';
+      case 'completed':
+        return 'var(--accent-secondary)';
+      case 'in_progress':
+        return 'var(--accent-primary)';
+      case 'failed':
+        return 'var(--accent-error)';
+      default:
+        return 'var(--text-tertiary)';
     }
   }
 
@@ -104,7 +113,7 @@
     const prdId = loopStore.selectedPrdId;
     if (!prdId || !newStoryTitle.trim()) return;
     try {
-      const criteria = newStoryCriteria.split('\n').filter(l => l.trim());
+      const criteria = newStoryCriteria.split('\n').filter((l) => l.trim());
       await api.prds.addStory(prdId, {
         title: newStoryTitle,
         description: newStoryDesc,
@@ -156,15 +165,24 @@
 
   function actionColor(action: string): string {
     switch (action) {
-      case 'passed': case 'committed': return 'var(--accent-secondary)';
-      case 'failed': return 'var(--accent-error)';
-      case 'started': return 'var(--accent-primary)';
-      default: return 'var(--text-tertiary)';
+      case 'passed':
+      case 'committed':
+        return 'var(--accent-secondary)';
+      case 'failed':
+        return 'var(--accent-error)';
+      case 'started':
+        return 'var(--accent-primary)';
+      default:
+        return 'var(--text-tertiary)';
     }
   }
 
   function formatTime(ts: number): string {
-    return new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    return new Date(ts).toLocaleTimeString([], {
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+    });
   }
 
   let planning = $state(false);
@@ -247,7 +265,10 @@
       if (result.ok) {
         const summary = loopStore.bulkPriorityResult?.summary;
         if (summary) {
-          uiStore.toast(`Priority recommendations: ${summary.changedCount} changes suggested (${summary.criticalCount}C/${summary.highCount}H/${summary.mediumCount}M/${summary.lowCount}L)`, 'success');
+          uiStore.toast(
+            `Priority recommendations: ${summary.changedCount} changes suggested (${summary.criticalCount}C/${summary.highCount}H/${summary.mediumCount}M/${summary.lowCount}L)`,
+            'success',
+          );
         } else {
           uiStore.toast('All priorities analyzed', 'success');
         }
@@ -268,7 +289,10 @@
       if (result.ok) {
         const summary = loopStore.prdEstimationResult?.summary;
         if (summary) {
-          uiStore.toast(`Estimated ${summary.smallCount + summary.mediumCount + summary.largeCount} stories (${summary.totalPoints} total points)`, 'success');
+          uiStore.toast(
+            `Estimated ${summary.smallCount + summary.mediumCount + summary.largeCount} stories (${summary.totalPoints} total points)`,
+            'success',
+          );
         } else {
           uiStore.toast('All stories estimated', 'success');
         }
@@ -282,10 +306,14 @@
 
   function estimateSizeColor(size: string): string {
     switch (size) {
-      case 'small': return 'var(--accent-secondary)';
-      case 'medium': return 'var(--accent-warning, #e6a817)';
-      case 'large': return 'var(--accent-error)';
-      default: return 'var(--text-tertiary)';
+      case 'small':
+        return 'var(--accent-secondary)';
+      case 'medium':
+        return 'var(--accent-warning, #e6a817)';
+      case 'large':
+        return 'var(--accent-error)';
+      default:
+        return 'var(--text-tertiary)';
     }
   }
 
@@ -294,11 +322,14 @@
   }
 
   let totalStoryPoints = $derived(
-    (loopStore.selectedPrd?.stories || []).reduce((sum, s) => sum + (s.estimate?.storyPoints || 0), 0)
+    (loopStore.selectedPrd?.stories || []).reduce(
+      (sum, s) => sum + (s.estimate?.storyPoints || 0),
+      0,
+    ),
   );
 
   let estimatedCount = $derived(
-    (loopStore.selectedPrd?.stories || []).filter((s) => s.estimate).length
+    (loopStore.selectedPrd?.stories || []).filter((s) => s.estimate).length,
   );
 
   async function startPlanning(mode: PlanMode) {
@@ -327,7 +358,7 @@
       if (mode === 'chat-generate') {
         await sendAndStream(
           result.conversationId,
-          'Let\'s plan this sprint. Review the PRD description and any existing stories, then suggest what we should build. Ask me clarifying questions if needed.',
+          "Let's plan this sprint. Review the PRD description and any existing stories, then suggest what we should build. Ask me clarifying questions if needed.",
         );
       }
 
@@ -345,7 +376,11 @@
   <div class="section-header">
     <h3>Autonomous Loop</h3>
     {#if loopStore.isActive}
-      <span class="loop-badge" class:running={loopStore.isRunning} class:paused={loopStore.isPaused}>
+      <span
+        class="loop-badge"
+        class:running={loopStore.isRunning}
+        class:paused={loopStore.isPaused}
+      >
         {loopStore.isRunning ? 'Running' : 'Paused'}
       </span>
     {/if}
@@ -367,10 +402,24 @@
           <option value={prd.id}>{prd.name}</option>
         {/each}
       </select>
-      <button class="icon-btn" title="New PRD" onclick={() => { showCreate = !showCreate; showImport = false; }}>
+      <button
+        class="icon-btn"
+        title="New PRD"
+        onclick={() => {
+          showCreate = !showCreate;
+          showImport = false;
+        }}
+      >
         +
       </button>
-      <button class="icon-btn" title="Import prd.json" onclick={() => { showImport = !showImport; showCreate = false; }}>
+      <button
+        class="icon-btn"
+        title="Import prd.json"
+        onclick={() => {
+          showImport = !showImport;
+          showCreate = false;
+        }}
+      >
         ↓
       </button>
     </div>
@@ -381,21 +430,31 @@
         <textarea bind:value={newPrdDesc} placeholder="Description (optional)" rows="2"></textarea>
         <div class="import-actions">
           <button class="btn-sm btn-primary" onclick={handleCreate}>Create</button>
-          <button class="btn-sm btn-ghost" onclick={() => { showCreate = false; newPrdName = ''; newPrdDesc = ''; }}>Cancel</button>
+          <button
+            class="btn-sm btn-ghost"
+            onclick={() => {
+              showCreate = false;
+              newPrdName = '';
+              newPrdDesc = '';
+            }}>Cancel</button
+          >
         </div>
       </div>
     {/if}
 
     {#if showImport}
       <div class="import-area">
-        <textarea
-          bind:value={importJson}
-          placeholder='Paste prd.json content here...'
-          rows="5"
+        <textarea bind:value={importJson} placeholder="Paste prd.json content here..." rows="5"
         ></textarea>
         <div class="import-actions">
           <button class="btn-sm" onclick={handleImport}>Import</button>
-          <button class="btn-sm btn-ghost" onclick={() => { showImport = false; importJson = ''; }}>Cancel</button>
+          <button
+            class="btn-sm btn-ghost"
+            onclick={() => {
+              showImport = false;
+              importJson = '';
+            }}>Cancel</button
+          >
         </div>
       </div>
     {/if}
@@ -405,34 +464,62 @@
   {#if loopStore.selectedPrdId && !loopStore.isActive}
     <div class="plan-section">
       <div class="plan-row">
-        <button class="btn-sm btn-plan" onclick={() => startPlanning('chat')}
+        <button
+          class="btn-sm btn-plan"
+          onclick={() => startPlanning('chat')}
           disabled={planning}
-          title="Open a planning conversation with Claude">
+          title="Open a planning conversation with Claude"
+        >
           Plan
         </button>
-        <button class="btn-sm btn-plan" onclick={() => startPlanning('generate')}
+        <button
+          class="btn-sm btn-plan"
+          onclick={() => startPlanning('generate')}
           disabled={planning}
-          title="AI-generate stories from PRD description with review">
+          title="AI-generate stories from PRD description with review"
+        >
           Generate
         </button>
-        <button class="btn-sm btn-plan" onclick={() => startPlanning('chat-generate')}
+        <button
+          class="btn-sm btn-plan"
+          onclick={() => startPlanning('chat-generate')}
           disabled={planning}
-          title="Chat to refine scope, then generate stories">
+          title="Chat to refine scope, then generate stories"
+        >
           Plan + Gen
         </button>
       </div>
-      <button class="edit-lock" onclick={() => {
-          const next = loopStore.editMode === 'locked' ? 'propose'
-            : loopStore.editMode === 'propose' ? 'unlocked' : 'locked';
+      <button
+        class="edit-lock"
+        onclick={() => {
+          const next =
+            loopStore.editMode === 'locked'
+              ? 'propose'
+              : loopStore.editMode === 'propose'
+                ? 'unlocked'
+                : 'locked';
           loopStore.setEditMode(next);
         }}
         title={loopStore.editMode === 'locked'
           ? 'Claude will discuss stories in plain text only'
           : loopStore.editMode === 'propose'
             ? 'Claude will propose structured edits for your approval'
-            : 'Claude will apply edits automatically'}>
-        <span class="lock-icon">{loopStore.editMode === 'locked' ? '▣' : loopStore.editMode === 'propose' ? '▥' : '▢'}</span>
-        <span class="lock-label">{loopStore.editMode === 'locked' ? 'Locked' : loopStore.editMode === 'propose' ? 'Propose' : 'Unlocked'}</span>
+            : 'Claude will apply edits automatically'}
+      >
+        <span class="lock-icon"
+          >{loopStore.editMode === 'locked'
+            ? '▣'
+            : loopStore.editMode === 'propose'
+              ? '▥'
+              : '▢'}</span
+        >
+        <span class="lock-label"
+          >{loopStore.editMode === 'locked'
+            ? 'Locked'
+            : loopStore.editMode === 'propose'
+              ? 'Propose'
+              : 'Unlocked'}</span
+        >
       </button>
     </div>
   {/if}
@@ -441,31 +528,97 @@
   {#if loopStore.selectedPrd}
     <div class="stories-section">
       <div class="section-header">
-        <h4>Stories ({loopStore.selectedPrd.stories?.length || 0}){#if totalStoryPoints > 0}<span class="total-points" title="{estimatedCount} of {loopStore.selectedPrd.stories?.length || 0} estimated"> · {totalStoryPoints}pts</span>{/if}</h4>
+        <h4>
+          Stories ({loopStore.selectedPrd.stories?.length || 0}){#if totalStoryPoints > 0}<span
+              class="total-points"
+              title="{estimatedCount} of {loopStore.selectedPrd.stories?.length || 0} estimated"
+            >
+              · {totalStoryPoints}pts</span
+            >{/if}
+        </h4>
         <div class="header-actions">
-          <button class="icon-btn" title="Add story" onclick={() => showAddStory = !showAddStory}>+</button>
+          <button class="icon-btn" title="Add story" onclick={() => (showAddStory = !showAddStory)}
+            >+</button
+          >
           <div class="stories-menu-wrap">
-            <button class="icon-btn" class:active-btn={showStoriesMenu} title="Actions" onclick={toggleStoriesMenu}>⋯</button>
+            <button
+              class="icon-btn"
+              class:active-btn={showStoriesMenu}
+              title="Actions"
+              onclick={toggleStoriesMenu}>⋯</button
+            >
             {#if showStoriesMenu}
               <!-- svelte-ignore a11y_no_static_element_interactions a11y_click_events_have_key_events -->
               <div class="stories-menu-backdrop" onclick={closeStoriesMenu}></div>
               <div class="stories-menu">
-                <button class="menu-item" onclick={() => { closeStoriesMenu(); estimateAllStories(); }} disabled={estimatingAll}>
+                <button
+                  class="menu-item"
+                  onclick={() => {
+                    closeStoriesMenu();
+                    estimateAllStories();
+                  }}
+                  disabled={estimatingAll}
+                >
                   {#if estimatingAll}<span class="spinner-sm"></span>{:else}Estimate all{/if}
                 </button>
-                <button class="menu-item" onclick={() => { closeStoriesMenu(); recommendAllPriorities(); }} disabled={recommendingAllPriorities}>
-                  {#if recommendingAllPriorities}<span class="spinner-sm"></span>{:else}Prioritize all{/if}
+                <button
+                  class="menu-item"
+                  onclick={() => {
+                    closeStoriesMenu();
+                    recommendAllPriorities();
+                  }}
+                  disabled={recommendingAllPriorities}
+                >
+                  {#if recommendingAllPriorities}<span class="spinner-sm"></span>{:else}Prioritize
+                    all{/if}
                 </button>
                 <div class="menu-divider"></div>
-                <button class="menu-item" onclick={() => { closeStoriesMenu(); openSprintPlanModal(); }}>Sprint plan</button>
-                <button class="menu-item" onclick={() => { closeStoriesMenu(); openEffortValueMatrix(); }}>Effort / Value matrix</button>
-                <button class="menu-item" onclick={() => { closeStoriesMenu(); openCompletenessModal(); }}>PRD completeness</button>
-                <button class="menu-item" onclick={() => { closeStoriesMenu(); openTemplateLibrary(); }}>Story templates</button>
-                <button class="menu-item" class:active-btn={showDependencies} onclick={() => { closeStoriesMenu(); showDependencies = !showDependencies; }}>
+                <button
+                  class="menu-item"
+                  onclick={() => {
+                    closeStoriesMenu();
+                    openSprintPlanModal();
+                  }}>Sprint plan</button
+                >
+                <button
+                  class="menu-item"
+                  onclick={() => {
+                    closeStoriesMenu();
+                    openEffortValueMatrix();
+                  }}>Effort / Value matrix</button
+                >
+                <button
+                  class="menu-item"
+                  onclick={() => {
+                    closeStoriesMenu();
+                    openCompletenessModal();
+                  }}>PRD completeness</button
+                >
+                <button
+                  class="menu-item"
+                  onclick={() => {
+                    closeStoriesMenu();
+                    openTemplateLibrary();
+                  }}>Story templates</button
+                >
+                <button
+                  class="menu-item"
+                  class:active-btn={showDependencies}
+                  onclick={() => {
+                    closeStoriesMenu();
+                    showDependencies = !showDependencies;
+                  }}
+                >
                   {showDependencies ? 'Hide dependencies' : 'Dependencies'}
                 </button>
                 <div class="menu-divider"></div>
-                <button class="menu-item menu-item-danger" onclick={() => { closeStoriesMenu(); handleDeletePrd(); }}>Delete PRD</button>
+                <button
+                  class="menu-item menu-item-danger"
+                  onclick={() => {
+                    closeStoriesMenu();
+                    handleDeletePrd();
+                  }}>Delete PRD</button
+                >
               </div>
             {/if}
           </div>
@@ -476,10 +629,14 @@
         <div class="add-story-form">
           <input bind:value={newStoryTitle} placeholder="Story title" />
           <textarea bind:value={newStoryDesc} placeholder="Description" rows="2"></textarea>
-          <textarea bind:value={newStoryCriteria} placeholder="Acceptance criteria (one per line)" rows="3"></textarea>
+          <textarea
+            bind:value={newStoryCriteria}
+            placeholder="Acceptance criteria (one per line)"
+            rows="3"
+          ></textarea>
           <div class="import-actions">
             <button class="btn-sm" onclick={handleAddStory}>Add</button>
-            <button class="btn-sm btn-ghost" onclick={() => showAddStory = false}>Cancel</button>
+            <button class="btn-sm btn-ghost" onclick={() => (showAddStory = false)}>Cancel</button>
           </div>
         </div>
       {/if}
@@ -490,8 +647,11 @@
             <span class="empty-hint">No stories yet. Click + to add one.</span>
           </div>
         {:else}
-          {#each (loopStore.selectedPrd.stories || []) as story (story.id)}
-            <div class="story-item" class:active={loopStore.activeLoop?.currentStoryId === story.id}>
+          {#each loopStore.selectedPrd.stories || [] as story (story.id)}
+            <div
+              class="story-item"
+              class:active={loopStore.activeLoop?.currentStoryId === story.id}
+            >
               <div class="story-header">
                 <span class="story-status" style:color={statusColor(story.status)}>
                   {statusIcon(story.status)}
@@ -501,21 +661,48 @@
                   <span class="priority-badge">{priorityLabel(story.priority)}</span>
                 {/if}
                 {#if !loopStore.isActive}
-                  <button class="validate-btn" title="Validate acceptance criteria" onclick={() => openValidateModal(story.id)}>✓</button>
-                  <button class="refine-btn" title="Refine story" onclick={() => openRefineModal(story.id)}>↻</button>
-                  <button class="estimate-btn" title="Estimate complexity" onclick={() => openEstimateModal(story.id)}>⚖</button>
-                  <button class="priority-btn" title="Recommend priority" onclick={() => openPriorityModal(story.id)}>⇅</button>
+                  <button
+                    class="validate-btn"
+                    title="Validate acceptance criteria"
+                    onclick={() => openValidateModal(story.id)}>✓</button
+                  >
+                  <button
+                    class="refine-btn"
+                    title="Refine story"
+                    onclick={() => openRefineModal(story.id)}>↻</button
+                  >
+                  <button
+                    class="estimate-btn"
+                    title="Estimate complexity"
+                    onclick={() => openEstimateModal(story.id)}>⚖</button
+                  >
+                  <button
+                    class="priority-btn"
+                    title="Recommend priority"
+                    onclick={() => openPriorityModal(story.id)}>⇅</button
+                  >
                   <button class="delete-btn" onclick={() => handleDeleteStory(story.id)}>×</button>
                 {/if}
               </div>
               <div class="story-badges">
                 {#if story.estimate}
-                  <span class="estimate-badge" style:background={estimateSizeColor(story.estimate.size)} title="{story.estimate.size} · {story.estimate.storyPoints} points · Confidence: {story.estimate.confidence}{story.estimate.isManualOverride ? ' (manual)' : ''}">
+                  <span
+                    class="estimate-badge"
+                    style:background={estimateSizeColor(story.estimate.size)}
+                    title="{story.estimate.size} · {story.estimate
+                      .storyPoints} points · Confidence: {story.estimate.confidence}{story.estimate
+                      .isManualOverride
+                      ? ' (manual)'
+                      : ''}"
+                  >
                     {estimateSizeLabel(story.estimate.size)}{story.estimate.storyPoints}
                   </span>
                 {/if}
                 {#if story.priorityRecommendation && story.priorityRecommendation.suggestedPriority !== story.priority && !story.priorityRecommendation.isManualOverride}
-                  <span class="priority-rec-badge" title="AI suggests: {story.priorityRecommendation.suggestedPriority}">
+                  <span
+                    class="priority-rec-badge"
+                    title="AI suggests: {story.priorityRecommendation.suggestedPriority}"
+                  >
                     ⇅{story.priorityRecommendation.suggestedPriority[0].toUpperCase()}
                   </span>
                 {/if}
@@ -549,7 +736,11 @@
         </div>
         <div class="warning-list">
           {#each loopStore.sprintWarnings as warning}
-            <div class="sprint-warning-item" class:blocking={warning.type === 'blocked_story'} class:circular={warning.type === 'circular_dependency'}>
+            <div
+              class="sprint-warning-item"
+              class:blocking={warning.type === 'blocked_story'}
+              class:circular={warning.type === 'circular_dependency'}
+            >
               <span class="warning-msg">{warning.message}</span>
             </div>
           {/each}
@@ -566,7 +757,8 @@
           <div class="progress-bar" style:width="{loopStore.progress}%"></div>
         </div>
         <span class="progress-text">
-          {loopStore.completedStories}/{loopStore.totalStories} stories • Iteration {loopStore.activeLoop?.currentIteration || 0}
+          {loopStore.completedStories}/{loopStore.totalStories} stories • Iteration {loopStore
+            .activeLoop?.currentIteration || 0}
         </span>
       </div>
 
@@ -574,11 +766,15 @@
         {#if loopStore.isRunning}
           <button class="btn-sm btn-warning" onclick={() => loopStore.pauseLoop()}>⏸ Pause</button>
         {:else if loopStore.isPaused}
-          <button class="btn-sm btn-primary" onclick={() => loopStore.resumeLoop()}>▶ Resume</button>
+          <button class="btn-sm btn-primary" onclick={() => loopStore.resumeLoop()}>▶ Resume</button
+          >
         {/if}
-        <button class="btn-sm btn-danger" onclick={() => {
-          if (confirm('Cancel the autonomous loop?')) loopStore.cancelLoop();
-        }}>⏹ Cancel</button>
+        <button
+          class="btn-sm btn-danger"
+          onclick={() => {
+            if (confirm('Cancel the autonomous loop?')) loopStore.cancelLoop();
+          }}>⏹ Cancel</button
+        >
       </div>
     {:else}
       <button
@@ -749,14 +945,19 @@
     color: var(--text-primary);
   }
 
-  .create-form, .import-area, .add-story-form {
+  .create-form,
+  .import-area,
+  .add-story-form {
     margin-top: 6px;
     display: flex;
     flex-direction: column;
     gap: 4px;
   }
-  .create-form input, .create-form textarea,
-  .import-area textarea, .add-story-form textarea, .add-story-form input {
+  .create-form input,
+  .create-form textarea,
+  .import-area textarea,
+  .add-story-form textarea,
+  .add-story-form input {
     width: 100%;
     padding: 6px 8px;
     font-size: 11px;
@@ -1110,11 +1311,18 @@
   }
 
   @keyframes pulse {
-    0%, 100% { opacity: 1; }
-    50% { opacity: 0.7; }
+    0%,
+    100% {
+      opacity: 1;
+    }
+    50% {
+      opacity: 0.7;
+    }
   }
 
   @keyframes spin {
-    to { transform: rotate(360deg); }
+    to {
+      transform: rotate(360deg);
+    }
   }
 </style>

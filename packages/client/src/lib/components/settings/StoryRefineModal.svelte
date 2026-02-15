@@ -87,7 +87,14 @@
     <div class="modal-header">
       <h2>Refine Story</h2>
       <button class="close-btn" onclick={close} title="Close">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <svg
+          width="16"
+          height="16"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+        >
           <line x1="18" y1="6" x2="6" y2="18"></line>
           <line x1="6" y1="6" x2="18" y2="18"></line>
         </svg>
@@ -128,10 +135,16 @@
             <div class="quality-header">
               <span class="quality-label">Quality Score</span>
               <div class="quality-score-row">
-                <span class="quality-score" style:color={qualityColor(loopStore.refinementQualityScore)}>
+                <span
+                  class="quality-score"
+                  style:color={qualityColor(loopStore.refinementQualityScore)}
+                >
                   {loopStore.refinementQualityScore}/100
                 </span>
-                <span class="quality-tag" style:background={qualityColor(loopStore.refinementQualityScore)}>
+                <span
+                  class="quality-tag"
+                  style:background={qualityColor(loopStore.refinementQualityScore)}
+                >
                   {qualityLabel(loopStore.refinementQualityScore)}
                 </span>
               </div>
@@ -250,12 +263,7 @@
           Submit Answers & Refine
         </button>
       {:else if loopStore.refinementMeetsThreshold && !loopStore.refining}
-        <button
-          class="btn-refine-again"
-          onclick={startRefinement}
-        >
-          Refine Again
-        </button>
+        <button class="btn-refine-again" onclick={startRefinement}> Refine Again </button>
       {/if}
     </div>
   </div>

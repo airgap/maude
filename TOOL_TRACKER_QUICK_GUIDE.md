@@ -7,12 +7,14 @@ Shows real-time progress when Claude executes multiple tools (even 20+!).
 ## What Users See
 
 ### Progress Bar
+
 ```
 TOOL EXECUTION                         12/20
 ████████████░░░░░░░░░░░░░░░░░░░░░░░░░░ 60%
 ```
 
 ### For Few Tools (≤5)
+
 ```
 ✓ write_file          0.3s
 ⟳ run_tests           (spinning...)
@@ -21,6 +23,7 @@ TOOL EXECUTION                         12/20
 ```
 
 ### For Many Tools (>5)
+
 ```
 ✓ Completed    18
 ⟳ Running       1
@@ -45,38 +48,41 @@ TOOL EXECUTION                         12/20
 
 ## Files
 
-| File | Size | Purpose |
-|------|------|---------|
-| ToolCallTracker.svelte | 314 lines | Component (new) |
+| File                    | Size      | Purpose                    |
+| ----------------------- | --------- | -------------------------- |
+| ToolCallTracker.svelte  | 314 lines | Component (new)            |
 | StreamingMessage.svelte | 254 lines | Updated to include tracker |
 
 ## Data Source
 
 Tracker reads from real-time stream:
+
 - `streamStore.contentBlocks` - list of tool calls
 - `streamStore.toolResults` - completion/error status
 - `streamStore.status` - streaming state
 
 ## Color Coding
 
-| Color | Meaning |
-|-------|---------|
+| Color    | Meaning                  |
+| -------- | ------------------------ |
 | 🟢 Green | ✓ Completed successfully |
-| 🔵 Blue | ⟳ Currently running |
-| 🔴 Red | ✕ Error/failed |
-| ⚪ Gray | ○ Pending/not started |
+| 🔵 Blue  | ⟳ Currently running      |
+| 🔴 Red   | ✕ Error/failed           |
+| ⚪ Gray  | ○ Pending/not started    |
 
 ## User Scenarios
 
 ### Scenario: User runs request with 20 tool calls
 
 **Before (Old UI):**
+
 - Blank message for 10+ seconds
 - User sees nothing happening
 - Message finally appears when done
 - ❌ Poor UX
 
 **After (New UI):**
+
 - Message appears immediately with tracker
 - 20/20 at top
 - 0% → 25% → 50% → 75% → 100%
@@ -95,7 +101,8 @@ Tracker reads from real-time stream:
 ### Change Compact View Threshold
 
 ```svelte
-{#if totalTools > 10}  <!-- was 5, now 10 -->
+{#if totalTools > 10}
+  <!-- was 5, now 10 -->
   <!-- Compact view -->
 {/if}
 ```
@@ -103,6 +110,7 @@ Tracker reads from real-time stream:
 ### Hide Tool Duration
 
 Remove this in detailed view:
+
 ```svelte
 {#if tool.duration}
   <span class="tool-duration">{(tool.duration / 1000).toFixed(1)}s</span>
@@ -112,9 +120,10 @@ Remove this in detailed view:
 ### Change Progress Colors
 
 In `<style>`:
+
 ```css
 .progress-fill {
-  background: linear-gradient(90deg, #ff6b6b, #ffd93d);  /* Custom colors */
+  background: linear-gradient(90deg, #ff6b6b, #ffd93d); /* Custom colors */
 }
 ```
 
@@ -154,6 +163,7 @@ A: Tracker doesn't render at all (checks `if totalTools > 0`)
 ## What's Tracked
 
 Only these block types generate progress:
+
 ```
 type: 'tool_use'
   - name: tool name (e.g., "write_file")
@@ -162,6 +172,7 @@ type: 'tool_use'
 ```
 
 Results stored in:
+
 ```
 streamStore.toolResults.get(toolId)
   - result: output/error message

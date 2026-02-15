@@ -78,11 +78,16 @@
 
   function priorityColor(p: string): string {
     switch (p) {
-      case 'critical': return 'var(--accent-error)';
-      case 'high': return 'var(--accent-warning, #e6a817)';
-      case 'medium': return 'var(--accent-primary)';
-      case 'low': return 'var(--text-tertiary)';
-      default: return 'var(--text-tertiary)';
+      case 'critical':
+        return 'var(--accent-error)';
+      case 'high':
+        return 'var(--accent-warning, #e6a817)';
+      case 'medium':
+        return 'var(--accent-primary)';
+      case 'low':
+        return 'var(--text-tertiary)';
+      default:
+        return 'var(--text-tertiary)';
     }
   }
 
@@ -107,7 +112,12 @@
 
   // Auto-generate when modal opens if we have a PRD selected
   $effect(() => {
-    if (loopStore.selectedPrdId && !loopStore.generatingSprintPlan && !loopStore.sprintPlanResult && !loopStore.sprintPlanError) {
+    if (
+      loopStore.selectedPrdId &&
+      !loopStore.generatingSprintPlan &&
+      !loopStore.sprintPlanResult &&
+      !loopStore.sprintPlanError
+    ) {
       // Don't auto-generate — let the user set capacity first
     }
   });
@@ -120,7 +130,14 @@
     <div class="modal-header">
       <h2>Sprint Plan Recommendations</h2>
       <button class="close-btn" onclick={close} title="Close">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <svg
+          width="16"
+          height="16"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+        >
           <line x1="18" y1="6" x2="6" y2="18"></line>
           <line x1="6" y1="6" x2="18" y2="18"></line>
         </svg>
@@ -183,7 +200,9 @@
             </div>
             <div class="summary-card">
               <span class="card-label">Stories</span>
-              <span class="card-value">{plan.sprints.reduce((sum, s) => sum + s.stories.length, 0)}</span>
+              <span class="card-value"
+                >{plan.sprints.reduce((sum, s) => sum + s.stories.length, 0)}</span
+              >
             </div>
           </div>
           <div class="summary-text">{plan.summary}</div>
@@ -202,7 +221,8 @@
                 <div class="sprint-title-row">
                   <h4 class="sprint-title">Sprint {sprint.sprintNumber}</h4>
                   <span class="sprint-meta">
-                    {sprint.totalPoints}pts · {sprint.stories.length} {sprint.stories.length === 1 ? 'story' : 'stories'}
+                    {sprint.totalPoints}pts · {sprint.stories.length}
+                    {sprint.stories.length === 1 ? 'story' : 'stories'}
                   </span>
                 </div>
                 <div class="capacity-bar-container">
@@ -238,8 +258,11 @@
                         class="story-reason-btn"
                         class:active={expandedStoryReason === story.storyId}
                         title="View placement rationale"
-                        onclick={(e) => { e.stopPropagation(); toggleStoryReason(story.storyId); }}
-                      >ℹ</button>
+                        onclick={(e) => {
+                          e.stopPropagation();
+                          toggleStoryReason(story.storyId);
+                        }}>ℹ</button
+                      >
                     </div>
                     {#if expandedStoryReason === story.storyId && story.reason}
                       <div class="story-reason-detail">{story.reason}</div>
@@ -272,19 +295,20 @@
       {:else}
         <!-- Initial state -->
         <div class="initial-state">
-          <p>Set sprint capacity and click <strong>Generate Plan</strong> to get AI-recommended sprint assignments.</p>
-          <p class="initial-hint">Stories must have estimates. Use "Estimate All" first if needed.</p>
+          <p>
+            Set sprint capacity and click <strong>Generate Plan</strong> to get AI-recommended sprint
+            assignments.
+          </p>
+          <p class="initial-hint">
+            Stories must have estimates. Use "Estimate All" first if needed.
+          </p>
         </div>
       {/if}
     </div>
 
     <div class="modal-footer">
       {#if plan && hasBeenAdjusted}
-        <button
-          class="btn-save"
-          onclick={saveAdjustedPlan}
-          disabled={saving}
-        >
+        <button class="btn-save" onclick={saveAdjustedPlan} disabled={saving}>
           {#if saving}
             <span class="spinner-sm"></span> Saving...
           {:else}

@@ -1,4 +1,32 @@
-import type { PRD, LoopState, IterationLogEntry, StreamLoopEvent, LoopConfig, PlanMode, EditMode, GeneratedStory, RefinementQuestion, RefineStoryResponse, DependencyGraph, SprintValidation, SprintValidationWarning, ValidateACResponse, ACOverride, StoryEstimate, EstimatePrdResponse, SprintPlanResponse, PRDCompletenessAnalysis, StoryTemplate, StoryTemplateCategory, PriorityRecommendation, PriorityRecommendationBulkResponse, EffortValueMatrix, MatrixStoryPosition, MatrixQuadrant, UserStory } from '@maude/shared';
+import type {
+  PRD,
+  LoopState,
+  IterationLogEntry,
+  StreamLoopEvent,
+  LoopConfig,
+  PlanMode,
+  EditMode,
+  GeneratedStory,
+  RefinementQuestion,
+  RefineStoryResponse,
+  DependencyGraph,
+  SprintValidation,
+  SprintValidationWarning,
+  ValidateACResponse,
+  ACOverride,
+  StoryEstimate,
+  EstimatePrdResponse,
+  SprintPlanResponse,
+  PRDCompletenessAnalysis,
+  StoryTemplate,
+  StoryTemplateCategory,
+  PriorityRecommendation,
+  PriorityRecommendationBulkResponse,
+  EffortValueMatrix,
+  MatrixStoryPosition,
+  MatrixQuadrant,
+  UserStory,
+} from '@maude/shared';
 import { api, getBaseUrl, getAuthToken } from '../api/client';
 
 // --- Helper functions for effort-value matrix computation ---
@@ -18,10 +46,12 @@ function computeEffortScore(story: UserStory): number | null {
     13: 95,
   };
 
-  const baseEffort = pointsToEffort[story.estimate.storyPoints] ?? Math.min(story.estimate.storyPoints * 7.5, 100);
+  const baseEffort =
+    pointsToEffort[story.estimate.storyPoints] ?? Math.min(story.estimate.storyPoints * 7.5, 100);
 
   // Adjust slightly based on size classification
-  const sizeModifier = story.estimate.size === 'large' ? 5 : story.estimate.size === 'small' ? -5 : 0;
+  const sizeModifier =
+    story.estimate.size === 'large' ? 5 : story.estimate.size === 'small' ? -5 : 0;
 
   return Math.max(0, Math.min(100, baseEffort + sizeModifier));
 }
@@ -66,10 +96,10 @@ function computeQuadrant(effortScore: number, valueScore: number): MatrixQuadran
   const highValue = valueScore >= 50;
   const highEffort = effortScore >= 50;
 
-  if (highValue && !highEffort) return 'quick_wins';     // High value, low effort
-  if (highValue && highEffort) return 'major_projects';   // High value, high effort
-  if (!highValue && !highEffort) return 'fill_ins';       // Low value, low effort
-  return 'low_priority';                                   // Low value, high effort
+  if (highValue && !highEffort) return 'quick_wins'; // High value, low effort
+  if (highValue && highEffort) return 'major_projects'; // High value, high effort
+  if (!highValue && !highEffort) return 'fill_ins'; // Low value, low effort
+  return 'low_priority'; // Low value, high effort
 }
 
 function createLoopStore() {
@@ -155,7 +185,9 @@ function createLoopStore() {
   // Effort-value matrix state
   let effortValueMatrix = $state<EffortValueMatrix | null>(null);
   let matrixFilterQuadrant = $state<MatrixQuadrant | null>(null);
-  let matrixManualPositions = $state<Record<string, { effortScore: number; valueScore: number }>>({});
+  let matrixManualPositions = $state<Record<string, { effortScore: number; valueScore: number }>>(
+    {},
+  );
 
   return {
     get activeLoop() {
@@ -265,7 +297,9 @@ function createLoopStore() {
     },
     get hasBlockedStories() {
       if (!dependencyGraph) return false;
-      return dependencyGraph.nodes.some((n) => n.blockedByCount > 0 && !n.isReady && n.status === 'pending');
+      return dependencyGraph.nodes.some(
+        (n) => n.blockedByCount > 0 && !n.isReady && n.status === 'pending',
+      );
     },
     get sprintWarnings(): SprintValidationWarning[] {
       return sprintValidation?.warnings || [];
@@ -598,7 +632,11 @@ function createLoopStore() {
       }
     },
 
-    async startLoop(prdId: string, projectPath: string, config: LoopConfig): Promise<{ ok: boolean; error?: string }> {
+    async startLoop(
+      prdId: string,
+      projectPath: string,
+      config: LoopConfig,
+    ): Promise<{ ok: boolean; error?: string }> {
       loading = true;
       try {
         const res = await api.loops.start({ prdId, projectPath, config });
@@ -692,9 +730,7 @@ function createLoopStore() {
     },
 
     updateGeneratedStory(index: number, updates: Partial<GeneratedStory>) {
-      generatedStories = generatedStories.map((s, i) =>
-        i === index ? { ...s, ...updates } : s,
-      );
+      generatedStories = generatedStories.map((s, i) => (i === index ? { ...s, ...updates } : s));
     },
 
     removeGeneratedStory(index: number) {
@@ -920,7 +956,13 @@ function createLoopStore() {
           return { ok: false, error: criteriaValidationError };
         }
 
-        const res = await api.prds.validateCriteria(prdId, storyId, criteriaToValidate, storyTitle, storyDescription);
+        const res = await api.prds.validateCriteria(
+          prdId,
+          storyId,
+          criteriaToValidate,
+          storyTitle,
+          storyDescription,
+        );
         if (res.ok) {
           criteriaValidationResult = res.data;
           return { ok: true };
@@ -1000,10 +1042,7 @@ function createLoopStore() {
       prdEstimationResult = null;
     },
 
-    async estimateStory(
-      prdId: string,
-      storyId: string,
-    ): Promise<{ ok: boolean; error?: string }> {
+    async estimateStory(prdId: string, storyId: string): Promise<{ ok: boolean; error?: string }> {
       estimating = true;
       estimationError = null;
       estimationResult = null;
@@ -1138,7 +1177,9 @@ function createLoopStore() {
 
       // Remove empty sprints and renumber
       const filtered = sprints.filter((s) => s.stories.length > 0);
-      filtered.forEach((s, i) => { s.sprintNumber = i + 1; });
+      filtered.forEach((s, i) => {
+        s.sprintNumber = i + 1;
+      });
 
       sprintPlanResult = {
         ...plan,
@@ -1169,9 +1210,7 @@ function createLoopStore() {
       completenessError = null;
     },
 
-    async analyzeCompleteness(
-      prdId: string,
-    ): Promise<{ ok: boolean; error?: string }> {
+    async analyzeCompleteness(prdId: string): Promise<{ ok: boolean; error?: string }> {
       analyzingCompleteness = true;
       completenessError = null;
       completenessResult = null;
@@ -1355,9 +1394,7 @@ function createLoopStore() {
       }
     },
 
-    async recommendAllPriorities(
-      prdId: string,
-    ): Promise<{ ok: boolean; error?: string }> {
+    async recommendAllPriorities(prdId: string): Promise<{ ok: boolean; error?: string }> {
       recommendingAllPriorities = true;
       bulkPriorityResult = null;
       try {

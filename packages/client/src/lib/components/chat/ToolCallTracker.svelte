@@ -38,7 +38,9 @@
   let completedTools = $derived(toolCalls.filter((t) => t.status === 'completed').length);
   let erroredTools = $derived(toolCalls.filter((t) => t.status === 'error').length);
   let runningTools = $derived(toolCalls.filter((t) => t.status === 'running').length);
-  let progressPercent = $derived(totalTools > 0 ? Math.round((completedTools / totalTools) * 100) : 0);
+  let progressPercent = $derived(
+    totalTools > 0 ? Math.round((completedTools / totalTools) * 100) : 0,
+  );
 </script>
 
 {#if totalTools > 0}
@@ -89,8 +91,18 @@
       <!-- Detailed view for fewer tools -->
       <div class="tracker-list">
         {#each toolCalls as tool (tool.id)}
-          <div class="tool-item" class:completed={tool.status === 'completed'} class:error={tool.status === 'error'} class:running={tool.status === 'running'}>
-            <span class="tool-status-icon" class:completed={tool.status === 'completed'} class:error={tool.status === 'error'} class:running={tool.status === 'running'}>
+          <div
+            class="tool-item"
+            class:completed={tool.status === 'completed'}
+            class:error={tool.status === 'error'}
+            class:running={tool.status === 'running'}
+          >
+            <span
+              class="tool-status-icon"
+              class:completed={tool.status === 'completed'}
+              class:error={tool.status === 'error'}
+              class:running={tool.status === 'running'}
+            >
               {#if tool.status === 'completed'}
                 ✓
               {:else if tool.status === 'error'}

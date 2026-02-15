@@ -86,7 +86,9 @@ app.get('/templates', (c) => {
   const category = c.req.query('category');
   let rows: any[];
   if (category) {
-    rows = db.query('SELECT * FROM story_templates WHERE category = ? ORDER BY is_built_in DESC, name ASC').all(category);
+    rows = db
+      .query('SELECT * FROM story_templates WHERE category = ? ORDER BY is_built_in DESC, name ASC')
+      .all(category);
   } else {
     rows = db.query('SELECT * FROM story_templates ORDER BY is_built_in DESC, name ASC').all();
   }
@@ -109,7 +111,7 @@ app.get('/templates/:templateId', (c) => {
 // --- Create a custom template ---
 app.post('/templates', async (c) => {
   const db = getDb();
-  const body = await c.req.json() as CreateTemplateRequest;
+  const body = (await c.req.json()) as CreateTemplateRequest;
 
   if (!body.name?.trim()) {
     return c.json({ ok: false, error: 'Template name is required' }, 400);
@@ -124,7 +126,7 @@ app.post('/templates', async (c) => {
   db.query(
     `INSERT INTO story_templates (id, name, description, category, title_template, description_template,
      acceptance_criteria_templates, priority, tags, is_built_in, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?)`
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?)`,
   ).run(
     id,
     body.name.trim(),
@@ -159,14 +161,38 @@ app.patch('/templates/:templateId', async (c) => {
   const updates: string[] = [];
   const values: any[] = [];
 
-  if (body.name !== undefined) { updates.push('name = ?'); values.push(body.name.trim()); }
-  if (body.description !== undefined) { updates.push('description = ?'); values.push(body.description.trim()); }
-  if (body.category !== undefined) { updates.push('category = ?'); values.push(body.category); }
-  if (body.titleTemplate !== undefined) { updates.push('title_template = ?'); values.push(body.titleTemplate.trim()); }
-  if (body.descriptionTemplate !== undefined) { updates.push('description_template = ?'); values.push(body.descriptionTemplate.trim()); }
-  if (body.acceptanceCriteriaTemplates !== undefined) { updates.push('acceptance_criteria_templates = ?'); values.push(JSON.stringify(body.acceptanceCriteriaTemplates)); }
-  if (body.priority !== undefined) { updates.push('priority = ?'); values.push(body.priority); }
-  if (body.tags !== undefined) { updates.push('tags = ?'); values.push(JSON.stringify(body.tags)); }
+  if (body.name !== undefined) {
+    updates.push('name = ?');
+    values.push(body.name.trim());
+  }
+  if (body.description !== undefined) {
+    updates.push('description = ?');
+    values.push(body.description.trim());
+  }
+  if (body.category !== undefined) {
+    updates.push('category = ?');
+    values.push(body.category);
+  }
+  if (body.titleTemplate !== undefined) {
+    updates.push('title_template = ?');
+    values.push(body.titleTemplate.trim());
+  }
+  if (body.descriptionTemplate !== undefined) {
+    updates.push('description_template = ?');
+    values.push(body.descriptionTemplate.trim());
+  }
+  if (body.acceptanceCriteriaTemplates !== undefined) {
+    updates.push('acceptance_criteria_templates = ?');
+    values.push(JSON.stringify(body.acceptanceCriteriaTemplates));
+  }
+  if (body.priority !== undefined) {
+    updates.push('priority = ?');
+    values.push(body.priority);
+  }
+  if (body.tags !== undefined) {
+    updates.push('tags = ?');
+    values.push(JSON.stringify(body.tags));
+  }
 
   if (updates.length === 0) {
     return c.json({ ok: true, data: templateFromRow(existing) });
@@ -437,16 +463,18 @@ app.patch('/:prdId/stories/:storyId', async (c) => {
   // Invalidate priority recommendations when dependencies change
   if (body.dependsOn !== undefined) {
     // Invalidate this story's recommendation since its dependencies changed
-    db.query('UPDATE prd_stories SET priority_recommendation = NULL, updated_at = ? WHERE id = ?')
-      .run(now, storyId);
+    db.query(
+      'UPDATE prd_stories SET priority_recommendation = NULL, updated_at = ? WHERE id = ?',
+    ).run(now, storyId);
     // Also invalidate recommendations for stories that were previously depended on
     // (they might have had their blocksCount change)
     const oldDeps: string[] = JSON.parse(existing.depends_on || '[]');
     const newDeps: string[] = body.dependsOn;
     const affectedIds = new Set([...oldDeps, ...newDeps]);
     for (const depId of affectedIds) {
-      db.query('UPDATE prd_stories SET priority_recommendation = NULL, updated_at = ? WHERE id = ?')
-        .run(now, depId);
+      db.query(
+        'UPDATE prd_stories SET priority_recommendation = NULL, updated_at = ? WHERE id = ?',
+      ).run(now, depId);
     }
   }
 
@@ -466,8 +494,9 @@ app.patch('/:prdId/stories/:storyId', async (c) => {
       .map((s: any) => s.id);
     const affectedIds = new Set([...deps, ...blockedByThis]);
     for (const id of affectedIds) {
-      db.query('UPDATE prd_stories SET priority_recommendation = NULL, updated_at = ? WHERE id = ?')
-        .run(now, id);
+      db.query(
+        'UPDATE prd_stories SET priority_recommendation = NULL, updated_at = ? WHERE id = ?',
+      ).run(now, id);
     }
   }
 
@@ -509,7 +538,15 @@ app.post('/import', async (c) => {
   db.query(
     `INSERT INTO prds (id, project_path, name, description, branch_name, quality_checks, created_at, updated_at)
      VALUES (?, ?, ?, ?, ?, '[]', ?, ?)`,
-  ).run(prdId, projectPath, ralph.project || 'Imported PRD', ralph.description || '', ralph.branchName || null, now, now);
+  ).run(
+    prdId,
+    projectPath,
+    ralph.project || 'Imported PRD',
+    ralph.description || '',
+    ralph.branchName || null,
+    now,
+    now,
+  );
 
   const storyInsert = db.query(
     `INSERT INTO prd_stories (id, prd_id, title, description, acceptance_criteria, priority, depends_on, status, sort_order, created_at, updated_at)
@@ -535,14 +572,32 @@ app.post('/import', async (c) => {
     // Map Ralph priority (number 1-4) to our string priority
     let priority: StoryPriority = 'medium';
     if (typeof rs.priority === 'number') {
-      priority = rs.priority <= 1 ? 'critical' : rs.priority === 2 ? 'high' : rs.priority === 3 ? 'medium' : 'low';
+      priority =
+        rs.priority <= 1
+          ? 'critical'
+          : rs.priority === 2
+            ? 'high'
+            : rs.priority === 3
+              ? 'medium'
+              : 'low';
     } else if (typeof rs.priority === 'string') {
       priority = rs.priority as StoryPriority;
     }
 
     const status = rs.passes === true ? 'completed' : 'pending';
 
-    storyInsert.run(storyId, prdId, rs.title, rs.description || '', JSON.stringify(criteria), priority, status, i, now, now);
+    storyInsert.run(
+      storyId,
+      prdId,
+      rs.title,
+      rs.description || '',
+      JSON.stringify(criteria),
+      priority,
+      status,
+      i,
+      now,
+      now,
+    );
   }
 
   return c.json({ ok: true, data: { id: prdId, storyIds, imported: ralphStories.length } }, 201);
@@ -595,7 +650,14 @@ app.post('/:id/generate', async (c) => {
   // Use PRD description if no description provided in request
   const description = body.description || prdRow.description;
   if (!description?.trim()) {
-    return c.json({ ok: false, error: 'No description provided. Supply a description in the request or set one on the PRD.' }, 400);
+    return c.json(
+      {
+        ok: false,
+        error:
+          'No description provided. Supply a description in the request or set one on the PRD.',
+      },
+      400,
+    );
   }
 
   // Build project memory context for better scoping
@@ -624,7 +686,9 @@ app.post('/:id/generate', async (c) => {
         memoryContext += `\n### ${labels[cat] || cat}\n${items.join('\n')}\n`;
       }
     }
-  } catch { /* no project memory */ }
+  } catch {
+    /* no project memory */
+  }
 
   // Check for existing stories to avoid duplicates
   const existingStories = db
@@ -700,7 +764,7 @@ ${description}${body.context ? `\n\n## Additional Context\n${body.context}` : ''
       );
     }
 
-    const result = await apiResponse.json() as any;
+    const result = (await apiResponse.json()) as any;
     const textContent = result.content?.find((c: any) => c.type === 'text');
     if (!textContent?.text) {
       return c.json({ ok: false, error: 'AI returned no text content' }, 502);
@@ -717,10 +781,7 @@ ${description}${body.context ? `\n\n## Additional Context\n${body.context}` : ''
     try {
       generatedStories = JSON.parse(rawText);
     } catch {
-      return c.json(
-        { ok: false, error: 'Failed to parse AI response as JSON. Try again.' },
-        502,
-      );
+      return c.json({ ok: false, error: 'Failed to parse AI response as JSON. Try again.' }, 502);
     }
 
     // Validate the response shape
@@ -735,7 +796,9 @@ ${description}${body.context ? `\n\n## Additional Context\n${body.context}` : ''
         title: s.title.trim(),
         description: (s.description || '').trim(),
         acceptanceCriteria: Array.isArray(s.acceptanceCriteria)
-          ? s.acceptanceCriteria.filter((ac: any) => typeof ac === 'string' && ac.trim()).map((ac: string) => ac.trim())
+          ? s.acceptanceCriteria
+              .filter((ac: any) => typeof ac === 'string' && ac.trim())
+              .map((ac: string) => ac.trim())
           : [],
         priority: validPriorities.includes(s.priority) ? s.priority : 'medium',
       }));
@@ -743,7 +806,9 @@ ${description}${body.context ? `\n\n## Additional Context\n${body.context}` : ''
     // Ensure each story has at least 3 acceptance criteria
     for (const story of validatedStories) {
       while (story.acceptanceCriteria.length < 3) {
-        story.acceptanceCriteria.push(`[Needs acceptance criterion ${story.acceptanceCriteria.length + 1}]`);
+        story.acceptanceCriteria.push(
+          `[Needs acceptance criterion ${story.acceptanceCriteria.length + 1}]`,
+        );
       }
     }
 
@@ -755,10 +820,7 @@ ${description}${body.context ? `\n\n## Additional Context\n${body.context}` : ''
       },
     });
   } catch (err) {
-    return c.json(
-      { ok: false, error: `Story generation failed: ${(err as Error).message}` },
-      500,
-    );
+    return c.json({ ok: false, error: `Story generation failed: ${(err as Error).message}` }, 500);
   }
 });
 
@@ -830,7 +892,9 @@ app.post('/:prdId/stories/:storyId/refine', async (c) => {
   const prdRow = db.query('SELECT * FROM prds WHERE id = ?').get(prdId) as any;
   if (!prdRow) return c.json({ ok: false, error: 'PRD not found' }, 404);
 
-  const storyRow = db.query('SELECT * FROM prd_stories WHERE id = ? AND prd_id = ?').get(storyId, prdId) as any;
+  const storyRow = db
+    .query('SELECT * FROM prd_stories WHERE id = ? AND prd_id = ?')
+    .get(storyId, prdId) as any;
   if (!storyRow) return c.json({ ok: false, error: 'Story not found' }, 404);
 
   const story = storyFromRow(storyRow);
@@ -861,7 +925,9 @@ app.post('/:prdId/stories/:storyId/refine', async (c) => {
         memoryContext += `\n### ${labels[cat] || cat}\n${items.join('\n')}\n`;
       }
     }
-  } catch { /* no project memory */ }
+  } catch {
+    /* no project memory */
+  }
 
   // Build context about existing stories for reference
   const existingStories = db
@@ -998,7 +1064,7 @@ IMPORTANT:
       );
     }
 
-    const result = await apiResponse.json() as any;
+    const result = (await apiResponse.json()) as any;
     const textContent = result.content?.find((ct: any) => ct.type === 'text');
     if (!textContent?.text) {
       return c.json({ ok: false, error: 'AI returned no text content' }, 502);
@@ -1034,9 +1100,10 @@ IMPORTANT:
           : undefined,
       }));
 
-    const qualityScore = typeof parsed.qualityScore === 'number'
-      ? Math.max(0, Math.min(100, Math.round(parsed.qualityScore)))
-      : 50;
+    const qualityScore =
+      typeof parsed.qualityScore === 'number'
+        ? Math.max(0, Math.min(100, Math.round(parsed.qualityScore)))
+        : 50;
 
     const response: any = {
       storyId,
@@ -1051,7 +1118,9 @@ IMPORTANT:
         title: (parsed.updatedStory.title || story.title).trim(),
         description: (parsed.updatedStory.description || story.description).trim(),
         acceptanceCriteria: Array.isArray(parsed.updatedStory.acceptanceCriteria)
-          ? parsed.updatedStory.acceptanceCriteria.filter((ac: any) => typeof ac === 'string' && ac.trim()).map((ac: string) => ac.trim())
+          ? parsed.updatedStory.acceptanceCriteria
+              .filter((ac: any) => typeof ac === 'string' && ac.trim())
+              .map((ac: string) => ac.trim())
           : story.acceptanceCriteria.map((ac: any) => ac.description),
         priority: validPriorities.includes(parsed.updatedStory.priority)
           ? parsed.updatedStory.priority
@@ -1077,17 +1146,21 @@ IMPORTANT:
 
       db.query(
         `UPDATE prd_stories SET title = ?, description = ?, acceptance_criteria = ?, priority = ?, updated_at = ? WHERE id = ?`,
-      ).run(updated.title, updated.description, JSON.stringify(criteria), updated.priority, now, storyId);
+      ).run(
+        updated.title,
+        updated.description,
+        JSON.stringify(criteria),
+        updated.priority,
+        now,
+        storyId,
+      );
 
       db.query('UPDATE prds SET updated_at = ? WHERE id = ?').run(now, prdId);
     }
 
     return c.json({ ok: true, data: response });
   } catch (err) {
-    return c.json(
-      { ok: false, error: `Story refinement failed: ${(err as Error).message}` },
-      500,
-    );
+    return c.json({ ok: false, error: `Story refinement failed: ${(err as Error).message}` }, 500);
   }
 });
 
@@ -1132,7 +1205,9 @@ app.post('/:id/plan', async (c) => {
         memoryContext += `\n### ${labels[cat] || cat}\n${items.join('\n')}\n`;
       }
     }
-  } catch { /* no project memory */ }
+  } catch {
+    /* no project memory */
+  }
 
   // Build stories context
   let storiesContext = '';
@@ -1140,13 +1215,16 @@ app.post('/:id/plan', async (c) => {
     storiesContext = `\n\n## Current Stories (${stories.length})\n`;
     for (const s of stories) {
       const mapped = storyFromRow(s);
-      const criteria = mapped.acceptanceCriteria.map((ac: any) => `  - ${ac.description}`).join('\n');
+      const criteria = mapped.acceptanceCriteria
+        .map((ac: any) => `  - ${ac.description}`)
+        .join('\n');
       storiesContext += `\n### ${mapped.title} [${mapped.status}] (${mapped.priority}) {id: ${mapped.id}}\n`;
       if (mapped.description) storiesContext += `${mapped.description}\n`;
       if (criteria) storiesContext += `Acceptance Criteria:\n${criteria}\n`;
     }
   } else {
-    storiesContext = '\n\n## Current Stories\nNo stories yet — this PRD needs stories to be planned.\n';
+    storiesContext =
+      '\n\n## Current Stories\nNo stories yet — this PRD needs stories to be planned.\n';
   }
 
   // Build edit instructions based on editMode (locked / propose / unlocked)
@@ -1216,7 +1294,15 @@ Each story should be implementable in a single focused session.`;
   db.query(
     `INSERT INTO conversations (id, title, model, system_prompt, project_path, plan_mode, created_at, updated_at)
      VALUES (?, ?, ?, ?, ?, 1, ?, ?)`,
-  ).run(conversationId, `[Plan] ${prdRow.name}`, model, systemPrompt, prdRow.project_path, now, now);
+  ).run(
+    conversationId,
+    `[Plan] ${prdRow.name}`,
+    model,
+    systemPrompt,
+    prdRow.project_path,
+    now,
+    now,
+  );
 
   const response: PlanSprintResponse = {
     conversationId,
@@ -1264,10 +1350,16 @@ app.post('/:id/dependencies', async (c) => {
   }
 
   // Verify both stories exist and belong to this PRD
-  const fromStory = db.query('SELECT * FROM prd_stories WHERE id = ? AND prd_id = ?').get(fromStoryId, prdId) as any;
-  const toStory = db.query('SELECT * FROM prd_stories WHERE id = ? AND prd_id = ?').get(toStoryId, prdId) as any;
-  if (!fromStory) return c.json({ ok: false, error: `Story ${fromStoryId} not found in this PRD` }, 404);
-  if (!toStory) return c.json({ ok: false, error: `Story ${toStoryId} not found in this PRD` }, 404);
+  const fromStory = db
+    .query('SELECT * FROM prd_stories WHERE id = ? AND prd_id = ?')
+    .get(fromStoryId, prdId) as any;
+  const toStory = db
+    .query('SELECT * FROM prd_stories WHERE id = ? AND prd_id = ?')
+    .get(toStoryId, prdId) as any;
+  if (!fromStory)
+    return c.json({ ok: false, error: `Story ${fromStoryId} not found in this PRD` }, 404);
+  if (!toStory)
+    return c.json({ ok: false, error: `Story ${toStoryId} not found in this PRD` }, 404);
 
   // fromStoryId depends on toStoryId (toStoryId blocks fromStoryId)
   const dependsOn: string[] = JSON.parse(fromStory.depends_on || '[]');
@@ -1287,11 +1379,13 @@ app.post('/:id/dependencies', async (c) => {
   }
 
   if (changed) {
-    db.query('UPDATE prd_stories SET depends_on = ?, dependency_reasons = ?, updated_at = ? WHERE id = ?')
-      .run(JSON.stringify(dependsOn), JSON.stringify(reasons), now, fromStoryId);
+    db.query(
+      'UPDATE prd_stories SET depends_on = ?, dependency_reasons = ?, updated_at = ? WHERE id = ?',
+    ).run(JSON.stringify(dependsOn), JSON.stringify(reasons), now, fromStoryId);
     // Invalidate priority recommendations for affected stories when dependencies change
-    db.query('UPDATE prd_stories SET priority_recommendation = NULL, updated_at = ? WHERE id = ? OR id = ?')
-      .run(now, fromStoryId, toStoryId);
+    db.query(
+      'UPDATE prd_stories SET priority_recommendation = NULL, updated_at = ? WHERE id = ? OR id = ?',
+    ).run(now, fromStoryId, toStoryId);
     db.query('UPDATE prds SET updated_at = ? WHERE id = ?').run(now, prdId);
   }
 
@@ -1318,8 +1412,11 @@ app.delete('/:id/dependencies', async (c) => {
     return c.json({ ok: false, error: 'fromStoryId and toStoryId required' }, 400);
   }
 
-  const fromStory = db.query('SELECT * FROM prd_stories WHERE id = ? AND prd_id = ?').get(fromStoryId, prdId) as any;
-  if (!fromStory) return c.json({ ok: false, error: `Story ${fromStoryId} not found in this PRD` }, 404);
+  const fromStory = db
+    .query('SELECT * FROM prd_stories WHERE id = ? AND prd_id = ?')
+    .get(fromStoryId, prdId) as any;
+  if (!fromStory)
+    return c.json({ ok: false, error: `Story ${fromStoryId} not found in this PRD` }, 404);
 
   const dependsOn: string[] = JSON.parse(fromStory.depends_on || '[]');
   const reasons: Record<string, string> = JSON.parse(fromStory.dependency_reasons || '{}');
@@ -1329,11 +1426,13 @@ app.delete('/:id/dependencies', async (c) => {
     // Also remove the reason for this dependency
     delete reasons[toStoryId];
     const now = Date.now();
-    db.query('UPDATE prd_stories SET depends_on = ?, dependency_reasons = ?, updated_at = ? WHERE id = ?')
-      .run(JSON.stringify(filtered), JSON.stringify(reasons), now, fromStoryId);
+    db.query(
+      'UPDATE prd_stories SET depends_on = ?, dependency_reasons = ?, updated_at = ? WHERE id = ?',
+    ).run(JSON.stringify(filtered), JSON.stringify(reasons), now, fromStoryId);
     // Invalidate priority recommendations for affected stories when dependencies change
-    db.query('UPDATE prd_stories SET priority_recommendation = NULL, updated_at = ? WHERE id = ? OR id = ?')
-      .run(now, fromStoryId, toStoryId);
+    db.query(
+      'UPDATE prd_stories SET priority_recommendation = NULL, updated_at = ? WHERE id = ? OR id = ?',
+    ).run(now, fromStoryId, toStoryId);
     db.query('UPDATE prds SET updated_at = ? WHERE id = ?').run(now, prdId);
   }
 
@@ -1360,8 +1459,11 @@ app.patch('/:id/dependencies', async (c) => {
     return c.json({ ok: false, error: 'fromStoryId and toStoryId required' }, 400);
   }
 
-  const fromStory = db.query('SELECT * FROM prd_stories WHERE id = ? AND prd_id = ?').get(fromStoryId, prdId) as any;
-  if (!fromStory) return c.json({ ok: false, error: `Story ${fromStoryId} not found in this PRD` }, 404);
+  const fromStory = db
+    .query('SELECT * FROM prd_stories WHERE id = ? AND prd_id = ?')
+    .get(fromStoryId, prdId) as any;
+  if (!fromStory)
+    return c.json({ ok: false, error: `Story ${fromStoryId} not found in this PRD` }, 404);
 
   const dependsOn: string[] = JSON.parse(fromStory.depends_on || '[]');
   if (!dependsOn.includes(toStoryId)) {
@@ -1378,8 +1480,11 @@ app.patch('/:id/dependencies', async (c) => {
   }
 
   const now = Date.now();
-  db.query('UPDATE prd_stories SET dependency_reasons = ?, updated_at = ? WHERE id = ?')
-    .run(JSON.stringify(reasons), now, fromStoryId);
+  db.query('UPDATE prd_stories SET dependency_reasons = ?, updated_at = ? WHERE id = ?').run(
+    JSON.stringify(reasons),
+    now,
+    fromStoryId,
+  );
   db.query('UPDATE prds SET updated_at = ? WHERE id = ?').run(now, prdId);
 
   // Return the updated graph
@@ -1413,9 +1518,7 @@ app.post('/:id/dependencies/analyze', async (c) => {
   // Build story context for AI analysis
   let storyContext = '';
   for (const s of mappedStories) {
-    const criteria = s.acceptanceCriteria
-      .map((ac: any) => `  - ${ac.description}`)
-      .join('\n');
+    const criteria = s.acceptanceCriteria.map((ac: any) => `  - ${ac.description}`).join('\n');
     storyContext += `\n### Story "${s.title}" (ID: ${s.id}) [${s.priority}]
 ${s.description}
 Acceptance Criteria:
@@ -1495,7 +1598,7 @@ Which stories must be completed before others can start? Return the dependency l
       );
     }
 
-    const result = await apiResponse.json() as any;
+    const result = (await apiResponse.json()) as any;
     const textContent = result.content?.find((ct: any) => ct.type === 'text');
     if (!textContent?.text) {
       return c.json({ ok: false, error: 'AI returned no text content' }, 502);
@@ -1523,7 +1626,12 @@ Which stories must be completed before others can start? Return the dependency l
     // Validate story IDs
     const storyIds = new Set(mappedStories.map((s) => s.id));
     const validDeps = aiDeps.filter(
-      (d) => d.fromStoryId && d.toStoryId && storyIds.has(d.fromStoryId) && storyIds.has(d.toStoryId) && d.fromStoryId !== d.toStoryId,
+      (d) =>
+        d.fromStoryId &&
+        d.toStoryId &&
+        storyIds.has(d.fromStoryId) &&
+        storyIds.has(d.toStoryId) &&
+        d.fromStoryId !== d.toStoryId,
     );
 
     // Build new depends_on maps
@@ -1570,9 +1678,13 @@ Which stories must be completed before others can start? Return the dependency l
     // Persist to database
     const now = Date.now();
     for (const [storyId, deps] of newDepsMap) {
-      const currentRow = db.query('SELECT depends_on, dependency_reasons FROM prd_stories WHERE id = ?').get(storyId) as any;
+      const currentRow = db
+        .query('SELECT depends_on, dependency_reasons FROM prd_stories WHERE id = ?')
+        .get(storyId) as any;
       const currentDeps = JSON.parse(currentRow?.depends_on || '[]');
-      const currentReasons: Record<string, string> = JSON.parse(currentRow?.dependency_reasons || '{}');
+      const currentReasons: Record<string, string> = JSON.parse(
+        currentRow?.dependency_reasons || '{}',
+      );
       const newDeps = Array.from(deps);
 
       // Merge AI reasons into existing reasons (preserve manual overrides)
@@ -1596,11 +1708,13 @@ Which stories must be completed before others can start? Return the dependency l
       const depsChanged = JSON.stringify(currentDeps.sort()) !== JSON.stringify(newDeps.sort());
       const reasonsChanged = JSON.stringify(currentReasons) !== JSON.stringify(newReasons);
       if (depsChanged || reasonsChanged) {
-        db.query('UPDATE prd_stories SET depends_on = ?, dependency_reasons = ?, updated_at = ? WHERE id = ?')
-          .run(JSON.stringify(newDeps), JSON.stringify(newReasons), now, storyId);
+        db.query(
+          'UPDATE prd_stories SET depends_on = ?, dependency_reasons = ?, updated_at = ? WHERE id = ?',
+        ).run(JSON.stringify(newDeps), JSON.stringify(newReasons), now, storyId);
         // Invalidate priority recommendations when dependencies change
-        db.query('UPDATE prd_stories SET priority_recommendation = NULL, updated_at = ? WHERE id = ?')
-          .run(now, storyId);
+        db.query(
+          'UPDATE prd_stories SET priority_recommendation = NULL, updated_at = ? WHERE id = ?',
+        ).run(now, storyId);
       }
     }
 
@@ -1736,7 +1850,9 @@ function buildDependencyGraph(stories: UserStory[], prdId: string): DependencyGr
     }
     warnings.push({
       type: 'circular',
-      message: `Circular dependencies detected involving stories: ${Array.from(involvedIds).map((id) => storyMap.get(id)?.title || id).join(', ')}`,
+      message: `Circular dependencies detected involving stories: ${Array.from(involvedIds)
+        .map((id) => storyMap.get(id)?.title || id)
+        .join(', ')}`,
       storyIds: Array.from(involvedIds),
     });
   }
@@ -1757,8 +1873,9 @@ function buildDependencyGraph(stories: UserStory[], prdId: string): DependencyGr
   // Unresolved blockers (pending/in_progress stories that have uncompleted dependencies)
   for (const story of stories) {
     if (story.status === 'pending' || story.status === 'in_progress') {
-      const unresolvedDeps = story.dependsOn
-        .filter((depId) => storyMap.has(depId) && !completedIds.has(depId));
+      const unresolvedDeps = story.dependsOn.filter(
+        (depId) => storyMap.has(depId) && !completedIds.has(depId),
+      );
       if (unresolvedDeps.length > 0) {
         warnings.push({
           type: 'unresolved_blocker',
@@ -1900,23 +2017,24 @@ app.post('/:prdId/stories/:storyId/validate-criteria', async (c) => {
   const prdRow = db.query('SELECT * FROM prds WHERE id = ?').get(prdId) as any;
   if (!prdRow) return c.json({ ok: false, error: 'PRD not found' }, 404);
 
-  const storyRow = db.query('SELECT * FROM prd_stories WHERE id = ? AND prd_id = ?').get(storyId, prdId) as any;
+  const storyRow = db
+    .query('SELECT * FROM prd_stories WHERE id = ? AND prd_id = ?')
+    .get(storyId, prdId) as any;
   if (!storyRow) return c.json({ ok: false, error: 'Story not found' }, 404);
 
   const story = storyFromRow(storyRow);
 
   // Use criteria from request body or fall back to stored criteria
-  const criteria = body.criteria && body.criteria.length > 0
-    ? body.criteria
-    : story.acceptanceCriteria.map((ac: any) => ac.description);
+  const criteria =
+    body.criteria && body.criteria.length > 0
+      ? body.criteria
+      : story.acceptanceCriteria.map((ac: any) => ac.description);
 
   if (criteria.length === 0) {
     return c.json({ ok: false, error: 'No acceptance criteria to validate' }, 400);
   }
 
-  const criteriaList = criteria
-    .map((c: string, i: number) => `${i + 1}. "${c}"`)
-    .join('\n');
+  const criteriaList = criteria.map((c: string, i: number) => `${i + 1}. "${c}"`).join('\n');
 
   const systemPrompt = `You are an expert agile coach specializing in writing high-quality acceptance criteria. Your task is to validate acceptance criteria for specificity, measurability, and testability.
 
@@ -2020,7 +2138,7 @@ Analyze each criterion and identify any issues with specificity, measurability, 
       );
     }
 
-    const result = await apiResponse.json() as any;
+    const result = (await apiResponse.json()) as any;
     const textContent = result.content?.find((ct: any) => ct.type === 'text');
     if (!textContent?.text) {
       return c.json({ ok: false, error: 'AI returned no text content' }, 502);
@@ -2044,32 +2162,44 @@ Analyze each criterion and identify any issues with specificity, measurability, 
 
     // Validate and shape the response
     const validSeverities = ['error', 'warning', 'info'];
-    const validCategories = ['vague', 'unmeasurable', 'untestable', 'too_broad', 'ambiguous', 'missing_detail'];
+    const validCategories = [
+      'vague',
+      'unmeasurable',
+      'untestable',
+      'too_broad',
+      'ambiguous',
+      'missing_detail',
+    ];
 
-    const validatedCriteria: ACCriterionValidation[] = (parsed.criteria || []).map((cr: any, idx: number) => {
-      const issues: ACValidationIssue[] = (cr.issues || [])
-        .filter((iss: any) => iss.message && typeof iss.message === 'string')
-        .map((iss: any) => ({
-          criterionIndex: typeof iss.criterionIndex === 'number' ? iss.criterionIndex : idx,
-          criterionText: (iss.criterionText || cr.text || criteria[idx] || '').trim(),
-          severity: validSeverities.includes(iss.severity) ? iss.severity : 'warning',
-          category: validCategories.includes(iss.category) ? iss.category : 'vague',
-          message: iss.message.trim(),
-          suggestedReplacement: iss.suggestedReplacement?.trim() || undefined,
-        }));
+    const validatedCriteria: ACCriterionValidation[] = (parsed.criteria || []).map(
+      (cr: any, idx: number) => {
+        const issues: ACValidationIssue[] = (cr.issues || [])
+          .filter((iss: any) => iss.message && typeof iss.message === 'string')
+          .map((iss: any) => ({
+            criterionIndex: typeof iss.criterionIndex === 'number' ? iss.criterionIndex : idx,
+            criterionText: (iss.criterionText || cr.text || criteria[idx] || '').trim(),
+            severity: validSeverities.includes(iss.severity) ? iss.severity : 'warning',
+            category: validCategories.includes(iss.category) ? iss.category : 'vague',
+            message: iss.message.trim(),
+            suggestedReplacement: iss.suggestedReplacement?.trim() || undefined,
+          }));
 
-      return {
-        index: typeof cr.index === 'number' ? cr.index : idx,
-        text: (cr.text || criteria[idx] || '').trim(),
-        isValid: issues.length === 0 || (cr.isValid === true && issues.every((i: any) => i.severity === 'info')),
-        issues,
-        suggestedReplacement: cr.suggestedReplacement?.trim() || undefined,
-      };
-    });
+        return {
+          index: typeof cr.index === 'number' ? cr.index : idx,
+          text: (cr.text || criteria[idx] || '').trim(),
+          isValid:
+            issues.length === 0 ||
+            (cr.isValid === true && issues.every((i: any) => i.severity === 'info')),
+          issues,
+          suggestedReplacement: cr.suggestedReplacement?.trim() || undefined,
+        };
+      },
+    );
 
-    const overallScore = typeof parsed.overallScore === 'number'
-      ? Math.max(0, Math.min(100, Math.round(parsed.overallScore)))
-      : 50;
+    const overallScore =
+      typeof parsed.overallScore === 'number'
+        ? Math.max(0, Math.min(100, Math.round(parsed.overallScore)))
+        : 50;
 
     const response: ValidateACResponse = {
       storyId,
@@ -2100,7 +2230,9 @@ app.post('/:prdId/stories/:storyId/estimate', async (c) => {
   const prdRow = db.query('SELECT * FROM prds WHERE id = ?').get(prdId) as any;
   if (!prdRow) return c.json({ ok: false, error: 'PRD not found' }, 404);
 
-  const storyRow = db.query('SELECT * FROM prd_stories WHERE id = ? AND prd_id = ?').get(storyId, prdId) as any;
+  const storyRow = db
+    .query('SELECT * FROM prd_stories WHERE id = ? AND prd_id = ?')
+    .get(storyId, prdId) as any;
   if (!storyRow) return c.json({ ok: false, error: 'Story not found' }, 404);
 
   const story = storyFromRow(storyRow);
@@ -2137,7 +2269,9 @@ app.post('/:prdId/stories/:storyId/estimate', async (c) => {
         memoryContext += `\n### ${labels[cat] || cat}\n${items.join('\n')}\n`;
       }
     }
-  } catch { /* no project memory */ }
+  } catch {
+    /* no project memory */
+  }
 
   // Build sibling stories context for relative sizing
   let siblingContext = '';
@@ -2153,9 +2287,7 @@ app.post('/:prdId/stories/:storyId/estimate', async (c) => {
     }
   }
 
-  const criteriaText = story.acceptanceCriteria
-    .map((ac: any) => `- ${ac.description}`)
-    .join('\n');
+  const criteriaText = story.acceptanceCriteria.map((ac: any) => `- ${ac.description}`).join('\n');
 
   const depsCount = story.dependsOn?.length || 0;
 
@@ -2256,7 +2388,7 @@ Provide a complexity estimate with story points, confidence level, and key facto
       );
     }
 
-    const result = await apiResponse.json() as any;
+    const result = (await apiResponse.json()) as any;
     const textContent = result.content?.find((ct: any) => ct.type === 'text');
     if (!textContent?.text) {
       return c.json({ ok: false, error: 'AI returned no text content' }, 502);
@@ -2286,13 +2418,22 @@ Provide a complexity estimate with story points, confidence level, and key facto
     const size: StorySize = validSizes.includes(parsed.size) ? parsed.size : 'medium';
     const storyPoints = validPoints.includes(parsed.storyPoints)
       ? parsed.storyPoints
-      : size === 'small' ? 2 : size === 'medium' ? 5 : 8;
+      : size === 'small'
+        ? 2
+        : size === 'medium'
+          ? 5
+          : 8;
     const confidence: EstimateConfidence = validConfidences.includes(parsed.confidence)
       ? parsed.confidence
       : 'medium';
-    const confidenceScore = typeof parsed.confidenceScore === 'number'
-      ? Math.max(0, Math.min(100, Math.round(parsed.confidenceScore)))
-      : confidence === 'high' ? 85 : confidence === 'medium' ? 60 : 30;
+    const confidenceScore =
+      typeof parsed.confidenceScore === 'number'
+        ? Math.max(0, Math.min(100, Math.round(parsed.confidenceScore)))
+        : confidence === 'high'
+          ? 85
+          : confidence === 'medium'
+            ? 60
+            : 30;
 
     const factors: EstimationFactor[] = (parsed.factors || [])
       .filter((f: any) => f.factor && typeof f.factor === 'string')
@@ -2311,16 +2452,22 @@ Provide a complexity estimate with story points, confidence level, and key facto
       confidenceScore,
       factors,
       reasoning: (parsed.reasoning || 'Estimate based on story content analysis.').trim(),
-      suggestedBreakdown: storyPoints >= 8 && Array.isArray(parsed.suggestedBreakdown)
-        ? parsed.suggestedBreakdown.filter((s: any) => typeof s === 'string' && s.trim()).map((s: string) => s.trim())
-        : undefined,
+      suggestedBreakdown:
+        storyPoints >= 8 && Array.isArray(parsed.suggestedBreakdown)
+          ? parsed.suggestedBreakdown
+              .filter((s: any) => typeof s === 'string' && s.trim())
+              .map((s: string) => s.trim())
+          : undefined,
       isManualOverride: false,
     };
 
     // Persist estimate to database
     const now = Date.now();
-    db.query('UPDATE prd_stories SET estimate = ?, updated_at = ? WHERE id = ?')
-      .run(JSON.stringify(estimate), now, storyId);
+    db.query('UPDATE prd_stories SET estimate = ?, updated_at = ? WHERE id = ?').run(
+      JSON.stringify(estimate),
+      now,
+      storyId,
+    );
     db.query('UPDATE prds SET updated_at = ? WHERE id = ?').run(now, prdId);
 
     return c.json({
@@ -2328,10 +2475,7 @@ Provide a complexity estimate with story points, confidence level, and key facto
       data: { storyId, estimate },
     });
   } catch (err) {
-    return c.json(
-      { ok: false, error: `Story estimation failed: ${(err as Error).message}` },
-      500,
-    );
+    return c.json({ ok: false, error: `Story estimation failed: ${(err as Error).message}` }, 500);
   }
 });
 
@@ -2342,7 +2486,9 @@ app.put('/:prdId/stories/:storyId/estimate', async (c) => {
   const storyId = c.req.param('storyId');
   const body = await c.req.json();
 
-  const storyRow = db.query('SELECT * FROM prd_stories WHERE id = ? AND prd_id = ?').get(storyId, prdId) as any;
+  const storyRow = db
+    .query('SELECT * FROM prd_stories WHERE id = ? AND prd_id = ?')
+    .get(storyId, prdId) as any;
   if (!storyRow) return c.json({ ok: false, error: 'Story not found' }, 404);
 
   const validSizes: StorySize[] = ['small', 'medium', 'large'];
@@ -2371,8 +2517,11 @@ app.put('/:prdId/stories/:storyId/estimate', async (c) => {
   };
 
   const now = Date.now();
-  db.query('UPDATE prd_stories SET estimate = ?, updated_at = ? WHERE id = ?')
-    .run(JSON.stringify(estimate), now, storyId);
+  db.query('UPDATE prd_stories SET estimate = ?, updated_at = ? WHERE id = ?').run(
+    JSON.stringify(estimate),
+    now,
+    storyId,
+  );
   db.query('UPDATE prds SET updated_at = ? WHERE id = ?').run(now, prdId);
 
   return c.json({ ok: true, data: { storyId, estimate } });
@@ -2414,12 +2563,11 @@ app.post('/:id/estimate', async (c) => {
   // Build context for batch estimation
   let storiesContext = '';
   for (const s of mappedStories) {
-    const criteria = s.acceptanceCriteria
-      .map((ac: any) => `  - ${ac.description}`)
-      .join('\n');
-    const existingEstimate = s.estimate && !storiesToEstimate.find((st) => st.id === s.id)
-      ? ` [Already estimated: ${s.estimate.size}, ${s.estimate.storyPoints}pts]`
-      : '';
+    const criteria = s.acceptanceCriteria.map((ac: any) => `  - ${ac.description}`).join('\n');
+    const existingEstimate =
+      s.estimate && !storiesToEstimate.find((st) => st.id === s.id)
+        ? ` [Already estimated: ${s.estimate.size}, ${s.estimate.storyPoints}pts]`
+        : '';
     storiesContext += `\n### Story "${s.title}" (ID: ${s.id}) [${s.priority}]${existingEstimate}
 ${s.description}
 Dependencies: ${s.dependsOn?.length || 0}
@@ -2453,7 +2601,9 @@ ${criteria || '(None)'}\n`;
         memoryContext += `\n### ${labels[cat] || cat}\n${items.join('\n')}\n`;
       }
     }
-  } catch { /* no project memory */ }
+  } catch {
+    /* no project memory */
+  }
 
   const storyIdsToEstimate = storiesToEstimate.map((s) => s.id);
 
@@ -2528,7 +2678,7 @@ Provide relative complexity estimates for all stories that need estimation.`;
       );
     }
 
-    const result = await apiResponse.json() as any;
+    const result = (await apiResponse.json()) as any;
     const textContent = result.content?.find((ct: any) => ct.type === 'text');
     if (!textContent?.text) {
       return c.json({ ok: false, error: 'AI returned no text content' }, 502);
@@ -2567,13 +2717,22 @@ Provide relative complexity estimates for all stories that need estimation.`;
       const size: StorySize = validSizes.includes(pe.size) ? pe.size : 'medium';
       const storyPoints = validPoints.includes(pe.storyPoints)
         ? pe.storyPoints
-        : size === 'small' ? 2 : size === 'medium' ? 5 : 8;
+        : size === 'small'
+          ? 2
+          : size === 'medium'
+            ? 5
+            : 8;
       const confidence: EstimateConfidence = validConfidences.includes(pe.confidence)
         ? pe.confidence
         : 'medium';
-      const confidenceScore = typeof pe.confidenceScore === 'number'
-        ? Math.max(0, Math.min(100, Math.round(pe.confidenceScore)))
-        : confidence === 'high' ? 85 : confidence === 'medium' ? 60 : 30;
+      const confidenceScore =
+        typeof pe.confidenceScore === 'number'
+          ? Math.max(0, Math.min(100, Math.round(pe.confidenceScore)))
+          : confidence === 'high'
+            ? 85
+            : confidence === 'medium'
+              ? 60
+              : 30;
 
       const factors: EstimationFactor[] = (pe.factors || [])
         .filter((f: any) => f.factor && typeof f.factor === 'string')
@@ -2592,17 +2751,23 @@ Provide relative complexity estimates for all stories that need estimation.`;
         confidenceScore,
         factors,
         reasoning: (pe.reasoning || 'Estimated based on story content.').trim(),
-        suggestedBreakdown: storyPoints >= 8 && Array.isArray(pe.suggestedBreakdown)
-          ? pe.suggestedBreakdown.filter((s: any) => typeof s === 'string' && s.trim()).map((s: string) => s.trim())
-          : undefined,
+        suggestedBreakdown:
+          storyPoints >= 8 && Array.isArray(pe.suggestedBreakdown)
+            ? pe.suggestedBreakdown
+                .filter((s: any) => typeof s === 'string' && s.trim())
+                .map((s: string) => s.trim())
+            : undefined,
         isManualOverride: false,
       };
 
       estimates.push(estimate);
 
       // Persist to database
-      db.query('UPDATE prd_stories SET estimate = ?, updated_at = ? WHERE id = ?')
-        .run(JSON.stringify(estimate), now, pe.storyId);
+      db.query('UPDATE prd_stories SET estimate = ?, updated_at = ? WHERE id = ?').run(
+        JSON.stringify(estimate),
+        now,
+        pe.storyId,
+      );
     }
 
     db.query('UPDATE prds SET updated_at = ? WHERE id = ?').run(now, prdId);
@@ -2610,9 +2775,7 @@ Provide relative complexity estimates for all stories that need estimation.`;
     // Combine with existing estimates that weren't re-estimated
     const allEstimates = [
       ...estimates,
-      ...mappedStories
-        .filter((s) => s.estimate && !storyIdSet.has(s.id))
-        .map((s) => s.estimate!),
+      ...mappedStories.filter((s) => s.estimate && !storyIdSet.has(s.id)).map((s) => s.estimate!),
     ];
 
     return c.json({
@@ -2620,10 +2783,7 @@ Provide relative complexity estimates for all stories that need estimation.`;
       data: buildEstimateSummary(prdId, allEstimates),
     });
   } catch (err) {
-    return c.json(
-      { ok: false, error: `Bulk estimation failed: ${(err as Error).message}` },
-      500,
-    );
+    return c.json({ ok: false, error: `Bulk estimation failed: ${(err as Error).message}` }, 500);
   }
 });
 
@@ -2649,14 +2809,13 @@ app.post('/:id/completeness', async (c) => {
   if (mappedStories.length > 0) {
     storiesContext = '\n## Existing Stories\n';
     for (const s of mappedStories) {
-      const criteria = s.acceptanceCriteria
-        .map((ac: any) => `  - ${ac.description}`)
-        .join('\n');
+      const criteria = s.acceptanceCriteria.map((ac: any) => `  - ${ac.description}`).join('\n');
       storiesContext += `\n### ${s.title}\n`;
       if (s.description) storiesContext += `Description: ${s.description}\n`;
       if (criteria) storiesContext += `Acceptance Criteria:\n${criteria}\n`;
       storiesContext += `Priority: ${s.priority}\n`;
-      if (s.estimate) storiesContext += `Estimate: ${s.estimate.size} (${s.estimate.storyPoints}pts)\n`;
+      if (s.estimate)
+        storiesContext += `Estimate: ${s.estimate.size} (${s.estimate.storyPoints}pts)\n`;
     }
   }
 
@@ -2664,7 +2823,9 @@ app.post('/:id/completeness', async (c) => {
   let memoryContext = '';
   try {
     const memories = db
-      .query('SELECT category, key, content FROM project_memories WHERE project_path = ? ORDER BY category, key')
+      .query(
+        'SELECT category, key, content FROM project_memories WHERE project_path = ? ORDER BY category, key',
+      )
       .all(prdRow.project_path) as any[];
     if (memories.length > 0) {
       memoryContext = '\n\n## Project Memory\n';
@@ -2672,9 +2833,15 @@ app.post('/:id/completeness', async (c) => {
         memoryContext += `- [${m.category}] ${m.key}: ${m.content}\n`;
       }
     }
-  } catch { /* no project memory */ }
+  } catch {
+    /* no project memory */
+  }
 
-  const standardSections: Array<{ name: PRDSectionName; label: string; severity: PRDSectionSeverity }> = [
+  const standardSections: Array<{
+    name: PRDSectionName;
+    label: string;
+    severity: PRDSectionSeverity;
+  }> = [
     { name: 'goals', label: 'Goals & Objectives', severity: 'critical' },
     { name: 'scope', label: 'Scope & Boundaries', severity: 'critical' },
     { name: 'success_metrics', label: 'Success Metrics & KPIs', severity: 'critical' },
@@ -2805,17 +2972,23 @@ IMPORTANT:
     }
 
     // Validate and build the response
-    const overallScore = typeof parsed.overallScore === 'number'
-      ? Math.max(0, Math.min(100, Math.round(parsed.overallScore)))
-      : 0;
+    const overallScore =
+      typeof parsed.overallScore === 'number'
+        ? Math.max(0, Math.min(100, Math.round(parsed.overallScore)))
+        : 0;
 
-    const overallLabel = typeof parsed.overallLabel === 'string'
-      ? parsed.overallLabel
-      : overallScore >= 90 ? 'Excellent'
-      : overallScore >= 70 ? 'Good'
-      : overallScore >= 50 ? 'Fair'
-      : overallScore >= 30 ? 'Needs Work'
-      : 'Incomplete';
+    const overallLabel =
+      typeof parsed.overallLabel === 'string'
+        ? parsed.overallLabel
+        : overallScore >= 90
+          ? 'Excellent'
+          : overallScore >= 70
+            ? 'Good'
+            : overallScore >= 50
+              ? 'Fair'
+              : overallScore >= 30
+                ? 'Needs Work'
+                : 'Incomplete';
 
     const sections: PRDSectionAnalysis[] = [];
     const parsedSections = Array.isArray(parsed.sections) ? parsed.sections : [];
@@ -2829,9 +3002,14 @@ IMPORTANT:
           label: standardSection.label,
           present: !!found.present,
           severity: standardSection.severity,
-          score: typeof found.score === 'number' ? Math.max(0, Math.min(100, Math.round(found.score))) : 0,
+          score:
+            typeof found.score === 'number'
+              ? Math.max(0, Math.min(100, Math.round(found.score)))
+              : 0,
           feedback: typeof found.feedback === 'string' ? found.feedback : 'No analysis available',
-          questions: Array.isArray(found.questions) ? found.questions.filter((q: any) => typeof q === 'string') : [],
+          questions: Array.isArray(found.questions)
+            ? found.questions.filter((q: any) => typeof q === 'string')
+            : [],
         });
       } else {
         // Section was not analyzed by AI — mark as missing
@@ -2859,7 +3037,8 @@ IMPORTANT:
       overallScore,
       overallLabel,
       sections,
-      summary: typeof parsed.summary === 'string' ? parsed.summary : `PRD completeness: ${overallScore}%`,
+      summary:
+        typeof parsed.summary === 'string' ? parsed.summary : `PRD completeness: ${overallScore}%`,
       suggestedQuestions,
       analyzedAt: Date.now(),
     };
@@ -2961,9 +3140,7 @@ app.post('/:id/sprint-plan', async (c) => {
         return dep ? `"${dep.title}" (${dep.status})` : depId;
       })
       .join(', ');
-    const criteria = s.acceptanceCriteria
-      .map((ac: any) => `  - ${ac.description}`)
-      .join('\n');
+    const criteria = s.acceptanceCriteria.map((ac: any) => `  - ${ac.description}`).join('\n');
 
     storiesContext += `
 ### Story: ${s.title}
@@ -2982,7 +3159,9 @@ ${criteria ? `- Acceptance Criteria:\n${criteria}` : ''}
   let memoryContext = '';
   try {
     const memories = db
-      .query('SELECT category, key, content FROM project_memories WHERE project_path = ? ORDER BY category, key')
+      .query(
+        'SELECT category, key, content FROM project_memories WHERE project_path = ? ORDER BY category, key',
+      )
       .all(prdRow.project_path) as any[];
     if (memories.length > 0) {
       memoryContext = '\n\n## Project Context\n';
@@ -2990,7 +3169,9 @@ ${criteria ? `- Acceptance Criteria:\n${criteria}` : ''}
         memoryContext += `- [${m.category}] ${m.key}: ${m.content}\n`;
       }
     }
-  } catch { /* no project memory */ }
+  } catch {
+    /* no project memory */
+  }
 
   const systemPrompt = `You are a sprint planning expert helping to assign user stories to sprints optimally.
 
@@ -3172,13 +3353,15 @@ IMPORTANT:
           overallTotalPoints += pts;
           sprints.push({
             sprintNumber: sprints.length + 1,
-            stories: [{
-              storyId: s.id,
-              title: s.title,
-              storyPoints: pts,
-              priority: s.priority,
-              reason: 'Added to overflow sprint',
-            }],
+            stories: [
+              {
+                storyId: s.id,
+                title: s.title,
+                storyPoints: pts,
+                priority: s.priority,
+                reason: 'Added to overflow sprint',
+              },
+            ],
             totalPoints: pts,
             rationale: 'Overflow sprint for remaining stories',
           });
@@ -3187,7 +3370,9 @@ IMPORTANT:
     }
 
     // Renumber sprints sequentially
-    sprints.forEach((s, i) => { s.sprintNumber = i + 1; });
+    sprints.forEach((s, i) => {
+      s.sprintNumber = i + 1;
+    });
 
     const response: SprintPlanResponse = {
       prdId,
@@ -3195,15 +3380,15 @@ IMPORTANT:
       totalPoints: overallTotalPoints,
       totalSprints: sprints.length,
       unassignedStories,
-      summary: (parsed.summary || `Planned ${estimatedPending.length} stories across ${sprints.length} sprints.`).trim(),
+      summary: (
+        parsed.summary ||
+        `Planned ${estimatedPending.length} stories across ${sprints.length} sprints.`
+      ).trim(),
     };
 
     return c.json({ ok: true, data: response });
   } catch (err) {
-    return c.json(
-      { ok: false, error: `Sprint planning failed: ${(err as Error).message}` },
-      500,
-    );
+    return c.json({ ok: false, error: `Sprint planning failed: ${(err as Error).message}` }, 500);
   }
 });
 
@@ -3235,7 +3420,7 @@ app.put('/:id/sprint-plan', async (c) => {
     const sprintStories: SprintStoryAssignment[] = [];
     let sprintPoints = 0;
 
-    for (const sa of (ps.stories || [])) {
+    for (const sa of ps.stories || []) {
       const story = storyMap.get(sa.storyId);
       if (!story) continue;
 
@@ -3280,9 +3465,10 @@ function buildEstimateSummary(prdId: string, estimates: StoryEstimate[]): Estima
   const smallCount = estimates.filter((e) => e.size === 'small').length;
   const mediumCount = estimates.filter((e) => e.size === 'medium').length;
   const largeCount = estimates.filter((e) => e.size === 'large').length;
-  const averageConfidence = estimates.length > 0
-    ? estimates.reduce((sum, e) => sum + e.confidenceScore, 0) / estimates.length
-    : 0;
+  const averageConfidence =
+    estimates.length > 0
+      ? estimates.reduce((sum, e) => sum + e.confidenceScore, 0) / estimates.length
+      : 0;
 
   return {
     prdId,
@@ -3395,14 +3581,16 @@ const BUILT_IN_TEMPLATES: Array<Omit<StoryTemplate, 'id' | 'createdAt' | 'update
 /** Seed built-in templates if they don't exist */
 function seedBuiltInTemplates(): void {
   const db = getDb();
-  const existing = db.query('SELECT COUNT(*) as count FROM story_templates WHERE is_built_in = 1').get() as any;
+  const existing = db
+    .query('SELECT COUNT(*) as count FROM story_templates WHERE is_built_in = 1')
+    .get() as any;
   if (existing.count > 0) return;
 
   const now = Date.now();
   const stmt = db.prepare(
     `INSERT INTO story_templates (id, name, description, category, title_template, description_template,
      acceptance_criteria_templates, priority, tags, is_built_in, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)`
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)`,
   );
 
   for (const tmpl of BUILT_IN_TEMPLATES) {
@@ -3426,7 +3614,7 @@ function seedBuiltInTemplates(): void {
 app.post('/:id/stories/from-template', async (c) => {
   const db = getDb();
   const prdId = c.req.param('id');
-  const body = await c.req.json() as CreateStoryFromTemplateRequest;
+  const body = (await c.req.json()) as CreateStoryFromTemplateRequest;
 
   // Verify PRD exists
   const prdRow = db.query('SELECT * FROM prds WHERE id = ?').get(prdId) as any;
@@ -3436,7 +3624,9 @@ app.post('/:id/stories/from-template', async (c) => {
 
   // Get the template
   seedBuiltInTemplates();
-  const tmplRow = db.query('SELECT * FROM story_templates WHERE id = ?').get(body.templateId) as any;
+  const tmplRow = db
+    .query('SELECT * FROM story_templates WHERE id = ?')
+    .get(body.templateId) as any;
   if (!tmplRow) {
     return c.json({ ok: false, error: 'Template not found' }, 404);
   }
@@ -3453,38 +3643,47 @@ app.post('/:id/stories/from-template', async (c) => {
 
   const title = applyVariables(template.titleTemplate, variables);
   const description = applyVariables(template.descriptionTemplate, variables);
-  const criteria = template.acceptanceCriteriaTemplates.map((ac: string) => applyVariables(ac, variables));
+  const criteria = template.acceptanceCriteriaTemplates.map((ac: string) =>
+    applyVariables(ac, variables),
+  );
 
   // Create the story
   const storyId = nanoid(12);
   const now = Date.now();
-  const maxSort = db.query('SELECT MAX(sort_order) as mx FROM prd_stories WHERE prd_id = ?').get(prdId) as any;
+  const maxSort = db
+    .query('SELECT MAX(sort_order) as mx FROM prd_stories WHERE prd_id = ?')
+    .get(prdId) as any;
   const sortOrder = (maxSort?.mx ?? -1) + 1;
 
-  const acJson = JSON.stringify(criteria.map((desc: string, idx: number) => ({
-    id: nanoid(8),
-    description: desc,
-    passed: false,
-  })));
+  const acJson = JSON.stringify(
+    criteria.map((desc: string, idx: number) => ({
+      id: nanoid(8),
+      description: desc,
+      passed: false,
+    })),
+  );
 
   db.query(
     `INSERT INTO prd_stories (id, prd_id, title, description, acceptance_criteria, priority,
      depends_on, dependency_reasons, status, attempts, max_attempts, learnings, sort_order, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, '[]', '{}', 'pending', 0, 3, '[]', ?, ?, ?)`
+     VALUES (?, ?, ?, ?, ?, ?, '[]', '{}', 'pending', 0, 3, '[]', ?, ?, ?)`,
   ).run(storyId, prdId, title, description, acJson, template.priority, sortOrder, now, now);
 
-  return c.json({
-    ok: true,
-    data: {
-      storyId,
-      story: {
-        title,
-        description,
-        acceptanceCriteria: criteria,
-        priority: template.priority,
-      },
-    } as CreateStoryFromTemplateResponse,
-  }, 201);
+  return c.json(
+    {
+      ok: true,
+      data: {
+        storyId,
+        story: {
+          title,
+          description,
+          acceptanceCriteria: criteria,
+          priority: template.priority,
+        },
+      } as CreateStoryFromTemplateResponse,
+    },
+    201,
+  );
 });
 
 // --- Priority Recommendation ---
@@ -3498,7 +3697,9 @@ app.post('/:prdId/stories/:storyId/priority', async (c) => {
   const prdRow = db.query('SELECT * FROM prds WHERE id = ?').get(prdId) as any;
   if (!prdRow) return c.json({ ok: false, error: 'PRD not found' }, 404);
 
-  const storyRow = db.query('SELECT * FROM prd_stories WHERE id = ? AND prd_id = ?').get(storyId, prdId) as any;
+  const storyRow = db
+    .query('SELECT * FROM prd_stories WHERE id = ? AND prd_id = ?')
+    .get(storyId, prdId) as any;
   if (!storyRow) return c.json({ ok: false, error: 'Story not found' }, 404);
 
   const story = storyFromRow(storyRow);
@@ -3535,13 +3736,13 @@ app.post('/:prdId/stories/:storyId/priority', async (c) => {
         memoryContext += `\n### ${labels[cat] || cat}\n${items.join('\n')}\n`;
       }
     }
-  } catch { /* no project memory */ }
+  } catch {
+    /* no project memory */
+  }
 
   // Build dependency context
   let dependencyContext = '';
-  const blocksStories = mappedStories.filter((s) =>
-    s.dependsOn?.includes(storyId)
-  );
+  const blocksStories = mappedStories.filter((s) => s.dependsOn?.includes(storyId));
   const blockedByStories = (story.dependsOn || [])
     .map((depId: string) => mappedStories.find((s) => s.id === depId))
     .filter(Boolean);
@@ -3572,9 +3773,7 @@ app.post('/:prdId/stories/:storyId/priority', async (c) => {
     siblingContext += `- ${s.title} (priority: ${s.priority}, status: ${s.status}, ${acCount} criteria, blocks: ${blocksCount}, blocked by: ${depsCount})\n`;
   }
 
-  const criteriaText = story.acceptanceCriteria
-    .map((ac: any) => `- ${ac.description}`)
-    .join('\n');
+  const criteriaText = story.acceptanceCriteria.map((ac: any) => `- ${ac.description}`).join('\n');
 
   const systemPrompt = `You are an expert product manager specializing in story prioritization. Your task is to recommend a priority level for a user story based on business value, risk factors, dependencies, and user impact.
 
@@ -3675,12 +3874,15 @@ Recommend a priority level with explanation and supporting factors.`;
     if (!apiResponse.ok) {
       const errBody = await apiResponse.text().catch(() => 'Unknown error');
       return c.json(
-        { ok: false, error: `AI priority recommendation failed (${apiResponse.status}): ${errBody}` },
+        {
+          ok: false,
+          error: `AI priority recommendation failed (${apiResponse.status}): ${errBody}`,
+        },
         502,
       );
     }
 
-    const result = await apiResponse.json() as any;
+    const result = (await apiResponse.json()) as any;
     const textContent = result.content?.find((ct: any) => ct.type === 'text');
     if (!textContent?.text) {
       return c.json({ ok: false, error: 'AI returned no text content' }, 502);
@@ -3709,9 +3911,10 @@ Recommend a priority level with explanation and supporting factors.`;
     const suggestedPriority: StoryPriority = validPriorities.includes(parsed.suggestedPriority)
       ? parsed.suggestedPriority
       : 'medium';
-    const confidence = typeof parsed.confidence === 'number'
-      ? Math.max(0, Math.min(100, Math.round(parsed.confidence)))
-      : 60;
+    const confidence =
+      typeof parsed.confidence === 'number'
+        ? Math.max(0, Math.min(100, Math.round(parsed.confidence)))
+        : 60;
 
     const factors: PriorityFactor[] = (parsed.factors || [])
       .filter((f: any) => f.factor && typeof f.factor === 'string')
@@ -3729,14 +3932,19 @@ Recommend a priority level with explanation and supporting factors.`;
       currentPriority: story.priority as StoryPriority,
       confidence,
       factors,
-      explanation: (parsed.explanation || 'Priority recommendation based on story analysis.').trim(),
+      explanation: (
+        parsed.explanation || 'Priority recommendation based on story analysis.'
+      ).trim(),
       isManualOverride: false,
     };
 
     // Persist recommendation to database
     const now = Date.now();
-    db.query('UPDATE prd_stories SET priority_recommendation = ?, updated_at = ? WHERE id = ?')
-      .run(JSON.stringify(recommendation), now, storyId);
+    db.query('UPDATE prd_stories SET priority_recommendation = ?, updated_at = ? WHERE id = ?').run(
+      JSON.stringify(recommendation),
+      now,
+      storyId,
+    );
     db.query('UPDATE prds SET updated_at = ? WHERE id = ?').run(now, prdId);
 
     return c.json({
@@ -3758,22 +3966,30 @@ app.put('/:prdId/stories/:storyId/priority', async (c) => {
   const storyId = c.req.param('storyId');
   const body = await c.req.json();
 
-  const storyRow = db.query('SELECT * FROM prd_stories WHERE id = ? AND prd_id = ?').get(storyId, prdId) as any;
+  const storyRow = db
+    .query('SELECT * FROM prd_stories WHERE id = ? AND prd_id = ?')
+    .get(storyId, prdId) as any;
   if (!storyRow) return c.json({ ok: false, error: 'Story not found' }, 404);
 
   const { priority, accept } = body;
   const validPriorities: StoryPriority[] = ['critical', 'high', 'medium', 'low'];
 
   if (!validPriorities.includes(priority)) {
-    return c.json({ ok: false, error: 'Invalid priority. Must be: critical, high, medium, or low' }, 400);
+    return c.json(
+      { ok: false, error: 'Invalid priority. Must be: critical, high, medium, or low' },
+      400,
+    );
   }
 
   const now = Date.now();
   const story = storyFromRow(storyRow);
 
   // Update the story priority
-  db.query('UPDATE prd_stories SET priority = ?, updated_at = ? WHERE id = ?')
-    .run(priority, now, storyId);
+  db.query('UPDATE prd_stories SET priority = ?, updated_at = ? WHERE id = ?').run(
+    priority,
+    now,
+    storyId,
+  );
 
   // Update the recommendation to note the override (if one exists)
   if (story.priorityRecommendation) {
@@ -3782,8 +3998,11 @@ app.put('/:prdId/stories/:storyId/priority', async (c) => {
       isManualOverride: !accept, // If accepting AI suggestion, it's not an override
       currentPriority: priority,
     };
-    db.query('UPDATE prd_stories SET priority_recommendation = ?, updated_at = ? WHERE id = ?')
-      .run(JSON.stringify(updatedRec), now, storyId);
+    db.query('UPDATE prd_stories SET priority_recommendation = ?, updated_at = ? WHERE id = ?').run(
+      JSON.stringify(updatedRec),
+      now,
+      storyId,
+    );
   }
 
   db.query('UPDATE prds SET updated_at = ? WHERE id = ?').run(now, prdId);
@@ -3812,7 +4031,7 @@ app.post('/:id/priorities', async (c) => {
   // Build dependency map
   const blocksMap: Record<string, string[]> = {};
   for (const s of mappedStories) {
-    for (const depId of (s.dependsOn || [])) {
+    for (const depId of s.dependsOn || []) {
       if (!blocksMap[depId]) blocksMap[depId] = [];
       blocksMap[depId].push(s.id);
     }
@@ -3822,9 +4041,7 @@ app.post('/:id/priorities', async (c) => {
   let storiesContext = '';
   for (const s of mappedStories) {
     const acCount = s.acceptanceCriteria?.length || 0;
-    const criteriaText = s.acceptanceCriteria
-      .map((ac: any) => `  - ${ac.description}`)
-      .join('\n');
+    const criteriaText = s.acceptanceCriteria.map((ac: any) => `  - ${ac.description}`).join('\n');
     const blocksCount = blocksMap[s.id]?.length || 0;
     const blockedByCount = s.dependsOn?.length || 0;
     const blocksTitles = (blocksMap[s.id] || [])
@@ -3849,7 +4066,9 @@ ${s.estimate ? `- Estimate: ${s.estimate.size} (${s.estimate.storyPoints} points
   let memoryContext = '';
   try {
     const memories = db
-      .query('SELECT category, key, content FROM project_memories WHERE project_path = ? ORDER BY category, key')
+      .query(
+        'SELECT category, key, content FROM project_memories WHERE project_path = ? ORDER BY category, key',
+      )
       .all(prdRow.project_path) as any[];
     if (memories.length > 0) {
       memoryContext = '\n\n## Project Context\n';
@@ -3857,7 +4076,9 @@ ${s.estimate ? `- Estimate: ${s.estimate.size} (${s.estimate.storyPoints} points
         memoryContext += `- [${m.category}] ${m.key}: ${m.content}\n`;
       }
     }
-  } catch { /* no project memory */ }
+  } catch {
+    /* no project memory */
+  }
 
   const systemPrompt = `You are an expert product manager specializing in story prioritization. Recommend priority levels for ALL stories in this PRD.
 
@@ -3939,7 +4160,10 @@ Prioritize all stories considering dependencies, risks, scope, and user impact.`
     if (!apiResponse.ok) {
       const errBody = await apiResponse.text().catch(() => 'Unknown error');
       return c.json(
-        { ok: false, error: `AI priority recommendation failed (${apiResponse.status}): ${errBody}` },
+        {
+          ok: false,
+          error: `AI priority recommendation failed (${apiResponse.status}): ${errBody}`,
+        },
         502,
       );
     }
@@ -3973,16 +4197,17 @@ Prioritize all stories considering dependencies, risks, scope, and user impact.`
     const recommendations: PriorityRecommendation[] = [];
     const now = Date.now();
 
-    for (const rec of (parsed.recommendations || [])) {
+    for (const rec of parsed.recommendations || []) {
       const matchedStory = mappedStories.find((s) => s.id === rec.storyId);
       if (!matchedStory) continue;
 
       const suggestedPriority: StoryPriority = validPriorities.includes(rec.suggestedPriority)
         ? rec.suggestedPriority
         : 'medium';
-      const confidence = typeof rec.confidence === 'number'
-        ? Math.max(0, Math.min(100, Math.round(rec.confidence)))
-        : 60;
+      const confidence =
+        typeof rec.confidence === 'number'
+          ? Math.max(0, Math.min(100, Math.round(rec.confidence)))
+          : 60;
 
       const factors: PriorityFactor[] = (rec.factors || [])
         .filter((f: any) => f.factor && typeof f.factor === 'string')
@@ -4007,8 +4232,9 @@ Prioritize all stories considering dependencies, risks, scope, and user impact.`
       recommendations.push(recommendation);
 
       // Persist to database
-      db.query('UPDATE prd_stories SET priority_recommendation = ?, updated_at = ? WHERE id = ?')
-        .run(JSON.stringify(recommendation), now, matchedStory.id);
+      db.query(
+        'UPDATE prd_stories SET priority_recommendation = ?, updated_at = ? WHERE id = ?',
+      ).run(JSON.stringify(recommendation), now, matchedStory.id);
     }
 
     db.query('UPDATE prds SET updated_at = ? WHERE id = ?').run(now, prdId);
@@ -4072,7 +4298,9 @@ function storyFromRow(row: any) {
     maxAttempts: row.max_attempts,
     learnings: JSON.parse(row.learnings || '[]'),
     estimate: row.estimate ? JSON.parse(row.estimate) : undefined,
-    priorityRecommendation: row.priority_recommendation ? JSON.parse(row.priority_recommendation) : undefined,
+    priorityRecommendation: row.priority_recommendation
+      ? JSON.parse(row.priority_recommendation)
+      : undefined,
     sortOrder: row.sort_order,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
@@ -4117,9 +4345,7 @@ function getAnthropicAuth(): { token: string; type: 'api-key' | 'oauth' } {
     // Credentials file not found or invalid
   }
 
-  throw new Error(
-    'No Anthropic API key found. Set ANTHROPIC_API_KEY or log in with Claude Code.',
-  );
+  throw new Error('No Anthropic API key found. Set ANTHROPIC_API_KEY or log in with Claude Code.');
 }
 
 export { app as prdRoutes };

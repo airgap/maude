@@ -1,4 +1,4 @@
-import type { StreamEvent } from '@maude/shared';
+import type { StreamEvent, Conversation } from '@maude/shared';
 import { streamStore } from '$lib/stores/stream.svelte';
 import { conversationStore } from '$lib/stores/conversation.svelte';
 import { projectMemoryStore } from '$lib/stores/project-memory.svelte';
@@ -7,21 +7,36 @@ import { api } from './client';
 /**
  * Connect to SSE stream for a conversation.
  * Uses fetch() instead of EventSource to support POST with body.
+ *
+ * IMPORTANT: This function captures a reference to the target conversation
+ * at stream start and routes ALL updates through it, regardless of whether
+ * the user switches to a different conversation during streaming.
  */
 export async function sendAndStream(conversationId: string, content: string): Promise<void> {
   // console.log('[sse] Starting stream for conversation:', conversationId);
   const abortController = new AbortController();
   streamStore.setAbortController(abortController);
-  streamStore.startStream();
+  streamStore.startStream(conversationId);
+
+  // Capture a reference to the conversation we're streaming to.
+  // This reference stays valid even if the user switches conversations.
+  const targetConversation = conversationStore.active;
+  if (!targetConversation || targetConversation.id !== conversationId) {
+    streamStore.handleEvent({
+      type: 'error',
+      error: { type: 'state_error', message: 'Target conversation not active' },
+    });
+    return;
+  }
 
   // Auto-snapshot before agent runs (fire-and-forget)
-  const projectPath = conversationStore.active?.projectPath;
+  const projectPath = targetConversation.projectPath;
   if (projectPath) {
     api.git.snapshot(projectPath, conversationId, 'pre-agent').catch(() => {});
   }
 
-  // Add user message to conversation immediately
-  conversationStore.addMessage({
+  // Add user message to the target conversation
+  conversationStore.addMessageTo(targetConversation, {
     id: crypto.randomUUID(),
     role: 'user',
     content: [{ type: 'text', text: content }],
@@ -55,14 +70,14 @@ export async function sendAndStream(conversationId: string, content: string): Pr
       streamStore.setSessionId(newSessionId);
     }
 
-    // Add empty assistant message that we'll build up
+    // Add empty assistant message to the target conversation
     const assistantMsgId = crypto.randomUUID();
-    conversationStore.addMessage({
+    conversationStore.addMessageTo(targetConversation, {
       id: assistantMsgId,
       role: 'assistant',
       content: [],
       timestamp: Date.now(),
-      model: conversationStore.active?.model,
+      model: targetConversation.model,
     });
 
     const reader = response.body?.getReader();
@@ -96,8 +111,10 @@ export async function sendAndStream(conversationId: string, content: string): Pr
           const event: StreamEvent = JSON.parse(data);
           streamStore.handleEvent(event);
 
-          // Sync content blocks to the assistant message
-          conversationStore.updateLastAssistantMessage([...streamStore.contentBlocks]);
+          // Sync content blocks to the target conversation's assistant message
+          conversationStore.updateLastAssistantMessageIn(targetConversation, [
+            ...streamStore.contentBlocks,
+          ]);
         } catch (parseErr) {
           console.warn('[sse] Failed to parse SSE data:', data, parseErr);
         }
@@ -106,7 +123,9 @@ export async function sendAndStream(conversationId: string, content: string): Pr
 
     // Final sync from stream store
     if (streamStore.contentBlocks.length > 0) {
-      conversationStore.updateLastAssistantMessage([...streamStore.contentBlocks]);
+      conversationStore.updateLastAssistantMessageIn(targetConversation, [
+        ...streamStore.contentBlocks,
+      ]);
     }
 
     // Ensure streaming state is cleared when the SSE connection closes.
@@ -119,12 +138,12 @@ export async function sendAndStream(conversationId: string, content: string): Pr
     // Reload conversation from DB to pick up server-persisted messages.
     // This handles cases where the stream produced no content_block events
     // (e.g. /compact, /init) but the server still saved an assistant message.
-    await conversationStore.reload();
+    await conversationStore.reloadById(conversationId);
 
     // Auto-extract project memories from this conversation
-    const activeProjectPath = conversationStore.active?.projectPath;
-    if (activeProjectPath) {
-      const msgs = conversationStore.active?.messages ?? [];
+    const convProjectPath = targetConversation.projectPath;
+    if (convProjectPath) {
+      const msgs = targetConversation.messages ?? [];
       // Take last 10 messages for extraction (avoid processing huge histories)
       const recent = msgs.slice(-10).map((m) => ({
         role: m.role,
@@ -136,7 +155,7 @@ export async function sendAndStream(conversationId: string, content: string): Pr
           : String(m.content),
       }));
       if (recent.length > 0) {
-        projectMemoryStore.extractFromConversation(activeProjectPath, recent).catch(() => {});
+        projectMemoryStore.extractFromConversation(convProjectPath, recent).catch(() => {});
       }
     }
   } catch (err) {
@@ -174,9 +193,7 @@ export async function reconnectActiveStream(): Promise<string | null> {
       (s) => s.status === 'running' || (s.bufferedEvents > 0 && !s.streamComplete),
     );
     // Also check for sessions that just completed but haven't been consumed
-    const justCompleted = sessionsRes.data.find(
-      (s) => s.streamComplete && s.bufferedEvents > 0,
-    );
+    const justCompleted = sessionsRes.data.find((s) => s.streamComplete && s.bufferedEvents > 0);
 
     const target = active || justCompleted;
     if (!target) {
@@ -191,14 +208,18 @@ export async function reconnectActiveStream(): Promise<string | null> {
       target.conversationId,
     );
 
-    streamStore.startStream();
+    streamStore.startStream(target.conversationId);
     streamStore.setSessionId(target.id);
 
     // Load the conversation so the UI can display it
     const convRes = await api.conversations.get(target.conversationId);
-    if (convRes.ok && convRes.data) {
-      conversationStore.setActive(convRes.data);
+    if (!convRes.ok || !convRes.data) {
+      streamStore.handleEvent({ type: 'message_stop' } as any);
+      streamStore.setReconnecting(false);
+      return null;
     }
+    conversationStore.setActive(convRes.data);
+    const targetConversation = convRes.data as Conversation;
 
     const response = await api.stream.reconnect(target.id);
     if (!response.ok || !response.body) {
@@ -208,12 +229,12 @@ export async function reconnectActiveStream(): Promise<string | null> {
     }
 
     // Add empty assistant message placeholder that we'll build up from replayed events
-    conversationStore.addMessage({
+    conversationStore.addMessageTo(targetConversation, {
       id: crypto.randomUUID(),
       role: 'assistant',
       content: [],
       timestamp: Date.now(),
-      model: conversationStore.active?.model,
+      model: targetConversation.model,
     });
 
     const reader = response.body.getReader();
@@ -236,7 +257,9 @@ export async function reconnectActiveStream(): Promise<string | null> {
         try {
           const event: StreamEvent = JSON.parse(data);
           streamStore.handleEvent(event);
-          conversationStore.updateLastAssistantMessage([...streamStore.contentBlocks]);
+          conversationStore.updateLastAssistantMessageIn(targetConversation, [
+            ...streamStore.contentBlocks,
+          ]);
         } catch {
           // Non-JSON line
         }
@@ -245,7 +268,9 @@ export async function reconnectActiveStream(): Promise<string | null> {
 
     // Final sync
     if (streamStore.contentBlocks.length > 0) {
-      conversationStore.updateLastAssistantMessage([...streamStore.contentBlocks]);
+      conversationStore.updateLastAssistantMessageIn(targetConversation, [
+        ...streamStore.contentBlocks,
+      ]);
     }
 
     // Ensure streaming state is cleared when the SSE connection closes.
@@ -256,7 +281,7 @@ export async function reconnectActiveStream(): Promise<string | null> {
     // Reload conversation from DB for the authoritative server-saved version.
     // By this point the stream has completed and the server has persisted the
     // assistant message, so the DB version will include it.
-    await conversationStore.reload();
+    await conversationStore.reloadById(target.conversationId);
     streamStore.setReconnecting(false);
 
     return target.conversationId;

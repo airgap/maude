@@ -22,6 +22,7 @@ interface PendingApproval {
 export interface StreamSnapshot {
   status: StreamStatus;
   sessionId: string | null;
+  conversationId: string | null;
   partialText: string;
   partialThinking: string;
   contentBlocks: MessageContent[];
@@ -40,6 +41,7 @@ function createStreamStore() {
    *  calling reset() and wiping out state being rebuilt from replayed events. */
   let reconnecting = $state(false);
   let sessionId = $state<string | null>(null);
+  let conversationId = $state<string | null>(null);
   let partialText = $state('');
   let partialThinking = $state('');
   let contentBlocks = $state<MessageContent[]>([]);
@@ -53,7 +55,13 @@ function createStreamStore() {
     new Map(),
   );
   let verifications = $state<
-    Map<string, { passed: boolean; issues: Array<{ severity: string; line?: number; message: string; rule?: string }> }>
+    Map<
+      string,
+      {
+        passed: boolean;
+        issues: Array<{ severity: string; line?: number; message: string; rule?: string }>;
+      }
+    >
   >(new Map());
   // Offset for mapping event indices to contentBlocks array positions.
   // Reset to contentBlocks.length on each message_start so sub-agent
@@ -67,6 +75,9 @@ function createStreamStore() {
     },
     get sessionId() {
       return sessionId;
+    },
+    get conversationId() {
+      return conversationId;
     },
     get partialText() {
       return partialText;
@@ -108,11 +119,14 @@ function createStreamStore() {
     setSessionId(id: string) {
       sessionId = id;
     },
+    setConversationId(id: string) {
+      conversationId = id;
+    },
     setAbortController(ctrl: AbortController) {
       abortController = ctrl;
     },
 
-    startStream() {
+    startStream(targetConversationId?: string) {
       status = 'connecting';
       partialText = '';
       partialThinking = '';
@@ -122,6 +136,7 @@ function createStreamStore() {
       toolResults = new Map();
       indexOffset = 0;
       currentParentId = null;
+      if (targetConversationId) conversationId = targetConversationId;
     },
 
     handleEvent(event: StreamEvent) {
@@ -197,7 +212,11 @@ function createStreamStore() {
             updated = prev;
           }
 
-          contentBlocks = [...contentBlocks.slice(0, idx), updated, ...contentBlocks.slice(idx + 1)];
+          contentBlocks = [
+            ...contentBlocks.slice(0, idx),
+            updated,
+            ...contentBlocks.slice(idx + 1),
+          ];
           break;
         }
 
@@ -304,6 +323,7 @@ function createStreamStore() {
 
     reset() {
       status = 'idle';
+      conversationId = null;
       partialText = '';
       partialThinking = '';
       contentBlocks = [];
@@ -321,6 +341,7 @@ function createStreamStore() {
       return {
         status,
         sessionId,
+        conversationId,
         partialText,
         partialThinking,
         contentBlocks: [...contentBlocks],
@@ -341,6 +362,7 @@ function createStreamStore() {
       }
       status = snapshot.status;
       sessionId = snapshot.sessionId;
+      conversationId = snapshot.conversationId;
       partialText = snapshot.partialText;
       partialThinking = snapshot.partialThinking;
       contentBlocks = snapshot.contentBlocks;

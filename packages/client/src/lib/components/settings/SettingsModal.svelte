@@ -4,6 +4,7 @@
   import { api } from '$lib/api/client';
   import { onMount } from 'svelte';
   import type { ThemeId, CliProvider } from '@maude/shared';
+  import { MONO_FONTS, SANS_FONTS, findFont } from '$lib/config/fonts';
 
   const cliProviders: { id: CliProvider; label: string; desc: string }[] = [
     { id: 'claude', label: 'Claude Code', desc: 'Anthropic Claude CLI' },
@@ -432,12 +433,55 @@
             <input
               type="range"
               min="10"
-              max="20"
+              max="24"
               value={settingsStore.fontSize}
               oninput={(e) =>
                 settingsStore.update({ fontSize: Number((e.target as HTMLInputElement).value) })}
             />
           </div>
+
+          <div class="setting-group">
+            <label class="setting-label">Code Font</label>
+            <select
+              class="font-select"
+              value={settingsStore.fontFamily}
+              onchange={(e) =>
+                settingsStore.update({ fontFamily: (e.target as HTMLSelectElement).value })}
+              style="font-family: {findFont(settingsStore.fontFamily)?.family || 'monospace'}"
+            >
+              {#each MONO_FONTS as font (font.id)}
+                <option value={font.id}>{font.label}{!font.googleFont ? ' (local)' : ''}</option>
+              {/each}
+            </select>
+            <div
+              class="font-preview mono"
+              style="font-family: {findFont(settingsStore.fontFamily)?.family || 'monospace'}"
+            >
+              const maude = "Hello, World!"; // 0O1lI
+            </div>
+          </div>
+
+          <div class="setting-group">
+            <label class="setting-label">UI Font</label>
+            <select
+              class="font-select"
+              value={settingsStore.fontFamilySans}
+              onchange={(e) =>
+                settingsStore.update({ fontFamilySans: (e.target as HTMLSelectElement).value })}
+              style="font-family: {findFont(settingsStore.fontFamilySans)?.family || 'sans-serif'}"
+            >
+              {#each SANS_FONTS as font (font.id)}
+                <option value={font.id}>{font.label}{!font.googleFont ? ' (local)' : ''}</option>
+              {/each}
+            </select>
+            <div
+              class="font-preview sans"
+              style="font-family: {findFont(settingsStore.fontFamilySans)?.family || 'sans-serif'}"
+            >
+              The quick brown fox jumps over the lazy dog
+            </div>
+          </div>
+
           <div class="setting-group">
             <label class="setting-label">Compact messages</label>
             <label class="toggle">
@@ -1210,5 +1254,35 @@
   .sandbox-path-input:focus {
     border-color: var(--accent-primary);
     outline: none;
+  }
+
+  /* Font picker */
+  .font-select {
+    width: 100%;
+    padding: 8px 10px;
+    font-size: 13px;
+    background: var(--bg-input);
+    border: 1px solid var(--border-secondary);
+    border-radius: var(--radius-sm);
+    color: var(--text-primary);
+    cursor: pointer;
+  }
+  .font-select:focus {
+    border-color: var(--accent-primary);
+    outline: none;
+  }
+  .font-preview {
+    margin-top: 8px;
+    padding: 10px 12px;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-secondary);
+    border-radius: var(--radius-sm);
+    color: var(--text-secondary);
+    font-size: 14px;
+    line-height: 1.5;
+  }
+  .font-preview.mono {
+    font-size: 13px;
+    letter-spacing: 0.3px;
   }
 </style>

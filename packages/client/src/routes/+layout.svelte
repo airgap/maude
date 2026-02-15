@@ -4,10 +4,47 @@
   import LoginPage from '$lib/components/auth/LoginPage.svelte';
   import { api, getAuthToken } from '$lib/api/client';
   import { streamStore, STREAM_CONTEXT_KEY } from '$lib/stores/stream.svelte';
+  import { settingsStore } from '$lib/stores/settings.svelte';
+  import { findFont, buildGoogleFontsUrl, type FontOption } from '$lib/config/fonts';
   import { onMount, setContext } from 'svelte';
-  
+
   // Set stream store in context for proper Svelte 5 reactivity tracking
   setContext(STREAM_CONTEXT_KEY, streamStore);
+
+  // --- Dynamic font loading & CSS variable application ---
+  const loadedFonts = new Set<string>();
+
+  function loadGoogleFont(font: FontOption) {
+    if (!font.googleFont || loadedFonts.has(font.id)) return;
+    const url = buildGoogleFontsUrl([font]);
+    if (!url) return;
+    const link = document.createElement('link');
+    link.rel = 'stylesheet';
+    link.href = url;
+    document.head.appendChild(link);
+    loadedFonts.add(font.id);
+  }
+
+  $effect(() => {
+    const root = document.documentElement;
+
+    // Apply font size
+    root.style.setProperty('--font-size', `${settingsStore.fontSize}px`);
+
+    // Apply mono font
+    const monoFont = findFont(settingsStore.fontFamily);
+    if (monoFont) {
+      loadGoogleFont(monoFont);
+      root.style.setProperty('--font-family', monoFont.family);
+    }
+
+    // Apply sans font
+    const sansFont = findFont(settingsStore.fontFamilySans);
+    if (sansFont) {
+      loadGoogleFont(sansFont);
+      root.style.setProperty('--font-family-sans', sansFont.family);
+    }
+  });
 
   let { children } = $props();
 

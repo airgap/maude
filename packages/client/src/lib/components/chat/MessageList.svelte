@@ -12,8 +12,8 @@
   // Check if the current conversation is a planning conversation with edits enabled
   let isPlanningWithEdits = $derived(
     loopStore.allowEdits &&
-    loopStore.planConversationId === conversationStore.activeId &&
-    conversationStore.active?.title?.startsWith('[Plan]'),
+      loopStore.planConversationId === conversationStore.activeId &&
+      conversationStore.active?.title?.startsWith('[Plan]'),
   );
 
   let scrollContainer: HTMLDivElement;
@@ -75,7 +75,9 @@
   {:else}
     {@const msgs = conversationStore.active.messages}
     {#each msgs as message, i (message.id)}
-      {#if !(streamStore.isStreaming && i === msgs.length - 1 && message.role === 'assistant')}
+      {@const isStreamingHere =
+        streamStore.isStreaming && streamStore.conversationId === conversationStore.activeId}
+      {#if !(isStreamingHere && i === msgs.length - 1 && message.role === 'assistant')}
         <MessageBubble {message} />
         {#if isPlanningWithEdits && message.role === 'assistant'}
           <StoryActionCards {message} />
@@ -83,7 +85,7 @@
       {/if}
     {/each}
 
-    {#if streamStore.isStreaming}
+    {#if streamStore.isStreaming && streamStore.conversationId === conversationStore.activeId}
       <StreamingMessage />
     {/if}
 

@@ -15,19 +15,19 @@ streamStore.startStream();
 const testEvent1 = {
   type: 'message_start',
   index: 0,
-  content_block: { type: 'text', text: '' }
+  content_block: { type: 'text', text: '' },
 };
 
 const testEvent2 = {
   type: 'content_block_start',
   index: 0,
-  content_block: { type: 'text', text: 'Hello' }
+  content_block: { type: 'text', text: 'Hello' },
 };
 
 const testEvent3 = {
   type: 'content_block_delta',
   index: 0,
-  delta: { type: 'text_delta', text: ' world!' }
+  delta: { type: 'text_delta', text: ' world!' },
 };
 
 // Process these events
@@ -49,6 +49,7 @@ console.log('streamStore.status:', streamStore.status);
 ## What to Expect
 
 If the store is working correctly, you should see:
+
 ```
 [streamStore.handleEvent] Processing: message_start contentBlocks.length: 0
 [streamStore.handleEvent] Processing: content_block_start contentBlocks.length: 0
@@ -64,6 +65,7 @@ streamStore.status: streaming
 ```
 
 If StreamingMessage is properly reactive, you should also see:
+
 ```
 [StreamingMessage] $derived recalculating, blocks.length: 1
 [StreamingMessage] $derived recalculating, blocks.length: 1
@@ -72,12 +74,14 @@ If StreamingMessage is properly reactive, you should also see:
 ## Interpreting Results
 
 ### Good Signs
+
 - Store logs appear immediately
 - contentBlocks array grows with new blocks
 - StreamingMessage logs appear after store logs
 - isStreaming becomes true
 
 ### Bad Signs
+
 - No [streamStore] logs → Store updates not happening
 - No [StreamingMessage] logs → Component not re-computing $derived
 - contentBlocks stays at 0 → State updates not persisting

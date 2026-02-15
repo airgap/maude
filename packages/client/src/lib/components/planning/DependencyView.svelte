@@ -1,7 +1,12 @@
 <script lang="ts">
   import { loopStore } from '$lib/stores/loop.svelte';
   import { uiStore } from '$lib/stores/ui.svelte';
-  import type { DependencyGraph, DependencyNode, DependencyEdge, DependencyWarning } from '@maude/shared';
+  import type {
+    DependencyGraph,
+    DependencyNode,
+    DependencyEdge,
+    DependencyWarning,
+  } from '@maude/shared';
 
   let { prdId }: { prdId: string } = $props();
 
@@ -36,7 +41,12 @@
 
   async function handleAddDependency() {
     if (!fromStoryId || !toStoryId || fromStoryId === toStoryId) return;
-    const result = await loopStore.addDependency(prdId, fromStoryId, toStoryId, addReason || undefined);
+    const result = await loopStore.addDependency(
+      prdId,
+      fromStoryId,
+      toStoryId,
+      addReason || undefined,
+    );
     if (result.ok) {
       addingDep = false;
       fromStoryId = '';
@@ -80,35 +90,53 @@
   }
 
   function storyTitle(id: string): string {
-    return graph?.nodes.find((n) => n.storyId === id)?.title || stories.find((s) => s.id === id)?.title || id;
+    return (
+      graph?.nodes.find((n) => n.storyId === id)?.title ||
+      stories.find((s) => s.id === id)?.title ||
+      id
+    );
   }
 
   function statusIcon(status: string): string {
     switch (status) {
-      case 'completed': return '✓';
-      case 'in_progress': return '●';
-      case 'failed': return '✗';
-      case 'skipped': return '⊘';
-      default: return '○';
+      case 'completed':
+        return '✓';
+      case 'in_progress':
+        return '●';
+      case 'failed':
+        return '✗';
+      case 'skipped':
+        return '⊘';
+      default:
+        return '○';
     }
   }
 
   function statusColor(status: string): string {
     switch (status) {
-      case 'completed': return 'var(--accent-secondary)';
-      case 'in_progress': return 'var(--accent-primary)';
-      case 'failed': return 'var(--accent-error)';
-      default: return 'var(--text-tertiary)';
+      case 'completed':
+        return 'var(--accent-secondary)';
+      case 'in_progress':
+        return 'var(--accent-primary)';
+      case 'failed':
+        return 'var(--accent-error)';
+      default:
+        return 'var(--text-tertiary)';
     }
   }
 
   function warningIcon(type: string): string {
     switch (type) {
-      case 'circular': return '⟳';
-      case 'missing_dependency': return '△';
-      case 'unresolved_blocker': return '⊘';
-      case 'orphan_dependency': return '◌';
-      default: return '△';
+      case 'circular':
+        return '⟳';
+      case 'missing_dependency':
+        return '△';
+      case 'unresolved_blocker':
+        return '⊘';
+      case 'orphan_dependency':
+        return '◌';
+      default:
+        return '△';
     }
   }
 
@@ -130,10 +158,20 @@
     <div class="dep-title-row">
       <h4>Dependencies</h4>
       <div class="dep-actions">
-        <button class="btn-sm dep-btn" class:active={viewMode === 'list'} onclick={() => viewMode = 'list'} title="List view">
+        <button
+          class="btn-sm dep-btn"
+          class:active={viewMode === 'list'}
+          onclick={() => (viewMode = 'list')}
+          title="List view"
+        >
           ☰
         </button>
-        <button class="btn-sm dep-btn" class:active={viewMode === 'graph'} onclick={() => viewMode = 'graph'} title="Graph view">
+        <button
+          class="btn-sm dep-btn"
+          class:active={viewMode === 'graph'}
+          onclick={() => (viewMode = 'graph')}
+          title="Graph view"
+        >
           ◈
         </button>
       </div>
@@ -149,7 +187,9 @@
       </button>
       <button
         class="btn-sm dep-btn"
-        onclick={() => { addingDep = !addingDep; }}
+        onclick={() => {
+          addingDep = !addingDep;
+        }}
         title="Manually add dependency"
       >
         + Add
@@ -184,11 +224,28 @@
       <div class="dep-field">
         <!-- svelte-ignore a11y_label_has_associated_control -->
         <label>Reason (optional)</label>
-        <input type="text" class="dep-reason-input" bind:value={addReason} placeholder="Why this dependency exists..." />
+        <input
+          type="text"
+          class="dep-reason-input"
+          bind:value={addReason}
+          placeholder="Why this dependency exists..."
+        />
       </div>
       <div class="dep-form-actions">
-        <button class="btn-sm btn-primary" onclick={handleAddDependency} disabled={!fromStoryId || !toStoryId || fromStoryId === toStoryId}>Add</button>
-        <button class="btn-sm btn-ghost" onclick={() => { addingDep = false; fromStoryId = ''; toStoryId = ''; addReason = ''; }}>Cancel</button>
+        <button
+          class="btn-sm btn-primary"
+          onclick={handleAddDependency}
+          disabled={!fromStoryId || !toStoryId || fromStoryId === toStoryId}>Add</button
+        >
+        <button
+          class="btn-sm btn-ghost"
+          onclick={() => {
+            addingDep = false;
+            fromStoryId = '';
+            toStoryId = '';
+            addReason = '';
+          }}>Cancel</button
+        >
       </div>
     </div>
   {/if}
@@ -214,7 +271,9 @@
     <div class="dep-empty">
       <span class="empty-hint">No dependencies detected yet.</span>
       {#if stories.length >= 2}
-        <span class="empty-hint">Click "Analyze" to auto-detect dependencies from story content.</span>
+        <span class="empty-hint"
+          >Click "Analyze" to auto-detect dependencies from story content.</span
+        >
       {/if}
     </div>
   {:else if viewMode === 'list'}
@@ -237,9 +296,14 @@
                   class="dep-reason-input"
                   bind:value={editReason}
                   placeholder="Reason for this dependency..."
-                  onkeydown={(e) => { if (e.key === 'Enter') handleSaveEdit(edge); if (e.key === 'Escape') cancelEditing(); }}
+                  onkeydown={(e) => {
+                    if (e.key === 'Enter') handleSaveEdit(edge);
+                    if (e.key === 'Escape') cancelEditing();
+                  }}
                 />
-                <button class="btn-sm btn-primary" onclick={() => handleSaveEdit(edge)} title="Save">✓</button>
+                <button class="btn-sm btn-primary" onclick={() => handleSaveEdit(edge)} title="Save"
+                  >✓</button
+                >
                 <button class="btn-sm btn-ghost" onclick={cancelEditing} title="Cancel">✗</button>
               </div>
             </div>
@@ -253,8 +317,14 @@
             {#if edge.reason}
               <span class="dep-reason" title={edge.reason}>{edge.reason}</span>
             {/if}
-            <button class="dep-edit-btn" onclick={() => startEditing(edge)} title="Edit reason">✎</button>
-            <button class="dep-remove-btn" onclick={() => handleRemoveDependency(edge.to, edge.from)} title="Remove dependency">×</button>
+            <button class="dep-edit-btn" onclick={() => startEditing(edge)} title="Edit reason"
+              >✎</button
+            >
+            <button
+              class="dep-remove-btn"
+              onclick={() => handleRemoveDependency(edge.to, edge.from)}
+              title="Remove dependency">×</button
+            >
           {/if}
         </div>
       {/each}
@@ -267,17 +337,27 @@
           <div class="dep-layer-label">Layer {depth}</div>
           <div class="dep-layer-nodes">
             {#each nodes as node (node.storyId)}
-              <div class="dep-node" class:ready={node.isReady} class:blocked={!node.isReady && node.blockedByCount > 0}>
+              <div
+                class="dep-node"
+                class:ready={node.isReady}
+                class:blocked={!node.isReady && node.blockedByCount > 0}
+              >
                 <span class="node-status" style:color={statusColor(node.status)}>
                   {statusIcon(node.status)}
                 </span>
                 <span class="node-title" title={node.title}>{node.title}</span>
                 <div class="node-badges">
                   {#if node.blocksCount > 0}
-                    <span class="node-badge blocks" title="Blocks {node.blocksCount} story(ies)">↓{node.blocksCount}</span>
+                    <span class="node-badge blocks" title="Blocks {node.blocksCount} story(ies)"
+                      >↓{node.blocksCount}</span
+                    >
                   {/if}
                   {#if node.blockedByCount > 0}
-                    <span class="node-badge blocked" title="Blocked by {node.blockedByCount} story(ies)">↑{node.blockedByCount}</span>
+                    <span
+                      class="node-badge blocked"
+                      title="Blocked by {node.blockedByCount} story(ies)"
+                      >↑{node.blockedByCount}</span
+                    >
                   {/if}
                 </div>
               </div>
@@ -462,7 +542,8 @@
     line-height: 1.3;
   }
 
-  .dep-loading, .dep-error {
+  .dep-loading,
+  .dep-error {
     font-size: 11px;
     color: var(--text-tertiary);
     padding: 8px;
@@ -561,7 +642,8 @@
     max-width: 80px;
   }
 
-  .dep-edit-btn, .dep-remove-btn {
+  .dep-edit-btn,
+  .dep-remove-btn {
     font-size: 12px;
     padding: 0 4px;
     color: var(--text-tertiary);

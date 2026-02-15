@@ -37,10 +37,14 @@ class LoopOrchestrator {
 
     // Validate that the PRD has at least one pending story
     const storyCount = db
-      .query("SELECT COUNT(*) as count FROM prd_stories WHERE prd_id = ? AND status IN ('pending', 'in_progress')")
+      .query(
+        "SELECT COUNT(*) as count FROM prd_stories WHERE prd_id = ? AND status IN ('pending', 'in_progress')",
+      )
       .get(prdId) as any;
     if (!storyCount || storyCount.count === 0) {
-      throw new Error('Cannot start loop: PRD has no pending stories. Add at least one story first.');
+      throw new Error(
+        'Cannot start loop: PRD has no pending stories. Add at least one story first.',
+      );
     }
 
     const loopId = nanoid(12);
@@ -101,9 +105,7 @@ class LoopOrchestrator {
     const db = getDb();
     let rows: any[];
     if (status) {
-      rows = db
-        .query('SELECT * FROM loops WHERE status = ? ORDER BY started_at DESC')
-        .all(status);
+      rows = db.query('SELECT * FROM loops WHERE status = ? ORDER BY started_at DESC').all(status);
     } else {
       rows = db.query('SELECT * FROM loops ORDER BY started_at DESC LIMIT 50').all();
     }
@@ -168,7 +170,9 @@ class LoopRunner {
       if (!story) {
         // Check if all done or all failed
         const stories = this.getAllStories();
-        const allCompleted = stories.every((s) => s.status === 'completed' || s.status === 'skipped');
+        const allCompleted = stories.every(
+          (s) => s.status === 'completed' || s.status === 'skipped',
+        );
 
         if (allCompleted) {
           this.updateLoopDb({ status: 'completed', completed_at: Date.now() });
@@ -295,9 +299,7 @@ class LoopRunner {
 
       // Run quality checks
       let qualityResults: QualityCheckResult[] = [];
-      const checksToRun = this.config.qualityChecks.length > 0
-        ? this.config.qualityChecks
-        : [];
+      const checksToRun = this.config.qualityChecks.length > 0 ? this.config.qualityChecks : [];
 
       if (checksToRun.length > 0) {
         qualityResults = await runAllQualityChecks(checksToRun, this.projectPath);
@@ -331,10 +333,9 @@ class LoopRunner {
       if (passed) {
         // Story succeeded!
         this.updateStory(story.id, { status: 'completed' });
-        db.query("UPDATE tasks SET status = 'completed', active_form = NULL, updated_at = ? WHERE id = ?").run(
-          Date.now(),
-          taskId,
-        );
+        db.query(
+          "UPDATE tasks SET status = 'completed', active_form = NULL, updated_at = ? WHERE id = ?",
+        ).run(Date.now(), taskId);
 
         // Increment completed counter
         const loop = db.query('SELECT * FROM loops WHERE id = ?').get(this.loopId) as any;
@@ -360,7 +361,11 @@ class LoopRunner {
           }
         }
 
-        this.emitEvent('story_completed', { storyId: story.id, storyTitle: story.title, iteration });
+        this.emitEvent('story_completed', {
+          storyId: story.id,
+          storyTitle: story.title,
+          iteration,
+        });
         this.addLogEntry({
           iteration,
           storyId: story.id,
@@ -376,7 +381,10 @@ class LoopRunner {
         // Story failed
         const failReason = hasAgentError
           ? `Agent error: ${agentError}`
-          : `Quality checks failed: ${qualityResults.filter((qr) => !qr.passed).map((qr) => qr.checkName).join(', ')}`;
+          : `Quality checks failed: ${qualityResults
+              .filter((qr) => !qr.passed)
+              .map((qr) => qr.checkName)
+              .join(', ')}`;
 
         // Record learning
         this.recordLearning(story, failReason, qualityResults);
@@ -385,20 +393,18 @@ class LoopRunner {
         const updatedStory = this.getStory(story.id);
         if (updatedStory && updatedStory.attempts >= updatedStory.maxAttempts) {
           this.updateStory(story.id, { status: 'failed' });
-          db.query("UPDATE tasks SET status = 'pending', active_form = NULL, updated_at = ? WHERE id = ?").run(
-            Date.now(),
-            taskId,
-          );
+          db.query(
+            "UPDATE tasks SET status = 'pending', active_form = NULL, updated_at = ? WHERE id = ?",
+          ).run(Date.now(), taskId);
 
           const loop = db.query('SELECT * FROM loops WHERE id = ?').get(this.loopId) as any;
           this.updateLoopDb({ total_stories_failed: (loop?.total_stories_failed || 0) + 1 });
         } else {
           // Reset to pending for retry
           this.updateStory(story.id, { status: 'pending' });
-          db.query("UPDATE tasks SET status = 'pending', active_form = NULL, updated_at = ? WHERE id = ?").run(
-            Date.now(),
-            taskId,
-          );
+          db.query(
+            "UPDATE tasks SET status = 'pending', active_form = NULL, updated_at = ? WHERE id = ?",
+          ).run(Date.now(), taskId);
         }
 
         this.emitEvent('story_failed', {
@@ -461,9 +467,7 @@ class LoopRunner {
 
   private selectNextStory(): UserStory | null {
     const stories = this.getAllStories();
-    const completedIds = new Set(
-      stories.filter((s) => s.status === 'completed').map((s) => s.id),
-    );
+    const completedIds = new Set(stories.filter((s) => s.status === 'completed').map((s) => s.id));
 
     const eligible = stories.filter((s) => {
       if (s.status !== 'pending') return false;
@@ -555,8 +559,7 @@ ${criteria}
       for (const learning of story.learnings) {
         prompt += `- ${learning}\n`;
       }
-      prompt +=
-        '\nPlease address these issues in this attempt. Do not repeat the same mistakes.';
+      prompt += '\nPlease address these issues in this attempt. Do not repeat the same mistakes.';
     }
 
     // Add progress context
@@ -827,10 +830,7 @@ ${criteria}
     }
   }
 
-  private emitEvent(
-    event: StreamLoopEvent['event'],
-    data: StreamLoopEvent['data'],
-  ): void {
+  private emitEvent(event: StreamLoopEvent['event'], data: StreamLoopEvent['data']): void {
     const evt: StreamLoopEvent = { type: 'loop_event', loopId: this.loopId, event, data };
     this.events.emit('loop_event', evt);
   }

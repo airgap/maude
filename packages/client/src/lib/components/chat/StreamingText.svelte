@@ -13,7 +13,7 @@
 </script>
 
 <div class="streaming-text-wrapper" class:active={streaming}>
-  <div class="prose" class:streaming={streaming}>
+  <div class="prose" class:streaming>
     {@html renderMarkdownPartial(text)}
   </div>
   {#if streaming}
@@ -61,7 +61,9 @@
     display: inline-block;
     margin-left: 2px;
     color: var(--accent-primary);
-    animation: cursorBlink 0.8s step-end infinite, cursorGlow 2s ease-in-out infinite;
+    animation:
+      cursorBlink 0.8s step-end infinite,
+      cursorGlow 2s ease-in-out infinite;
     text-shadow: 0 0 8px rgba(0, 180, 255, 0.8);
     font-weight: bold;
   }
@@ -102,11 +104,15 @@
   @keyframes cursorGlow {
     0%,
     100% {
-      text-shadow: 0 0 8px rgba(0, 180, 255, 0.8), 0 0 12px rgba(0, 180, 255, 0.4);
+      text-shadow:
+        0 0 8px rgba(0, 180, 255, 0.8),
+        0 0 12px rgba(0, 180, 255, 0.4);
       transform: scaleY(1);
     }
     50% {
-      text-shadow: 0 0 16px rgba(0, 180, 255, 1), 0 0 24px rgba(0, 180, 255, 0.6),
+      text-shadow:
+        0 0 16px rgba(0, 180, 255, 1),
+        0 0 24px rgba(0, 180, 255, 0.6),
         0 0 32px rgba(0, 255, 255, 0.3);
       transform: scaleY(1.1);
     }

@@ -67,44 +67,62 @@
 
   function sizeColor(size: string): string {
     switch (size) {
-      case 'small': return 'var(--accent-secondary)';
-      case 'medium': return 'var(--accent-warning, #e6a817)';
-      case 'large': return 'var(--accent-error)';
-      default: return 'var(--text-tertiary)';
+      case 'small':
+        return 'var(--accent-secondary)';
+      case 'medium':
+        return 'var(--accent-warning, #e6a817)';
+      case 'large':
+        return 'var(--accent-error)';
+      default:
+        return 'var(--text-tertiary)';
     }
   }
 
   function confidenceColor(confidence: string): string {
     switch (confidence) {
-      case 'high': return 'var(--accent-secondary)';
-      case 'medium': return 'var(--accent-warning, #e6a817)';
-      case 'low': return 'var(--accent-error)';
-      default: return 'var(--text-tertiary)';
+      case 'high':
+        return 'var(--accent-secondary)';
+      case 'medium':
+        return 'var(--accent-warning, #e6a817)';
+      case 'low':
+        return 'var(--accent-error)';
+      default:
+        return 'var(--text-tertiary)';
     }
   }
 
   function impactIcon(impact: string): string {
     switch (impact) {
-      case 'increases': return '↑';
-      case 'decreases': return '↓';
-      default: return '→';
+      case 'increases':
+        return '↑';
+      case 'decreases':
+        return '↓';
+      default:
+        return '→';
     }
   }
 
   function impactColor(impact: string): string {
     switch (impact) {
-      case 'increases': return 'var(--accent-error)';
-      case 'decreases': return 'var(--accent-secondary)';
-      default: return 'var(--text-tertiary)';
+      case 'increases':
+        return 'var(--accent-error)';
+      case 'decreases':
+        return 'var(--accent-secondary)';
+      default:
+        return 'var(--text-tertiary)';
     }
   }
 
   function weightLabel(weight: string): string {
     switch (weight) {
-      case 'major': return 'Major';
-      case 'moderate': return 'Moderate';
-      case 'minor': return 'Minor';
-      default: return weight;
+      case 'major':
+        return 'Major';
+      case 'moderate':
+        return 'Moderate';
+      case 'minor':
+        return 'Minor';
+      default:
+        return weight;
     }
   }
 
@@ -117,7 +135,12 @@
 
   // Auto-start estimation when modal opens
   $effect(() => {
-    if (loopStore.estimatingStoryId && !loopStore.estimating && !loopStore.estimationResult && !story?.estimate) {
+    if (
+      loopStore.estimatingStoryId &&
+      !loopStore.estimating &&
+      !loopStore.estimationResult &&
+      !story?.estimate
+    ) {
       startEstimation();
     }
   });
@@ -130,7 +153,14 @@
     <div class="modal-header">
       <h2>Story Estimation</h2>
       <button class="close-btn" onclick={close} title="Close">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <svg
+          width="16"
+          height="16"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+        >
           <line x1="18" y1="6" x2="6" y2="18"></line>
           <line x1="6" y1="6" x2="18" y2="18"></line>
         </svg>
@@ -254,16 +284,15 @@
                 <!-- svelte-ignore a11y_label_has_associated_control -->
                 <label class="override-field full">
                   <span class="field-label">Reasoning (optional)</span>
-                  <textarea
-                    bind:value={manualReasoning}
-                    placeholder="Why this estimate?"
-                    rows="2"
+                  <textarea bind:value={manualReasoning} placeholder="Why this estimate?" rows="2"
                   ></textarea>
                 </label>
               </div>
               <div class="override-actions">
                 <button class="btn-save" onclick={saveManual}>Save Override</button>
-                <button class="btn-cancel-override" onclick={() => showManualOverride = false}>Cancel</button>
+                <button class="btn-cancel-override" onclick={() => (showManualOverride = false)}
+                  >Cancel</button
+                >
               </div>
             </div>
           </div>
@@ -302,9 +331,7 @@
           {currentEstimate ? 'Re-estimate' : 'Estimate'}
         </button>
         {#if currentEstimate && !showManualOverride}
-          <button class="btn-override" onclick={openManualOverride}>
-            Override
-          </button>
+          <button class="btn-override" onclick={openManualOverride}> Override </button>
         {/if}
       {/if}
     </div>

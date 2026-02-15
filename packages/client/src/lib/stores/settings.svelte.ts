@@ -14,6 +14,7 @@ interface SettingsState {
   autoMemoryEnabled: boolean;
   fontSize: number;
   fontFamily: string;
+  fontFamilySans: string;
   showThinkingBlocks: boolean;
   showToolDetails: boolean;
   autoScroll: boolean;
@@ -51,7 +52,8 @@ const defaults: SettingsState = {
   ],
   autoMemoryEnabled: true,
   fontSize: 14,
-  fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
+  fontFamily: 'share-tech-mono',
+  fontFamilySans: 'rajdhani',
   showThinkingBlocks: true,
   showToolDetails: true,
   autoScroll: true,
@@ -71,7 +73,17 @@ function loadFromStorage(): SettingsState {
   if (typeof window === 'undefined') return defaults;
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    if (raw) return { ...defaults, ...JSON.parse(raw) };
+    if (raw) {
+      const parsed = { ...defaults, ...JSON.parse(raw) };
+      // Migrate old CSS-string fontFamily values to font IDs
+      if (parsed.fontFamily && parsed.fontFamily.includes("'")) {
+        parsed.fontFamily = defaults.fontFamily;
+      }
+      if (!parsed.fontFamilySans) {
+        parsed.fontFamilySans = defaults.fontFamilySans;
+      }
+      return parsed;
+    }
   } catch {}
   return defaults;
 }
@@ -155,6 +167,9 @@ function createSettingsStore() {
     },
     get fontFamily() {
       return state.fontFamily;
+    },
+    get fontFamilySans() {
+      return state.fontFamilySans;
     },
     get showThinkingBlocks() {
       return state.showThinkingBlocks;

@@ -123,14 +123,7 @@ export interface IterationLogEntry {
   iteration: number;
   storyId: string;
   storyTitle: string;
-  action:
-    | 'started'
-    | 'quality_check'
-    | 'passed'
-    | 'failed'
-    | 'committed'
-    | 'skipped'
-    | 'learning';
+  action: 'started' | 'quality_check' | 'passed' | 'failed' | 'committed' | 'skipped' | 'learning';
   detail: string;
   timestamp: number;
   qualityResults?: QualityCheckResult[];
@@ -217,9 +210,9 @@ export type DependencyType = 'blocks' | 'blocked_by';
 /** A directional dependency edge between two stories */
 export interface StoryDependency {
   fromStoryId: string; // this story...
-  toStoryId: string;   // ...depends on / blocks this story
+  toStoryId: string; // ...depends on / blocks this story
   type: DependencyType; // relationship direction
-  reason?: string;     // why this dependency exists
+  reason?: string; // why this dependency exists
   autoDetected: boolean; // was this found by AI analysis?
 }
 
@@ -248,7 +241,7 @@ export interface DependencyNode {
 
 export interface DependencyEdge {
   from: string; // story ID that blocks
-  to: string;   // story ID that is blocked
+  to: string; // story ID that is blocked
   reason?: string;
 }
 
@@ -292,7 +285,13 @@ export interface SprintValidationWarning {
 export type ACValidationSeverity = 'error' | 'warning' | 'info';
 
 /** Category of the validation issue */
-export type ACValidationCategory = 'vague' | 'unmeasurable' | 'untestable' | 'too_broad' | 'ambiguous' | 'missing_detail';
+export type ACValidationCategory =
+  | 'vague'
+  | 'unmeasurable'
+  | 'untestable'
+  | 'too_broad'
+  | 'ambiguous'
+  | 'missing_detail';
 
 /** A single validation issue for one acceptance criterion */
 export interface ACValidationIssue {
@@ -346,7 +345,7 @@ export type EstimateConfidence = 'low' | 'medium' | 'high';
 
 /** A single factor that influenced the estimate */
 export interface EstimationFactor {
-  factor: string;       // e.g. "Multiple API integrations required"
+  factor: string; // e.g. "Multiple API integrations required"
   impact: 'increases' | 'decreases' | 'neutral';
   weight: 'minor' | 'moderate' | 'major';
 }
@@ -355,13 +354,13 @@ export interface EstimationFactor {
 export interface StoryEstimate {
   storyId: string;
   size: StorySize;
-  storyPoints: number;           // Fibonacci: 1, 2, 3, 5, 8, 13
+  storyPoints: number; // Fibonacci: 1, 2, 3, 5, 8, 13
   confidence: EstimateConfidence;
-  confidenceScore: number;       // 0-100 numeric confidence
+  confidenceScore: number; // 0-100 numeric confidence
   factors: EstimationFactor[];
-  reasoning: string;             // Brief explanation of the estimate
+  reasoning: string; // Brief explanation of the estimate
   suggestedBreakdown?: string[]; // For large stories, suggest sub-tasks
-  isManualOverride: boolean;     // Whether the user overrode the AI estimate
+  isManualOverride: boolean; // Whether the user overrode the AI estimate
 }
 
 /** Request to estimate a story */
@@ -461,23 +460,23 @@ export type PRDSectionName =
 /** Analysis of a single PRD section */
 export interface PRDSectionAnalysis {
   section: PRDSectionName;
-  label: string;              // Human-readable section name
-  present: boolean;           // Whether the section is detected
+  label: string; // Human-readable section name
+  present: boolean; // Whether the section is detected
   severity: PRDSectionSeverity; // How critical the missing/weak section is
-  score: number;              // 0-100 score for this section's quality
-  feedback: string;           // Explanation of what's missing or weak
-  questions: string[];        // Suggested questions to fill gaps
+  score: number; // 0-100 score for this section's quality
+  feedback: string; // Explanation of what's missing or weak
+  questions: string[]; // Suggested questions to fill gaps
 }
 
 /** Full PRD completeness analysis result */
 export interface PRDCompletenessAnalysis {
   prdId: string;
-  overallScore: number;       // 0-100 percentage completeness
-  overallLabel: string;       // e.g. "Excellent", "Good", "Needs Work"
+  overallScore: number; // 0-100 percentage completeness
+  overallLabel: string; // e.g. "Excellent", "Good", "Needs Work"
   sections: PRDSectionAnalysis[];
-  summary: string;            // Brief overall assessment
+  summary: string; // Brief overall assessment
   suggestedQuestions: string[]; // Top questions to fill critical gaps
-  analyzedAt: number;         // Timestamp of analysis
+  analyzedAt: number; // Timestamp of analysis
 }
 
 /** Request to analyze PRD completeness */
@@ -503,12 +502,12 @@ export interface StoryTemplate {
   name: string;
   description: string;
   category: StoryTemplateCategory;
-  titleTemplate: string;              // Template title with placeholders e.g. "[Feature] {{feature_name}}"
-  descriptionTemplate: string;        // Template description with placeholder guidance
+  titleTemplate: string; // Template title with placeholders e.g. "[Feature] {{feature_name}}"
+  descriptionTemplate: string; // Template description with placeholder guidance
   acceptanceCriteriaTemplates: string[]; // Pre-filled AC examples for this story type
   priority: StoryPriority;
   tags: string[];
-  isBuiltIn: boolean;                 // true = system template, false = user-created
+  isBuiltIn: boolean; // true = system template, false = user-created
   createdAt: number;
   updatedAt: number;
 }
@@ -547,7 +546,7 @@ export interface CreateStoryFromTemplateResponse {
 
 /** A single factor that influenced the priority recommendation */
 export interface PriorityFactor {
-  factor: string;           // e.g. "Blocks 3 other stories"
+  factor: string; // e.g. "Blocks 3 other stories"
   category: 'dependency' | 'risk' | 'scope' | 'user_impact';
   impact: 'increases' | 'decreases' | 'neutral';
   weight: 'minor' | 'moderate' | 'major';
@@ -558,10 +557,10 @@ export interface PriorityRecommendation {
   storyId: string;
   suggestedPriority: StoryPriority;
   currentPriority: StoryPriority;
-  confidence: number;            // 0-100
+  confidence: number; // 0-100
   factors: PriorityFactor[];
-  explanation: string;           // Human-readable explanation for the priority
-  isManualOverride: boolean;     // Whether the user overrode the AI recommendation
+  explanation: string; // Human-readable explanation for the priority
+  isManualOverride: boolean; // Whether the user overrode the AI recommendation
 }
 
 /** Response from priority recommendation for a single story */
@@ -579,7 +578,7 @@ export interface PriorityRecommendationBulkResponse {
     highCount: number;
     mediumCount: number;
     lowCount: number;
-    changedCount: number;       // How many stories had their priority changed from current
+    changedCount: number; // How many stories had their priority changed from current
   };
 }
 

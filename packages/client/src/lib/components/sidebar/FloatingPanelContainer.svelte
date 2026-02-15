@@ -4,12 +4,12 @@
   import FloatingPanel from './FloatingPanel.svelte';
 
   // --- Viewport resize clamping ---
-  // When the window resizes, reposition any panels that would overflow the viewport.
+  // When the window resizes, reposition any free-floating panels that would overflow the viewport.
   function clampPanelsToViewport() {
     const vw = window.innerWidth;
     const vh = window.innerHeight;
 
-    for (const panel of sidebarLayoutStore.floatingPanels) {
+    for (const panel of sidebarLayoutStore.freeFloatingPanels) {
       let clamped = false;
       let newX = panel.x;
       let newY = panel.y;
@@ -41,12 +41,14 @@
   });
 </script>
 
-{#each sidebarLayoutStore.floatingPanels as panel (panel.tabId)}
+<!-- Free-floating panels (rendered as fixed overlays) -->
+{#each sidebarLayoutStore.freeFloatingPanels as panel (panel.tabId)}
   <FloatingPanel
     tabId={panel.tabId}
     x={panel.x}
     y={panel.y}
     width={panel.width}
     height={panel.height}
+    docked={panel.docked}
   />
 {/each}

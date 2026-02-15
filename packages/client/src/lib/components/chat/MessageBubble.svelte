@@ -127,7 +127,10 @@
             <span class="model-label">{message.model.split('-').slice(1, 3).join(' ')}</span>
           {/if}
           <span class="timestamp">
-            {new Date(message.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+            {new Date(message.timestamp).toLocaleTimeString([], {
+              hour: '2-digit',
+              minute: '2-digit',
+            })}
           </span>
         </div>
 

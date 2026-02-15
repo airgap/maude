@@ -50,9 +50,7 @@ export const streamState = {
   toolResults: $state<Map<string, { result: string; isError: boolean; duration?: number }>>(
     new Map(),
   ),
-  verifications: $state<
-    Map<string, { passed: boolean; issues: any[]; tool: string }>
-  >(new Map()),
+  verifications: $state<Map<string, { passed: boolean; issues: any[]; tool: string }>>(new Map()),
   indexOffset: 0,
   currentParentId: $state<string | null>(null),
 };
@@ -122,7 +120,12 @@ function createStreamStore() {
     },
 
     handleEvent(event: StreamEvent) {
-      console.log('[streamStore.handleEvent] Processing:', event.type, 'contentBlocks.length:', state.contentBlocks.length);
+      console.log(
+        '[streamStore.handleEvent] Processing:',
+        event.type,
+        'contentBlocks.length:',
+        state.contentBlocks.length,
+      );
       switch (event.type) {
         case 'message_start':
           state.status = 'streaming';
@@ -149,7 +152,10 @@ function createStreamStore() {
                 parentToolUseId: pid,
               },
             ];
-            console.log('[streamStore] Added thinking block, new length:', state.contentBlocks.length);
+            console.log(
+              '[streamStore] Added thinking block, new length:',
+              state.contentBlocks.length,
+            );
           } else if (event.content_block.type === 'tool_use') {
             state.contentBlocks = [
               ...state.contentBlocks,
@@ -161,7 +167,10 @@ function createStreamStore() {
                 parentToolUseId: pid,
               },
             ];
-            console.log('[streamStore] Added tool_use block, new length:', state.contentBlocks.length);
+            console.log(
+              '[streamStore] Added tool_use block, new length:',
+              state.contentBlocks.length,
+            );
           }
           break;
         }
@@ -188,7 +197,11 @@ function createStreamStore() {
             }
           }
 
-          state.contentBlocks = [...state.contentBlocks.slice(0, idx), block, ...state.contentBlocks.slice(idx + 1)];
+          state.contentBlocks = [
+            ...state.contentBlocks.slice(0, idx),
+            block,
+            ...state.contentBlocks.slice(idx + 1),
+          ];
           break;
         }
 
@@ -276,7 +289,9 @@ function createStreamStore() {
             }
           }
 
-          state.pendingApprovals = state.pendingApprovals.filter((a) => a.toolCallId !== event.toolCallId);
+          state.pendingApprovals = state.pendingApprovals.filter(
+            (a) => a.toolCallId !== event.toolCallId,
+          );
           if (state.pendingApprovals.length === 0 && state.status === 'tool_pending') {
             state.status = 'streaming';
           }

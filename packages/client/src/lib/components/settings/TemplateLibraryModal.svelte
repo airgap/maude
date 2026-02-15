@@ -199,7 +199,14 @@
       <div class="header-left">
         {#if phase !== 'browse'}
           <button class="back-btn" onclick={backToBrowse} title="Back to templates">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <svg
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+            >
               <polyline points="15 18 9 12 15 6"></polyline>
             </svg>
           </button>
@@ -213,7 +220,14 @@
         </h2>
       </div>
       <button class="close-btn" onclick={close} title="Close">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <svg
+          width="16"
+          height="16"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+        >
           <line x1="18" y1="6" x2="6" y2="18"></line>
           <line x1="6" y1="6" x2="18" y2="18"></line>
         </svg>
@@ -226,20 +240,20 @@
           <div class="spinner-large"></div>
           <p>Loading templates...</p>
         </div>
-
       {:else if phase === 'browse'}
         <!-- Category filter -->
         <div class="filter-bar">
           <button
             class="filter-chip"
             class:active={filterCategory === null}
-            onclick={() => filterCategory = null}
-          >All</button>
+            onclick={() => (filterCategory = null)}>All</button
+          >
           {#each Object.entries(categoryLabels) as [cat, label]}
             <button
               class="filter-chip"
               class:active={filterCategory === cat}
-              onclick={() => filterCategory = filterCategory === cat ? null : cat as StoryTemplateCategory}
+              onclick={() =>
+                (filterCategory = filterCategory === cat ? null : (cat as StoryTemplateCategory))}
             >
               <span class="chip-icon">{categoryIcons[cat as StoryTemplateCategory]}</span>
               {label}
@@ -253,23 +267,29 @@
             <button class="template-card" onclick={() => selectTemplate(template)}>
               <div class="card-header">
                 <span class="card-category" data-cat={template.category}>
-                  {categoryIcons[template.category]} {categoryLabels[template.category]}
+                  {categoryIcons[template.category]}
+                  {categoryLabels[template.category]}
                 </span>
                 {#if template.isBuiltIn}
                   <span class="built-in-badge">Built-in</span>
                 {:else}
                   <button
                     class="card-delete"
-                    onclick={(e) => { e.stopPropagation(); handleDeleteTemplate(template); }}
-                    title="Delete template"
-                  >x</button>
+                    onclick={(e) => {
+                      e.stopPropagation();
+                      handleDeleteTemplate(template);
+                    }}
+                    title="Delete template">x</button
+                  >
                 {/if}
               </div>
               <h3 class="card-title">{template.name}</h3>
               <p class="card-desc">{template.description}</p>
               <div class="card-meta">
                 <span class="criteria-count">{template.acceptanceCriteriaTemplates.length} AC</span>
-                <span class="priority-tag" data-priority={template.priority}>{template.priority}</span>
+                <span class="priority-tag" data-priority={template.priority}
+                  >{template.priority}</span
+                >
               </div>
             </button>
           {/each}
@@ -284,15 +304,17 @@
             {/if}
           </div>
         {/if}
-
       {:else if phase === 'preview' && selectedTemplate}
         <!-- Template preview -->
         <div class="preview-section">
           <div class="preview-header">
             <span class="card-category" data-cat={selectedTemplate.category}>
-              {categoryIcons[selectedTemplate.category]} {categoryLabels[selectedTemplate.category]}
+              {categoryIcons[selectedTemplate.category]}
+              {categoryLabels[selectedTemplate.category]}
             </span>
-            <span class="priority-tag" data-priority={selectedTemplate.priority}>{selectedTemplate.priority}</span>
+            <span class="priority-tag" data-priority={selectedTemplate.priority}
+              >{selectedTemplate.priority}</span
+            >
             {#if selectedTemplate.isBuiltIn}
               <span class="built-in-badge">Built-in</span>
             {/if}
@@ -308,11 +330,15 @@
 
           <div class="preview-field">
             <label>Description Template</label>
-            <div class="preview-value description-preview">{selectedTemplate.descriptionTemplate}</div>
+            <div class="preview-value description-preview">
+              {selectedTemplate.descriptionTemplate}
+            </div>
           </div>
 
           <div class="preview-field">
-            <label>Acceptance Criteria ({selectedTemplate.acceptanceCriteriaTemplates.length})</label>
+            <label
+              >Acceptance Criteria ({selectedTemplate.acceptanceCriteriaTemplates.length})</label
+            >
             <ul class="ac-list">
               {#each selectedTemplate.acceptanceCriteriaTemplates as ac, i}
                 <li><span class="ac-index">{i + 1}.</span> {ac}</li>
@@ -328,7 +354,6 @@
             </div>
           {/if}
         </div>
-
       {:else if phase === 'use' && selectedTemplate}
         <!-- Use template: fill variables -->
         <div class="use-section">
@@ -372,7 +397,6 @@
             </div>
           </div>
         </div>
-
       {:else if phase === 'create'}
         <!-- Create custom template form -->
         <div class="create-form">
@@ -393,23 +417,41 @@
 
           <div class="form-field">
             <label for="tmpl-desc">Description</label>
-            <input id="tmpl-desc" bind:value={newDescription} placeholder="Brief description of when to use this template" />
+            <input
+              id="tmpl-desc"
+              bind:value={newDescription}
+              placeholder="Brief description of when to use this template"
+            />
           </div>
 
           <div class="form-field">
             <label for="tmpl-title">Title Template</label>
-            <input id="tmpl-title" bind:value={newTitleTemplate} placeholder={"e.g. As a {{user_role}}, I want to {{action}}"} />
-            <span class="field-hint">Use {"{{variable_name}}"} for placeholders</span>
+            <input
+              id="tmpl-title"
+              bind:value={newTitleTemplate}
+              placeholder={'e.g. As a {{user_role}}, I want to {{action}}'}
+            />
+            <span class="field-hint">Use {'{{variable_name}}'} for placeholders</span>
           </div>
 
           <div class="form-field">
             <label for="tmpl-body">Description Template</label>
-            <textarea id="tmpl-body" bind:value={newDescriptionTemplate} rows="5" placeholder="Template body with placeholder guidance..."></textarea>
+            <textarea
+              id="tmpl-body"
+              bind:value={newDescriptionTemplate}
+              rows="5"
+              placeholder="Template body with placeholder guidance..."
+            ></textarea>
           </div>
 
           <div class="form-field">
             <label for="tmpl-criteria">Acceptance Criteria (one per line)</label>
-            <textarea id="tmpl-criteria" bind:value={newCriteriaText} rows="4" placeholder="Each line becomes one acceptance criterion..."></textarea>
+            <textarea
+              id="tmpl-criteria"
+              bind:value={newCriteriaText}
+              rows="4"
+              placeholder="Each line becomes one acceptance criterion..."
+            ></textarea>
           </div>
 
           <div class="form-row">
@@ -437,23 +479,19 @@
 
     <div class="modal-footer">
       {#if phase === 'browse'}
-        <button class="btn-create-new" onclick={openCreateForm}>
-          + New Template
-        </button>
+        <button class="btn-create-new" onclick={openCreateForm}> + New Template </button>
         <div class="footer-spacer"></div>
         <button class="btn-cancel" onclick={close}>Close</button>
       {:else if phase === 'preview'}
         <button class="btn-cancel" onclick={backToBrowse}>Back</button>
         <div class="footer-spacer"></div>
         {#if loopStore.selectedPrdId}
-          <button class="btn-primary" onclick={startUseTemplate}>
-            Use Template
-          </button>
+          <button class="btn-primary" onclick={startUseTemplate}> Use Template </button>
         {:else}
           <span class="no-prd-hint">Select a PRD to use templates</span>
         {/if}
       {:else if phase === 'use'}
-        <button class="btn-cancel" onclick={() => phase = 'preview'}>Back</button>
+        <button class="btn-cancel" onclick={() => (phase = 'preview')}>Back</button>
         <div class="footer-spacer"></div>
         <button class="btn-primary" onclick={handleUseTemplate} disabled={usingTemplate}>
           {#if usingTemplate}Creating...{:else}Create Story{/if}
@@ -629,11 +667,26 @@
     background: var(--bg-tertiary);
     color: var(--text-tertiary);
   }
-  .card-category[data-cat="feature"] { color: var(--accent-primary); background: rgba(0, 180, 255, 0.1); }
-  .card-category[data-cat="bug"] { color: var(--accent-error); background: rgba(239, 68, 68, 0.1); }
-  .card-category[data-cat="tech_debt"] { color: var(--accent-warning, #e6a817); background: rgba(230, 168, 23, 0.1); }
-  .card-category[data-cat="spike"] { color: var(--accent-secondary); background: rgba(34, 197, 94, 0.1); }
-  .card-category[data-cat="custom"] { color: var(--text-secondary); background: var(--bg-tertiary); }
+  .card-category[data-cat='feature'] {
+    color: var(--accent-primary);
+    background: rgba(0, 180, 255, 0.1);
+  }
+  .card-category[data-cat='bug'] {
+    color: var(--accent-error);
+    background: rgba(239, 68, 68, 0.1);
+  }
+  .card-category[data-cat='tech_debt'] {
+    color: var(--accent-warning, #e6a817);
+    background: rgba(230, 168, 23, 0.1);
+  }
+  .card-category[data-cat='spike'] {
+    color: var(--accent-secondary);
+    background: rgba(34, 197, 94, 0.1);
+  }
+  .card-category[data-cat='custom'] {
+    color: var(--text-secondary);
+    background: var(--bg-tertiary);
+  }
 
   .built-in-badge {
     font-size: 8px;
@@ -692,10 +745,22 @@
     text-transform: uppercase;
     letter-spacing: 0.3px;
   }
-  .priority-tag[data-priority="critical"] { color: var(--accent-error); background: rgba(239, 68, 68, 0.1); }
-  .priority-tag[data-priority="high"] { color: var(--accent-warning, #e6a817); background: rgba(230, 168, 23, 0.1); }
-  .priority-tag[data-priority="medium"] { color: var(--accent-primary); background: rgba(0, 180, 255, 0.1); }
-  .priority-tag[data-priority="low"] { color: var(--text-tertiary); background: var(--bg-tertiary); }
+  .priority-tag[data-priority='critical'] {
+    color: var(--accent-error);
+    background: rgba(239, 68, 68, 0.1);
+  }
+  .priority-tag[data-priority='high'] {
+    color: var(--accent-warning, #e6a817);
+    background: rgba(230, 168, 23, 0.1);
+  }
+  .priority-tag[data-priority='medium'] {
+    color: var(--accent-primary);
+    background: rgba(0, 180, 255, 0.1);
+  }
+  .priority-tag[data-priority='low'] {
+    color: var(--text-tertiary);
+    background: var(--bg-tertiary);
+  }
 
   /* Preview */
   .preview-section {

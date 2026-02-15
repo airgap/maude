@@ -5,7 +5,8 @@
 
   // The story to validate
   let story = $derived(
-    loopStore.selectedPrd?.stories?.find((s) => s.id === loopStore.validatingCriteriaStoryId) || null,
+    loopStore.selectedPrd?.stories?.find((s) => s.id === loopStore.validatingCriteriaStoryId) ||
+      null,
   );
 
   // Track which suggestions the user has accepted (by criterion index)
@@ -99,31 +100,46 @@
 
   function severityColor(severity: string): string {
     switch (severity) {
-      case 'error': return 'var(--accent-error)';
-      case 'warning': return 'var(--accent-warning, #e6a817)';
-      case 'info': return 'var(--accent-primary)';
-      default: return 'var(--text-tertiary)';
+      case 'error':
+        return 'var(--accent-error)';
+      case 'warning':
+        return 'var(--accent-warning, #e6a817)';
+      case 'info':
+        return 'var(--accent-primary)';
+      default:
+        return 'var(--text-tertiary)';
     }
   }
 
   function severityIcon(severity: string): string {
     switch (severity) {
-      case 'error': return '✗';
-      case 'warning': return '⚠';
-      case 'info': return 'ℹ';
-      default: return '•';
+      case 'error':
+        return '✗';
+      case 'warning':
+        return '⚠';
+      case 'info':
+        return 'ℹ';
+      default:
+        return '•';
     }
   }
 
   function categoryLabel(category: string): string {
     switch (category) {
-      case 'vague': return 'Vague';
-      case 'unmeasurable': return 'Not Measurable';
-      case 'untestable': return 'Not Testable';
-      case 'too_broad': return 'Too Broad';
-      case 'ambiguous': return 'Ambiguous';
-      case 'missing_detail': return 'Missing Detail';
-      default: return category;
+      case 'vague':
+        return 'Vague';
+      case 'unmeasurable':
+        return 'Not Measurable';
+      case 'untestable':
+        return 'Not Testable';
+      case 'too_broad':
+        return 'Too Broad';
+      case 'ambiguous':
+        return 'Ambiguous';
+      case 'missing_detail':
+        return 'Missing Detail';
+      default:
+        return category;
     }
   }
 
@@ -154,15 +170,17 @@
   );
 
   let issueCount = $derived(
-    loopStore.criteriaValidationResult?.criteria.reduce(
-      (count, c) => count + c.issues.length,
+    loopStore.criteriaValidationResult?.criteria.reduce((count, c) => count + c.issues.length, 0) ||
       0,
-    ) || 0,
   );
 
   // Auto-start validation when modal opens
   $effect(() => {
-    if (loopStore.validatingCriteriaStoryId && !loopStore.validatingCriteria && !loopStore.criteriaValidationResult) {
+    if (
+      loopStore.validatingCriteriaStoryId &&
+      !loopStore.validatingCriteria &&
+      !loopStore.criteriaValidationResult
+    ) {
       startValidation();
     }
   });
@@ -175,7 +193,14 @@
     <div class="modal-header">
       <h2>Validate Acceptance Criteria</h2>
       <button class="close-btn" onclick={close} title="Close">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <svg
+          width="16"
+          height="16"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+        >
           <line x1="18" y1="6" x2="6" y2="18"></line>
           <line x1="6" y1="6" x2="18" y2="18"></line>
         </svg>
@@ -207,10 +232,16 @@
           <div class="score-header">
             <span class="score-label">Criteria Quality</span>
             <div class="score-row">
-              <span class="score-value" style:color={scoreColor(loopStore.criteriaValidationResult.overallScore)}>
+              <span
+                class="score-value"
+                style:color={scoreColor(loopStore.criteriaValidationResult.overallScore)}
+              >
                 {loopStore.criteriaValidationResult.overallScore}/100
               </span>
-              <span class="score-tag" style:background={scoreColor(loopStore.criteriaValidationResult.overallScore)}>
+              <span
+                class="score-tag"
+                style:background={scoreColor(loopStore.criteriaValidationResult.overallScore)}
+              >
                 {scoreLabel(loopStore.criteriaValidationResult.overallScore)}
               </span>
             </div>
@@ -232,7 +263,9 @@
 
         <!-- Criteria List -->
         <div class="criteria-section">
-          <h4 class="section-label">Criteria ({loopStore.criteriaValidationResult.criteria.length})</h4>
+          <h4 class="section-label">
+            Criteria ({loopStore.criteriaValidationResult.criteria.length})
+          </h4>
           <div class="criteria-list">
             {#each loopStore.criteriaValidationResult.criteria as criterion (criterion.index)}
               <div
@@ -245,8 +278,15 @@
                 <!-- Criterion header -->
                 <div class="criterion-header">
                   <span class="criterion-index">{criterion.index + 1}</span>
-                  <span class="criterion-status-icon" style:color={criterion.isValid ? 'var(--accent-secondary)' : severityColor(criterion.issues[0]?.severity || 'warning')}>
-                    {criterion.isValid ? '✓' : severityIcon(criterion.issues[0]?.severity || 'warning')}
+                  <span
+                    class="criterion-status-icon"
+                    style:color={criterion.isValid
+                      ? 'var(--accent-secondary)'
+                      : severityColor(criterion.issues[0]?.severity || 'warning')}
+                  >
+                    {criterion.isValid
+                      ? '✓'
+                      : severityIcon(criterion.issues[0]?.severity || 'warning')}
                   </span>
                   <span class="criterion-text">{criterion.text}</span>
                 </div>
@@ -255,7 +295,10 @@
                 {#if criterion.issues.length > 0}
                   <div class="issues-list">
                     {#each criterion.issues as issue}
-                      <div class="issue-item" style:border-left-color={severityColor(issue.severity)}>
+                      <div
+                        class="issue-item"
+                        style:border-left-color={severityColor(issue.severity)}
+                      >
                         <div class="issue-header-row">
                           <span class="issue-severity" style:color={severityColor(issue.severity)}>
                             {severityIcon(issue.severity)}
@@ -284,10 +327,7 @@
                         {acceptedSuggestions.has(criterion.index) ? '✓ Accepted' : 'Accept'}
                       </button>
                       {#if !criterion.isValid}
-                        <button
-                          class="btn-override"
-                          onclick={() => startOverride(criterion.index)}
-                        >
+                        <button class="btn-override" onclick={() => startOverride(criterion.index)}>
                           Override
                         </button>
                       {/if}
@@ -307,10 +347,16 @@
                       rows="2"
                     ></textarea>
                     <div class="override-actions">
-                      <button class="btn-confirm-override" onclick={() => confirmOverride(criterion.index)}>
+                      <button
+                        class="btn-confirm-override"
+                        onclick={() => confirmOverride(criterion.index)}
+                      >
                         Confirm Override
                       </button>
-                      <button class="btn-cancel-override" onclick={() => cancelOverride(criterion.index)}>
+                      <button
+                        class="btn-cancel-override"
+                        onclick={() => cancelOverride(criterion.index)}
+                      >
                         Cancel
                       </button>
                     </div>
@@ -322,7 +368,8 @@
                   <div class="override-confirmed">
                     <span class="override-badge">Overridden</span>
                     <span class="override-justification">
-                      {loopStore.criteriaOverrides.find((o) => o.criterionIndex === criterion.index)?.justification}
+                      {loopStore.criteriaOverrides.find((o) => o.criterionIndex === criterion.index)
+                        ?.justification}
                     </span>
                   </div>
                 {/if}
@@ -349,17 +396,9 @@
         {loopStore.criteriaValidationResult?.allValid ? 'Done' : 'Close'}
       </button>
       {#if loopStore.criteriaValidationResult && !loopStore.validatingCriteria}
-        <button
-          class="btn-revalidate"
-          onclick={startValidation}
-        >
-          Re-validate
-        </button>
+        <button class="btn-revalidate" onclick={startValidation}> Re-validate </button>
         {#if acceptedSuggestions.size > 0}
-          <button
-            class="btn-apply"
-            onclick={applyChanges}
-          >
+          <button class="btn-apply" onclick={applyChanges}>
             Apply {acceptedSuggestions.size} Suggestion{acceptedSuggestions.size === 1 ? '' : 's'}
           </button>
         {/if}

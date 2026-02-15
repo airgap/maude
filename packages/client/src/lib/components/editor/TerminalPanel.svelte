@@ -77,7 +77,7 @@
 
     const url = getWsUrl();
     ws = new WebSocket(url);
-    
+
     // Ensure terminal is ready before receiving messages
     // This is a workaround for a race condition where data arrives before terminal is fully rendered
     let isReady = false;
@@ -98,7 +98,7 @@
         ws?.send(`\x01${terminal.cols},${terminal.rows}`);
       }
     };
-    
+
     ws.onmessage = (e) => {
       if (isReady) {
         terminal?.write(e.data);

@@ -37,23 +37,33 @@
 
   function severityIcon(severity: PRDSectionSeverity): string {
     switch (severity) {
-      case 'critical': return '●';
-      case 'warning': return '●';
-      case 'info': return '●';
+      case 'critical':
+        return '●';
+      case 'warning':
+        return '●';
+      case 'info':
+        return '●';
     }
   }
 
   function severityLabel(severity: PRDSectionSeverity): string {
     switch (severity) {
-      case 'critical': return 'Critical';
-      case 'warning': return 'Warning';
-      case 'info': return 'Info';
+      case 'critical':
+        return 'Critical';
+      case 'warning':
+        return 'Warning';
+      case 'info':
+        return 'Info';
     }
   }
 
   // Auto-start analysis when modal opens
   $effect(() => {
-    if (loopStore.selectedPrdId && !loopStore.completenessResult && !loopStore.analyzingCompleteness) {
+    if (
+      loopStore.selectedPrdId &&
+      !loopStore.completenessResult &&
+      !loopStore.analyzingCompleteness
+    ) {
       runAnalysis();
     }
   });
@@ -87,7 +97,14 @@
     <div class="modal-header">
       <h2>PRD Completeness Analysis</h2>
       <button class="close-btn" onclick={close} title="Close">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <svg
+          width="16"
+          height="16"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+        >
           <line x1="18" y1="6" x2="6" y2="18"></line>
           <line x1="6" y1="6" x2="18" y2="18"></line>
         </svg>
@@ -137,10 +154,14 @@
           {#if criticalCount > 0 || warningCount > 0}
             <div class="issue-counts">
               {#if criticalCount > 0}
-                <span class="issue-badge critical">{criticalCount} critical gap{criticalCount !== 1 ? 's' : ''}</span>
+                <span class="issue-badge critical"
+                  >{criticalCount} critical gap{criticalCount !== 1 ? 's' : ''}</span
+                >
               {/if}
               {#if warningCount > 0}
-                <span class="issue-badge warning">{warningCount} warning{warningCount !== 1 ? 's' : ''}</span>
+                <span class="issue-badge warning"
+                  >{warningCount} warning{warningCount !== 1 ? 's' : ''}</span
+                >
               {/if}
             </div>
           {/if}
@@ -157,14 +178,20 @@
             >
               <div class="section-card-header">
                 <div class="section-label-row">
-                  <span class="severity-icon" title="{severityLabel(section.severity)}">{severityIcon(section.severity)}</span>
+                  <span class="severity-icon" title={severityLabel(section.severity)}
+                    >{severityIcon(section.severity)}</span
+                  >
                   <span class="section-name">{section.label}</span>
                 </div>
                 <div class="section-score-row">
                   <span class="section-score" style:color={scoreColor(section.score)}>
                     {section.score}
                   </span>
-                  <span class="section-presence" class:present={section.present} class:absent={!section.present}>
+                  <span
+                    class="section-presence"
+                    class:present={section.present}
+                    class:absent={!section.present}
+                  >
                     {section.present ? 'Found' : 'Missing'}
                   </span>
                 </div>
@@ -221,9 +248,7 @@
         {result ? 'Done' : 'Cancel'}
       </button>
       {#if result && !loopStore.analyzingCompleteness}
-        <button class="btn-reanalyze" onclick={runAnalysis}>
-          Re-analyze
-        </button>
+        <button class="btn-reanalyze" onclick={runAnalysis}> Re-analyze </button>
       {/if}
     </div>
   </div>

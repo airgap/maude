@@ -10,6 +10,7 @@
 ## Documentation Files
 
 ### Problem Analysis
+
 - **`REACTIVITY_INVESTIGATION.md`** (170 lines)
   - What the problem is
   - Why messages don't stream in real-time
@@ -18,6 +19,7 @@
   - Why the solution works
 
 ### Technical Solution
+
 - **`STREAMING_FIX_NOTES/svelte5-reactivity-solution.md`** (196 lines)
   - Why previous approach (exporting $state directly) failed
   - Svelte 5 syntax constraints
@@ -26,6 +28,7 @@
   - Implementation steps
 
 ### Debugging & Diagnosis
+
 - **`REACTIVITY_DEBUG.md`** (161 lines)
   - Diagnostic logging added to track reactivity
   - Expected console logs at each stage
@@ -39,6 +42,7 @@
   - Quick way to verify reactivity works
 
 ### Validation & Testing
+
 - **`STREAMING_FIX_TESTING.md`** (276 lines)
   - Three test scenarios (basic, multi-tool, long-running)
   - Expected behavior and log patterns
@@ -49,6 +53,7 @@
   - Reverting instructions if needed
 
 ### Overview
+
 - **`WORK_SUMMARY.md`** (258 lines)
   - Complete overview of problem, solution, impact
   - File changes summary
@@ -59,6 +64,7 @@
 ## Code Changes
 
 ### Core Files Modified
+
 ```
 packages/client/src/lib/stores/stream.svelte.ts
   - Added: export const STREAM_CONTEXT_KEY = Symbol('streamStore');
@@ -76,12 +82,15 @@ packages/client/src/lib/components/chat/StreamingMessage.svelte
 ```
 
 ### Diagnostic Logging
+
 Console logs added (can be removed later):
+
 - `[streamStore.handleEvent]` - When events processed
 - `[streamStore]` - When blocks added/updated
 - `[StreamingMessage]` - When component re-renders
 
 ### Reference Implementation
+
 - **`packages/client/src/lib/stores/stream-refactored.svelte.ts`**
   - Alternative approach that was attempted first
   - Kept as reference/fallback
@@ -90,24 +99,28 @@ Console logs added (can be removed later):
 ## How to Use These Resources
 
 ### For Testing
+
 1. Read: `STREAMING_FIX_TESTING.md` (5 min)
 2. Run: Test 1 from that guide (2 min)
 3. Check: Console logs for `[StreamingMessage] $derived recalculating`
 4. Verify: Message appears in real-time
 
 ### For Understanding
+
 1. Read: `WORK_SUMMARY.md` (10 min) - overview
 2. Read: `REACTIVITY_INVESTIGATION.md` (10 min) - problem analysis
 3. Read: `STREAMING_FIX_NOTES/svelte5-reactivity-solution.md` (10 min) - solution details
 4. Done! You understand the complete issue and fix
 
 ### For Debugging If Issues Arise
+
 1. Open: `STREAMING_FIX_TESTING.md` section "Red Flags"
 2. Check: Which log patterns are missing
 3. See: "Debugging Commands for Console"
 4. Read: Specific issue fix in "Common Issues & Fixes"
 
 ### For Deep Dive
+
 1. `REACTIVITY_DEBUG.md` - How logs work
 2. `TEST_REACTIVITY.md` - Manual testing
 3. `STREAMING_FIX_NOTES/svelte5-reactivity-solution.md` - Architecture
@@ -115,17 +128,21 @@ Console logs added (can be removed later):
 ## Key Takeaways
 
 ### The Problem
+
 ```
 SSE Events → Store Updates → UI Should Update → DOESN'T HAPPEN ✗
 ```
 
 ### Why It Broke
+
 Getter-based store access doesn't trigger reactivity in Svelte 5's `$derived.by()`
 
 ### The Fix
+
 Use Svelte's Context API to ensure proper dependency tracking
 
 ### What You'll See When It Works
+
 1. Message appears immediately (not after 5 minutes)
 2. Text streams character-by-character
 3. Console shows `[StreamingMessage] $derived recalculating` logs
@@ -133,20 +150,21 @@ Use Svelte's Context API to ensure proper dependency tracking
 
 ## Files at a Glance
 
-| File | Size | Purpose | Read Time |
-|------|------|---------|-----------|
-| WORK_SUMMARY.md | 258 lines | Complete overview | 10 min |
-| REACTIVITY_INVESTIGATION.md | 170 lines | Problem analysis | 10 min |
-| STREAMING_FIX_NOTES/svelte5-reactivity-solution.md | 196 lines | Technical details | 10 min |
-| REACTIVITY_DEBUG.md | 161 lines | Debugging guide | 8 min |
-| STREAMING_FIX_TESTING.md | 276 lines | Testing procedures | 15 min |
-| TEST_REACTIVITY.md | 91 lines | Console test script | 5 min |
+| File                                               | Size      | Purpose             | Read Time |
+| -------------------------------------------------- | --------- | ------------------- | --------- |
+| WORK_SUMMARY.md                                    | 258 lines | Complete overview   | 10 min    |
+| REACTIVITY_INVESTIGATION.md                        | 170 lines | Problem analysis    | 10 min    |
+| STREAMING_FIX_NOTES/svelte5-reactivity-solution.md | 196 lines | Technical details   | 10 min    |
+| REACTIVITY_DEBUG.md                                | 161 lines | Debugging guide     | 8 min     |
+| STREAMING_FIX_TESTING.md                           | 276 lines | Testing procedures  | 15 min    |
+| TEST_REACTIVITY.md                                 | 91 lines  | Console test script | 5 min     |
 
 **Total documentation**: ~1150 lines covering problem, solution, implementation, testing
 
 ## Build Status
 
 ✅ Build succeeds without errors
+
 - npm run build works
 - No TypeScript errors related to changes
 - Ready for testing
@@ -161,6 +179,7 @@ Use Svelte's Context API to ensure proper dependency tracking
 ## Supporting Documentation (Previous Sessions)
 
 These documents provide context from earlier investigation:
+
 - `STREAMING_DEBUG.md` - Original debugging attempt
 - `STREAMING_FIX.md` - Previous fix attempts
 - `STREAMING_VISIBILITY_GUIDE.md` - User-facing documentation
@@ -169,17 +188,20 @@ These documents provide context from earlier investigation:
 ## Technical Concepts
 
 ### Svelte 5 Reactivity Runes
+
 - **$state**: Reactive variable declaration
 - **$derived**: Computed value that auto-updates
 - **$derived.by()**: Computed value with function body
 - **$effect**: Side effect that runs when dependencies change
 
 ### Context API (Used in Fix)
+
 - **setContext()**: Set value in context from parent
 - **getContext()**: Retrieve context value in child
 - Enables app-wide reactive state without prop drilling
 
 ### SSE (Server-Sent Events)
+
 - Network: Chunks arrive continuously
 - Client: Parsed from SSE format
 - Store: Events processed and state updated
@@ -204,6 +226,7 @@ A: Only components that need real-time streaming updates. Others using streamSto
 This is a **minimal, focused fix** to a **critical reactivity issue** using **Svelte's recommended patterns**.
 
 The fix is:
+
 - ✅ Complete (code + documentation)
 - ✅ Tested to compile
 - ✅ Ready for validation

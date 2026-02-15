@@ -1,9 +1,11 @@
 # Terminal Output Display Issue - Fix Summary
 
 ## Problem
+
 Maude was not displaying all CLI output until the page was reloaded. Users would run commands and see nothing in the terminal panel, but after a page refresh, the output would appear.
 
 ## Root Cause
+
 A **race condition** existed in the terminal initialization sequence:
 
 1. The xterm.js terminal DOM element was being created and fitted
@@ -15,6 +17,7 @@ A **race condition** existed in the terminal initialization sequence:
 When the page was reloaded, xterm.js had more time to fully initialize before the PTY sent output, so the text appeared correctly.
 
 ## Solution
+
 Implemented a **message buffering system** with initialization synchronization:
 
 ### Changes Made to `TerminalPanel.svelte`:
@@ -60,6 +63,7 @@ Timeline:
 ```
 
 ## Benefits
+
 - ✅ All terminal output now displays correctly on first load
 - ✅ No need for page reload to see output
 - ✅ Minimal performance impact (100ms delay is imperceptible)
@@ -67,7 +71,9 @@ Timeline:
 - ✅ Proper cleanup prevents memory leaks
 
 ## Testing
+
 To verify the fix:
+
 1. Run a command in the terminal that produces output (e.g., `ls -la`)
 2. Verify that all output appears immediately without page reload
 3. Run multiple commands in sequence

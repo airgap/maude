@@ -107,7 +107,10 @@
               streaming={entry.lastChildIndex === totalBlocks - 1}
             />
           {:else if entry.block.type === 'thinking' && settingsStore.showThinkingBlocks}
-            <ThinkingBlock content={entry.block.thinking} streaming={entry.index === totalBlocks - 1} />
+            <ThinkingBlock
+              content={entry.block.thinking}
+              streaming={entry.index === totalBlocks - 1}
+            />
           {:else if entry.block.type === 'text' && entry.block.text}
             {@const isStreaming = entry.index === totalBlocks - 1}
             <StreamingText text={entry.block.text} streaming={isStreaming} />

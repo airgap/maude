@@ -9,6 +9,8 @@
   import MainContent from './MainContent.svelte';
   import Sidebar from '../sidebar/Sidebar.svelte';
   import FloatingPanelContainer from '../sidebar/FloatingPanelContainer.svelte';
+  import LeftDockedPanels from '../sidebar/LeftDockedPanels.svelte';
+  import RightDockedPanels from '../sidebar/RightDockedPanels.svelte';
   import SettingsModal from '../settings/SettingsModal.svelte';
   import SnapshotModal from '../settings/SnapshotModal.svelte';
   import LoopConfigModal from '../settings/LoopConfigModal.svelte';
@@ -173,9 +175,14 @@
 
   <div class="app-body">
     {#if uiStore.sidebarOpen}
-      <aside class="sidebar" style:width="{uiStore.sidebarWidth}px">
-        <Sidebar />
-      </aside>
+      <div class="left-column" style:width="{uiStore.sidebarWidth}px">
+        <aside class="sidebar">
+          <Sidebar />
+        </aside>
+        {#if sidebarLayoutStore.leftDockedPanels.length > 0}
+          <LeftDockedPanels />
+        {/if}
+      </div>
       <!-- svelte-ignore a11y_no_static_element_interactions -->
       <div class="resize-handle" onmousedown={onResizeStart}></div>
     {/if}
@@ -187,6 +194,8 @@
         {/snippet}
       </MainContent>
     </main>
+
+    <RightDockedPanels />
   </div>
 
   <StatusBar />
@@ -281,8 +290,16 @@
     z-index: 1;
   }
 
-  .sidebar {
+  .left-column {
+    display: flex;
+    flex-direction: column;
     flex-shrink: 0;
+    overflow: hidden;
+  }
+
+  .sidebar {
+    flex: 1;
+    min-height: 0;
     border-right: 1px solid var(--border-primary);
     background: var(--bg-secondary);
     overflow: hidden;

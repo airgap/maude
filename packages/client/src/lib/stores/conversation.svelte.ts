@@ -36,6 +36,17 @@ function createConversationStore() {
       active.updatedAt = Date.now();
     },
 
+    /** Add a message to a specific conversation (even if it's not the active one). */
+    addMessageTo(conv: Conversation, msg: Message) {
+      conv.messages = [...conv.messages, msg];
+      conv.updatedAt = Date.now();
+      // If this is the active conversation, trigger reactivity by
+      // assigning a new object (same-reference assignment won't trigger Svelte 5 updates)
+      if (active && active.id === conv.id) {
+        active = { ...conv };
+      }
+    },
+
     updateLastAssistantMessage(content: MessageContent[]) {
       if (!active) return;
       const msgs = active.messages;
@@ -43,6 +54,21 @@ function createConversationStore() {
       if (last?.role === 'assistant') {
         last.content = content;
         active.messages = [...msgs];
+      }
+    },
+
+    /** Update the last assistant message in a specific conversation. */
+    updateLastAssistantMessageIn(conv: Conversation, content: MessageContent[]) {
+      const msgs = conv.messages;
+      const last = msgs[msgs.length - 1];
+      if (last?.role === 'assistant') {
+        last.content = content;
+        conv.messages = [...msgs];
+        // If this is the active conversation, trigger reactivity by
+        // assigning a new object (same-reference assignment won't trigger Svelte 5 updates)
+        if (active && active.id === conv.id) {
+          active = { ...conv };
+        }
       }
     },
 
@@ -72,6 +98,20 @@ function createConversationStore() {
         const res = await api.conversations.get(active.id);
         if (res.ok && res.data) {
           active = res.data as Conversation;
+        }
+      } catch (e) {
+        console.warn('[conversationStore] Failed to reload:', e);
+      }
+    },
+
+    /** Reload a specific conversation by ID. Updates active if it matches. */
+    async reloadById(id: string) {
+      try {
+        const res = await api.conversations.get(id);
+        if (res.ok && res.data) {
+          if (active && active.id === id) {
+            active = res.data as Conversation;
+          }
         }
       } catch (e) {
         console.warn('[conversationStore] Failed to reload:', e);

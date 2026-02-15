@@ -8,7 +8,10 @@
   let matrixEl = $state<HTMLDivElement | undefined>(undefined);
   let hoveredStory = $state<string | null>(null);
 
-  const quadrantLabels: Record<MatrixQuadrant, { label: string; description: string; icon: string }> = {
+  const quadrantLabels: Record<
+    MatrixQuadrant,
+    { label: string; description: string; icon: string }
+  > = {
     quick_wins: { label: 'Quick Wins', description: 'High value, low effort', icon: '↯' },
     major_projects: { label: 'Major Projects', description: 'High value, high effort', icon: '▩' },
     fill_ins: { label: 'Fill-ins', description: 'Low value, low effort', icon: '▤' },
@@ -45,7 +48,7 @@
   let filterQuadrant = $derived(loopStore.matrixFilterQuadrant);
 
   let filteredStories = $derived(
-    matrix?.stories.filter((s) => !filterQuadrant || s.quadrant === filterQuadrant) ?? []
+    matrix?.stories.filter((s) => !filterQuadrant || s.quadrant === filterQuadrant) ?? [],
   );
 
   function toggleFilter(quadrant: MatrixQuadrant) {
@@ -58,30 +61,44 @@
 
   function priorityColor(p: string): string {
     switch (p) {
-      case 'critical': return '#ef4444';
-      case 'high': return '#f59e0b';
-      case 'medium': return '#3b82f6';
-      case 'low': return '#6b7280';
-      default: return '#6b7280';
+      case 'critical':
+        return '#ef4444';
+      case 'high':
+        return '#f59e0b';
+      case 'medium':
+        return '#3b82f6';
+      case 'low':
+        return '#6b7280';
+      default:
+        return '#6b7280';
     }
   }
 
   function statusIcon(status: string): string {
     switch (status) {
-      case 'completed': return '✓';
-      case 'in_progress': return '●';
-      case 'failed': return '✗';
-      case 'skipped': return '⊘';
-      default: return '○';
+      case 'completed':
+        return '✓';
+      case 'in_progress':
+        return '●';
+      case 'failed':
+        return '✗';
+      case 'skipped':
+        return '⊘';
+      default:
+        return '○';
     }
   }
 
   function statusColor(status: string): string {
     switch (status) {
-      case 'completed': return 'var(--accent-secondary)';
-      case 'in_progress': return 'var(--accent-primary)';
-      case 'failed': return 'var(--accent-error)';
-      default: return 'var(--text-tertiary)';
+      case 'completed':
+        return 'var(--accent-secondary)';
+      case 'in_progress':
+        return 'var(--accent-primary)';
+      case 'failed':
+        return 'var(--accent-error)';
+      default:
+        return 'var(--text-tertiary)';
     }
   }
 
@@ -139,7 +156,14 @@
       <div class="header-actions">
         <button class="refresh-btn" onclick={refreshMatrix} title="Refresh matrix">↻</button>
         <button class="close-btn" onclick={close} title="Close">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <svg
+            width="16"
+            height="16"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+          >
             <line x1="18" y1="6" x2="6" y2="18"></line>
             <line x1="6" y1="6" x2="18" y2="18"></line>
           </svg>
@@ -179,7 +203,10 @@
             <div class="quadrant-bg quick-wins" style:background={quadrantColors.quick_wins}>
               <span class="quadrant-label">↯ Quick Wins</span>
             </div>
-            <div class="quadrant-bg major-projects" style:background={quadrantColors.major_projects}>
+            <div
+              class="quadrant-bg major-projects"
+              style:background={quadrantColors.major_projects}
+            >
               <span class="quadrant-label">▩ Major Projects</span>
             </div>
             <div class="quadrant-bg fill-ins" style:background={quadrantColors.fill_ins}>
@@ -205,9 +232,15 @@
                 style:bottom="{story.valueScore}%"
                 style:--dot-color={storyDotColor(story)}
                 onmousedown={(e) => handleMatrixMouseDown(e, story.storyId)}
-                onmouseenter={() => { hoveredStory = story.storyId; }}
-                onmouseleave={() => { hoveredStory = null; }}
-                title="{story.title} — Effort: {story.effortScore}, Value: {story.valueScore}{story.storyPoints ? ` (${story.storyPoints}pts)` : ''}"
+                onmouseenter={() => {
+                  hoveredStory = story.storyId;
+                }}
+                onmouseleave={() => {
+                  hoveredStory = null;
+                }}
+                title="{story.title} — Effort: {story.effortScore}, Value: {story.valueScore}{story.storyPoints
+                  ? ` (${story.storyPoints}pts)`
+                  : ''}"
               >
                 <span class="dot-label">
                   {story.title.length > 12 ? story.title.slice(0, 12) + '...' : story.title}
@@ -233,8 +266,12 @@
               <div
                 class="story-list-item"
                 class:hovered={hoveredStory === story.storyId}
-                onmouseenter={() => { hoveredStory = story.storyId; }}
-                onmouseleave={() => { hoveredStory = null; }}
+                onmouseenter={() => {
+                  hoveredStory = story.storyId;
+                }}
+                onmouseleave={() => {
+                  hoveredStory = null;
+                }}
               >
                 <span class="story-status-icon" style:color={statusColor(story.status)}>
                   {statusIcon(story.status)}
@@ -246,11 +283,20 @@
                 {#if story.storyPoints}
                   <span class="story-points">{story.storyPoints}pts</span>
                 {/if}
-                <span class="story-quadrant-tag" style:background={quadrantColors[story.quadrant]} style:border-color={quadrantBorderColors[story.quadrant]}>
-                  {quadrantLabels[story.quadrant].icon} {quadrantLabels[story.quadrant].label}
+                <span
+                  class="story-quadrant-tag"
+                  style:background={quadrantColors[story.quadrant]}
+                  style:border-color={quadrantBorderColors[story.quadrant]}
+                >
+                  {quadrantLabels[story.quadrant].icon}
+                  {quadrantLabels[story.quadrant].label}
                 </span>
                 {#if story.isManualPosition}
-                  <button class="reset-btn" onclick={() => resetPosition(story.storyId)} title="Reset to computed position">↺</button>
+                  <button
+                    class="reset-btn"
+                    onclick={() => resetPosition(story.storyId)}
+                    title="Reset to computed position">↺</button
+                  >
                 {/if}
               </div>
             {/each}
@@ -275,7 +321,10 @@
       {:else if matrix && matrix.totalPlotted === 0}
         <div class="empty-state">
           <p>No stories could be plotted on the matrix.</p>
-          <p class="empty-hint">Stories need estimates to be positioned. Click "Estimate All" in the stories panel first.</p>
+          <p class="empty-hint">
+            Stories need estimates to be positioned. Click "Estimate All" in the stories panel
+            first.
+          </p>
           {#if matrix.excludedStories.length > 0}
             <div class="excluded-section">
               <h4 class="section-label">Excluded ({matrix.excludedStories.length})</h4>
@@ -526,7 +575,9 @@
     box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
     transform: translate(-50%, 50%);
     cursor: grab;
-    transition: transform 0.15s, box-shadow 0.15s;
+    transition:
+      transform 0.15s,
+      box-shadow 0.15s;
     z-index: 2;
   }
   .story-dot:hover,

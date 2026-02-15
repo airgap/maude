@@ -57,7 +57,13 @@
     try {
       const res = await api.conversations.get(id);
       conversationStore.setActive(res.data);
-      streamStore.reset();
+      // Only reset stream state if there's no active stream, or the stream
+      // belongs to the conversation we're switching TO (so UI syncs up).
+      // If the stream is for a different conversation, leave it running —
+      // it will continue updating its target conversation in the background.
+      if (!streamStore.isStreaming || streamStore.conversationId === id) {
+        streamStore.reset();
+      }
     } finally {
       conversationStore.setLoading(false);
     }
@@ -65,7 +71,10 @@
 
   async function newConversation() {
     conversationStore.setActive(null);
-    streamStore.reset();
+    // Only reset if no active stream is running for another conversation
+    if (!streamStore.isStreaming) {
+      streamStore.reset();
+    }
   }
 
   async function deleteConversation(e: MouseEvent, id: string) {

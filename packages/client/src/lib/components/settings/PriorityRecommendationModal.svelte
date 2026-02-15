@@ -5,7 +5,8 @@
 
   // The story being analyzed
   let story = $derived(
-    loopStore.selectedPrd?.stories?.find((s) => s.id === loopStore.recommendingPriorityStoryId) || null,
+    loopStore.selectedPrd?.stories?.find((s) => s.id === loopStore.recommendingPriorityStoryId) ||
+      null,
   );
 
   // Manual override state
@@ -35,7 +36,12 @@
     const storyId = loopStore.recommendingPriorityStoryId;
     if (!prdId || !storyId || !currentRecommendation) return;
 
-    const result = await loopStore.acceptPriority(prdId, storyId, currentRecommendation.suggestedPriority, true);
+    const result = await loopStore.acceptPriority(
+      prdId,
+      storyId,
+      currentRecommendation.suggestedPriority,
+      true,
+    );
     if (result.ok) {
       uiStore.toast(`Priority updated to ${currentRecommendation.suggestedPriority}`, 'success');
       close();
@@ -60,77 +66,114 @@
 
   function openOverride() {
     showManualOverride = true;
-    manualPriority = (currentRecommendation?.suggestedPriority || story?.priority || 'medium') as StoryPriority;
+    manualPriority = (currentRecommendation?.suggestedPriority ||
+      story?.priority ||
+      'medium') as StoryPriority;
   }
 
   function priorityColor(priority: string): string {
     switch (priority) {
-      case 'critical': return 'var(--accent-error)';
-      case 'high': return '#e07a2f';
-      case 'medium': return 'var(--accent-warning, #e6a817)';
-      case 'low': return 'var(--accent-secondary)';
-      default: return 'var(--text-tertiary)';
+      case 'critical':
+        return 'var(--accent-error)';
+      case 'high':
+        return '#e07a2f';
+      case 'medium':
+        return 'var(--accent-warning, #e6a817)';
+      case 'low':
+        return 'var(--accent-secondary)';
+      default:
+        return 'var(--text-tertiary)';
     }
   }
 
   function priorityIcon(priority: string): string {
     switch (priority) {
-      case 'critical': return '●';
-      case 'high': return '●';
-      case 'medium': return '●';
-      case 'low': return '●';
-      default: return '○';
+      case 'critical':
+        return '●';
+      case 'high':
+        return '●';
+      case 'medium':
+        return '●';
+      case 'low':
+        return '●';
+      default:
+        return '○';
     }
   }
 
   function categoryIcon(category: string): string {
     switch (category) {
-      case 'dependency': return '⊟';
-      case 'risk': return '△';
-      case 'scope': return '∟';
-      case 'user_impact': return '⊕';
-      default: return '•';
+      case 'dependency':
+        return '⊟';
+      case 'risk':
+        return '△';
+      case 'scope':
+        return '∟';
+      case 'user_impact':
+        return '⊕';
+      default:
+        return '•';
     }
   }
 
   function categoryLabel(category: string): string {
     switch (category) {
-      case 'dependency': return 'Dependency';
-      case 'risk': return 'Risk';
-      case 'scope': return 'Scope';
-      case 'user_impact': return 'User Impact';
-      default: return category;
+      case 'dependency':
+        return 'Dependency';
+      case 'risk':
+        return 'Risk';
+      case 'scope':
+        return 'Scope';
+      case 'user_impact':
+        return 'User Impact';
+      default:
+        return category;
     }
   }
 
   function impactIcon(impact: string): string {
     switch (impact) {
-      case 'increases': return '↑';
-      case 'decreases': return '↓';
-      default: return '→';
+      case 'increases':
+        return '↑';
+      case 'decreases':
+        return '↓';
+      default:
+        return '→';
     }
   }
 
   function impactColor(impact: string): string {
     switch (impact) {
-      case 'increases': return 'var(--accent-error)';
-      case 'decreases': return 'var(--accent-secondary)';
-      default: return 'var(--text-tertiary)';
+      case 'increases':
+        return 'var(--accent-error)';
+      case 'decreases':
+        return 'var(--accent-secondary)';
+      default:
+        return 'var(--text-tertiary)';
     }
   }
 
   const priorityOptions: StoryPriority[] = ['critical', 'high', 'medium', 'low'];
 
   // Current recommendation (either from modal result or persisted on the story)
-  let currentRecommendation = $derived(loopStore.priorityRecommendationResult || story?.priorityRecommendation || null);
+  let currentRecommendation = $derived(
+    loopStore.priorityRecommendationResult || story?.priorityRecommendation || null,
+  );
 
   let priorityChanged = $derived(
-    currentRecommendation ? currentRecommendation.suggestedPriority !== currentRecommendation.currentPriority : false
+    currentRecommendation
+      ? currentRecommendation.suggestedPriority !== currentRecommendation.currentPriority
+      : false,
   );
 
   // Auto-start recommendation when modal opens
   $effect(() => {
-    if (loopStore.recommendingPriorityStoryId && !loopStore.recommendingPriority && !loopStore.priorityRecommendationResult && !story?.priorityRecommendation) {
+    if (
+      loopStore.recommendingPriorityStoryId &&
+      !loopStore.recommendingPriority &&
+      !loopStore.priorityRecommendationResult &&
+      !story?.priorityRecommendation
+    ) {
       startRecommendation();
     }
   });
@@ -143,7 +186,14 @@
     <div class="modal-header">
       <h2>Priority Recommendation</h2>
       <button class="close-btn" onclick={close} title="Close">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <svg
+          width="16"
+          height="16"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+        >
           <line x1="18" y1="6" x2="6" y2="18"></line>
           <line x1="6" y1="6" x2="18" y2="18"></line>
         </svg>
@@ -173,8 +223,12 @@
         <div class="priority-comparison">
           <div class="priority-card current">
             <span class="card-label">Current Priority</span>
-            <span class="card-value" style:color={priorityColor(currentRecommendation.currentPriority)}>
-              {priorityIcon(currentRecommendation.currentPriority)} {currentRecommendation.currentPriority.toUpperCase()}
+            <span
+              class="card-value"
+              style:color={priorityColor(currentRecommendation.currentPriority)}
+            >
+              {priorityIcon(currentRecommendation.currentPriority)}
+              {currentRecommendation.currentPriority.toUpperCase()}
             </span>
           </div>
           <div class="priority-arrow">
@@ -186,8 +240,12 @@
           </div>
           <div class="priority-card suggested" class:changed={priorityChanged}>
             <span class="card-label">Suggested Priority</span>
-            <span class="card-value" style:color={priorityColor(currentRecommendation.suggestedPriority)}>
-              {priorityIcon(currentRecommendation.suggestedPriority)} {currentRecommendation.suggestedPriority.toUpperCase()}
+            <span
+              class="card-value"
+              style:color={priorityColor(currentRecommendation.suggestedPriority)}
+            >
+              {priorityIcon(currentRecommendation.suggestedPriority)}
+              {currentRecommendation.suggestedPriority.toUpperCase()}
             </span>
             <span class="confidence-score">{currentRecommendation.confidence}% confidence</span>
           </div>
@@ -238,8 +296,10 @@
                   <button
                     class="priority-option"
                     class:selected={manualPriority === opt}
-                    style:border-color={manualPriority === opt ? priorityColor(opt) : 'var(--border-primary)'}
-                    onclick={() => manualPriority = opt}
+                    style:border-color={manualPriority === opt
+                      ? priorityColor(opt)
+                      : 'var(--border-primary)'}
+                    onclick={() => (manualPriority = opt)}
                   >
                     <span class="opt-icon">{priorityIcon(opt)}</span>
                     <span class="opt-label">{opt.charAt(0).toUpperCase() + opt.slice(1)}</span>
@@ -248,7 +308,9 @@
               </div>
               <div class="override-actions">
                 <button class="btn-save" onclick={saveOverride}>Save Override</button>
-                <button class="btn-cancel-override" onclick={() => showManualOverride = false}>Cancel</button>
+                <button class="btn-cancel-override" onclick={() => (showManualOverride = false)}
+                  >Cancel</button
+                >
               </div>
             </div>
           </div>
@@ -273,7 +335,10 @@
           {/if}
         </div>
         <div class="no-recommendation">
-          <p>No priority recommendation yet. Click "Analyze" to get an AI-powered priority suggestion.</p>
+          <p>
+            No priority recommendation yet. Click "Analyze" to get an AI-powered priority
+            suggestion.
+          </p>
         </div>
       {/if}
     </div>
@@ -292,9 +357,7 @@
           </button>
         {/if}
         {#if currentRecommendation && !showManualOverride}
-          <button class="btn-override" onclick={openOverride}>
-            Override
-          </button>
+          <button class="btn-override" onclick={openOverride}> Override </button>
         {/if}
       {/if}
     </div>

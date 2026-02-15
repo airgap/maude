@@ -24,7 +24,7 @@
     // Pre-populate with PRD quality checks or defaults
     const prd = loopStore.selectedPrd;
     if (prd && prd.qualityChecks?.length > 0) {
-      checks = prd.qualityChecks.map(c => ({ ...c, enabled: true }));
+      checks = prd.qualityChecks.map((c) => ({ ...c, enabled: true }));
     } else {
       // Provide sensible defaults based on common project setups
       checks = [
@@ -62,14 +62,16 @@
   }
 
   function removeCheck(id: string) {
-    checks = checks.filter(c => c.id !== id);
+    checks = checks.filter((c) => c.id !== id);
   }
 
   function toggleCheck(id: string) {
-    checks = checks.map(c => c.id === id ? { ...c, enabled: !c.enabled } : c);
+    checks = checks.map((c) => (c.id === id ? { ...c, enabled: !c.enabled } : c));
   }
 
-  let depWarnings = $state<Array<{ type: string; message: string; storyId: string; storyTitle: string }>>([]);
+  let depWarnings = $state<
+    Array<{ type: string; message: string; storyId: string; storyTitle: string }>
+  >([]);
   let validatingDeps = $state(false);
 
   onMount(async () => {
@@ -126,7 +128,14 @@
     <div class="modal-header">
       <h2>Configure Loop</h2>
       <button class="close-btn" onclick={close}>
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <svg
+          width="16"
+          height="16"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+        >
           <line x1="18" y1="6" x2="6" y2="18"></line>
           <line x1="6" y1="6" x2="18" y2="18"></line>
         </svg>
@@ -195,7 +204,7 @@
       <div class="form-section">
         <div class="section-header-inline">
           <h3>Quality Checks</h3>
-          <button class="add-btn" onclick={() => showAddCheck = !showAddCheck}>+ Add</button>
+          <button class="add-btn" onclick={() => (showAddCheck = !showAddCheck)}>+ Add</button>
         </div>
 
         {#if showAddCheck}
@@ -223,7 +232,11 @@
           {#each checks as check (check.id)}
             <div class="check-item">
               <label class="check-toggle">
-                <input type="checkbox" checked={check.enabled} onchange={() => toggleCheck(check.id)} />
+                <input
+                  type="checkbox"
+                  checked={check.enabled}
+                  onchange={() => toggleCheck(check.id)}
+                />
               </label>
               <div class="check-info">
                 <span class="check-name" class:disabled={!check.enabled}>
@@ -355,7 +368,8 @@
     font-size: 12px;
     color: var(--text-secondary);
   }
-  .form-row select, .form-row input[type="number"] {
+  .form-row select,
+  .form-row input[type='number'] {
     width: 160px;
     padding: 4px 8px;
     font-size: 12px;
@@ -374,7 +388,7 @@
     color: var(--text-secondary);
     cursor: pointer;
   }
-  .toggle-row input[type="checkbox"] {
+  .toggle-row input[type='checkbox'] {
     accent-color: var(--accent-primary);
   }
 
@@ -404,7 +418,8 @@
     background: var(--bg-tertiary);
     border-radius: var(--radius-sm);
   }
-  .add-check-form input, .add-check-form select {
+  .add-check-form input,
+  .add-check-form select {
     padding: 4px 8px;
     font-size: 12px;
     background: var(--bg-primary);

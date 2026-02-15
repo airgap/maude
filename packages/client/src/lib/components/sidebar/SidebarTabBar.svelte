@@ -72,8 +72,7 @@
     // Determine where the dragged tab's center currently is
     const draggedOriginalIndex = drag.startIndex;
     const draggedWidth = drag.tabWidths[draggedOriginalIndex];
-    const draggedCenter =
-      drag.tabOffsets[draggedOriginalIndex] + draggedWidth / 2 + deltaX;
+    const draggedCenter = drag.tabOffsets[draggedOriginalIndex] + draggedWidth / 2 + deltaX;
 
     // Find current position of dragged tab in the working order
     const currentDragIndex = drag.order.indexOf(drag.tabId);
@@ -89,8 +88,7 @@
       if (idx < newOrder.length - 1) {
         const rightOrigIndex = sidebarLayoutStore.pinnedTabIds.indexOf(newOrder[idx + 1]);
         if (rightOrigIndex >= 0 && rightOrigIndex < drag.tabOffsets.length) {
-          const rightMid =
-            drag.tabOffsets[rightOrigIndex] + drag.tabWidths[rightOrigIndex] / 2;
+          const rightMid = drag.tabOffsets[rightOrigIndex] + drag.tabWidths[rightOrigIndex] / 2;
           if (draggedCenter > rightMid) {
             // Swap
             [newOrder[idx], newOrder[idx + 1]] = [newOrder[idx + 1], newOrder[idx]];
@@ -104,8 +102,7 @@
       if (idx > 0) {
         const leftOrigIndex = sidebarLayoutStore.pinnedTabIds.indexOf(newOrder[idx - 1]);
         if (leftOrigIndex >= 0 && leftOrigIndex < drag.tabOffsets.length) {
-          const leftMid =
-            drag.tabOffsets[leftOrigIndex] + drag.tabWidths[leftOrigIndex] / 2;
+          const leftMid = drag.tabOffsets[leftOrigIndex] + drag.tabWidths[leftOrigIndex] / 2;
           if (draggedCenter < leftMid) {
             [newOrder[idx - 1], newOrder[idx]] = [newOrder[idx], newOrder[idx - 1]];
             swapped = true;
@@ -211,6 +208,32 @@
   function handlePopOut(tabId: SidebarTab, e: MouseEvent) {
     e.stopPropagation();
     sidebarLayoutStore.popOutTab(tabId);
+    closeMenu();
+    closeContextMenu();
+  }
+
+  function handleDockRight(tabId: SidebarTab, e: MouseEvent) {
+    e.stopPropagation();
+    // If already a panel, just change its dock mode
+    if (sidebarLayoutStore.floatingPanels.some((p) => p.tabId === tabId)) {
+      sidebarLayoutStore.dockToRight(tabId);
+    } else {
+      // Pop out directly to right-docked
+      sidebarLayoutStore.popOutTab(tabId, undefined, 'right');
+    }
+    closeMenu();
+    closeContextMenu();
+  }
+
+  function handleDockLeft(tabId: SidebarTab, e: MouseEvent) {
+    e.stopPropagation();
+    // If already a panel, just change its dock mode
+    if (sidebarLayoutStore.floatingPanels.some((p) => p.tabId === tabId)) {
+      sidebarLayoutStore.dockToLeft(tabId);
+    } else {
+      // Pop out directly to left-docked
+      sidebarLayoutStore.popOutTab(tabId, undefined, 'left');
+    }
     closeMenu();
     closeContextMenu();
   }
@@ -321,22 +344,77 @@
               onclick={(e) => handleTogglePin(tab.id, e)}
             >
               {#if isPinned}
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="1">
+                <svg
+                  width="12"
+                  height="12"
+                  viewBox="0 0 24 24"
+                  fill="currentColor"
+                  stroke="currentColor"
+                  stroke-width="1"
+                >
                   <path d="M12 2l2 7h7l-5.5 4 2 7L12 16l-5.5 4 2-7L3 9h7z" />
                 </svg>
               {:else}
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <svg
+                  width="12"
+                  height="12"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                >
                   <path d="M12 2l2 7h7l-5.5 4 2 7L12 16l-5.5 4 2-7L3 9h7z" />
                 </svg>
               {/if}
             </button>
             <button
               class="menu-action popout-btn"
-              title="Pop out"
+              title="Pop out (floating)"
               onclick={(e) => handlePopOut(tab.id, e)}
             >
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6M15 3h6v6M10 14L21 3" />
+              <svg
+                width="12"
+                height="12"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+              >
+                <path
+                  d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6M15 3h6v6M10 14L21 3"
+                />
+              </svg>
+            </button>
+            <button
+              class="menu-action dock-left-btn"
+              title="Dock to left edge"
+              onclick={(e) => handleDockLeft(tab.id, e)}
+            >
+              <svg
+                width="12"
+                height="12"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+              >
+                <path d="M3 3h6a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H3M11 3h10v18H11z" />
+              </svg>
+            </button>
+            <button
+              class="menu-action dock-right-btn"
+              title="Dock to right edge"
+              onclick={(e) => handleDockRight(tab.id, e)}
+            >
+              <svg
+                width="12"
+                height="12"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+              >
+                <path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4M3 3h12v18H3z" />
               </svg>
             </button>
           </div>
@@ -348,21 +426,62 @@
 
 {#if contextMenu}
   <div class="context-backdrop" onclick={closeContextMenu}></div>
-  <div
-    class="context-menu"
-    style="left: {contextMenu.x}px; top: {contextMenu.y}px;"
-  >
+  <div class="context-menu" style="left: {contextMenu.x}px; top: {contextMenu.y}px;">
     <button class="menu-item" onclick={() => handleContextUnpin(contextMenu!.tabId)}>
-      <svg class="menu-item-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <svg
+        class="menu-item-icon"
+        width="14"
+        height="14"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+      >
         <path d="M12 2l2 7h7l-5.5 4 2 7L12 16l-5.5 4 2-7L3 9h7z" />
       </svg>
       Unpin
     </button>
     <button class="menu-item" onclick={() => handleContextPopOut(contextMenu!.tabId)}>
-      <svg class="menu-item-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <svg
+        class="menu-item-icon"
+        width="14"
+        height="14"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+      >
         <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6M15 3h6v6M10 14L21 3" />
       </svg>
       Pop out
+    </button>
+    <button class="menu-item" onclick={(e) => handleDockLeft(contextMenu!.tabId, e)}>
+      <svg
+        class="menu-item-icon"
+        width="14"
+        height="14"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+      >
+        <path d="M3 3h6a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H3M11 3h10v18H11z" />
+      </svg>
+      Dock to left
+    </button>
+    <button class="menu-item" onclick={(e) => handleDockRight(contextMenu!.tabId, e)}>
+      <svg
+        class="menu-item-icon"
+        width="14"
+        height="14"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+      >
+        <path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4M3 3h12v18H3z" />
+      </svg>
+      Dock to right
     </button>
   </div>
 {/if}

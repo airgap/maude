@@ -51,7 +51,9 @@
                 {:else}
                   <span
                     class="verify-badge failed"
-                    title={verification.issues.map((issue: { message: string }) => issue.message).join('; ')}
+                    title={verification.issues
+                      .map((issue: { message: string }) => issue.message)
+                      .join('; ')}
                   >
                     {verification.issues.length} issue{verification.issues.length !== 1 ? 's' : ''}
                   </span>
