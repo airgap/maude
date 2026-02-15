@@ -1,31 +1,11 @@
 <script lang="ts">
   import { uiStore } from '$lib/stores/ui.svelte';
-  import { SIDEBAR_TABS } from '$lib/config/sidebarTabs';
+  import SidebarTabBar from './SidebarTabBar.svelte';
   import SidebarTabContent from './SidebarTabContent.svelte';
 </script>
 
 <div class="sidebar-container">
-  <nav class="sidebar-tabs">
-    {#each SIDEBAR_TABS as tab}
-      <button
-        class="tab-btn"
-        class:active={uiStore.sidebarTab === tab.id}
-        onclick={() => uiStore.setSidebarTab(tab.id)}
-        title={tab.label}
-      >
-        <svg
-          width="16"
-          height="16"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="2"
-        >
-          <path d={tab.icon} />
-        </svg>
-      </button>
-    {/each}
-  </nav>
+  <SidebarTabBar />
 
   <div class="sidebar-content">
     <SidebarTabContent tabId={uiStore.sidebarTab} />
@@ -37,48 +17,6 @@
     display: flex;
     flex-direction: column;
     height: 100%;
-  }
-
-  .sidebar-tabs {
-    display: flex;
-    border-bottom: 1px solid var(--border-primary);
-    padding: 4px 6px;
-    gap: 1px;
-    flex-shrink: 0;
-  }
-
-  .tab-btn {
-    flex: 1;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: 6px 4px;
-    color: var(--text-tertiary);
-    border-radius: 0;
-    transition: all var(--transition);
-    position: relative;
-    border: 1px solid transparent;
-    min-width: 0;
-  }
-  .tab-btn:hover {
-    color: var(--accent-primary);
-    background: var(--bg-hover);
-  }
-  .tab-btn.active {
-    color: var(--accent-primary);
-    background: var(--bg-active);
-    border-color: var(--border-primary);
-    border-bottom-color: transparent;
-  }
-  .tab-btn.active::after {
-    content: '';
-    position: absolute;
-    bottom: -1px;
-    left: 20%;
-    right: 20%;
-    height: 1px;
-    background: var(--accent-primary);
-    box-shadow: 0 0 6px rgba(0, 180, 255, 0.4);
   }
 
   .sidebar-content {
