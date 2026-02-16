@@ -583,10 +583,10 @@ function createLoopStore() {
 
     // --- API helpers ---
 
-    async loadPrds(projectPath: string) {
+    async loadPrds(workspacePath: string) {
       loading = true;
       try {
-        const res = await api.prds.list(projectPath);
+        const res = await api.prds.list(workspacePath);
         if (res.ok) {
           prds = res.data;
         }
@@ -634,12 +634,12 @@ function createLoopStore() {
 
     async startLoop(
       prdId: string,
-      projectPath: string,
+      workspacePath: string,
       config: LoopConfig,
     ): Promise<{ ok: boolean; error?: string }> {
       loading = true;
       try {
-        const res = await api.loops.start({ prdId, projectPath, config });
+        const res = await api.loops.start({ prdId, workspacePath, config });
         if (res.ok) {
           const loopRes = await api.loops.get(res.data.loopId);
           if (loopRes.ok) {
@@ -1537,7 +1537,7 @@ function createLoopStore() {
 
     async startPlanning(
       prdId: string,
-      projectPath: string,
+      workspacePath: string,
       mode: PlanMode,
       userPrompt?: string,
     ): Promise<{ conversationId: string; mode: string } | null> {

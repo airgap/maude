@@ -11,7 +11,7 @@ app.get('/', (c) => {
   const rows = db
     .query(
       `
-    SELECT id, title, model, project_path, project_id, plan_mode, total_tokens, permission_mode, effort,
+    SELECT id, title, model, workspace_path, workspace_id, plan_mode, total_tokens, permission_mode, effort,
            created_at, updated_at,
            (SELECT COUNT(*) FROM messages WHERE conversation_id = conversations.id) as message_count
     FROM conversations
@@ -26,8 +26,8 @@ app.get('/', (c) => {
       id: r.id,
       title: r.title,
       model: r.model,
-      projectPath: r.project_path,
-      projectId: r.project_id || undefined,
+      workspacePath: r.workspace_path,
+      workspaceId: r.workspace_id || undefined,
       permissionMode: r.permission_mode,
       effort: r.effort,
       messageCount: r.message_count,
@@ -54,8 +54,8 @@ app.get('/:id', (c) => {
       title: conv.title,
       model: conv.model,
       systemPrompt: conv.system_prompt,
-      projectPath: conv.project_path,
-      projectId: conv.project_id || undefined,
+      workspacePath: conv.workspace_path,
+      workspaceId: conv.workspace_id || undefined,
       planMode: Boolean(conv.plan_mode),
       planFile: conv.plan_file,
       totalTokens: conv.total_tokens,
@@ -89,7 +89,7 @@ app.post('/', async (c) => {
 
   db.query(
     `
-    INSERT INTO conversations (id, title, model, system_prompt, project_path,
+    INSERT INTO conversations (id, title, model, system_prompt, workspace_path,
       plan_mode, permission_mode, effort, max_budget_usd, max_turns, allowed_tools, disallowed_tools,
       created_at, updated_at)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -99,7 +99,7 @@ app.post('/', async (c) => {
     body.title || 'New Conversation',
     body.model || 'claude-sonnet-4-5-20250929',
     body.systemPrompt || null,
-    body.projectPath || process.cwd(),
+    body.workspacePath || process.cwd(),
     body.planMode ? 1 : 0,
     body.permissionMode || 'default',
     body.effort || 'high',
@@ -127,9 +127,9 @@ app.patch('/:id', async (c) => {
     updates.push('title = ?');
     values.push(body.title);
   }
-  if (body.projectPath !== undefined) {
-    updates.push('project_path = ?');
-    values.push(body.projectPath);
+  if (body.workspacePath !== undefined) {
+    updates.push('workspace_path = ?');
+    values.push(body.workspacePath);
   }
   if (body.model !== undefined) {
     updates.push('model = ?');
@@ -320,7 +320,7 @@ app.post('/:id/fork', async (c) => {
   const now = Date.now();
   db.query(
     `
-    INSERT INTO conversations (id, title, model, system_prompt, project_path, project_id,
+    INSERT INTO conversations (id, title, model, system_prompt, workspace_path, workspace_id,
       plan_mode, permission_mode, effort, max_budget_usd, max_turns,
       allowed_tools, disallowed_tools, created_at, updated_at)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -330,8 +330,8 @@ app.post('/:id/fork', async (c) => {
     (conv.title || 'Conversation') + ' (fork)',
     conv.model,
     conv.system_prompt,
-    conv.project_path,
-    conv.project_id,
+    conv.workspace_path,
+    conv.workspace_id,
     conv.plan_mode,
     conv.permission_mode,
     conv.effort,

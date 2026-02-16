@@ -1,20 +1,20 @@
-export interface Project {
+export interface Workspace {
   id: string;
   name: string;
   path: string;
   lastOpened: number;
-  settings?: ProjectSettings;
+  settings?: WorkspaceSettings;
   createdAt: number;
 }
 
-export interface ProjectSettings {
+export interface WorkspaceSettings {
   defaultModel?: string;
   defaultPermissionMode?: string;
   systemPrompt?: string;
   effort?: string;
 }
 
-export interface ProjectSummary {
+export interface WorkspaceSummary {
   id: string;
   name: string;
   path: string;

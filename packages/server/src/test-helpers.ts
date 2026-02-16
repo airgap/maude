@@ -14,8 +14,8 @@ export function createTestDb(): Database {
       title TEXT NOT NULL DEFAULT 'New Conversation',
       model TEXT NOT NULL DEFAULT 'claude-sonnet-4-5-20250929',
       system_prompt TEXT,
-      project_path TEXT,
-      project_id TEXT,
+      workspace_path TEXT,
+      workspace_id TEXT,
       plan_mode INTEGER NOT NULL DEFAULT 0,
       plan_file TEXT,
       total_tokens INTEGER NOT NULL DEFAULT 0,
@@ -84,7 +84,7 @@ export function createTestDb(): Database {
   db.exec(`
     CREATE TABLE IF NOT EXISTS git_snapshots (
       id TEXT PRIMARY KEY,
-      project_path TEXT NOT NULL,
+      workspace_path TEXT NOT NULL,
       conversation_id TEXT,
       head_sha TEXT NOT NULL,
       stash_sha TEXT,
@@ -95,9 +95,9 @@ export function createTestDb(): Database {
   `);
 
   db.exec(`
-    CREATE TABLE IF NOT EXISTS project_memories (
+    CREATE TABLE IF NOT EXISTS workspace_memories (
       id TEXT PRIMARY KEY,
-      project_path TEXT NOT NULL,
+      workspace_path TEXT NOT NULL,
       category TEXT NOT NULL DEFAULT 'convention',
       key TEXT NOT NULL,
       content TEXT NOT NULL,
@@ -112,7 +112,7 @@ export function createTestDb(): Database {
   db.exec(`
     CREATE TABLE IF NOT EXISTS prds (
       id TEXT PRIMARY KEY,
-      project_path TEXT NOT NULL,
+      workspace_path TEXT NOT NULL,
       name TEXT NOT NULL,
       description TEXT NOT NULL DEFAULT '',
       branch_name TEXT,
@@ -153,7 +153,7 @@ export function createTestDb(): Database {
     CREATE TABLE IF NOT EXISTS loops (
       id TEXT PRIMARY KEY,
       prd_id TEXT NOT NULL,
-      project_path TEXT NOT NULL,
+      workspace_path TEXT NOT NULL,
       status TEXT NOT NULL DEFAULT 'idle',
       config TEXT NOT NULL DEFAULT '{}',
       current_iteration INTEGER NOT NULL DEFAULT 0,
@@ -191,12 +191,14 @@ export function createTestDb(): Database {
   db.exec('CREATE INDEX IF NOT EXISTS idx_messages_conv ON messages(conversation_id, timestamp)');
   db.exec('CREATE INDEX IF NOT EXISTS idx_tasks_conv ON tasks(conversation_id)');
   db.exec('CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status)');
-  db.exec('CREATE INDEX IF NOT EXISTS idx_git_snapshots_path ON git_snapshots(project_path)');
-  db.exec('CREATE INDEX IF NOT EXISTS idx_project_memories_path ON project_memories(project_path)');
+  db.exec('CREATE INDEX IF NOT EXISTS idx_git_snapshots_path ON git_snapshots(workspace_path)');
   db.exec(
-    'CREATE INDEX IF NOT EXISTS idx_project_memories_category ON project_memories(project_path, category)',
+    'CREATE INDEX IF NOT EXISTS idx_workspace_memories_path ON workspace_memories(workspace_path)',
   );
-  db.exec('CREATE INDEX IF NOT EXISTS idx_prds_project_path ON prds(project_path)');
+  db.exec(
+    'CREATE INDEX IF NOT EXISTS idx_workspace_memories_category ON workspace_memories(workspace_path, category)',
+  );
+  db.exec('CREATE INDEX IF NOT EXISTS idx_prds_workspace_path ON prds(workspace_path)');
   db.exec('CREATE INDEX IF NOT EXISTS idx_prd_stories_prd ON prd_stories(prd_id)');
   db.exec('CREATE INDEX IF NOT EXISTS idx_loops_prd ON loops(prd_id)');
   db.exec('CREATE INDEX IF NOT EXISTS idx_loops_status ON loops(status)');

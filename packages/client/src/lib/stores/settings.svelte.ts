@@ -23,7 +23,7 @@ interface SettingsState {
   streamingEnabled: boolean;
   compactMessages: boolean;
   showBudgetDisplay: boolean;
-  projectPath: string;
+  workspacePath: string;
   effort: string;
   maxBudgetUsd: number | null;
   maxTurns: number | null;
@@ -67,7 +67,7 @@ const defaults: SettingsState = {
   streamingEnabled: true,
   compactMessages: false,
   showBudgetDisplay: true,
-  projectPath: '.',
+  workspacePath: '.',
   effort: 'high',
   maxBudgetUsd: null,
   maxTurns: null,
@@ -235,8 +235,8 @@ function createSettingsStore() {
     get showBudgetDisplay() {
       return state.showBudgetDisplay;
     },
-    get projectPath() {
-      return state.projectPath;
+    get workspacePath() {
+      return state.workspacePath;
     },
     get effort() {
       return state.effort;

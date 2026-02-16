@@ -76,7 +76,7 @@ export const api = {
       title?: string;
       model?: string;
       systemPrompt?: string;
-      projectPath?: string;
+      workspacePath?: string;
       permissionMode?: string;
       effort?: string;
       maxBudgetUsd?: number;
@@ -265,8 +265,8 @@ export const api = {
 
   // --- Memory ---
   memory: {
-    list: (projectPath?: string) => {
-      const q = projectPath ? `?projectPath=${encodeURIComponent(projectPath)}` : '';
+    list: (workspacePath?: string) => {
+      const q = workspacePath ? `?workspacePath=${encodeURIComponent(workspacePath)}` : '';
       return request<{ ok: boolean; data: any[] }>(`/memory${q}`);
     },
     update: (path: string, content: string) =>
@@ -319,7 +319,7 @@ export const api = {
         data: { parent: string; directories: { name: string; path: string }[] };
       }>(`/files/directories?${params}`);
     },
-    verify: (path: string, projectPath?: string) =>
+    verify: (path: string, workspacePath?: string) =>
       request<{
         ok: boolean;
         data: {
@@ -331,38 +331,38 @@ export const api = {
         };
       }>('/files/verify', {
         method: 'POST',
-        body: JSON.stringify({ path, projectPath }),
+        body: JSON.stringify({ path, workspacePath }),
       }),
   },
 
-  // --- Projects ---
-  projects: {
-    list: () => request<{ ok: boolean; data: any[] }>('/projects'),
-    get: (id: string) => request<{ ok: boolean; data: any }>(`/projects/${id}`),
+  // --- Workspaces ---
+  workspaces: {
+    list: () => request<{ ok: boolean; data: any[] }>('/workspaces'),
+    get: (id: string) => request<{ ok: boolean; data: any }>(`/workspaces/${id}`),
     create: (body: { name: string; path: string; settings?: any }) =>
-      request<{ ok: boolean; data: { id: string } }>('/projects', {
+      request<{ ok: boolean; data: { id: string } }>('/workspaces', {
         method: 'POST',
         body: JSON.stringify(body),
       }),
     update: (id: string, body: Record<string, any>) =>
-      request<{ ok: boolean }>(`/projects/${id}`, {
+      request<{ ok: boolean }>(`/workspaces/${id}`, {
         method: 'PATCH',
         body: JSON.stringify(body),
       }),
-    delete: (id: string) => request<{ ok: boolean }>(`/projects/${id}`, { method: 'DELETE' }),
-    open: (id: string) => request<{ ok: boolean }>(`/projects/${id}/open`, { method: 'POST' }),
+    delete: (id: string) => request<{ ok: boolean }>(`/workspaces/${id}`, { method: 'DELETE' }),
+    open: (id: string) => request<{ ok: boolean }>(`/workspaces/${id}/open`, { method: 'POST' }),
     getSandbox: (path: string) =>
       request<{
         ok: boolean;
         data: { enabled: boolean; allowedPaths: string[]; blockedCommands: string[] };
-      }>(`/projects/sandbox/config?path=${encodeURIComponent(path)}`),
+      }>(`/workspaces/sandbox/config?path=${encodeURIComponent(path)}`),
     updateSandbox: (body: {
-      projectPath: string;
+      workspacePath: string;
       enabled?: boolean;
       allowedPaths?: string[];
       blockedCommands?: string[];
     }) =>
-      request<{ ok: boolean }>('/projects/sandbox/config', {
+      request<{ ok: boolean }>('/workspaces/sandbox/config', {
         method: 'PUT',
         body: JSON.stringify(body),
       }),
@@ -462,7 +462,7 @@ export const api = {
         ok: boolean;
         data: Array<{
           id: string;
-          projectPath: string;
+          workspacePath: string;
           conversationId: string | null;
           headSha: string;
           stashSha: string | null;
@@ -477,56 +477,57 @@ export const api = {
       }),
   },
 
-  // --- Project Memory ---
-  projectMemory: {
-    list: (projectPath: string, category?: string) => {
-      const params = new URLSearchParams({ projectPath });
+  // --- Workspace Memory ---
+  workspaceMemory: {
+    list: (workspacePath: string, category?: string) => {
+      const params = new URLSearchParams({ workspacePath });
       if (category) params.set('category', category);
-      return request<{ ok: boolean; data: any[] }>(`/project-memory?${params}`);
+      return request<{ ok: boolean; data: any[] }>(`/workspace-memory?${params}`);
     },
-    get: (id: string) => request<{ ok: boolean; data: any }>(`/project-memory/${id}`),
+    get: (id: string) => request<{ ok: boolean; data: any }>(`/workspace-memory/${id}`),
     create: (body: {
-      projectPath: string;
+      workspacePath: string;
       category?: string;
       key: string;
       content: string;
       source?: string;
       confidence?: number;
     }) =>
-      request<{ ok: boolean; data: { id: string } }>('/project-memory', {
+      request<{ ok: boolean; data: { id: string } }>('/workspace-memory', {
         method: 'POST',
         body: JSON.stringify(body),
       }),
     update: (id: string, body: Record<string, any>) =>
-      request<{ ok: boolean }>(`/project-memory/${id}`, {
+      request<{ ok: boolean }>(`/workspace-memory/${id}`, {
         method: 'PATCH',
         body: JSON.stringify(body),
       }),
-    delete: (id: string) => request<{ ok: boolean }>(`/project-memory/${id}`, { method: 'DELETE' }),
-    search: (projectPath: string, q: string) => {
-      const params = new URLSearchParams({ projectPath, q });
-      return request<{ ok: boolean; data: any[] }>(`/project-memory/search/query?${params}`);
+    delete: (id: string) =>
+      request<{ ok: boolean }>(`/workspace-memory/${id}`, { method: 'DELETE' }),
+    search: (workspacePath: string, q: string) => {
+      const params = new URLSearchParams({ workspacePath, q });
+      return request<{ ok: boolean; data: any[] }>(`/workspace-memory/search/query?${params}`);
     },
-    extract: (projectPath: string, messages: Array<{ role: string; content: string }>) =>
+    extract: (workspacePath: string, messages: Array<{ role: string; content: string }>) =>
       request<{ ok: boolean; data: { extracted: number; created: number } }>(
-        '/project-memory/extract',
+        '/workspace-memory/extract',
         {
           method: 'POST',
-          body: JSON.stringify({ projectPath, messages }),
+          body: JSON.stringify({ workspacePath, messages }),
         },
       ),
-    context: (projectPath: string) => {
-      const params = new URLSearchParams({ projectPath });
+    context: (workspacePath: string) => {
+      const params = new URLSearchParams({ workspacePath });
       return request<{ ok: boolean; data: { context: string; count: number } }>(
-        `/project-memory/context?${params}`,
+        `/workspace-memory/context?${params}`,
       );
     },
   },
 
   // --- PRDs ---
   prds: {
-    list: (projectPath?: string) => {
-      const q = projectPath ? `?projectPath=${encodeURIComponent(projectPath)}` : '';
+    list: (workspacePath?: string) => {
+      const q = workspacePath ? `?workspacePath=${encodeURIComponent(workspacePath)}` : '';
       return request<{ ok: boolean; data: any[] }>(`/prds${q}`);
     },
     get: (id: string) => request<{ ok: boolean; data: any }>(`/prds/${id}`),
@@ -553,12 +554,12 @@ export const api = {
       }),
     deleteStory: (prdId: string, storyId: string) =>
       request<{ ok: boolean }>(`/prds/${prdId}/stories/${storyId}`, { method: 'DELETE' }),
-    import: (projectPath: string, prdJson: any) =>
+    import: (workspacePath: string, prdJson: any) =>
       request<{ ok: boolean; data: { id: string; storyIds: string[]; imported: number } }>(
         '/prds/import',
         {
           method: 'POST',
-          body: JSON.stringify({ projectPath, prdJson }),
+          body: JSON.stringify({ workspacePath, prdJson }),
         },
       ),
     export: (id: string) => request<{ ok: boolean; data: any }>(`/prds/${id}/export`),
@@ -814,7 +815,7 @@ export const api = {
 
   // --- Loops ---
   loops: {
-    start: (body: { prdId: string; projectPath: string; config: any }) =>
+    start: (body: { prdId: string; workspacePath: string; config: any }) =>
       request<{ ok: boolean; data: { loopId: string } }>('/loops/start', {
         method: 'POST',
         body: JSON.stringify(body),

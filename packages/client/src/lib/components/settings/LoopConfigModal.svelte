@@ -90,8 +90,8 @@
 
   async function startLoop() {
     const prdId = loopStore.selectedPrdId;
-    const projectPath = settingsStore.projectPath;
-    if (!prdId || !projectPath) return;
+    const workspacePath = settingsStore.workspacePath;
+    if (!prdId || !workspacePath) return;
 
     const config: LoopConfig = {
       maxIterations,
@@ -105,7 +105,7 @@
     };
 
     try {
-      const result = await loopStore.startLoop(prdId, projectPath, config);
+      const result = await loopStore.startLoop(prdId, workspacePath, config);
       if (result.ok) {
         uiStore.toast('Autonomous loop started', 'success');
         close();

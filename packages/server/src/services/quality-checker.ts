@@ -5,7 +5,7 @@ import type { QualityCheckConfig, QualityCheckResult } from '@maude/shared';
  */
 export async function runQualityCheck(
   check: QualityCheckConfig,
-  projectPath: string,
+  workspacePath: string,
 ): Promise<QualityCheckResult> {
   const start = Date.now();
 
@@ -15,7 +15,7 @@ export async function runQualityCheck(
     const cleanParts = parts.map((p) => p.replace(/^["']|["']$/g, ''));
 
     const proc = Bun.spawn(cleanParts, {
-      cwd: projectPath,
+      cwd: workspacePath,
       stdout: 'pipe',
       stderr: 'pipe',
       env: { ...process.env, FORCE_COLOR: '0', CI: '1' },
@@ -56,12 +56,12 @@ export async function runQualityCheck(
  */
 export async function runAllQualityChecks(
   checks: QualityCheckConfig[],
-  projectPath: string,
+  workspacePath: string,
 ): Promise<QualityCheckResult[]> {
   const enabledChecks = checks.filter((c) => c.enabled);
   const results: QualityCheckResult[] = [];
   for (const check of enabledChecks) {
-    results.push(await runQualityCheck(check, projectPath));
+    results.push(await runQualityCheck(check, workspacePath));
   }
   return results;
 }

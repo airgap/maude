@@ -7,12 +7,12 @@ const app = new Hono();
 
 // Get all memory files
 app.get('/', async (c) => {
-  const projectPath = c.req.query('projectPath') || process.cwd();
+  const workspacePath = c.req.query('workspacePath') || process.cwd();
   const files = [];
 
-  // Project memory
+  // Workspace memory
   for (const p of ['CLAUDE.md', '.claude/CLAUDE.md']) {
-    const full = join(projectPath, p);
+    const full = join(workspacePath, p);
     try {
       const content = await readFile(full, 'utf-8');
       const s = await stat(full);
@@ -23,7 +23,7 @@ app.get('/', async (c) => {
   }
 
   // Local memory
-  const localPath = join(projectPath, 'CLAUDE.local.md');
+  const localPath = join(workspacePath, 'CLAUDE.local.md');
   try {
     const content = await readFile(localPath, 'utf-8');
     const s = await stat(localPath);
@@ -43,8 +43,8 @@ app.get('/', async (c) => {
   }
 
   // Auto memory
-  const projectName = projectPath.replace(/\//g, '-');
-  const autoMemPath = join(homedir(), '.claude', 'projects', projectName, 'memory');
+  const wsName = workspacePath.replace(/\//g, '-');
+  const autoMemPath = join(homedir(), '.claude', 'projects', wsName, 'memory');
   try {
     const entries = await readdir(autoMemPath);
     for (const entry of entries) {
@@ -63,7 +63,7 @@ app.get('/', async (c) => {
   }
 
   // Rules
-  const rulesDir = join(projectPath, '.claude', 'rules');
+  const rulesDir = join(workspacePath, '.claude', 'rules');
   try {
     const entries = await readdir(rulesDir, { recursive: true });
     for (const entry of entries) {
@@ -78,7 +78,7 @@ app.get('/', async (c) => {
   }
 
   // Skills
-  const skillsDir = join(projectPath, '.claude', 'skills');
+  const skillsDir = join(workspacePath, '.claude', 'skills');
   try {
     const entries = await readdir(skillsDir);
     for (const entry of entries) {

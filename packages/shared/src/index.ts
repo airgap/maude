@@ -67,16 +67,16 @@ export { DEFAULT_SETTINGS } from './settings.js';
 
 export type { MemoryFile, MemoryFileType, Skill, MemoryState } from './memory.js';
 
-export type { Project, ProjectSettings, ProjectSummary } from './projects.js';
+export type { Workspace, WorkspaceSettings, WorkspaceSummary } from './projects.js';
 
 export type { EditorConfigProps } from './editorconfig.js';
 
 export type {
   MemoryCategory,
   MemorySource,
-  ProjectMemory,
-  ProjectMemoryCreate,
-  ProjectMemoryUpdate,
+  WorkspaceMemory,
+  WorkspaceMemoryCreate,
+  WorkspaceMemoryUpdate,
 } from './project-memory.js';
 
 export type {

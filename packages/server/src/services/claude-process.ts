@@ -188,7 +188,7 @@ interface ClaudeSession {
   process?: Subprocess;
   cliProcess?: CliProcess;
   conversationId: string;
-  projectPath?: string;
+  workspacePath?: string;
   model?: string;
   systemPrompt?: string;
   effort?: string;
@@ -389,7 +389,7 @@ class ClaudeProcessManager {
     opts: {
       model?: string;
       systemPrompt?: string;
-      projectPath?: string;
+      workspacePath?: string;
       effort?: string;
       maxBudgetUsd?: number;
       maxTurns?: number;
@@ -404,7 +404,7 @@ class ClaudeProcessManager {
       id: sessionId,
       cliSessionId: opts.resumeSessionId,
       conversationId,
-      projectPath: opts.projectPath,
+      workspacePath: opts.workspacePath,
       model: opts.model,
       systemPrompt: opts.systemPrompt,
       effort: opts.effort,
@@ -440,7 +440,7 @@ class ClaudeProcessManager {
     }
 
     // Apply sandbox restrictions
-    const sandbox = getSandboxConfig(session.projectPath || null);
+    const sandbox = getSandboxConfig(session.workspacePath || null);
     let systemPrompt = session.systemPrompt;
     if (sandbox.enabled && sandbox.allowedPaths.length > 0) {
       const sandboxDirective = `\n\n## Sandbox Restrictions\nYou MUST only read/write files within these directories: ${sandbox.allowedPaths.join(', ')}. Do NOT access files outside these paths. Do NOT run destructive commands like: ${sandbox.blockedCommands.slice(0, 5).join(', ')}.`;
@@ -478,7 +478,7 @@ class ClaudeProcessManager {
 
     let cliProc: CliProcess;
     try {
-      const cwd = session.projectPath || process.cwd();
+      const cwd = session.workspacePath || process.cwd();
       if (hasScript) {
         cliProc = spawnWithScript(binary, args, cwd, spawnEnv);
         console.log(`[${provider}] Spawned PID ${cliProc.pid} (script/pty)`);
@@ -834,7 +834,7 @@ class ClaudeProcessManager {
                             try {
                               const result = await verifyFile(
                                 filePath,
-                                session.projectPath || process.cwd(),
+                                session.workspacePath || process.cwd(),
                               );
                               const verifyEvent = JSON.stringify({
                                 type: 'verification_result',

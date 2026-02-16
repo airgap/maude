@@ -57,16 +57,16 @@ import { homedir } from 'os';
 
 const app = new Hono();
 
-// List PRDs (optionally filtered by projectPath)
+// List PRDs (optionally filtered by workspacePath)
 app.get('/', (c) => {
   const db = getDb();
-  const projectPath = c.req.query('projectPath');
+  const workspacePath = c.req.query('workspacePath');
 
   let rows: any[];
-  if (projectPath) {
+  if (workspacePath) {
     rows = db
-      .query('SELECT * FROM prds WHERE project_path = ? ORDER BY updated_at DESC')
-      .all(projectPath);
+      .query('SELECT * FROM prds WHERE workspace_path = ? ORDER BY updated_at DESC')
+      .all(workspacePath);
   } else {
     rows = db.query('SELECT * FROM prds ORDER BY updated_at DESC').all();
   }
@@ -252,11 +252,11 @@ app.post('/', async (c) => {
   const now = Date.now();
 
   db.query(
-    `INSERT INTO prds (id, project_path, name, description, branch_name, quality_checks, created_at, updated_at)
+    `INSERT INTO prds (id, workspace_path, name, description, branch_name, quality_checks, created_at, updated_at)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
   ).run(
     prdId,
-    body.projectPath,
+    body.workspacePath,
     body.name,
     body.description || '',
     body.branchName || null,
@@ -521,10 +521,10 @@ app.delete('/:prdId/stories/:storyId', (c) => {
 // Import Ralph-format prd.json
 app.post('/import', async (c) => {
   const body = await c.req.json();
-  const { projectPath, prdJson } = body;
+  const { workspacePath, prdJson } = body;
 
-  if (!projectPath || !prdJson) {
-    return c.json({ ok: false, error: 'projectPath and prdJson required' }, 400);
+  if (!workspacePath || !prdJson) {
+    return c.json({ ok: false, error: 'workspacePath and prdJson required' }, 400);
   }
 
   // Parse Ralph format:
@@ -536,11 +536,11 @@ app.post('/import', async (c) => {
   const now = Date.now();
 
   db.query(
-    `INSERT INTO prds (id, project_path, name, description, branch_name, quality_checks, created_at, updated_at)
+    `INSERT INTO prds (id, workspace_path, name, description, branch_name, quality_checks, created_at, updated_at)
      VALUES (?, ?, ?, ?, ?, '[]', ?, ?)`,
   ).run(
     prdId,
-    projectPath,
+    workspacePath,
     ralph.project || 'Imported PRD',
     ralph.description || '',
     ralph.branchName || null,
@@ -665,9 +665,9 @@ app.post('/:id/generate', async (c) => {
   try {
     const memRows = db
       .query(
-        `SELECT * FROM project_memories WHERE project_path = ? AND confidence >= 0.3 ORDER BY category, times_seen DESC LIMIT 30`,
+        `SELECT * FROM workspace_memories WHERE workspace_path = ? AND confidence >= 0.3 ORDER BY category, times_seen DESC LIMIT 30`,
       )
-      .all(prdRow.project_path) as any[];
+      .all(prdRow.workspace_path) as any[];
     if (memRows.length > 0) {
       const grouped: Record<string, string[]> = {};
       for (const m of memRows) {
@@ -904,9 +904,9 @@ app.post('/:prdId/stories/:storyId/refine', async (c) => {
   try {
     const memRows = db
       .query(
-        `SELECT * FROM project_memories WHERE project_path = ? AND confidence >= 0.3 ORDER BY category, times_seen DESC LIMIT 30`,
+        `SELECT * FROM workspace_memories WHERE workspace_path = ? AND confidence >= 0.3 ORDER BY category, times_seen DESC LIMIT 30`,
       )
-      .all(prdRow.project_path) as any[];
+      .all(prdRow.workspace_path) as any[];
     if (memRows.length > 0) {
       const grouped: Record<string, string[]> = {};
       for (const m of memRows) {
@@ -1184,9 +1184,9 @@ app.post('/:id/plan', async (c) => {
   try {
     const memRows = db
       .query(
-        `SELECT * FROM project_memories WHERE project_path = ? AND confidence >= 0.3 ORDER BY category, times_seen DESC LIMIT 50`,
+        `SELECT * FROM workspace_memories WHERE workspace_path = ? AND confidence >= 0.3 ORDER BY category, times_seen DESC LIMIT 50`,
       )
-      .all(prdRow.project_path) as any[];
+      .all(prdRow.workspace_path) as any[];
     if (memRows.length > 0) {
       const grouped: Record<string, string[]> = {};
       for (const m of memRows) {
@@ -1292,14 +1292,14 @@ Each story should be implementable in a single focused session.`;
   const model = body.model || 'sonnet';
 
   db.query(
-    `INSERT INTO conversations (id, title, model, system_prompt, project_path, plan_mode, created_at, updated_at)
+    `INSERT INTO conversations (id, title, model, system_prompt, workspace_path, plan_mode, created_at, updated_at)
      VALUES (?, ?, ?, ?, ?, 1, ?, ?)`,
   ).run(
     conversationId,
     `[Plan] ${prdRow.name}`,
     model,
     systemPrompt,
-    prdRow.project_path,
+    prdRow.workspace_path,
     now,
     now,
   );
@@ -2248,9 +2248,9 @@ app.post('/:prdId/stories/:storyId/estimate', async (c) => {
   try {
     const memRows = db
       .query(
-        `SELECT * FROM project_memories WHERE project_path = ? AND confidence >= 0.3 ORDER BY category, times_seen DESC LIMIT 30`,
+        `SELECT * FROM workspace_memories WHERE workspace_path = ? AND confidence >= 0.3 ORDER BY category, times_seen DESC LIMIT 30`,
       )
-      .all(prdRow.project_path) as any[];
+      .all(prdRow.workspace_path) as any[];
     if (memRows.length > 0) {
       const grouped: Record<string, string[]> = {};
       for (const m of memRows) {
@@ -2580,9 +2580,9 @@ ${criteria || '(None)'}\n`;
   try {
     const memRows = db
       .query(
-        `SELECT * FROM project_memories WHERE project_path = ? AND confidence >= 0.3 ORDER BY category, times_seen DESC LIMIT 30`,
+        `SELECT * FROM workspace_memories WHERE workspace_path = ? AND confidence >= 0.3 ORDER BY category, times_seen DESC LIMIT 30`,
       )
-      .all(prdRow.project_path) as any[];
+      .all(prdRow.workspace_path) as any[];
     if (memRows.length > 0) {
       const grouped: Record<string, string[]> = {};
       for (const m of memRows) {
@@ -2824,9 +2824,9 @@ app.post('/:id/completeness', async (c) => {
   try {
     const memories = db
       .query(
-        'SELECT category, key, content FROM project_memories WHERE project_path = ? ORDER BY category, key',
+        'SELECT category, key, content FROM workspace_memories WHERE workspace_path = ? ORDER BY category, key',
       )
-      .all(prdRow.project_path) as any[];
+      .all(prdRow.workspace_path) as any[];
     if (memories.length > 0) {
       memoryContext = '\n\n## Project Memory\n';
       for (const m of memories.slice(0, 10)) {
@@ -3160,9 +3160,9 @@ ${criteria ? `- Acceptance Criteria:\n${criteria}` : ''}
   try {
     const memories = db
       .query(
-        'SELECT category, key, content FROM project_memories WHERE project_path = ? ORDER BY category, key',
+        'SELECT category, key, content FROM workspace_memories WHERE workspace_path = ? ORDER BY category, key',
       )
-      .all(prdRow.project_path) as any[];
+      .all(prdRow.workspace_path) as any[];
     if (memories.length > 0) {
       memoryContext = '\n\n## Project Context\n';
       for (const m of memories.slice(0, 10)) {
@@ -3715,9 +3715,9 @@ app.post('/:prdId/stories/:storyId/priority', async (c) => {
   try {
     const memRows = db
       .query(
-        `SELECT * FROM project_memories WHERE project_path = ? AND confidence >= 0.3 ORDER BY category, times_seen DESC LIMIT 20`,
+        `SELECT * FROM workspace_memories WHERE workspace_path = ? AND confidence >= 0.3 ORDER BY category, times_seen DESC LIMIT 20`,
       )
-      .all(prdRow.project_path) as any[];
+      .all(prdRow.workspace_path) as any[];
     if (memRows.length > 0) {
       const grouped: Record<string, string[]> = {};
       for (const m of memRows) {
@@ -4067,9 +4067,9 @@ ${s.estimate ? `- Estimate: ${s.estimate.size} (${s.estimate.storyPoints} points
   try {
     const memories = db
       .query(
-        'SELECT category, key, content FROM project_memories WHERE project_path = ? ORDER BY category, key',
+        'SELECT category, key, content FROM workspace_memories WHERE workspace_path = ? ORDER BY category, key',
       )
-      .all(prdRow.project_path) as any[];
+      .all(prdRow.workspace_path) as any[];
     if (memories.length > 0) {
       memoryContext = '\n\n## Project Context\n';
       for (const m of memories.slice(0, 10)) {
@@ -4269,7 +4269,7 @@ Prioritize all stories considering dependencies, risks, scope, and user impact.`
 function prdFromRow(row: any) {
   return {
     id: row.id,
-    projectPath: row.project_path,
+    workspacePath: row.workspace_path,
     name: row.name,
     description: row.description,
     branchName: row.branch_name,

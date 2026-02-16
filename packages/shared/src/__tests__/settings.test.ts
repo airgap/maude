@@ -48,8 +48,8 @@ describe('DEFAULT_SETTINGS', () => {
     expect(DEFAULT_SETTINGS.autoMemoryEnabled).toBe(true);
   });
 
-  test('has correct default project path', () => {
-    expect(DEFAULT_SETTINGS.projectPath).toBe('.');
+  test('has correct default workspace path', () => {
+    expect(DEFAULT_SETTINGS.workspacePath).toBe('.');
   });
 
   test('has correct appearance defaults', () => {

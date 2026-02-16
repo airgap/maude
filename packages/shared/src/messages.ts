@@ -50,8 +50,8 @@ export interface Conversation {
   updatedAt: number;
   model: string;
   systemPrompt?: string;
-  projectPath?: string;
-  projectId?: string;
+  workspacePath?: string;
+  workspaceId?: string;
   totalTokens: number;
   maxContextTokens: number;
   // Plan mode
@@ -76,6 +76,6 @@ export interface ConversationSummary {
   updatedAt: number;
   messageCount: number;
   model: string;
-  projectPath?: string;
-  projectId?: string;
+  workspacePath?: string;
+  workspaceId?: string;
 }

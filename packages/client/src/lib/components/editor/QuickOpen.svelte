@@ -83,7 +83,7 @@
   });
 
   async function loadFiles() {
-    const path = conversationStore.active?.projectPath || settingsStore.projectPath || '.';
+    const path = conversationStore.active?.workspacePath || settingsStore.workspacePath || '.';
     try {
       const res = await api.files.tree(path, 6);
       allFiles = flattenTree(res.data);

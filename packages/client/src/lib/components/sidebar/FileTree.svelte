@@ -2,7 +2,7 @@
   import { api } from '$lib/api/client';
   import { conversationStore } from '$lib/stores/conversation.svelte';
   import { settingsStore } from '$lib/stores/settings.svelte';
-  import { projectStore } from '$lib/stores/projects.svelte';
+  import { workspaceListStore } from '$lib/stores/projects.svelte';
   import { editorStore } from '$lib/stores/editor.svelte';
   import { gitStore } from '$lib/stores/git.svelte';
 
@@ -19,12 +19,12 @@
   let loading = $state(false);
   let currentPath = $state('');
 
-  // Reactively reload when active conversation or project changes
+  // Reactively reload when active conversation or workspace changes
   $effect(() => {
     const path =
-      projectStore.activeProject?.path ||
-      conversationStore.active?.projectPath ||
-      settingsStore.projectPath ||
+      workspaceListStore.activeWorkspace?.path ||
+      conversationStore.active?.workspacePath ||
+      settingsStore.workspacePath ||
       '.';
     if (path !== currentPath) {
       currentPath = path;

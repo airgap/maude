@@ -38,7 +38,7 @@ export interface Settings {
   keybindings: Keybinding[];
   mcpServers: MCPServerConfig[];
   autoMemoryEnabled: boolean;
-  projectPath: string;
+  workspacePath: string;
   maxBudgetUsd?: number;
   // Appearance
   fontSize: number;
@@ -61,7 +61,7 @@ export interface Keybinding {
 // API key is stored server-side only, never sent to client
 export interface ServerOnlySettings {
   anthropicApiKey: string;
-  projectPaths: string[];
+  workspacePaths: string[];
   sessionPersistence: boolean;
   debugMode: boolean;
 }
@@ -93,7 +93,7 @@ export const DEFAULT_SETTINGS: Settings = {
   ],
   mcpServers: [],
   autoMemoryEnabled: true,
-  projectPath: '.',
+  workspacePath: '.',
   fontSize: 14,
   fontFamily: "'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace",
   showThinkingBlocks: true,

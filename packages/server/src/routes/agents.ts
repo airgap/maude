@@ -38,7 +38,7 @@ app.post('/', async (c) => {
 
   const sessionId = await claudeManager.createSession(body.parentConversationId || '', {
     model: body.model,
-    projectPath: body.projectPath,
+    workspacePath: body.workspacePath,
   });
 
   const agent = {

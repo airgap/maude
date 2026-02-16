@@ -34,12 +34,12 @@ describe('Git Routes', () => {
     test('returns snapshots ordered by created_at DESC', async () => {
       testDb
         .query(
-          'INSERT INTO git_snapshots (id, project_path, head_sha, reason, has_changes, created_at) VALUES (?, ?, ?, ?, ?, ?)',
+          'INSERT INTO git_snapshots (id, workspace_path, head_sha, reason, has_changes, created_at) VALUES (?, ?, ?, ?, ?, ?)',
         )
         .run('snap-1', '/test', 'abc123', 'pre-agent', 0, 100);
       testDb
         .query(
-          'INSERT INTO git_snapshots (id, project_path, head_sha, reason, has_changes, created_at) VALUES (?, ?, ?, ?, ?, ?)',
+          'INSERT INTO git_snapshots (id, workspace_path, head_sha, reason, has_changes, created_at) VALUES (?, ?, ?, ?, ?, ?)',
         )
         .run('snap-2', '/test', 'def456', 'pre-agent', 1, 200);
 

@@ -8,7 +8,7 @@
     onCreated?: (id: string) => void;
   }>();
 
-  let projectPath = $state(settingsStore.projectPath);
+  let workspacePath = $state(settingsStore.workspacePath);
   let model = $state(settingsStore.model);
   let permissionMode = $state(settingsStore.permissionMode);
   let effort = $state(settingsStore.effort);
@@ -49,14 +49,14 @@
   }
 
   function selectDirectory(path: string) {
-    projectPath = path;
+    workspacePath = path;
     browsing = false;
   }
 
   async function create() {
     const res = await api.conversations.create({
       model,
-      projectPath: projectPath !== '.' ? projectPath : undefined,
+      workspacePath: workspacePath !== '.' ? workspacePath : undefined,
       permissionMode,
       effort,
       maxBudgetUsd: maxBudgetUsd ? parseFloat(maxBudgetUsd) : undefined,
@@ -92,12 +92,12 @@
       <h2>New Conversation</h2>
 
       <div class="field">
-        <label for="nc-path">Project Directory</label>
+        <label for="nc-path">Workspace Directory</label>
         <div class="path-row">
-          <input id="nc-path" type="text" bind:value={projectPath} placeholder="." />
+          <input id="nc-path" type="text" bind:value={workspacePath} placeholder="." />
           <button
             class="btn-browse"
-            onclick={() => browseDirectory(projectPath !== '.' ? projectPath : undefined)}
+            onclick={() => browseDirectory(workspacePath !== '.' ? workspacePath : undefined)}
             >Browse</button
           >
         </div>

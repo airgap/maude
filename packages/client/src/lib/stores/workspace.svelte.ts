@@ -3,7 +3,7 @@ import { uiStore, type SidebarTab } from './ui.svelte';
 import { streamStore, type StreamSnapshot } from './stream.svelte';
 import { searchStore } from './search.svelte';
 import { terminalStore } from './terminal.svelte';
-import { projectStore } from './projects.svelte';
+import { workspaceListStore } from './projects.svelte';
 import { conversationStore } from './conversation.svelte';
 import { gitStore } from './git.svelte';
 import { settingsStore } from './settings.svelte';
@@ -42,10 +42,10 @@ export interface WorkspaceSnapshot {
   sidebarLayout?: SidebarLayoutSnapshot;
 }
 
-export interface Workspace {
-  projectId: string;
-  projectName: string;
-  projectPath: string;
+export interface WorkspaceTab {
+  workspaceId: string;
+  workspaceName: string;
+  workspacePath: string;
   snapshot: WorkspaceSnapshot;
 }
 
@@ -68,9 +68,9 @@ function createDefaultSnapshot(): WorkspaceSnapshot {
 }
 
 interface PersistedWorkspace {
-  projectId: string;
-  projectName: string;
-  projectPath: string;
+  workspaceId: string;
+  workspaceName: string;
+  workspacePath: string;
   snapshot: {
     editorTabs: EditorTab[];
     activeEditorTabId: string | null;
@@ -102,15 +102,15 @@ function loadFromStorage(): PersistedState | null {
   return null;
 }
 
-function saveToStorage(workspaces: Workspace[], activeId: string | null) {
+function saveToStorage(workspaces: WorkspaceTab[], activeId: string | null) {
   if (typeof window === 'undefined') return;
   try {
     const persisted: PersistedState = {
       activeWorkspaceId: activeId,
       workspaces: workspaces.map((w) => ({
-        projectId: w.projectId,
-        projectName: w.projectName,
-        projectPath: w.projectPath,
+        workspaceId: w.workspaceId,
+        workspaceName: w.workspaceName,
+        workspacePath: w.workspacePath,
         snapshot: {
           editorTabs: w.snapshot.editorTabs,
           activeEditorTabId: w.snapshot.activeEditorTabId,
@@ -134,11 +134,11 @@ function saveToStorage(workspaces: Workspace[], activeId: string | null) {
 }
 
 function createWorkspaceStore() {
-  let workspaces = $state<Workspace[]>([]);
+  let workspaces = $state<WorkspaceTab[]>([]);
   let activeWorkspaceId = $state<string | null>(null);
 
   const activeWorkspace = $derived(
-    workspaces.find((w) => w.projectId === activeWorkspaceId) ?? null,
+    workspaces.find((w) => w.workspaceId === activeWorkspaceId) ?? null,
   );
   const hasWorkspaces = $derived(workspaces.length > 0);
 
@@ -247,18 +247,18 @@ function createWorkspaceStore() {
         activeWorkspaceId = saved.activeWorkspaceId;
 
         // Restore the active workspace
-        const active = workspaces.find((w) => w.projectId === activeWorkspaceId);
+        const active = workspaces.find((w) => w.workspaceId === activeWorkspaceId);
         if (active) {
           restoreSnapshot(active.snapshot);
-          projectStore.setActiveProjectId(active.projectId);
-          gitStore.startPolling(active.projectPath);
+          workspaceListStore.setActiveWorkspaceId(active.workspaceId);
+          gitStore.startPolling(active.workspacePath);
         }
       }
     },
 
     openWorkspace(project: { id: string; name: string; path: string }) {
       // If already open, just switch to it
-      const existing = workspaces.find((w) => w.projectId === project.id);
+      const existing = workspaces.find((w) => w.workspaceId === project.id);
       if (existing) {
         this.switchWorkspace(project.id);
         return;
@@ -266,17 +266,17 @@ function createWorkspaceStore() {
 
       // Capture current workspace state before switching
       if (activeWorkspaceId) {
-        const current = workspaces.find((w) => w.projectId === activeWorkspaceId);
+        const current = workspaces.find((w) => w.workspaceId === activeWorkspaceId);
         if (current) {
           current.snapshot = captureSnapshot();
         }
       }
 
       // Create new workspace
-      const workspace: Workspace = {
-        projectId: project.id,
-        projectName: project.name,
-        projectPath: project.path,
+      const workspace: WorkspaceTab = {
+        workspaceId: project.id,
+        workspaceName: project.name,
+        workspacePath: project.path,
         snapshot: createDefaultSnapshot(),
       };
 
@@ -287,7 +287,7 @@ function createWorkspaceStore() {
       restoreSnapshot(workspace.snapshot);
 
       // Set project context
-      projectStore.setActiveProjectId(project.id);
+      workspaceListStore.setActiveWorkspaceId(project.id);
       gitStore.stopPolling();
       gitStore.startPolling(project.path);
 
@@ -297,30 +297,30 @@ function createWorkspaceStore() {
       persist();
     },
 
-    switchWorkspace(projectId: string) {
-      if (projectId === activeWorkspaceId) return;
+    switchWorkspace(wsId: string) {
+      if (wsId === activeWorkspaceId) return;
 
-      const target = workspaces.find((w) => w.projectId === projectId);
+      const target = workspaces.find((w) => w.workspaceId === wsId);
       if (!target) return;
 
       // 1. Capture current workspace snapshot
       if (activeWorkspaceId) {
-        const current = workspaces.find((w) => w.projectId === activeWorkspaceId);
+        const current = workspaces.find((w) => w.workspaceId === activeWorkspaceId);
         if (current) {
           current.snapshot = captureSnapshot();
         }
       }
 
       // 2. Switch
-      activeWorkspaceId = projectId;
+      activeWorkspaceId = wsId;
 
       // 3. Restore target snapshot
       restoreSnapshot(target.snapshot);
 
-      // 4. Update project store + git polling
-      projectStore.setActiveProjectId(projectId);
+      // 4. Update workspace list store + git polling
+      workspaceListStore.setActiveWorkspaceId(wsId);
       gitStore.stopPolling();
-      gitStore.startPolling(target.projectPath);
+      gitStore.startPolling(target.workspacePath);
 
       // 5. Restore conversation context
       if (target.snapshot.activeConversationId) {
@@ -344,8 +344,8 @@ function createWorkspaceStore() {
       persist();
     },
 
-    closeWorkspace(projectId: string) {
-      const idx = workspaces.findIndex((w) => w.projectId === projectId);
+    closeWorkspace(wsId: string) {
+      const idx = workspaces.findIndex((w) => w.workspaceId === wsId);
       if (idx < 0) return;
 
       const workspace = workspaces[idx];
@@ -355,22 +355,22 @@ function createWorkspaceStore() {
         workspace.snapshot.streamSnapshot.abortController.abort();
       }
       // Also check if this is the active workspace with a live stream
-      if (projectId === activeWorkspaceId && streamStore.isStreaming) {
+      if (wsId === activeWorkspaceId && streamStore.isStreaming) {
         streamStore.cancel();
       }
 
-      workspaces = workspaces.filter((w) => w.projectId !== projectId);
+      workspaces = workspaces.filter((w) => w.workspaceId !== wsId);
 
       // If we closed the active workspace, switch to adjacent
-      if (projectId === activeWorkspaceId) {
+      if (wsId === activeWorkspaceId) {
         if (workspaces.length > 0) {
           const nextIdx = Math.min(idx, workspaces.length - 1);
-          this.switchWorkspace(workspaces[nextIdx].projectId);
+          this.switchWorkspace(workspaces[nextIdx].workspaceId);
         } else {
           activeWorkspaceId = null;
           // Clear all stores to empty state
           restoreSnapshot(createDefaultSnapshot());
-          projectStore.setActiveProjectId(null);
+          workspaceListStore.setActiveWorkspaceId(null);
           gitStore.stopPolling();
           conversationStore.setActive(null);
         }
@@ -382,7 +382,7 @@ function createWorkspaceStore() {
     /** Update the active workspace's snapshot without a full switch */
     updateActiveSnapshot() {
       if (!activeWorkspaceId) return;
-      const current = workspaces.find((w) => w.projectId === activeWorkspaceId);
+      const current = workspaces.find((w) => w.workspaceId === activeWorkspaceId);
       if (current) {
         current.snapshot = captureSnapshot();
         persist();
@@ -390,11 +390,11 @@ function createWorkspaceStore() {
     },
 
     /** Check if a workspace has unsaved editor tabs */
-    hasDirtyTabs(projectId: string): boolean {
-      const ws = workspaces.find((w) => w.projectId === projectId);
+    hasDirtyTabs(wsId: string): boolean {
+      const ws = workspaces.find((w) => w.workspaceId === wsId);
       if (!ws) return false;
       // If it's the active workspace, check live editor state
-      if (projectId === activeWorkspaceId) {
+      if (wsId === activeWorkspaceId) {
         return editorStore.dirtyTabs.length > 0;
       }
       // Otherwise check snapshot
@@ -402,19 +402,19 @@ function createWorkspaceStore() {
     },
 
     /** Check if a workspace has an active stream */
-    hasActiveStream(projectId: string): boolean {
-      if (projectId === activeWorkspaceId) {
+    hasActiveStream(wsId: string): boolean {
+      if (wsId === activeWorkspaceId) {
         return streamStore.isStreaming;
       }
-      const ws = workspaces.find((w) => w.projectId === projectId);
+      const ws = workspaces.find((w) => w.workspaceId === wsId);
       if (!ws) return false;
       const ss = ws.snapshot.streamSnapshot;
       return ss !== null && (ss.status === 'streaming' || ss.status === 'connecting');
     },
 
-    /** Called when a project is deleted externally */
-    onProjectDeleted(projectId: string) {
-      this.closeWorkspace(projectId);
+    /** Called when a workspace is deleted externally */
+    onWorkspaceDeleted(wsId: string) {
+      this.closeWorkspace(wsId);
     },
   };
 }

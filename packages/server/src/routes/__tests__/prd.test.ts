@@ -16,7 +16,7 @@ import { prdRoutes as app } from '../prd';
 function clearTables() {
   testDb.exec('DELETE FROM prd_stories');
   testDb.exec('DELETE FROM prds');
-  testDb.exec('DELETE FROM project_memories');
+  testDb.exec('DELETE FROM workspace_memories');
   testDb.exec('DELETE FROM conversations');
   testDb.exec('DELETE FROM story_templates');
 }
@@ -24,7 +24,7 @@ function clearTables() {
 function insertPrd(overrides: Record<string, any> = {}) {
   const defaults = {
     id: 'prd-1',
-    project_path: '/test/project',
+    workspace_path: '/test/project',
     name: 'Test PRD',
     description: 'A test product requirements document',
     branch_name: null,
@@ -35,12 +35,12 @@ function insertPrd(overrides: Record<string, any> = {}) {
   const row = { ...defaults, ...overrides };
   testDb
     .query(
-      `INSERT INTO prds (id, project_path, name, description, branch_name, quality_checks, created_at, updated_at)
+      `INSERT INTO prds (id, workspace_path, name, description, branch_name, quality_checks, created_at, updated_at)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
     )
     .run(
       row.id,
-      row.project_path,
+      row.workspace_path,
       row.name,
       row.description,
       row.branch_name,
@@ -106,7 +106,7 @@ function insertStory(overrides: Record<string, any> = {}) {
 function insertMemory(overrides: Record<string, any> = {}) {
   const defaults = {
     id: 'mem-1',
-    project_path: '/test/project',
+    workspace_path: '/test/project',
     category: 'convention',
     key: 'test-convention',
     content: 'Use TypeScript strict mode',
@@ -119,12 +119,12 @@ function insertMemory(overrides: Record<string, any> = {}) {
   const row = { ...defaults, ...overrides };
   testDb
     .query(
-      `INSERT INTO project_memories (id, project_path, category, key, content, source, confidence, times_seen, created_at, updated_at)
+      `INSERT INTO workspace_memories (id, workspace_path, category, key, content, source, confidence, times_seen, created_at, updated_at)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     )
     .run(
       row.id,
-      row.project_path,
+      row.workspace_path,
       row.category,
       row.key,
       row.content,
@@ -169,11 +169,11 @@ describe('PRD Routes', () => {
       expect(json.data[1].id).toBe('prd-old');
     });
 
-    test('filters by projectPath query param', async () => {
-      insertPrd({ id: 'prd-a', project_path: '/project-a' });
-      insertPrd({ id: 'prd-b', project_path: '/project-b' });
+    test('filters by workspacePath query param', async () => {
+      insertPrd({ id: 'prd-a', workspace_path: '/project-a' });
+      insertPrd({ id: 'prd-b', workspace_path: '/project-b' });
 
-      const res = await app.request('/?projectPath=/project-a');
+      const res = await app.request('/?workspacePath=/project-a');
       const json = await res.json();
       expect(json.data).toHaveLength(1);
       expect(json.data[0].id).toBe('prd-a');
@@ -182,7 +182,7 @@ describe('PRD Routes', () => {
     test('maps row to camelCase shape', async () => {
       insertPrd({
         id: 'prd-1',
-        project_path: '/my/project',
+        workspace_path: '/my/project',
         name: 'My PRD',
         description: 'desc',
         branch_name: 'feature/test',
@@ -195,7 +195,7 @@ describe('PRD Routes', () => {
       const json = await res.json();
       const prd = json.data[0];
       expect(prd.id).toBe('prd-1');
-      expect(prd.projectPath).toBe('/my/project');
+      expect(prd.workspacePath).toBe('/my/project');
       expect(prd.name).toBe('My PRD');
       expect(prd.description).toBe('desc');
       expect(prd.branchName).toBe('feature/test');
@@ -273,7 +273,7 @@ describe('PRD Routes', () => {
       const res = await app.request('/', {
         method: 'POST',
         body: JSON.stringify({
-          projectPath: '/test/project',
+          workspacePath: '/test/project',
           name: 'New PRD',
           description: 'Build a thing',
           stories: [
@@ -321,7 +321,7 @@ describe('PRD Routes', () => {
       const res = await app.request('/', {
         method: 'POST',
         body: JSON.stringify({
-          projectPath: '/test/project',
+          workspacePath: '/test/project',
           name: 'Empty PRD',
           description: '',
           stories: [],
@@ -338,7 +338,7 @@ describe('PRD Routes', () => {
       const res = await app.request('/', {
         method: 'POST',
         body: JSON.stringify({
-          projectPath: '/test/project',
+          workspacePath: '/test/project',
           name: 'PRD with Checks',
           stories: [],
           qualityChecks: [
@@ -665,7 +665,7 @@ describe('PRD Routes', () => {
 
       const res = await app.request('/import', {
         method: 'POST',
-        body: JSON.stringify({ projectPath: '/test/project', prdJson: ralphPrd }),
+        body: JSON.stringify({ workspacePath: '/test/project', prdJson: ralphPrd }),
         headers: { 'Content-Type': 'application/json' },
       });
 
@@ -1317,10 +1317,10 @@ describe('PRD Routes', () => {
     });
 
     test('includes project memory context in system prompt', async () => {
-      insertPrd({ id: 'prd-1', description: 'Test PRD', project_path: '/test/project' });
+      insertPrd({ id: 'prd-1', description: 'Test PRD', workspace_path: '/test/project' });
       insertMemory({
         id: 'mem-1',
-        project_path: '/test/project',
+        workspace_path: '/test/project',
         category: 'convention',
         key: 'language',
         content: 'Use TypeScript',
@@ -1970,11 +1970,11 @@ describe('PRD Routes', () => {
     test(
       'includes project memory context in system prompt',
       withApiKey(async () => {
-        insertPrd({ id: 'prd-1', project_path: '/test/project' });
+        insertPrd({ id: 'prd-1', workspace_path: '/test/project' });
         insertStory({ id: 'story-1', prd_id: 'prd-1' });
         insertMemory({
           id: 'mem-1',
-          project_path: '/test/project',
+          workspace_path: '/test/project',
           category: 'convention',
           key: 'testing',
           content: 'Use vitest for all tests',

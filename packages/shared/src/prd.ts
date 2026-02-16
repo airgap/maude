@@ -36,7 +36,7 @@ export interface UserStory {
 
 export interface PRD {
   id: string;
-  projectPath: string;
+  workspacePath: string;
   name: string;
   description: string;
   branchName?: string;
@@ -47,7 +47,7 @@ export interface PRD {
 }
 
 export interface PRDCreateInput {
-  projectPath: string;
+  workspacePath: string;
   name: string;
   description: string;
   branchName?: string;
@@ -104,7 +104,7 @@ export interface LoopConfig {
 export interface LoopState {
   id: string;
   prdId: string;
-  projectPath: string;
+  workspacePath: string;
   status: LoopStatus;
   config: LoopConfig;
   currentIteration: number;

@@ -221,7 +221,7 @@
 
     // Auto-connect LSP if a server is available
     if (!lspStore.isConnected(tab.language)) {
-      lspStore.ensureConnection(tab.language, settingsStore.projectPath);
+      lspStore.ensureConnection(tab.language, settingsStore.workspacePath);
     }
 
     // Notify LSP of file open

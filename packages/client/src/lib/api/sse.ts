@@ -2,7 +2,7 @@ import type { StreamEvent, Conversation } from '@maude/shared';
 import { streamStore } from '$lib/stores/stream.svelte';
 import { conversationStore } from '$lib/stores/conversation.svelte';
 import { workspaceStore } from '$lib/stores/workspace.svelte';
-import { projectMemoryStore } from '$lib/stores/project-memory.svelte';
+import { workspaceMemoryStore } from '$lib/stores/project-memory.svelte';
 import { api } from './client';
 import { uuid } from '$lib/utils/uuid';
 
@@ -32,9 +32,9 @@ export async function sendAndStream(conversationId: string, content: string): Pr
   }
 
   // Auto-snapshot before agent runs (fire-and-forget)
-  const projectPath = targetConversation.projectPath;
-  if (projectPath) {
-    api.git.snapshot(projectPath, conversationId, 'pre-agent').catch(() => {});
+  const wsPath = targetConversation.workspacePath;
+  if (wsPath) {
+    api.git.snapshot(wsPath, conversationId, 'pre-agent').catch(() => {});
   }
 
   // Add user message to the target conversation
@@ -153,9 +153,9 @@ export async function sendAndStream(conversationId: string, content: string): Pr
     // (e.g. /compact, /init) but the server still saved an assistant message.
     await conversationStore.reloadById(conversationId);
 
-    // Auto-extract project memories from this conversation
-    const convProjectPath = targetConversation.projectPath;
-    if (convProjectPath) {
+    // Auto-extract workspace memories from this conversation
+    const convWorkspacePath = targetConversation.workspacePath;
+    if (convWorkspacePath) {
       const msgs = targetConversation.messages ?? [];
       // Take last 10 messages for extraction (avoid processing huge histories)
       const recent = msgs.slice(-10).map((m) => ({
@@ -168,7 +168,7 @@ export async function sendAndStream(conversationId: string, content: string): Pr
           : String(m.content),
       }));
       if (recent.length > 0) {
-        projectMemoryStore.extractFromConversation(convProjectPath, recent).catch(() => {});
+        workspaceMemoryStore.extractFromConversation(convWorkspacePath, recent).catch(() => {});
       }
     }
   } catch (err) {

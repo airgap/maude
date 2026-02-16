@@ -7,14 +7,14 @@ const app = new Hono();
 // Start a new loop
 app.post('/start', async (c) => {
   const body = await c.req.json();
-  const { prdId, projectPath, config } = body;
+  const { prdId, workspacePath, config } = body;
 
-  if (!prdId || !projectPath || !config) {
-    return c.json({ ok: false, error: 'prdId, projectPath, and config are required' }, 400);
+  if (!prdId || !workspacePath || !config) {
+    return c.json({ ok: false, error: 'prdId, workspacePath, and config are required' }, 400);
   }
 
   try {
-    const loopId = await loopOrchestrator.startLoop(prdId, projectPath, config);
+    const loopId = await loopOrchestrator.startLoop(prdId, workspacePath, config);
     return c.json({ ok: true, data: { loopId } }, 201);
   } catch (err) {
     return c.json({ ok: false, error: String(err) }, 500);

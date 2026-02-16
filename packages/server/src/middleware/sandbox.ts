@@ -25,8 +25,8 @@ const DEFAULT_BLOCKED_COMMANDS = [
  * Get sandbox configuration for a project path.
  * Returns sandbox settings from project settings in the DB.
  */
-export function getSandboxConfig(projectPath: string | null): SandboxConfig {
-  if (!projectPath) {
+export function getSandboxConfig(workspacePath: string | null): SandboxConfig {
+  if (!workspacePath) {
     return { enabled: false, allowedPaths: [], blockedCommands: DEFAULT_BLOCKED_COMMANDS };
   }
 
@@ -34,14 +34,14 @@ export function getSandboxConfig(projectPath: string | null): SandboxConfig {
     const db = getDb();
     const project = db
       .query(`SELECT settings FROM projects WHERE path = ?`)
-      .get(projectPath) as any;
+      .get(workspacePath) as any;
 
     if (project?.settings) {
       const settings = JSON.parse(project.settings);
       if (settings.sandbox) {
         return {
           enabled: settings.sandbox.enabled !== false,
-          allowedPaths: settings.sandbox.allowedPaths || [projectPath],
+          allowedPaths: settings.sandbox.allowedPaths || [workspacePath],
           blockedCommands: [
             ...DEFAULT_BLOCKED_COMMANDS,
             ...(settings.sandbox.blockedCommands || []),
@@ -56,7 +56,7 @@ export function getSandboxConfig(projectPath: string | null): SandboxConfig {
   // Default: sandbox enabled, restrict to project dir + home config dirs
   return {
     enabled: true,
-    allowedPaths: [projectPath],
+    allowedPaths: [workspacePath],
     blockedCommands: DEFAULT_BLOCKED_COMMANDS,
   };
 }
@@ -100,9 +100,9 @@ export function isCommandBlocked(command: string, config: SandboxConfig): boolea
  */
 export function validatePath(
   filePath: string,
-  projectPath: string | null,
+  workspacePath: string | null,
 ): { allowed: boolean; reason?: string } {
-  const config = getSandboxConfig(projectPath);
+  const config = getSandboxConfig(workspacePath);
   if (!config.enabled) return { allowed: true };
 
   if (isPathAllowed(filePath, config)) return { allowed: true };

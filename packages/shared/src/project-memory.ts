@@ -2,9 +2,9 @@ export type MemoryCategory = 'convention' | 'decision' | 'preference' | 'pattern
 
 export type MemorySource = 'auto' | 'manual';
 
-export interface ProjectMemory {
+export interface WorkspaceMemory {
   id: string;
-  projectPath: string;
+  workspacePath: string;
   category: MemoryCategory;
   key: string;
   content: string;
@@ -15,8 +15,8 @@ export interface ProjectMemory {
   updatedAt: number;
 }
 
-export interface ProjectMemoryCreate {
-  projectPath: string;
+export interface WorkspaceMemoryCreate {
+  workspacePath: string;
   category: MemoryCategory;
   key: string;
   content: string;
@@ -24,7 +24,7 @@ export interface ProjectMemoryCreate {
   confidence?: number;
 }
 
-export interface ProjectMemoryUpdate {
+export interface WorkspaceMemoryUpdate {
   category?: MemoryCategory;
   key?: string;
   content?: string;

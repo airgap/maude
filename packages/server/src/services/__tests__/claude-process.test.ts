@@ -193,7 +193,7 @@ describe('ClaudeProcessManager', () => {
     const sessionId = await claudeManager.createSession('conv-test-3', {
       model: 'claude-opus-4-6',
       systemPrompt: 'Be helpful',
-      projectPath: '/tmp',
+      workspacePath: '/tmp',
       effort: 'high',
       maxBudgetUsd: 5.0,
       maxTurns: 10,
@@ -204,7 +204,7 @@ describe('ClaudeProcessManager', () => {
     const session = claudeManager.getSession(sessionId);
     expect(session!.model).toBe('claude-opus-4-6');
     expect(session!.systemPrompt).toBe('Be helpful');
-    expect(session!.projectPath).toBe('/tmp');
+    expect(session!.workspacePath).toBe('/tmp');
     expect(session!.effort).toBe('high');
     expect(session!.maxBudgetUsd).toBe(5.0);
     expect(session!.maxTurns).toBe(10);

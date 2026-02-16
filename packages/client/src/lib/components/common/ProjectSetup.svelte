@@ -1,6 +1,6 @@
 <script lang="ts">
   import { uiStore } from '$lib/stores/ui.svelte';
-  import { projectStore } from '$lib/stores/projects.svelte';
+  import { workspaceListStore } from '$lib/stores/projects.svelte';
   import { api } from '$lib/api/client';
 
   let name = $state('');
@@ -34,10 +34,10 @@
       return;
     }
     try {
-      await projectStore.createProject(name.trim(), path.trim());
+      await workspaceListStore.createWorkspace(name.trim(), path.trim());
       close();
     } catch (e: any) {
-      error = e.message || 'Failed to create project';
+      error = e.message || 'Failed to create workspace';
     }
   }
 
@@ -50,14 +50,14 @@
   }
 </script>
 
-{#if uiStore.activeModal === 'project-setup'}
+{#if uiStore.activeModal === 'workspace-setup'}
   <!-- svelte-ignore a11y_no_static_element_interactions -->
   <div class="modal-overlay" onclick={close}>
     <!-- svelte-ignore a11y_click_events_have_key_events -->
     <!-- svelte-ignore a11y_no_static_element_interactions -->
     <div class="modal" onclick={(e) => e.stopPropagation()}>
       <div class="modal-header">
-        <h2>New Project</h2>
+        <h2>New Workspace</h2>
         <button class="close-btn" onclick={close}>
           <svg
             width="16"
@@ -74,14 +74,14 @@
 
       <div class="modal-body">
         <div class="field">
-          <label class="field-label">Project name</label>
-          <input bind:value={name} placeholder="My Project" class="field-input" />
+          <label class="field-label">Workspace name</label>
+          <input bind:value={name} placeholder="My Workspace" class="field-input" />
         </div>
 
         <div class="field">
           <label class="field-label">Directory</label>
           <div class="path-row">
-            <input bind:value={path} placeholder="/path/to/project" class="field-input" />
+            <input bind:value={path} placeholder="/path/to/workspace" class="field-input" />
             <button class="browse-btn" onclick={() => browseDirectories(path || undefined)}>
               Browse
             </button>
@@ -117,7 +117,7 @@
 
       <div class="modal-footer">
         <button class="btn-cancel" onclick={close}>Cancel</button>
-        <button class="btn-create" onclick={create}>Create Project</button>
+        <button class="btn-create" onclick={create}>Create Workspace</button>
       </div>
     </div>
   </div>

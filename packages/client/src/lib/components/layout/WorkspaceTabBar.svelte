@@ -1,6 +1,6 @@
 <script lang="ts">
   import { workspaceStore } from '$lib/stores/workspace.svelte';
-  import { projectStore } from '$lib/stores/projects.svelte';
+  import { workspaceListStore } from '$lib/stores/projects.svelte';
   import { uiStore } from '$lib/stores/ui.svelte';
   import { streamStore } from '$lib/stores/stream.svelte';
   import { api } from '$lib/api/client';
@@ -15,7 +15,7 @@
   let addBtnEl: HTMLButtonElement;
 
   onMount(() => {
-    projectStore.loadProjects();
+    workspaceListStore.loadWorkspaces();
   });
 
   function handleClickOutside(e: MouseEvent) {
@@ -27,39 +27,39 @@
     browsing = false;
   }
 
-  function switchTo(projectId: string) {
-    workspaceStore.switchWorkspace(projectId);
+  function switchTo(workspaceId: string) {
+    workspaceStore.switchWorkspace(workspaceId);
   }
 
-  function closeTab(e: MouseEvent, projectId: string) {
+  function closeTab(e: MouseEvent, workspaceId: string) {
     e.stopPropagation();
 
     // Check for dirty tabs or active stream
-    if (workspaceStore.hasDirtyTabs(projectId)) {
+    if (workspaceStore.hasDirtyTabs(workspaceId)) {
       if (!confirm('This workspace has unsaved changes. Close anyway?')) return;
     }
-    if (workspaceStore.hasActiveStream(projectId)) {
+    if (workspaceStore.hasActiveStream(workspaceId)) {
       if (!confirm('A stream is running in this workspace. Close and cancel it?')) return;
     }
 
-    workspaceStore.closeWorkspace(projectId);
+    workspaceStore.closeWorkspace(workspaceId);
   }
 
-  function onMiddleClick(e: MouseEvent, projectId: string) {
+  function onMiddleClick(e: MouseEvent, workspaceId: string) {
     if (e.button === 1) {
       e.preventDefault();
-      closeTab(e, projectId);
+      closeTab(e, workspaceId);
     }
   }
 
-  function openProject(project: { id: string; name: string; path: string }) {
-    workspaceStore.openWorkspace(project);
+  function openWorkspaceTab(workspace: { id: string; name: string; path: string }) {
+    workspaceStore.openWorkspace(workspace);
     dropdownOpen = false;
     browsing = false;
   }
 
-  function isAlreadyOpen(projectId: string): boolean {
-    return workspaceStore.workspaces.some((w) => w.projectId === projectId);
+  function isAlreadyOpen(workspaceId: string): boolean {
+    return workspaceStore.workspaces.some((w) => w.workspaceId === workspaceId);
   }
 
   async function browseDirectories(parentPath?: string) {
@@ -79,16 +79,16 @@
   async function selectFolder(path: string) {
     const name = path.split('/').pop() || path;
     try {
-      const id = await projectStore.createProject(name, path);
+      const id = await workspaceListStore.createWorkspace(name, path);
       if (id) {
-        const project = projectStore.projects.find((p) => p.id === id);
-        if (project) {
-          openProject(project);
+        const ws = workspaceListStore.workspaces.find((p) => p.id === id);
+        if (ws) {
+          openWorkspaceTab(ws);
           return;
         }
       }
     } catch (e: any) {
-      uiStore.toast(e.message || 'Failed to create project', 'error');
+      uiStore.toast(e.message || 'Failed to create workspace', 'error');
     }
     browsing = false;
     dropdownOpen = false;
@@ -99,28 +99,28 @@
 
 <div class="workspace-tabs">
   <div class="tab-list" role="tablist">
-    {#each workspaceStore.workspaces as workspace (workspace.projectId)}
+    {#each workspaceStore.workspaces as workspace (workspace.workspaceId)}
       <!-- svelte-ignore a11y_no_static_element_interactions -->
       <div
         class="tab"
-        class:active={workspace.projectId === workspaceStore.activeWorkspaceId}
+        class:active={workspace.workspaceId === workspaceStore.activeWorkspaceId}
         role="tab"
         tabindex="0"
-        aria-selected={workspace.projectId === workspaceStore.activeWorkspaceId}
-        onclick={() => switchTo(workspace.projectId)}
+        aria-selected={workspace.workspaceId === workspaceStore.activeWorkspaceId}
+        onclick={() => switchTo(workspace.workspaceId)}
         onkeydown={(e) => {
-          if (e.key === 'Enter' || e.key === ' ') switchTo(workspace.projectId);
+          if (e.key === 'Enter' || e.key === ' ') switchTo(workspace.workspaceId);
         }}
-        onmousedown={(e) => onMiddleClick(e, workspace.projectId)}
-        title={workspace.projectPath}
+        onmousedown={(e) => onMiddleClick(e, workspace.workspaceId)}
+        title={workspace.workspacePath}
       >
-        <span class="tab-name">{workspace.projectName}</span>
-        {#if workspaceStore.hasDirtyTabs(workspace.projectId)}
+        <span class="tab-name">{workspace.workspaceName}</span>
+        {#if workspaceStore.hasDirtyTabs(workspace.workspaceId)}
           <span class="dirty-dot" title="Unsaved changes"></span>
         {/if}
         <button
           class="close-btn"
-          onclick={(e) => closeTab(e, workspace.projectId)}
+          onclick={(e) => closeTab(e, workspace.workspaceId)}
           title="Close workspace"
         >
           <span class="close-icon">
@@ -135,7 +135,7 @@
               <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
             </svg>
           </span>
-          {#if workspaceStore.hasActiveStream(workspace.projectId)}
+          {#if workspaceStore.hasActiveStream(workspace.workspaceId)}
             <span class="stream-indicator" title="Stream active"></span>
           {/if}
         </button>
@@ -148,7 +148,7 @@
       class="add-btn"
       bind:this={addBtnEl}
       onclick={() => (dropdownOpen = !dropdownOpen)}
-      title="Open project in new tab"
+      title="Open workspace in new tab"
     >
       <svg
         width="14"
@@ -186,22 +186,22 @@
           <div class="dropdown-divider"></div>
           <button class="dropdown-item" onclick={() => (browsing = false)}>Back</button>
         {:else}
-          {#each projectStore.projects as project (project.id)}
+          {#each workspaceListStore.workspaces as ws (ws.id)}
             <button
               class="dropdown-item"
-              class:already-open={isAlreadyOpen(project.id)}
-              disabled={isAlreadyOpen(project.id)}
-              onclick={() => openProject(project)}
+              class:already-open={isAlreadyOpen(ws.id)}
+              disabled={isAlreadyOpen(ws.id)}
+              onclick={() => openWorkspaceTab(ws)}
             >
-              <span class="item-name">{project.name}</span>
-              <span class="item-path">{project.path}</span>
-              {#if isAlreadyOpen(project.id)}
+              <span class="item-name">{ws.name}</span>
+              <span class="item-path">{ws.path}</span>
+              {#if isAlreadyOpen(ws.id)}
                 <span class="item-badge">open</span>
               {/if}
             </button>
           {/each}
 
-          {#if projectStore.projects.length > 0}
+          {#if workspaceListStore.workspaces.length > 0}
             <div class="dropdown-divider"></div>
           {/if}
 
@@ -213,13 +213,13 @@
             {browseLoading ? 'Loading...' : 'Open Folder...'}
           </button>
           <button
-            class="dropdown-item new-project"
+            class="dropdown-item new-workspace"
             onclick={() => {
-              uiStore.openModal('project-setup');
+              uiStore.openModal('workspace-setup');
               dropdownOpen = false;
             }}
           >
-            New Project...
+            New Workspace...
           </button>
         {/if}
       </div>
@@ -446,7 +446,7 @@
     color: var(--accent-primary);
     font-weight: 600;
   }
-  .new-project {
+  .new-workspace {
     color: var(--text-tertiary);
   }
 

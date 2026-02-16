@@ -136,7 +136,7 @@ app.post('/snapshot', async (c) => {
     const now = Date.now();
     const db = getDb();
     db.query(
-      `INSERT INTO git_snapshots (id, project_path, conversation_id, head_sha, stash_sha, reason, has_changes, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO git_snapshots (id, workspace_path, conversation_id, head_sha, stash_sha, reason, has_changes, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
     ).run(
       id,
       rootPath,
@@ -164,14 +164,14 @@ app.get('/snapshots', (c) => {
 
   const db = getDb();
   const rows = db
-    .query(`SELECT * FROM git_snapshots WHERE project_path = ? ORDER BY created_at DESC LIMIT 50`)
+    .query(`SELECT * FROM git_snapshots WHERE workspace_path = ? ORDER BY created_at DESC LIMIT 50`)
     .all(rootPath) as any[];
 
   return c.json({
     ok: true,
     data: rows.map((r) => ({
       id: r.id,
-      projectPath: r.project_path,
+      workspacePath: r.workspace_path,
       conversationId: r.conversation_id,
       headSha: r.head_sha,
       stashSha: r.stash_sha,
@@ -192,7 +192,7 @@ app.post('/snapshot/:id/restore', async (c) => {
   try {
     // Reset to the HEAD sha from the snapshot
     const resetProc = Bun.spawn(['git', 'reset', '--hard', snapshot.head_sha], {
-      cwd: snapshot.project_path,
+      cwd: snapshot.workspace_path,
       stdout: 'pipe',
       stderr: 'pipe',
     });
@@ -205,7 +205,7 @@ app.post('/snapshot/:id/restore', async (c) => {
     // If there was a stash, apply it
     if (snapshot.stash_sha) {
       const applyProc = Bun.spawn(['git', 'stash', 'apply', snapshot.stash_sha], {
-        cwd: snapshot.project_path,
+        cwd: snapshot.workspace_path,
         stdout: 'pipe',
         stderr: 'pipe',
       });

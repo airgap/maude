@@ -6,7 +6,7 @@
 
   interface Snapshot {
     id: string;
-    projectPath: string;
+    workspacePath: string;
     conversationId: string | null;
     headSha: string;
     stashSha: string | null;
@@ -28,7 +28,7 @@
     loading = true;
     error = null;
     try {
-      const res = await api.git.snapshots(settingsStore.projectPath);
+      const res = await api.git.snapshots(settingsStore.workspacePath);
       snapshots = res.data;
     } catch {
       error = 'Failed to load snapshots';

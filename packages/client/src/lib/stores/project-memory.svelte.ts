@@ -1,10 +1,10 @@
-import type { ProjectMemory, MemoryCategory } from '@maude/shared';
+import type { WorkspaceMemory, MemoryCategory } from '@maude/shared';
 import { api } from '$lib/api/client';
 
-function createProjectMemoryStore() {
-  let memories = $state<ProjectMemory[]>([]);
+function createWorkspaceMemoryStore() {
+  let memories = $state<WorkspaceMemory[]>([]);
   let loading = $state(false);
-  let currentProjectPath = $state<string | null>(null);
+  let currentWorkspacePath = $state<string | null>(null);
   let filterCategory = $state<MemoryCategory | 'all'>('all');
 
   const filtered = $derived(
@@ -39,19 +39,19 @@ function createProjectMemoryStore() {
     get filterCategory() {
       return filterCategory;
     },
-    get currentProjectPath() {
-      return currentProjectPath;
+    get currentWorkspacePath() {
+      return currentWorkspacePath;
     },
 
     setFilter(cat: MemoryCategory | 'all') {
       filterCategory = cat;
     },
 
-    async load(projectPath: string) {
-      currentProjectPath = projectPath;
+    async load(workspacePath: string) {
+      currentWorkspacePath = workspacePath;
       loading = true;
       try {
-        const res = await api.projectMemory.list(projectPath);
+        const res = await api.workspaceMemory.list(workspacePath);
         memories = res.data;
       } catch {
         memories = [];
@@ -60,15 +60,15 @@ function createProjectMemoryStore() {
     },
 
     async create(body: {
-      projectPath: string;
+      workspacePath: string;
       category: MemoryCategory;
       key: string;
       content: string;
     }) {
       try {
-        await api.projectMemory.create({ ...body, source: 'manual', confidence: 1.0 });
-        if (currentProjectPath === body.projectPath) {
-          await this.load(body.projectPath);
+        await api.workspaceMemory.create({ ...body, source: 'manual', confidence: 1.0 });
+        if (currentWorkspacePath === body.workspacePath) {
+          await this.load(body.workspacePath);
         }
         return true;
       } catch {
@@ -78,8 +78,8 @@ function createProjectMemoryStore() {
 
     async update(id: string, body: Record<string, any>) {
       try {
-        await api.projectMemory.update(id, body);
-        if (currentProjectPath) await this.load(currentProjectPath);
+        await api.workspaceMemory.update(id, body);
+        if (currentWorkspacePath) await this.load(currentWorkspacePath);
         return true;
       } catch {
         return false;
@@ -88,7 +88,7 @@ function createProjectMemoryStore() {
 
     async remove(id: string) {
       try {
-        await api.projectMemory.delete(id);
+        await api.workspaceMemory.delete(id);
         memories = memories.filter((m) => m.id !== id);
         return true;
       } catch {
@@ -97,23 +97,23 @@ function createProjectMemoryStore() {
     },
 
     async search(q: string) {
-      if (!currentProjectPath) return [];
+      if (!currentWorkspacePath) return [];
       try {
-        const res = await api.projectMemory.search(currentProjectPath, q);
-        return res.data as ProjectMemory[];
+        const res = await api.workspaceMemory.search(currentWorkspacePath, q);
+        return res.data as WorkspaceMemory[];
       } catch {
         return [];
       }
     },
 
     async extractFromConversation(
-      projectPath: string,
+      workspacePath: string,
       messages: Array<{ role: string; content: string }>,
     ) {
       try {
-        const res = await api.projectMemory.extract(projectPath, messages);
-        if (res.data.created > 0 && currentProjectPath === projectPath) {
-          await this.load(projectPath);
+        const res = await api.workspaceMemory.extract(workspacePath, messages);
+        if (res.data.created > 0 && currentWorkspacePath === workspacePath) {
+          await this.load(workspacePath);
         }
         return res.data;
       } catch {
@@ -123,4 +123,4 @@ function createProjectMemoryStore() {
   };
 }
 
-export const projectMemoryStore = createProjectMemoryStore();
+export const workspaceMemoryStore = createWorkspaceMemoryStore();

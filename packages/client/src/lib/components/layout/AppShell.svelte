@@ -163,9 +163,9 @@
       e.preventDefault();
       const ws = workspaceStore.workspaces;
       if (ws.length > 1 && workspaceStore.activeWorkspaceId) {
-        const idx = ws.findIndex((w) => w.projectId === workspaceStore.activeWorkspaceId);
+        const idx = ws.findIndex((w) => w.workspaceId === workspaceStore.activeWorkspaceId);
         const prev = (idx - 1 + ws.length) % ws.length;
-        workspaceStore.switchWorkspace(ws[prev].projectId);
+        workspaceStore.switchWorkspace(ws[prev].workspaceId);
       }
     }
     // Ctrl+Alt+Right: Next workspace
@@ -173,9 +173,9 @@
       e.preventDefault();
       const ws = workspaceStore.workspaces;
       if (ws.length > 1 && workspaceStore.activeWorkspaceId) {
-        const idx = ws.findIndex((w) => w.projectId === workspaceStore.activeWorkspaceId);
+        const idx = ws.findIndex((w) => w.workspaceId === workspaceStore.activeWorkspaceId);
         const next = (idx + 1) % ws.length;
-        workspaceStore.switchWorkspace(ws[next].projectId);
+        workspaceStore.switchWorkspace(ws[next].workspaceId);
       }
     }
     // Ctrl+Alt+W: Close active workspace

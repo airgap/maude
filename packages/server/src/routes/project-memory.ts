@@ -4,10 +4,10 @@ import { getDb } from '../db/database';
 
 const app = new Hono();
 
-// List project memories for a given project path
+// List workspace memories for a given workspace path
 app.get('/', (c) => {
-  const projectPath = c.req.query('projectPath');
-  if (!projectPath) return c.json({ ok: false, error: 'projectPath required' }, 400);
+  const workspacePath = c.req.query('workspacePath');
+  if (!workspacePath) return c.json({ ok: false, error: 'workspacePath required' }, 400);
 
   const db = getDb();
   const category = c.req.query('category');
@@ -16,15 +16,15 @@ app.get('/', (c) => {
   if (category) {
     rows = db
       .query(
-        `SELECT * FROM project_memories WHERE project_path = ? AND category = ? ORDER BY times_seen DESC, updated_at DESC`,
+        `SELECT * FROM workspace_memories WHERE workspace_path = ? AND category = ? ORDER BY times_seen DESC, updated_at DESC`,
       )
-      .all(projectPath, category);
+      .all(workspacePath, category);
   } else {
     rows = db
       .query(
-        `SELECT * FROM project_memories WHERE project_path = ? ORDER BY times_seen DESC, updated_at DESC`,
+        `SELECT * FROM workspace_memories WHERE workspace_path = ? ORDER BY times_seen DESC, updated_at DESC`,
       )
-      .all(projectPath);
+      .all(workspacePath);
   }
 
   return c.json({
@@ -36,35 +36,35 @@ app.get('/', (c) => {
 // Create a new memory
 app.post('/', async (c) => {
   const body = await c.req.json();
-  const { projectPath, category, key, content, source, confidence } = body;
+  const { workspacePath, category, key, content, source, confidence } = body;
 
-  if (!projectPath || !key || !content) {
-    return c.json({ ok: false, error: 'projectPath, key, and content are required' }, 400);
+  if (!workspacePath || !key || !content) {
+    return c.json({ ok: false, error: 'workspacePath, key, and content are required' }, 400);
   }
 
   const db = getDb();
 
-  // Check for existing memory with same project+key — merge if auto-extracted
+  // Check for existing memory with same workspace+key — merge if auto-extracted
   const existing = db
-    .query(`SELECT * FROM project_memories WHERE project_path = ? AND key = ?`)
-    .get(projectPath, key) as any;
+    .query(`SELECT * FROM workspace_memories WHERE workspace_path = ? AND key = ?`)
+    .get(workspacePath, key) as any;
 
   if (existing) {
     // Reinforce existing memory
     db.query(
-      `UPDATE project_memories SET content = ?, times_seen = times_seen + 1, confidence = MIN(1.0, confidence + 0.1), updated_at = ? WHERE id = ?`,
+      `UPDATE workspace_memories SET content = ?, times_seen = times_seen + 1, confidence = MIN(1.0, confidence + 0.1), updated_at = ? WHERE id = ?`,
     ).run(content, Date.now(), existing.id);
-    const updated = db.query(`SELECT * FROM project_memories WHERE id = ?`).get(existing.id);
+    const updated = db.query(`SELECT * FROM workspace_memories WHERE id = ?`).get(existing.id);
     return c.json({ ok: true, data: toApiShape(updated as any) });
   }
 
   const id = nanoid();
   const now = Date.now();
   db.query(
-    `INSERT INTO project_memories (id, project_path, category, key, content, source, confidence, times_seen, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?, ?)`,
+    `INSERT INTO workspace_memories (id, workspace_path, category, key, content, source, confidence, times_seen, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?, ?)`,
   ).run(
     id,
-    projectPath,
+    workspacePath,
     category || 'convention',
     key,
     content,
@@ -79,32 +79,33 @@ app.post('/', async (c) => {
 
 // Search memories by content or key
 app.get('/search/query', (c) => {
-  const projectPath = c.req.query('projectPath');
+  const workspacePath = c.req.query('workspacePath');
   const q = c.req.query('q');
-  if (!projectPath || !q) return c.json({ ok: false, error: 'projectPath and q required' }, 400);
+  if (!workspacePath || !q)
+    return c.json({ ok: false, error: 'workspacePath and q required' }, 400);
 
   const db = getDb();
   const rows = db
     .query(
-      `SELECT * FROM project_memories WHERE project_path = ? AND (key LIKE ? OR content LIKE ?) ORDER BY times_seen DESC, confidence DESC LIMIT 50`,
+      `SELECT * FROM workspace_memories WHERE workspace_path = ? AND (key LIKE ? OR content LIKE ?) ORDER BY times_seen DESC, confidence DESC LIMIT 50`,
     )
-    .all(projectPath, `%${q}%`, `%${q}%`);
+    .all(workspacePath, `%${q}%`, `%${q}%`);
 
   return c.json({ ok: true, data: rows.map(toApiShape) });
 });
 
 // Get memories formatted for system prompt injection
 app.get('/context', (c) => {
-  const projectPath = c.req.query('projectPath');
-  if (!projectPath) return c.json({ ok: false, error: 'projectPath required' }, 400);
+  const workspacePath = c.req.query('workspacePath');
+  if (!workspacePath) return c.json({ ok: false, error: 'workspacePath required' }, 400);
 
   const db = getDb();
   // Get high-confidence memories, sorted by relevance
   const rows = db
     .query(
-      `SELECT * FROM project_memories WHERE project_path = ? AND confidence >= 0.3 ORDER BY category, times_seen DESC, confidence DESC LIMIT 100`,
+      `SELECT * FROM workspace_memories WHERE workspace_path = ? AND confidence >= 0.3 ORDER BY category, times_seen DESC, confidence DESC LIMIT 100`,
     )
-    .all(projectPath) as any[];
+    .all(workspacePath) as any[];
 
   if (rows.length === 0) {
     return c.json({ ok: true, data: { context: '', count: 0 } });
@@ -122,10 +123,10 @@ app.get('/context', (c) => {
     decision: 'Architecture Decisions',
     preference: 'User Preferences',
     pattern: 'Common Patterns',
-    context: 'Project Context',
+    context: 'Workspace Context',
   };
 
-  let context = '## Project Memory\n\n';
+  let context = '## Workspace Memory\n\n';
   for (const [cat, items] of Object.entries(grouped)) {
     context += `### ${categoryLabels[cat] || cat}\n${items.join('\n')}\n\n`;
   }
@@ -136,7 +137,7 @@ app.get('/context', (c) => {
 // Get a single memory (MUST come after /search/query and /context to avoid /:id catching them)
 app.get('/:id', (c) => {
   const db = getDb();
-  const row = db.query(`SELECT * FROM project_memories WHERE id = ?`).get(c.req.param('id'));
+  const row = db.query(`SELECT * FROM workspace_memories WHERE id = ?`).get(c.req.param('id'));
   if (!row) return c.json({ ok: false, error: 'Not found' }, 404);
   return c.json({ ok: true, data: toApiShape(row as any) });
 });
@@ -147,7 +148,7 @@ app.patch('/:id', async (c) => {
   const body = await c.req.json();
   const db = getDb();
 
-  const existing = db.query(`SELECT * FROM project_memories WHERE id = ?`).get(id);
+  const existing = db.query(`SELECT * FROM workspace_memories WHERE id = ?`).get(id);
   if (!existing) return c.json({ ok: false, error: 'Not found' }, 404);
 
   const updates: string[] = [];
@@ -166,7 +167,7 @@ app.patch('/:id', async (c) => {
   values.push(Date.now());
   values.push(id);
 
-  db.query(`UPDATE project_memories SET ${updates.join(', ')} WHERE id = ?`).run(...values);
+  db.query(`UPDATE workspace_memories SET ${updates.join(', ')} WHERE id = ?`).run(...values);
 
   return c.json({ ok: true });
 });
@@ -174,7 +175,7 @@ app.patch('/:id', async (c) => {
 // Delete a memory
 app.delete('/:id', (c) => {
   const db = getDb();
-  const result = db.query(`DELETE FROM project_memories WHERE id = ?`).run(c.req.param('id'));
+  const result = db.query(`DELETE FROM workspace_memories WHERE id = ?`).run(c.req.param('id'));
   if (result.changes === 0) return c.json({ ok: false, error: 'Not found' }, 404);
   return c.json({ ok: true });
 });
@@ -182,10 +183,10 @@ app.delete('/:id', (c) => {
 // Bulk extract endpoint — receives conversation text and extracts memories
 app.post('/extract', async (c) => {
   const body = await c.req.json();
-  const { projectPath, messages } = body;
+  const { workspacePath, messages } = body;
 
-  if (!projectPath || !messages || !Array.isArray(messages)) {
-    return c.json({ ok: false, error: 'projectPath and messages[] required' }, 400);
+  if (!workspacePath || !messages || !Array.isArray(messages)) {
+    return c.json({ ok: false, error: 'workspacePath and messages[] required' }, 400);
   }
 
   const extracted = extractMemories(messages);
@@ -195,20 +196,20 @@ app.post('/extract', async (c) => {
   for (const mem of extracted) {
     // Check if this memory already exists
     const existing = db
-      .query(`SELECT * FROM project_memories WHERE project_path = ? AND key = ?`)
-      .get(projectPath, mem.key) as any;
+      .query(`SELECT * FROM workspace_memories WHERE workspace_path = ? AND key = ?`)
+      .get(workspacePath, mem.key) as any;
 
     if (existing) {
       // Reinforce
       db.query(
-        `UPDATE project_memories SET times_seen = times_seen + 1, confidence = MIN(1.0, confidence + 0.05), updated_at = ? WHERE id = ?`,
+        `UPDATE workspace_memories SET times_seen = times_seen + 1, confidence = MIN(1.0, confidence + 0.05), updated_at = ? WHERE id = ?`,
       ).run(Date.now(), existing.id);
     } else {
       const id = nanoid();
       const now = Date.now();
       db.query(
-        `INSERT INTO project_memories (id, project_path, category, key, content, source, confidence, times_seen, created_at, updated_at) VALUES (?, ?, ?, ?, ?, 'auto', ?, 1, ?, ?)`,
-      ).run(id, projectPath, mem.category, mem.key, mem.content, mem.confidence, now, now);
+        `INSERT INTO workspace_memories (id, workspace_path, category, key, content, source, confidence, times_seen, created_at, updated_at) VALUES (?, ?, ?, ?, ?, 'auto', ?, 1, ?, ?)`,
+      ).run(id, workspacePath, mem.category, mem.key, mem.content, mem.confidence, now, now);
       created.push(id);
     }
   }
@@ -219,7 +220,7 @@ app.post('/extract', async (c) => {
 function toApiShape(row: any) {
   return {
     id: row.id,
-    projectPath: row.project_path,
+    workspacePath: row.workspace_path,
     category: row.category,
     key: row.key,
     content: row.content,
@@ -318,4 +319,4 @@ function extractMemories(
   });
 }
 
-export { app as projectMemoryRoutes };
+export { app as workspaceMemoryRoutes };

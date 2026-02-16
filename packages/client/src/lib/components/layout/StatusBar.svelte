@@ -131,7 +131,7 @@
       {:else if lspServerInfo?.installable && !lspServerInfo?.available && !lspStore.isDismissed(lang)}
         <button
           class="status-item lsp-install"
-          onclick={() => lspStore.installServer(lang, settingsStore.projectPath)}
+          onclick={() => lspStore.installServer(lang, settingsStore.workspacePath)}
           title="Install {lspServerInfo.command} via npm"
         >
           Install LSP

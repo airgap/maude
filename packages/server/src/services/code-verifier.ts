@@ -49,14 +49,14 @@ const VERIFIER_MAP: Record<
  */
 export async function verifyFile(
   filePath: string,
-  projectPath: string,
+  workspacePath: string,
 ): Promise<VerificationResult> {
   const ext = extname(filePath).toLowerCase();
   const start = Date.now();
 
   // For TypeScript/JS, try to run a quick syntax check
   if (ext === '.ts' || ext === '.tsx' || ext === '.js' || ext === '.jsx') {
-    return runSyntaxCheck(filePath, projectPath, ext, start);
+    return runSyntaxCheck(filePath, workspacePath, ext, start);
   }
 
   if (ext === '.py') {
@@ -75,7 +75,7 @@ export async function verifyFile(
 
 async function runSyntaxCheck(
   filePath: string,
-  projectPath: string,
+  workspacePath: string,
   ext: string,
   start: number,
 ): Promise<VerificationResult> {

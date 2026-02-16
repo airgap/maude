@@ -210,14 +210,14 @@ app.get('/editorconfig', async (c) => {
 
 // Verify file (syntax check)
 app.post('/verify', async (c) => {
-  const body = await c.req.json<{ path: string; projectPath?: string }>();
-  const { path: filePath, projectPath } = body;
+  const body = await c.req.json<{ path: string; workspacePath?: string }>();
+  const { path: filePath, workspacePath } = body;
 
   if (!filePath) return c.json({ ok: false, error: 'path required' }, 400);
 
   try {
     const { verifyFile } = await import('../services/code-verifier');
-    const result = await verifyFile(filePath, projectPath || process.cwd());
+    const result = await verifyFile(filePath, workspacePath || process.cwd());
     return c.json({ ok: true, data: result });
   } catch (err) {
     return c.json({ ok: false, error: String(err) }, 500);

@@ -81,7 +81,7 @@
 
   async function loadSandbox() {
     try {
-      const res = await api.projects.getSandbox(settingsStore.projectPath);
+      const res = await api.workspaces.getSandbox(settingsStore.workspacePath);
       sandboxEnabled = res.data.enabled;
       sandboxPaths = res.data.allowedPaths;
     } catch {}
@@ -90,8 +90,8 @@
   async function saveSandbox() {
     sandboxLoading = true;
     try {
-      await api.projects.updateSandbox({
-        projectPath: settingsStore.projectPath,
+      await api.workspaces.updateSandbox({
+        workspacePath: settingsStore.workspacePath,
         enabled: sandboxEnabled,
         allowedPaths: sandboxPaths,
       });

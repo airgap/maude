@@ -30,7 +30,7 @@ class LoopOrchestrator {
   private runners = new Map<string, LoopRunner>();
   readonly events = new EventEmitter();
 
-  async startLoop(prdId: string, projectPath: string, config: LoopConfig): Promise<string> {
+  async startLoop(prdId: string, workspacePath: string, config: LoopConfig): Promise<string> {
     const db = getDb();
     const prd = db.query('SELECT * FROM prds WHERE id = ?').get(prdId) as any;
     if (!prd) throw new Error(`PRD ${prdId} not found`);
@@ -52,11 +52,11 @@ class LoopOrchestrator {
 
     // Persist loop to DB
     db.query(
-      `INSERT INTO loops (id, prd_id, project_path, status, config, current_iteration, started_at, total_stories_completed, total_stories_failed, total_iterations, iteration_log)
+      `INSERT INTO loops (id, prd_id, workspace_path, status, config, current_iteration, started_at, total_stories_completed, total_stories_failed, total_iterations, iteration_log)
        VALUES (?, ?, ?, 'running', ?, 0, ?, 0, 0, 0, '[]')`,
-    ).run(loopId, prdId, projectPath, JSON.stringify(config), now);
+    ).run(loopId, prdId, workspacePath, JSON.stringify(config), now);
 
-    const runner = new LoopRunner(loopId, prdId, projectPath, config, this.events);
+    const runner = new LoopRunner(loopId, prdId, workspacePath, config, this.events);
     this.runners.set(loopId, runner);
 
     // Start the loop asynchronously
@@ -151,7 +151,7 @@ class LoopRunner {
   constructor(
     private loopId: string,
     private prdId: string,
-    private projectPath: string,
+    private workspacePath: string,
     private config: LoopConfig,
     private events: EventEmitter,
   ) {}
@@ -227,14 +227,14 @@ class LoopRunner {
       const conversationId = nanoid();
       const now = Date.now();
       db.query(
-        `INSERT INTO conversations (id, title, model, system_prompt, project_path, created_at, updated_at)
+        `INSERT INTO conversations (id, title, model, system_prompt, workspace_path, created_at, updated_at)
          VALUES (?, ?, ?, ?, ?, ?, ?)`,
       ).run(
         conversationId,
         `[Loop] ${story.title}`,
         this.config.model,
         this.config.systemPromptOverride || null,
-        this.projectPath,
+        this.workspacePath,
         now,
         now,
       );
@@ -273,7 +273,7 @@ class LoopRunner {
       try {
         const sessionId = await claudeManager.createSession(conversationId, {
           model: this.config.model,
-          projectPath: this.projectPath,
+          workspacePath: this.workspacePath,
           effort: this.config.effort,
           systemPrompt: this.buildSystemPrompt(),
         });
@@ -302,7 +302,7 @@ class LoopRunner {
       const checksToRun = this.config.qualityChecks.length > 0 ? this.config.qualityChecks : [];
 
       if (checksToRun.length > 0) {
-        qualityResults = await runAllQualityChecks(checksToRun, this.projectPath);
+        qualityResults = await runAllQualityChecks(checksToRun, this.workspacePath);
 
         for (const qr of qualityResults) {
           this.emitEvent('quality_check', {
@@ -509,9 +509,9 @@ class LoopRunner {
       const db = getDb();
       const memories = db
         .query(
-          `SELECT * FROM project_memories WHERE project_path = ? AND confidence >= 0.3 ORDER BY category, times_seen DESC LIMIT 50`,
+          `SELECT * FROM workspace_memories WHERE workspace_path = ? AND confidence >= 0.3 ORDER BY category, times_seen DESC LIMIT 50`,
         )
-        .all(this.projectPath) as any[];
+        .all(this.workspacePath) as any[];
 
       if (memories.length > 0) {
         const grouped: Record<string, string[]> = {};
@@ -675,18 +675,18 @@ ${criteria}
     try {
       const memKey = `loop-learning:${story.title.slice(0, 60)}`;
       const existing = db
-        .query('SELECT * FROM project_memories WHERE project_path = ? AND key = ?')
-        .get(this.projectPath, memKey) as any;
+        .query('SELECT * FROM workspace_memories WHERE workspace_path = ? AND key = ?')
+        .get(this.workspacePath, memKey) as any;
 
       if (existing) {
         db.query(
-          'UPDATE project_memories SET content = ?, times_seen = times_seen + 1, updated_at = ? WHERE id = ?',
+          'UPDATE workspace_memories SET content = ?, times_seen = times_seen + 1, updated_at = ? WHERE id = ?',
         ).run(learning.slice(0, 500), Date.now(), existing.id);
       } else {
         db.query(
-          `INSERT INTO project_memories (id, project_path, category, key, content, source, confidence, times_seen, created_at, updated_at)
+          `INSERT INTO workspace_memories (id, workspace_path, category, key, content, source, confidence, times_seen, created_at, updated_at)
            VALUES (?, ?, 'context', ?, ?, 'auto', 0.6, 1, ?, ?)`,
-        ).run(nanoid(), this.projectPath, memKey, learning.slice(0, 500), Date.now(), Date.now());
+        ).run(nanoid(), this.workspacePath, memKey, learning.slice(0, 500), Date.now(), Date.now());
       }
     } catch {
       /* non-critical */
@@ -704,7 +704,7 @@ ${criteria}
   private async createGitSnapshot(storyId: string): Promise<void> {
     try {
       const checkProc = Bun.spawn(['git', 'rev-parse', '--is-inside-work-tree'], {
-        cwd: this.projectPath,
+        cwd: this.workspacePath,
         stdout: 'pipe',
         stderr: 'pipe',
       });
@@ -712,7 +712,7 @@ ${criteria}
       if (!isRepo) return;
 
       const headProc = Bun.spawn(['git', 'rev-parse', 'HEAD'], {
-        cwd: this.projectPath,
+        cwd: this.workspacePath,
         stdout: 'pipe',
         stderr: 'pipe',
       });
@@ -720,7 +720,7 @@ ${criteria}
       if ((await headProc.exited) !== 0) return;
 
       const statusProc = Bun.spawn(['git', 'status', '--porcelain'], {
-        cwd: this.projectPath,
+        cwd: this.workspacePath,
         stdout: 'pipe',
         stderr: 'pipe',
       });
@@ -730,7 +730,7 @@ ${criteria}
       let stashSha: string | null = null;
       if (hasChanges) {
         const stashProc = Bun.spawn(['git', 'stash', 'create'], {
-          cwd: this.projectPath,
+          cwd: this.workspacePath,
           stdout: 'pipe',
           stderr: 'pipe',
         });
@@ -739,11 +739,11 @@ ${criteria}
 
       const db = getDb();
       db.query(
-        `INSERT INTO git_snapshots (id, project_path, head_sha, stash_sha, reason, has_changes, created_at)
+        `INSERT INTO git_snapshots (id, workspace_path, head_sha, stash_sha, reason, has_changes, created_at)
          VALUES (?, ?, ?, ?, ?, ?, ?)`,
       ).run(
         nanoid(),
-        this.projectPath,
+        this.workspacePath,
         headSha,
         stashSha,
         `loop:${this.loopId}:story:${storyId}`,
@@ -759,7 +759,7 @@ ${criteria}
     try {
       // Stage all changes
       const addProc = Bun.spawn(['git', 'add', '-A'], {
-        cwd: this.projectPath,
+        cwd: this.workspacePath,
         stdout: 'pipe',
         stderr: 'pipe',
       });
@@ -767,7 +767,7 @@ ${criteria}
 
       // Check if there are staged changes
       const diffProc = Bun.spawn(['git', 'diff', '--cached', '--quiet'], {
-        cwd: this.projectPath,
+        cwd: this.workspacePath,
         stdout: 'pipe',
         stderr: 'pipe',
       });
@@ -777,7 +777,7 @@ ${criteria}
       // Commit
       const msg = `[loop] ${story.title}\n\nImplemented by E autonomous loop.\nPRD: ${this.prdId}\nStory: ${story.id}`;
       const commitProc = Bun.spawn(['git', 'commit', '-m', msg], {
-        cwd: this.projectPath,
+        cwd: this.workspacePath,
         stdout: 'pipe',
         stderr: 'pipe',
       });
@@ -785,7 +785,7 @@ ${criteria}
 
       // Get commit SHA
       const shaProc = Bun.spawn(['git', 'rev-parse', 'HEAD'], {
-        cwd: this.projectPath,
+        cwd: this.workspacePath,
         stdout: 'pipe',
         stderr: 'pipe',
       });
@@ -866,7 +866,7 @@ function loopFromRow(row: any): LoopState {
   return {
     id: row.id,
     prdId: row.prd_id,
-    projectPath: row.project_path,
+    workspacePath: row.workspace_path,
     status: row.status,
     config: JSON.parse(row.config || '{}'),
     currentIteration: row.current_iteration,

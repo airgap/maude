@@ -22,15 +22,15 @@ When the user is satisfied with the plan, they will turn off plan mode and ask y
 
 `;
 
-function getProjectMemoryContext(projectPath: string | null): string {
-  if (!projectPath) return '';
+function getWorkspaceMemoryContext(workspacePath: string | null): string {
+  if (!workspacePath) return '';
   try {
     const db = getDb();
     const rows = db
       .query(
-        `SELECT * FROM project_memories WHERE project_path = ? AND confidence >= 0.3 ORDER BY category, times_seen DESC, confidence DESC LIMIT 100`,
+        `SELECT * FROM workspace_memories WHERE workspace_path = ? AND confidence >= 0.3 ORDER BY category, times_seen DESC, confidence DESC LIMIT 100`,
       )
-      .all(projectPath) as any[];
+      .all(workspacePath) as any[];
     if (rows.length === 0) return '';
 
     const grouped: Record<string, string[]> = {};
@@ -43,9 +43,9 @@ function getProjectMemoryContext(projectPath: string | null): string {
       decision: 'Architecture Decisions',
       preference: 'User Preferences',
       pattern: 'Common Patterns',
-      context: 'Project Context',
+      context: 'Workspace Context',
     };
-    let ctx = '\n\n## Project Memory\n\n';
+    let ctx = '\n\n## Workspace Memory\n\n';
     for (const [cat, items] of Object.entries(grouped)) {
       ctx += `### ${labels[cat] || cat}\n${items.join('\n')}\n\n`;
     }
@@ -65,8 +65,8 @@ function getSessionOpts(conv: any) {
     if (conv.disallowed_tools) disallowedTools = JSON.parse(conv.disallowed_tools);
   } catch {}
 
-  // Build system prompt: plan mode directive + user system prompt + project memories
-  const memoryContext = getProjectMemoryContext(conv.project_path);
+  // Build system prompt: plan mode directive + user system prompt + workspace memories
+  const memoryContext = getWorkspaceMemoryContext(conv.workspace_path);
   let systemPrompt = conv.system_prompt || '';
 
   if (conv.plan_mode) {
@@ -80,7 +80,7 @@ function getSessionOpts(conv: any) {
   return {
     model: conv.model,
     systemPrompt: systemPrompt || undefined,
-    projectPath: conv.project_path,
+    workspacePath: conv.workspace_path,
     effort: conv.effort,
     maxBudgetUsd: conv.max_budget_usd,
     maxTurns: conv.max_turns,

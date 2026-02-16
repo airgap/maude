@@ -6,7 +6,7 @@
   import { terminalStore } from '$lib/stores/terminal.svelte';
   import { settingsStore } from '$lib/stores/settings.svelte';
   import { conversationStore } from '$lib/stores/conversation.svelte';
-  import { projectStore } from '$lib/stores/projects.svelte';
+  import { workspaceListStore } from '$lib/stores/projects.svelte';
   import { getWsBase } from '$lib/api/client';
   import '@xterm/xterm/css/xterm.css';
 
@@ -20,9 +20,9 @@
 
   function getWsUrl(): string {
     const cwd =
-      projectStore.activeProject?.path ||
-      conversationStore.active?.projectPath ||
-      settingsStore.projectPath ||
+      workspaceListStore.activeWorkspace?.path ||
+      conversationStore.active?.workspacePath ||
+      settingsStore.workspacePath ||
       '.';
     return `${getWsBase()}/terminal/ws?cwd=${encodeURIComponent(cwd)}&cols=80&rows=24`;
   }

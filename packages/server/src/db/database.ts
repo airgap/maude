@@ -28,7 +28,7 @@ export function initDatabase(): void {
       title TEXT NOT NULL DEFAULT 'New Conversation',
       model TEXT NOT NULL DEFAULT 'claude-sonnet-4-5-20250929',
       system_prompt TEXT,
-      project_path TEXT,
+      workspace_path TEXT,
       plan_mode INTEGER NOT NULL DEFAULT 0,
       plan_file TEXT,
       total_tokens INTEGER NOT NULL DEFAULT 0,
@@ -79,7 +79,7 @@ export function initDatabase(): void {
       status TEXT NOT NULL DEFAULT 'disconnected'
     );
 
-    CREATE TABLE IF NOT EXISTS projects (
+    CREATE TABLE IF NOT EXISTS workspaces (
       id TEXT PRIMARY KEY,
       name TEXT NOT NULL,
       path TEXT NOT NULL UNIQUE,
@@ -90,7 +90,7 @@ export function initDatabase(): void {
 
     CREATE TABLE IF NOT EXISTS git_snapshots (
       id TEXT PRIMARY KEY,
-      project_path TEXT NOT NULL,
+      workspace_path TEXT NOT NULL,
       conversation_id TEXT,
       head_sha TEXT NOT NULL,
       stash_sha TEXT,
@@ -99,9 +99,9 @@ export function initDatabase(): void {
       created_at INTEGER NOT NULL
     );
 
-    CREATE TABLE IF NOT EXISTS project_memories (
+    CREATE TABLE IF NOT EXISTS workspace_memories (
       id TEXT PRIMARY KEY,
-      project_path TEXT NOT NULL,
+      workspace_path TEXT NOT NULL,
       category TEXT NOT NULL DEFAULT 'convention',
       key TEXT NOT NULL,
       content TEXT NOT NULL,
@@ -115,10 +115,10 @@ export function initDatabase(): void {
     CREATE INDEX IF NOT EXISTS idx_messages_conversation ON messages(conversation_id, timestamp);
     CREATE INDEX IF NOT EXISTS idx_tasks_conversation ON tasks(conversation_id);
     CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status);
-    CREATE INDEX IF NOT EXISTS idx_projects_last_opened ON projects(last_opened DESC);
-    CREATE INDEX IF NOT EXISTS idx_git_snapshots_path ON git_snapshots(project_path, created_at DESC);
-    CREATE INDEX IF NOT EXISTS idx_project_memories_path ON project_memories(project_path);
-    CREATE INDEX IF NOT EXISTS idx_project_memories_category ON project_memories(project_path, category);
+    CREATE INDEX IF NOT EXISTS idx_workspaces_last_opened ON workspaces(last_opened DESC);
+    CREATE INDEX IF NOT EXISTS idx_git_snapshots_path ON git_snapshots(workspace_path, created_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_workspace_memories_path ON workspace_memories(workspace_path);
+    CREATE INDEX IF NOT EXISTS idx_workspace_memories_category ON workspace_memories(workspace_path, category);
 
     CREATE TABLE IF NOT EXISTS users (
       id TEXT PRIMARY KEY,
@@ -131,7 +131,7 @@ export function initDatabase(): void {
 
     CREATE TABLE IF NOT EXISTS prds (
       id TEXT PRIMARY KEY,
-      project_path TEXT NOT NULL,
+      workspace_path TEXT NOT NULL,
       name TEXT NOT NULL,
       description TEXT NOT NULL DEFAULT '',
       branch_name TEXT,
@@ -165,7 +165,7 @@ export function initDatabase(): void {
     CREATE TABLE IF NOT EXISTS loops (
       id TEXT PRIMARY KEY,
       prd_id TEXT NOT NULL,
-      project_path TEXT NOT NULL,
+      workspace_path TEXT NOT NULL,
       status TEXT NOT NULL DEFAULT 'idle',
       config TEXT NOT NULL DEFAULT '{}',
       current_iteration INTEGER NOT NULL DEFAULT 0,
@@ -196,7 +196,7 @@ export function initDatabase(): void {
       updated_at INTEGER NOT NULL
     );
 
-    CREATE INDEX IF NOT EXISTS idx_prds_project_path ON prds(project_path);
+    CREATE INDEX IF NOT EXISTS idx_prds_workspace_path ON prds(workspace_path);
     CREATE INDEX IF NOT EXISTS idx_prd_stories_prd ON prd_stories(prd_id);
     CREATE INDEX IF NOT EXISTS idx_loops_prd ON loops(prd_id);
     CREATE INDEX IF NOT EXISTS idx_loops_status ON loops(status);
@@ -212,7 +212,7 @@ export function initDatabase(): void {
     `ALTER TABLE conversations ADD COLUMN allowed_tools TEXT`,
     `ALTER TABLE conversations ADD COLUMN disallowed_tools TEXT`,
     `ALTER TABLE conversations ADD COLUMN cli_session_id TEXT`,
-    `ALTER TABLE conversations ADD COLUMN project_id TEXT REFERENCES projects(id)`,
+    `ALTER TABLE conversations ADD COLUMN workspace_id TEXT REFERENCES workspaces(id)`,
     `ALTER TABLE conversations ADD COLUMN user_id TEXT`,
     `ALTER TABLE prd_stories ADD COLUMN estimate TEXT`,
     `ALTER TABLE prd_stories ADD COLUMN dependency_reasons TEXT NOT NULL DEFAULT '{}'`,
@@ -223,6 +223,27 @@ export function initDatabase(): void {
       db.exec(sql);
     } catch {
       /* column already exists */
+    }
+  }
+
+  // Migrate: rename old project tables/columns to workspace (for existing databases)
+  const migrations = [
+    // Rename tables
+    `ALTER TABLE projects RENAME TO workspaces`,
+    `ALTER TABLE project_memories RENAME TO workspace_memories`,
+    // Rename columns
+    `ALTER TABLE conversations RENAME COLUMN project_path TO workspace_path`,
+    `ALTER TABLE conversations RENAME COLUMN project_id TO workspace_id`,
+    `ALTER TABLE git_snapshots RENAME COLUMN project_path TO workspace_path`,
+    `ALTER TABLE workspace_memories RENAME COLUMN project_path TO workspace_path`,
+    `ALTER TABLE prds RENAME COLUMN project_path TO workspace_path`,
+    `ALTER TABLE loops RENAME COLUMN project_path TO workspace_path`,
+  ];
+  for (const sql of migrations) {
+    try {
+      db.exec(sql);
+    } catch {
+      /* already migrated or table doesn't exist */
     }
   }
 }

@@ -3,7 +3,7 @@
   import { editorStore } from '$lib/stores/editor.svelte';
   import { settingsStore } from '$lib/stores/settings.svelte';
   import { conversationStore } from '$lib/stores/conversation.svelte';
-  import { projectStore } from '$lib/stores/projects.svelte';
+  import { workspaceListStore } from '$lib/stores/projects.svelte';
 
   let searchInput: HTMLInputElement;
   let debounceTimer: ReturnType<typeof setTimeout>;
@@ -11,9 +11,9 @@
 
   function getRootPath(): string {
     return (
-      projectStore.activeProject?.path ||
-      conversationStore.active?.projectPath ||
-      settingsStore.projectPath ||
+      workspaceListStore.activeWorkspace?.path ||
+      conversationStore.active?.workspacePath ||
+      settingsStore.workspacePath ||
       '.'
     );
   }

@@ -6,7 +6,7 @@ export interface CreateConversationRequest {
   title?: string;
   model?: string;
   systemPrompt?: string;
-  projectPath?: string;
+  workspacePath?: string;
   permissionMode?: string;
   effort?: string;
   maxBudgetUsd?: number;

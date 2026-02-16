@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { projectStore } from '$lib/stores/projects.svelte';
+  import { workspaceListStore } from '$lib/stores/projects.svelte';
   import { uiStore } from '$lib/stores/ui.svelte';
   import { api } from '$lib/api/client';
   import { onMount } from 'svelte';
@@ -12,7 +12,7 @@
   let dropdown: HTMLDivElement;
 
   onMount(() => {
-    projectStore.loadProjects();
+    workspaceListStore.loadWorkspaces();
   });
 
   function handleClickOutside(e: MouseEvent) {
@@ -39,9 +39,9 @@
   async function selectFolder(path: string) {
     const name = path.split('/').pop() || path;
     try {
-      await projectStore.createProject(name, path);
+      await workspaceListStore.createWorkspace(name, path);
     } catch (e: any) {
-      uiStore.toast(e.message || 'Failed to create project', 'error');
+      uiStore.toast(e.message || 'Failed to create workspace', 'error');
     }
     browsing = false;
     open = false;
@@ -50,7 +50,7 @@
 
 <svelte:window onclick={handleClickOutside} />
 
-<div class="project-switcher" bind:this={dropdown}>
+<div class="workspace-switcher" bind:this={dropdown}>
   <button class="switcher-btn" onclick={() => (open = !open)}>
     <svg
       width="14"
@@ -62,8 +62,8 @@
     >
       <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
     </svg>
-    <span class="project-name">
-      {projectStore.activeProject?.name || 'No Project'}
+    <span class="workspace-name">
+      {workspaceListStore.activeWorkspace?.name || 'No Workspace'}
     </span>
     <svg
       width="10"
@@ -101,32 +101,32 @@
         <div class="dropdown-divider"></div>
         <button class="dropdown-item" onclick={() => (browsing = false)}> Back </button>
       {:else}
-        {#each projectStore.projects as project (project.id)}
+        {#each workspaceListStore.workspaces as workspace (workspace.id)}
           <button
             class="dropdown-item"
-            class:active={project.id === projectStore.activeProjectId}
+            class:active={workspace.id === workspaceListStore.activeWorkspaceId}
             onclick={() => {
-              projectStore.switchProject(project.id);
+              workspaceListStore.switchWorkspace(workspace.id);
               open = false;
             }}
           >
-            <span class="item-name">{project.name}</span>
-            <span class="item-path">{project.path}</span>
+            <span class="item-name">{workspace.name}</span>
+            <span class="item-path">{workspace.path}</span>
           </button>
         {/each}
 
-        {#if projectStore.projects.length > 0}
+        {#if workspaceListStore.workspaces.length > 0}
           <div class="dropdown-divider"></div>
         {/if}
 
         <button
-          class="dropdown-item all-projects"
+          class="dropdown-item all-workspaces"
           onclick={() => {
-            projectStore.clearActiveProject();
+            workspaceListStore.clearActiveWorkspace();
             open = false;
           }}
         >
-          All Projects
+          All Workspaces
         </button>
 
         <div class="dropdown-divider"></div>
@@ -139,13 +139,13 @@
           {browseLoading ? 'Loading...' : 'Open Folder...'}
         </button>
         <button
-          class="dropdown-item new-project"
+          class="dropdown-item new-workspace"
           onclick={() => {
-            uiStore.openModal('project-setup');
+            uiStore.openModal('workspace-setup');
             open = false;
           }}
         >
-          New Project...
+          New Workspace...
         </button>
       {/if}
     </div>
@@ -153,7 +153,7 @@
 </div>
 
 <style>
-  .project-switcher {
+  .workspace-switcher {
     position: relative;
   }
 
@@ -172,7 +172,7 @@
     background: var(--bg-hover);
   }
 
-  .project-name {
+  .workspace-name {
     max-width: 160px;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -232,7 +232,7 @@
     margin: 4px 8px;
   }
 
-  .all-projects {
+  .all-workspaces {
     color: var(--text-tertiary);
     font-style: italic;
   }
@@ -242,7 +242,7 @@
     font-weight: 600;
   }
 
-  .new-project {
+  .new-workspace {
     color: var(--text-tertiary);
   }
 

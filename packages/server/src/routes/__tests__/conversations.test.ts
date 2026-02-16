@@ -21,8 +21,8 @@ function insertConversation(overrides: Record<string, any> = {}) {
     title: 'Test Conversation',
     model: 'claude-sonnet-4-5-20250929',
     system_prompt: null,
-    project_path: '/tmp/test',
-    project_id: null,
+    workspace_path: '/tmp/test',
+    workspace_id: null,
     plan_mode: 0,
     plan_file: null,
     total_tokens: 0,
@@ -39,7 +39,7 @@ function insertConversation(overrides: Record<string, any> = {}) {
   const row = { ...defaults, ...overrides };
   testDb
     .query(
-      `INSERT INTO conversations (id, title, model, system_prompt, project_path, project_id, plan_mode, plan_file,
+      `INSERT INTO conversations (id, title, model, system_prompt, workspace_path, workspace_id, plan_mode, plan_file,
         total_tokens, permission_mode, effort, max_budget_usd, max_turns, allowed_tools, disallowed_tools,
         cli_session_id, created_at, updated_at)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
@@ -49,8 +49,8 @@ function insertConversation(overrides: Record<string, any> = {}) {
       row.title,
       row.model,
       row.system_prompt,
-      row.project_path,
-      row.project_id,
+      row.workspace_path,
+      row.workspace_id,
       row.plan_mode,
       row.plan_file,
       row.total_tokens,
@@ -135,7 +135,7 @@ describe('Conversation Routes', () => {
     test('maps snake_case fields to camelCase', async () => {
       insertConversation({
         id: 'conv-1',
-        project_path: '/my/project',
+        workspace_path: '/my/project',
         permission_mode: 'trusted',
         effort: 'low',
       });
@@ -143,7 +143,7 @@ describe('Conversation Routes', () => {
       const res = await app.request('/');
       const json = await res.json();
       const conv = json.data[0];
-      expect(conv.projectPath).toBe('/my/project');
+      expect(conv.workspacePath).toBe('/my/project');
       expect(conv.permissionMode).toBe('trusted');
       expect(conv.effort).toBe('low');
       expect(conv.createdAt).toBeDefined();
@@ -265,7 +265,7 @@ describe('Conversation Routes', () => {
           title: 'Custom Chat',
           model: 'claude-opus-4-6',
           systemPrompt: 'Be helpful',
-          projectPath: '/my/project',
+          workspacePath: '/my/project',
           permissionMode: 'trusted',
           effort: 'low',
           maxBudgetUsd: 5.0,
@@ -283,7 +283,7 @@ describe('Conversation Routes', () => {
       expect(row.title).toBe('Custom Chat');
       expect(row.model).toBe('claude-opus-4-6');
       expect(row.system_prompt).toBe('Be helpful');
-      expect(row.project_path).toBe('/my/project');
+      expect(row.workspace_path).toBe('/my/project');
       expect(row.permission_mode).toBe('trusted');
       expect(row.effort).toBe('low');
       expect(row.max_budget_usd).toBe(5.0);
@@ -339,17 +339,17 @@ describe('Conversation Routes', () => {
       expect(row.model).toBe('claude-opus-4-6');
     });
 
-    test('updates projectPath', async () => {
+    test('updates workspacePath', async () => {
       insertConversation({ id: 'conv-1' });
       await app.request('/conv-1', {
         method: 'PATCH',
-        body: JSON.stringify({ projectPath: '/new/path' }),
+        body: JSON.stringify({ workspacePath: '/new/path' }),
         headers: { 'Content-Type': 'application/json' },
       });
       const row = testDb
-        .query('SELECT project_path FROM conversations WHERE id = ?')
+        .query('SELECT workspace_path FROM conversations WHERE id = ?')
         .get('conv-1') as any;
-      expect(row.project_path).toBe('/new/path');
+      expect(row.workspace_path).toBe('/new/path');
     });
 
     test('updates planMode as integer', async () => {

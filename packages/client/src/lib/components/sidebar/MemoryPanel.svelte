@@ -1,12 +1,12 @@
 <script lang="ts">
   import { api } from '$lib/api/client';
   import { onMount } from 'svelte';
-  import { projectMemoryStore } from '$lib/stores/project-memory.svelte';
+  import { workspaceMemoryStore } from '$lib/stores/project-memory.svelte';
   import { settingsStore } from '$lib/stores/settings.svelte';
   import { uiStore } from '$lib/stores/ui.svelte';
   import type { MemoryCategory } from '@maude/shared';
 
-  type ViewMode = 'files' | 'project';
+  type ViewMode = 'files' | 'workspace';
 
   interface MemoryFile {
     path: string;
@@ -15,13 +15,13 @@
     lastModified: number;
   }
 
-  let viewMode = $state<ViewMode>('project');
+  let viewMode = $state<ViewMode>('workspace');
   let files = $state<MemoryFile[]>([]);
   let editingFile = $state<MemoryFile | null>(null);
   let editContent = $state('');
   let saving = $state(false);
 
-  // Project memory add form
+  // Workspace memory add form
   let showAddForm = $state(false);
   let addForm = $state({
     key: '',
@@ -29,7 +29,7 @@
     category: 'convention' as MemoryCategory,
   });
 
-  // Project memory editing
+  // Workspace memory editing
   let editingMemory = $state<string | null>(null);
   let editMemoryContent = $state('');
 
@@ -55,8 +55,8 @@
       const res = await api.memory.list();
       files = res.data;
     } catch {}
-    if (settingsStore.projectPath) {
-      projectMemoryStore.load(settingsStore.projectPath);
+    if (settingsStore.workspacePath) {
+      workspaceMemoryStore.load(settingsStore.workspacePath);
     }
   });
 
@@ -78,9 +78,9 @@
   }
 
   async function addMemory() {
-    if (!addForm.key || !addForm.content || !settingsStore.projectPath) return;
-    const ok = await projectMemoryStore.create({
-      projectPath: settingsStore.projectPath,
+    if (!addForm.key || !addForm.content || !settingsStore.workspacePath) return;
+    const ok = await workspaceMemoryStore.create({
+      workspacePath: settingsStore.workspacePath,
       category: addForm.category,
       key: addForm.key,
       content: addForm.content,
@@ -93,17 +93,17 @@
   }
 
   async function deleteMemory(id: string) {
-    await projectMemoryStore.remove(id);
+    await workspaceMemoryStore.remove(id);
   }
 
   async function saveMemoryEdit(id: string) {
-    await projectMemoryStore.update(id, { content: editMemoryContent });
+    await workspaceMemoryStore.update(id, { content: editMemoryContent });
     editingMemory = null;
   }
 
   function typeLabel(type: string): string {
     const labels: Record<string, string> = {
-      project: 'Project',
+      project: 'Workspace',
       'project-local': 'Local',
       user: 'User',
       'auto-memory': 'Auto Memory',
@@ -124,12 +124,12 @@
     <div class="view-tabs">
       <button
         class="view-tab"
-        class:active={viewMode === 'project'}
-        onclick={() => (viewMode = 'project')}
+        class:active={viewMode === 'workspace'}
+        onclick={() => (viewMode = 'workspace')}
       >
-        Project Memory
-        {#if projectMemoryStore.stats.total > 0}
-          <span class="count">{projectMemoryStore.stats.total}</span>
+        Workspace Memory
+        {#if workspaceMemoryStore.stats.total > 0}
+          <span class="count">{workspaceMemoryStore.stats.total}</span>
         {/if}
       </button>
       <button
@@ -145,15 +145,15 @@
     </div>
   </div>
 
-  {#if viewMode === 'project'}
-    <div class="project-memory-view">
+  {#if viewMode === 'workspace'}
+    <div class="workspace-memory-view">
       <div class="pm-toolbar">
         <div class="filter-row">
           {#each CATEGORIES as cat}
             <button
               class="filter-chip"
-              class:active={projectMemoryStore.filterCategory === cat.value}
-              onclick={() => projectMemoryStore.setFilter(cat.value)}
+              class:active={workspaceMemoryStore.filterCategory === cat.value}
+              onclick={() => workspaceMemoryStore.setFilter(cat.value)}
             >
               {cat.label}
             </button>
@@ -190,19 +190,19 @@
         </div>
       {/if}
 
-      {#if projectMemoryStore.loading}
+      {#if workspaceMemoryStore.loading}
         <div class="empty">Loading...</div>
-      {:else if projectMemoryStore.memories.length === 0}
+      {:else if workspaceMemoryStore.memories.length === 0}
         <div class="empty">
-          {#if !settingsStore.projectPath}
-            Set a project path to use project memory
+          {#if !settingsStore.workspacePath}
+            Set a workspace path to use workspace memory
           {:else}
             No memories yet. Add manually or they'll be auto-extracted from conversations.
           {/if}
         </div>
       {:else}
         <div class="memory-list">
-          {#each projectMemoryStore.memories as mem (mem.id)}
+          {#each workspaceMemoryStore.memories as mem (mem.id)}
             <div class="pm-item">
               <div class="pm-header">
                 <span
@@ -338,7 +338,7 @@
     color: var(--text-secondary);
   }
 
-  .project-memory-view {
+  .workspace-memory-view {
     flex: 1;
     display: flex;
     flex-direction: column;

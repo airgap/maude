@@ -1,86 +1,86 @@
 import { api } from '$lib/api/client';
 import { settingsStore } from './settings.svelte';
-import type { ProjectSummary } from '@maude/shared';
+import type { WorkspaceSummary } from '@maude/shared';
 
-function createProjectStore() {
-  let projects = $state<ProjectSummary[]>([]);
-  let activeProjectId = $state<string | null>(null);
+function createWorkspaceListStore() {
+  let workspaces = $state<WorkspaceSummary[]>([]);
+  let activeWorkspaceId = $state<string | null>(null);
   let loading = $state(false);
 
-  const activeProject = $derived(projects.find((p) => p.id === activeProjectId) ?? null);
+  const activeWorkspace = $derived(workspaces.find((p) => p.id === activeWorkspaceId) ?? null);
 
   return {
-    get projects() {
-      return projects;
+    get workspaces() {
+      return workspaces;
     },
-    get activeProjectId() {
-      return activeProjectId;
+    get activeWorkspaceId() {
+      return activeWorkspaceId;
     },
-    get activeProject() {
-      return activeProject;
+    get activeWorkspace() {
+      return activeWorkspace;
     },
     get loading() {
       return loading;
     },
 
-    async loadProjects() {
+    async loadWorkspaces() {
       loading = true;
       try {
-        const res = await api.projects.list();
-        projects = res.data;
+        const res = await api.workspaces.list();
+        workspaces = res.data;
       } catch {
-        projects = [];
+        workspaces = [];
       }
       loading = false;
     },
 
-    async createProject(name: string, path: string) {
+    async createWorkspace(name: string, path: string) {
       try {
-        const res = await api.projects.create({ name, path });
-        await this.loadProjects();
-        activeProjectId = res.data.id;
-        settingsStore.update({ projectPath: path });
+        const res = await api.workspaces.create({ name, path });
+        await this.loadWorkspaces();
+        activeWorkspaceId = res.data.id;
+        settingsStore.update({ workspacePath: path });
         return res.data.id;
       } catch (e) {
         throw e;
       }
     },
 
-    async switchProject(id: string) {
-      const project = projects.find((p) => p.id === id);
-      if (!project) return;
+    async switchWorkspace(id: string) {
+      const workspace = workspaces.find((p) => p.id === id);
+      if (!workspace) return;
 
-      activeProjectId = id;
-      settingsStore.update({ projectPath: project.path });
+      activeWorkspaceId = id;
+      settingsStore.update({ workspacePath: workspace.path });
 
       // Update last-opened
       try {
-        await api.projects.open(id);
+        await api.workspaces.open(id);
       } catch {}
     },
 
-    clearActiveProject() {
-      activeProjectId = null;
+    clearActiveWorkspace() {
+      activeWorkspaceId = null;
     },
 
-    async deleteProject(id: string) {
+    async deleteWorkspace(id: string) {
       try {
-        await api.projects.delete(id);
-        if (activeProjectId === id) activeProjectId = null;
-        await this.loadProjects();
+        await api.workspaces.delete(id);
+        if (activeWorkspaceId === id) activeWorkspaceId = null;
+        await this.loadWorkspaces();
       } catch {}
     },
 
-    setActiveProjectId(id: string | null) {
-      activeProjectId = id;
+    setActiveWorkspaceId(id: string | null) {
+      activeWorkspaceId = id;
       if (id) {
-        const project = projects.find((p) => p.id === id);
-        if (project) {
-          settingsStore.update({ projectPath: project.path });
+        const workspace = workspaces.find((p) => p.id === id);
+        if (workspace) {
+          settingsStore.update({ workspacePath: workspace.path });
         }
       }
     },
   };
 }
 
-export const projectStore = createProjectStore();
+export const workspaceListStore = createWorkspaceListStore();

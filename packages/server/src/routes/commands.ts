@@ -25,7 +25,7 @@ app.post('/:conversationId/execute', async (c) => {
 
     case 'init': {
       // Init creates a CLAUDE.md in the project directory
-      const cwd = conv.project_path || process.cwd();
+      const cwd = conv.workspace_path || process.cwd();
       const proc = Bun.spawn(['claude', '/init'], {
         cwd,
         stdout: 'pipe',

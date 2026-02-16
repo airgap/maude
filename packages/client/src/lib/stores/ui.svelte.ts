@@ -16,7 +16,7 @@ type ModalId =
   | 'mcp-manager'
   | 'keybindings'
   | 'quick-open'
-  | 'project-setup'
+  | 'workspace-setup'
   | 'snapshots'
   | 'loop-config'
   | 'story-generate'

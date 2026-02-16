@@ -1,7 +1,7 @@
 <script lang="ts">
   import { conversationStore } from '$lib/stores/conversation.svelte';
   import { streamStore } from '$lib/stores/stream.svelte';
-  import { projectStore } from '$lib/stores/projects.svelte';
+  import { workspaceListStore } from '$lib/stores/projects.svelte';
   import { workspaceStore } from '$lib/stores/workspace.svelte';
   import { uiStore } from '$lib/stores/ui.svelte';
   import { api } from '$lib/api/client';
@@ -12,11 +12,11 @@
   let filtered = $derived(
     conversationStore.list
       .filter((c) => {
-        // Always filter by active project — workspace tabs handle project switching
-        if (projectStore.activeProject) {
+        // Always filter by active workspace — workspace tabs handle workspace switching
+        if (workspaceListStore.activeWorkspace) {
           return (
-            c.projectId === projectStore.activeProjectId ||
-            c.projectPath === projectStore.activeProject.path
+            c.workspaceId === workspaceListStore.activeWorkspaceId ||
+            c.workspacePath === workspaceListStore.activeWorkspace.path
           );
         }
         return true;

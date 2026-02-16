@@ -10,7 +10,7 @@
   import type { PlanMode } from '@maude/shared';
   import DependencyView from '$lib/components/planning/DependencyView.svelte';
 
-  let projectPath = $derived(settingsStore.projectPath || '');
+  let workspacePath = $derived(settingsStore.workspacePath || '');
   let importJson = $state('');
   let showImport = $state(false);
   let showCreate = $state(false);
@@ -23,8 +23,8 @@
   let logEl = $state<HTMLDivElement>();
 
   onMount(() => {
-    if (projectPath) {
-      loopStore.loadPrds(projectPath);
+    if (workspacePath) {
+      loopStore.loadPrds(workspacePath);
     }
     loopStore.loadActiveLoop();
   });
@@ -69,17 +69,17 @@
   }
 
   async function handleCreate() {
-    if (!newPrdName.trim() || !projectPath) return;
+    if (!newPrdName.trim() || !workspacePath) return;
     try {
       const res = await api.prds.create({
-        projectPath,
+        workspacePath: workspacePath,
         name: newPrdName.trim(),
         description: newPrdDesc.trim(),
         stories: [],
       });
       if (res.ok) {
         loopStore.setSelectedPrdId(res.data.id);
-        await loopStore.loadPrds(projectPath);
+        await loopStore.loadPrds(workspacePath);
         await loopStore.loadPrd(res.data.id);
         showCreate = false;
         newPrdName = '';
@@ -92,13 +92,13 @@
   }
 
   async function handleImport() {
-    if (!importJson.trim() || !projectPath) return;
+    if (!importJson.trim() || !workspacePath) return;
     try {
       const parsed = JSON.parse(importJson);
-      const res = await api.prds.import(projectPath, parsed);
+      const res = await api.prds.import(workspacePath, parsed);
       if (res.ok) {
         loopStore.setSelectedPrdId(res.data.id);
-        await loopStore.loadPrds(projectPath);
+        await loopStore.loadPrds(workspacePath);
         await loopStore.loadPrd(res.data.id);
         showImport = false;
         importJson = '';
@@ -143,7 +143,7 @@
     if (!confirm('Delete this PRD and all its stories?')) return;
     await api.prds.delete(prdId);
     loopStore.setSelectedPrdId(null);
-    await loopStore.loadPrds(projectPath);
+    await loopStore.loadPrds(workspacePath);
   }
 
   function openLoopConfig() {
@@ -343,7 +343,7 @@
 
     planning = true;
     try {
-      const result = await loopStore.startPlanning(loopStore.selectedPrdId, projectPath, mode);
+      const result = await loopStore.startPlanning(loopStore.selectedPrdId, workspacePath, mode);
       if (!result) {
         uiStore.toast('Failed to start planning session', 'error');
         return;

@@ -2,7 +2,7 @@
   import { conversationStore } from '$lib/stores/conversation.svelte';
   import { streamStore } from '$lib/stores/stream.svelte';
   import { settingsStore } from '$lib/stores/settings.svelte';
-  import { projectStore } from '$lib/stores/projects.svelte';
+  import { workspaceListStore } from '$lib/stores/projects.svelte';
   import { editorStore } from '$lib/stores/editor.svelte';
   import { sendAndStream, cancelStream } from '$lib/api/sse';
   import { api } from '$lib/api/client';
@@ -53,7 +53,7 @@
   }
 
   function getDisplayPath(): string {
-    const p = conversationStore.active?.projectPath || settingsStore.projectPath;
+    const p = conversationStore.active?.workspacePath || settingsStore.workspacePath;
     return !p || p === '.' ? '~' : p;
   }
 
@@ -68,7 +68,7 @@
   }
 
   function startEditingPath() {
-    pathInputValue = settingsStore.projectPath === '.' ? '' : settingsStore.projectPath;
+    pathInputValue = settingsStore.workspacePath === '.' ? '' : settingsStore.workspacePath;
     editingPath = true;
     // Focus after Svelte renders the input
     setTimeout(() => pathInput?.focus(), 0);
@@ -78,11 +78,11 @@
     editingPath = false;
     const val = pathInputValue.trim();
     if (val && val !== getDisplayPath()) {
-      settingsStore.update({ projectPath: val });
+      settingsStore.update({ workspacePath: val });
       if (conversationStore.activeId) {
-        api.conversations.update(conversationStore.activeId, { projectPath: val });
+        api.conversations.update(conversationStore.activeId, { workspacePath: val });
         if (conversationStore.active) {
-          conversationStore.active.projectPath = val;
+          conversationStore.active.workspacePath = val;
         }
       }
     }
@@ -98,13 +98,13 @@
   }
 
   function selectDirectory(path: string) {
-    settingsStore.update({ projectPath: path });
+    settingsStore.update({ workspacePath: path });
     showDirPicker = false;
-    // If mid-conversation, update the conversation's project path too
+    // If mid-conversation, update the conversation's workspace path too
     if (conversationStore.activeId) {
-      api.conversations.update(conversationStore.activeId, { projectPath: path });
+      api.conversations.update(conversationStore.activeId, { workspacePath: path });
       if (conversationStore.active) {
-        conversationStore.active.projectPath = path;
+        conversationStore.active.workspacePath = path;
       }
     }
   }
@@ -183,14 +183,14 @@
   }
 
   async function createConversation(text: string) {
-    // Use active project path if available, otherwise fall back to settings
-    const projectPath =
-      projectStore.activeProject?.path ||
-      (settingsStore.projectPath !== '.' ? settingsStore.projectPath : undefined);
+    // Use active workspace path if available, otherwise fall back to settings
+    const workspacePath =
+      workspaceListStore.activeWorkspace?.path ||
+      (settingsStore.workspacePath !== '.' ? settingsStore.workspacePath : undefined);
     const res = await api.conversations.create({
       title: text.slice(0, 60),
       model: settingsStore.model,
-      projectPath,
+      workspacePath,
       permissionMode: settingsStore.permissionMode,
       effort: settingsStore.effort,
       maxBudgetUsd: settingsStore.maxBudgetUsd ?? undefined,
