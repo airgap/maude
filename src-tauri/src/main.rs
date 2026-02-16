@@ -14,7 +14,7 @@ fn main() {
     let sidecar_port = listener.local_addr().unwrap().port();
     drop(listener); // Release port so the sidecar can bind it
 
-    println!("[maude] selected port {} for sidecar", sidecar_port);
+    println!("[e] selected port {} for sidecar", sidecar_port);
 
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
@@ -38,12 +38,12 @@ fn main() {
 
             // Spawn the sidecar with the pre-selected port
             let (mut rx, child) = shell
-                .sidecar("maude-server")
-                .expect("failed to create maude-server sidecar")
+                .sidecar("e-server")
+                .expect("failed to create e-server sidecar")
                 .env("PORT", sidecar_port.to_string())
                 .env("CLIENT_DIST", &client_dist)
                 .spawn()
-                .expect("failed to spawn maude-server sidecar");
+                .expect("failed to spawn e-server sidecar");
 
             // Store child process for cleanup on exit
             app.manage(SidecarState {
@@ -56,17 +56,17 @@ fn main() {
                 while let Some(event) = rx.recv().await {
                     match event {
                         CommandEvent::Stdout(line) => {
-                            println!("[maude-server] {}", String::from_utf8_lossy(&line));
+                            println!("[e-server] {}", String::from_utf8_lossy(&line));
                         }
                         CommandEvent::Stderr(line) => {
-                            eprintln!("[maude-server] {}", String::from_utf8_lossy(&line));
+                            eprintln!("[e-server] {}", String::from_utf8_lossy(&line));
                         }
                         CommandEvent::Terminated(status) => {
-                            eprintln!("[maude-server] terminated: {:?}", status);
+                            eprintln!("[e-server] terminated: {:?}", status);
                             break;
                         }
                         CommandEvent::Error(err) => {
-                            eprintln!("[maude-server] error: {}", err);
+                            eprintln!("[e-server] error: {}", err);
                             break;
                         }
                         _ => {}
@@ -85,7 +85,7 @@ fn main() {
                     tokio::time::sleep(Duration::from_millis(250)).await;
                     if let Ok(resp) = client.get(&health_url).send().await {
                         if resp.status().is_success() {
-                            println!("[maude] server ready on port {}", sidecar_port);
+                            println!("[e] server ready on port {}", sidecar_port);
                             if let Some(window) = app_handle.get_webview_window("main") {
                                 let _ = window.eval(&format!(
                                     "window.location.href = 'http://localhost:{}/';",
@@ -96,7 +96,7 @@ fn main() {
                         }
                     }
                 }
-                eprintln!("[maude] server failed to start within 15 seconds");
+                eprintln!("[e] server failed to start within 15 seconds");
             });
 
             Ok(())

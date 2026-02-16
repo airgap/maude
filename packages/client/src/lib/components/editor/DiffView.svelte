@@ -3,7 +3,7 @@
   import { EditorView } from '@codemirror/view';
   import { EditorState } from '@codemirror/state';
   import { MergeView } from '@codemirror/merge';
-  import { maudeEditorTheme, maudeSyntaxHighlighting } from './maude-cm-theme';
+  import { eEditorTheme, eSyntaxHighlighting } from './e-cm-theme';
   import { loadLanguage } from './language-map';
 
   let {
@@ -27,7 +27,7 @@
     }
 
     const langSupport = await loadLanguage(language);
-    const extensions = [maudeEditorTheme, maudeSyntaxHighlighting, EditorView.editable.of(false)];
+    const extensions = [eEditorTheme, eSyntaxHighlighting, EditorView.editable.of(false)];
     if (langSupport) extensions.push(langSupport);
 
     mergeView = new MergeView({

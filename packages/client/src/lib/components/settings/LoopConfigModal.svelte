@@ -3,7 +3,7 @@
   import { loopStore } from '$lib/stores/loop.svelte';
   import { settingsStore } from '$lib/stores/settings.svelte';
   import { uuid } from '$lib/utils/uuid';
-  import type { QualityCheckConfig, LoopConfig } from '@maude/shared';
+  import type { QualityCheckConfig, LoopConfig } from '@e/shared';
   import { onMount } from 'svelte';
 
   let maxIterations = $state(50);

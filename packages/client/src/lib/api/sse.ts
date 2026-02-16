@@ -1,4 +1,4 @@
-import type { StreamEvent, Conversation } from '@maude/shared';
+import type { StreamEvent, Conversation } from '@e/shared';
 import { streamStore } from '$lib/stores/stream.svelte';
 import { conversationStore } from '$lib/stores/conversation.svelte';
 import { workspaceStore } from '$lib/stores/workspace.svelte';

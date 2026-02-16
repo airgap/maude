@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { MessageContent } from '@maude/shared';
+  import type { MessageContent } from '@e/shared';
   import { settingsStore } from '$lib/stores/settings.svelte';
   import ThinkingBlock from './ThinkingBlock.svelte';
   import ToolCallBlock from './ToolCallBlock.svelte';

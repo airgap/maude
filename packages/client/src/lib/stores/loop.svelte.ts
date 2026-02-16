@@ -26,7 +26,7 @@ import type {
   MatrixStoryPosition,
   MatrixQuadrant,
   UserStory,
-} from '@maude/shared';
+} from '@e/shared';
 import { api, getBaseUrl, getAuthToken } from '../api/client';
 
 // --- Helper functions for effort-value matrix computation ---

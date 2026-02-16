@@ -1,6 +1,6 @@
 import { api } from '$lib/api/client';
 import { settingsStore } from './settings.svelte';
-import type { WorkspaceSummary } from '@maude/shared';
+import type { WorkspaceSummary } from '@e/shared';
 
 function createWorkspaceListStore() {
   let workspaces = $state<WorkspaceSummary[]>([]);

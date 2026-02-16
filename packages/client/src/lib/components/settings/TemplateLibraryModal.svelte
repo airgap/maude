@@ -1,7 +1,7 @@
 <script lang="ts">
   import { uiStore } from '$lib/stores/ui.svelte';
   import { loopStore } from '$lib/stores/loop.svelte';
-  import type { StoryTemplate, StoryTemplateCategory } from '@maude/shared';
+  import type { StoryTemplate, StoryTemplateCategory } from '@e/shared';
 
   type Phase = 'browse' | 'preview' | 'create' | 'use';
 

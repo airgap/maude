@@ -1,4 +1,4 @@
-import type { WorkspaceMemory, MemoryCategory } from '@maude/shared';
+import type { WorkspaceMemory, MemoryCategory } from '@e/shared';
 import { api } from '$lib/api/client';
 
 function createWorkspaceMemoryStore() {

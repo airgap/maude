@@ -4,7 +4,7 @@
   import { workspaceMemoryStore } from '$lib/stores/project-memory.svelte';
   import { settingsStore } from '$lib/stores/settings.svelte';
   import { uiStore } from '$lib/stores/ui.svelte';
-  import type { MemoryCategory } from '@maude/shared';
+  import type { MemoryCategory } from '@e/shared';
 
   type ViewMode = 'files' | 'workspace';
 

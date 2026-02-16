@@ -2,10 +2,10 @@
   "$schema": "https://raw.githubusercontent.com/tauri-apps/tauri/dev/crates/tauri-config-schema/schema.json",
   "productName": "E",
   "version": "0.1.0",
-  "identifier": "com.maude.app",
+  "identifier": "com.e.app",
   "build": {
     "frontendDist": "../packages/client/build",
-    "beforeDevCommand": "bun run --filter @maude/client build",
+    "beforeDevCommand": "bun run --filter @e/client build",
     "beforeBuildCommand": "bun run build:desktop"
   },
   "bundle": {
@@ -18,7 +18,7 @@
       "icons/icon.icns",
       "icons/icon.ico"
     ],
-    "externalBin": ["binaries/maude-server"]
+    "externalBin": ["binaries/e-server"]
   },
   "app": {
     "withGlobalTauri": true,

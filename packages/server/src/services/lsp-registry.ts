@@ -105,11 +105,11 @@ const REGISTRY: Record<string, LspRegistryEntry> = {
 };
 
 /** Base directory for managed LSP installs */
-const LSP_DIR = join(homedir(), '.maude', 'lsp');
+const LSP_DIR = join(homedir(), '.e', 'lsp');
 
 /**
  * Look up the LSP command for a given language.
- * Resolves from ~/.maude/lsp/node_modules/.bin/ first, then system PATH.
+ * Resolves from ~/.e/lsp/node_modules/.bin/ first, then system PATH.
  */
 export function getLspCommand(language: string): { command: string; args: string[] } | null {
   const entry = REGISTRY[language];

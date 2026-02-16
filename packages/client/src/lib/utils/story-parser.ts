@@ -1,4 +1,4 @@
-import type { StoryPriority } from '@maude/shared';
+import type { StoryPriority } from '@e/shared';
 
 export interface StoryAddAction {
   type: 'add';

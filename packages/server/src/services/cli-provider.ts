@@ -1,4 +1,4 @@
-import type { CliProvider } from '@maude/shared';
+import type { CliProvider } from '@e/shared';
 import { existsSync } from 'fs';
 import { join } from 'path';
 import { homedir } from 'os';

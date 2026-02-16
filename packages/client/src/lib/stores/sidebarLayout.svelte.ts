@@ -3,7 +3,7 @@ import { onSidebarTabChange } from './ui.svelte';
 import { SIDEBAR_TABS, type TabDefinition } from '$lib/config/sidebarTabs';
 import { uuid } from '$lib/utils/uuid';
 
-const STORAGE_KEY = 'maude-sidebar-layout';
+const STORAGE_KEY = 'e-sidebar-layout';
 
 const DEFAULT_TABS: SidebarTab[] = ['conversations', 'files', 'search', 'tasks'];
 

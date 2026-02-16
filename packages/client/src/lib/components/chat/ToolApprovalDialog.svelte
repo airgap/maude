@@ -2,7 +2,7 @@
   import { streamStore } from '$lib/stores/stream.svelte';
   import { conversationStore } from '$lib/stores/conversation.svelte';
   import { cancelStream } from '$lib/api/sse';
-  import { parseMcpToolName, isMcpToolDangerous } from '@maude/shared';
+  import { parseMcpToolName, isMcpToolDangerous } from '@e/shared';
 
   let { toolCallId, toolName, input, description } = $props<{
     toolCallId: string;

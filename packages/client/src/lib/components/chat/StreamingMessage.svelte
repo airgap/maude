@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { MessageContent } from '@maude/shared';
+  import type { MessageContent } from '@e/shared';
   import { streamStore } from '$lib/stores/stream.svelte';
   import { settingsStore } from '$lib/stores/settings.svelte';
   import { renderMarkdownPartial } from '$lib/utils/markdown';

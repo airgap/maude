@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 import { loopOrchestrator } from '../services/loop-orchestrator';
-import type { StreamLoopEvent } from '@maude/shared';
+import type { StreamLoopEvent } from '@e/shared';
 
 const app = new Hono();
 

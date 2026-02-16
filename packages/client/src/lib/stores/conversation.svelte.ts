@@ -1,4 +1,4 @@
-import type { Message, Conversation, ConversationSummary, MessageContent } from '@maude/shared';
+import type { Message, Conversation, ConversationSummary, MessageContent } from '@e/shared';
 import { api } from '$lib/api/client';
 
 export const DRAFT_ID = '__draft__';

@@ -3,7 +3,7 @@ import { readdirSync, renameSync, unlinkSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 
 const binDir = resolve(import.meta.dirname!, '..', 'src-tauri', 'binaries');
-const baseName = 'maude-server';
+const baseName = 'e-server';
 
 // Get target triple from rustc
 const rustcOutput = execSync('rustc -vV', { encoding: 'utf-8' });

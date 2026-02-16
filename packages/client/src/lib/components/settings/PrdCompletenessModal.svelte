@@ -1,7 +1,7 @@
 <script lang="ts">
   import { uiStore } from '$lib/stores/ui.svelte';
   import { loopStore } from '$lib/stores/loop.svelte';
-  import type { PRDSectionSeverity } from '@maude/shared';
+  import type { PRDSectionSeverity } from '@e/shared';
 
   let prd = $derived(loopStore.selectedPrd);
   let result = $derived(loopStore.completenessResult);

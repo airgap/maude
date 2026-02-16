@@ -1,5 +1,5 @@
 [package]
-name = "maude"
+name = "e"
 version = "0.1.0"
 edition = "2021"
 description = "E desktop shell — Tauri + Bun sidecar"

@@ -13,7 +13,7 @@ import {
   type PanelColumn,
 } from './sidebarLayout.svelte';
 
-const STORAGE_KEY = 'maude-workspaces';
+const STORAGE_KEY = 'e-workspaces';
 
 export interface SidebarLayoutSnapshot {
   // V2 format

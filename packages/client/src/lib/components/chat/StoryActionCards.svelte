@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { Message } from '@maude/shared';
+  import type { Message } from '@e/shared';
   import { parseStoryActions, type StoryAction } from '$lib/utils/story-parser';
   import { loopStore } from '$lib/stores/loop.svelte';
   import { uiStore } from '$lib/stores/ui.svelte';

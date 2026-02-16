@@ -9,7 +9,7 @@ const config = {
     alias: {
       $lib: './src/lib',
       '$lib/*': './src/lib/*',
-      '@maude/shared': '../shared/src',
+      '@e/shared': '../shared/src',
     },
   },
 };

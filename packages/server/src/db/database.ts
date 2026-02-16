@@ -3,14 +3,14 @@ import { join } from 'path';
 import { homedir } from 'os';
 import { mkdirSync } from 'fs';
 
-const DB_PATH = join(homedir(), '.maude', 'maude.db');
+const DB_PATH = join(homedir(), '.e', 'e.db');
 
 let db: Database;
 
 export function getDb(): Database {
   if (!db) {
     // Ensure directory exists
-    const dir = join(homedir(), '.maude');
+    const dir = join(homedir(), '.e');
     mkdirSync(dir, { recursive: true });
     db = new Database(DB_PATH);
     db.exec('PRAGMA journal_mode=WAL');
@@ -116,9 +116,6 @@ export function initDatabase(): void {
     CREATE INDEX IF NOT EXISTS idx_tasks_conversation ON tasks(conversation_id);
     CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status);
     CREATE INDEX IF NOT EXISTS idx_workspaces_last_opened ON workspaces(last_opened DESC);
-    CREATE INDEX IF NOT EXISTS idx_git_snapshots_path ON git_snapshots(workspace_path, created_at DESC);
-    CREATE INDEX IF NOT EXISTS idx_workspace_memories_path ON workspace_memories(workspace_path);
-    CREATE INDEX IF NOT EXISTS idx_workspace_memories_category ON workspace_memories(workspace_path, category);
 
     CREATE TABLE IF NOT EXISTS users (
       id TEXT PRIMARY KEY,
@@ -196,7 +193,6 @@ export function initDatabase(): void {
       updated_at INTEGER NOT NULL
     );
 
-    CREATE INDEX IF NOT EXISTS idx_prds_workspace_path ON prds(workspace_path);
     CREATE INDEX IF NOT EXISTS idx_prd_stories_prd ON prd_stories(prd_id);
     CREATE INDEX IF NOT EXISTS idx_loops_prd ON loops(prd_id);
     CREATE INDEX IF NOT EXISTS idx_loops_status ON loops(status);
@@ -246,4 +242,12 @@ export function initDatabase(): void {
       /* already migrated or table doesn't exist */
     }
   }
+
+  // Create workspace-related indexes AFTER migrations so columns exist
+  db.exec(`
+    CREATE INDEX IF NOT EXISTS idx_git_snapshots_path ON git_snapshots(workspace_path, created_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_workspace_memories_path ON workspace_memories(workspace_path);
+    CREATE INDEX IF NOT EXISTS idx_workspace_memories_category ON workspace_memories(workspace_path, category);
+    CREATE INDEX IF NOT EXISTS idx_prds_workspace_path ON prds(workspace_path);
+  `);
 }

@@ -1,4 +1,4 @@
-import type { StreamEvent, MessageContent } from '@maude/shared';
+import type { StreamEvent, MessageContent } from '@e/shared';
 import { editorStore } from './editor.svelte';
 import { changesStore } from './changes.svelte';
 

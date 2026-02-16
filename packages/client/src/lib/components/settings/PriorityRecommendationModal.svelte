@@ -1,7 +1,7 @@
 <script lang="ts">
   import { uiStore } from '$lib/stores/ui.svelte';
   import { loopStore } from '$lib/stores/loop.svelte';
-  import type { PriorityRecommendation, StoryPriority } from '@maude/shared';
+  import type { PriorityRecommendation, StoryPriority } from '@e/shared';
 
   // The story being analyzed
   let story = $derived(

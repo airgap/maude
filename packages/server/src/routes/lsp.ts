@@ -9,7 +9,7 @@ import type { BinaryDownloadInfo } from '../services/lsp-registry';
 
 export const lspRoutes = new Hono();
 
-const LSP_DIR = join(homedir(), '.maude', 'lsp');
+const LSP_DIR = join(homedir(), '.e', 'lsp');
 
 // REST: list available language servers
 lspRoutes.get('/servers', async (c) => {
@@ -33,7 +33,7 @@ function resolveBinaryUrl(download: BinaryDownloadInfo): string | null {
 }
 
 /**
- * Download a zip, extract, and place the binary in ~/.maude/lsp/bin/.
+ * Download a zip, extract, and place the binary in ~/.e/lsp/bin/.
  */
 async function installBinaryFromZip(url: string, commandName: string): Promise<void> {
   const binDir = join(LSP_DIR, 'bin');
@@ -71,7 +71,7 @@ async function installBinaryFromZip(url: string, commandName: string): Promise<v
   }
 }
 
-// POST: install a language server into ~/.maude/lsp/
+// POST: install a language server into ~/.e/lsp/
 lspRoutes.post('/install', async (c) => {
   const body = await c.req.json<{ language: string }>();
   const { language } = body;
@@ -132,7 +132,7 @@ lspRoutes.post('/install', async (c) => {
   return c.json({ ok: false, error: `No install method available for language: ${language}` }, 404);
 });
 
-// GET: check which languages have managed installs in ~/.maude/lsp/
+// GET: check which languages have managed installs in ~/.e/lsp/
 lspRoutes.get('/install-status', async (c) => {
   const servers = await getAvailableServers();
   const npmBinDir = join(LSP_DIR, 'node_modules', '.bin');

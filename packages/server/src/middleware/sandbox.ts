@@ -63,16 +63,16 @@ export function getSandboxConfig(workspacePath: string | null): SandboxConfig {
 
 /**
  * Check if a file path is allowed by the sandbox.
- * Always allows ~/.maude/ for config.
+ * Always allows ~/.e/ for config.
  */
 export function isPathAllowed(filePath: string, config: SandboxConfig): boolean {
   if (!config.enabled) return true;
 
   const resolved = resolve(filePath);
 
-  // Always allow maude config directory
+  // Always allow app config directory
   const homeDir = process.env.HOME || '/root';
-  if (resolved.startsWith(resolve(homeDir, '.maude'))) return true;
+  if (resolved.startsWith(resolve(homeDir, '.e'))) return true;
 
   // Check against allowed paths
   for (const allowed of config.allowedPaths) {

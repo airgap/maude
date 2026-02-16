@@ -3,7 +3,7 @@
   import { uiStore } from '$lib/stores/ui.svelte';
   import { api } from '$lib/api/client';
   import { onMount } from 'svelte';
-  import type { ThemeId, CliProvider } from '@maude/shared';
+  import type { ThemeId, CliProvider } from '@e/shared';
   import { MONO_FONTS, SANS_FONTS, findFont } from '$lib/config/fonts';
   import { HYPERTHEMES } from '$lib/config/hyperthemes';
 
@@ -488,7 +488,7 @@
               class="font-preview mono"
               style="font-family: {findFont(settingsStore.fontFamily)?.family || 'monospace'}"
             >
-              const maude = "Hello, World!"; // 0O1lI
+              const e = "Hello, World!"; // 0O1lI
             </div>
           </div>
 

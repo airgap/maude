@@ -7,7 +7,7 @@
   import { api } from '$lib/api/client';
   import { sendAndStream } from '$lib/api/sse';
   import { onMount } from 'svelte';
-  import type { PlanMode } from '@maude/shared';
+  import type { PlanMode } from '@e/shared';
   import DependencyView from '$lib/components/planning/DependencyView.svelte';
 
   let workspacePath = $derived(settingsStore.workspacePath || '');

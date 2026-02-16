@@ -1,7 +1,7 @@
 <script lang="ts">
   import { uiStore } from '$lib/stores/ui.svelte';
   import { loopStore } from '$lib/stores/loop.svelte';
-  import type { GeneratedStory } from '@maude/shared';
+  import type { GeneratedStory } from '@e/shared';
 
   // Input state
   let description = $state(loopStore.selectedPrd?.description || '');

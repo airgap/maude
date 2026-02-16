@@ -1,7 +1,7 @@
 <script lang="ts">
   import { uiStore } from '$lib/stores/ui.svelte';
   import { loopStore } from '$lib/stores/loop.svelte';
-  import type { ACCriterionValidation } from '@maude/shared';
+  import type { ACCriterionValidation } from '@e/shared';
 
   // The story to validate
   let story = $derived(

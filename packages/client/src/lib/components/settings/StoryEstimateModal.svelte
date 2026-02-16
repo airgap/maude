@@ -1,7 +1,7 @@
 <script lang="ts">
   import { uiStore } from '$lib/stores/ui.svelte';
   import { loopStore } from '$lib/stores/loop.svelte';
-  import type { StoryEstimate } from '@maude/shared';
+  import type { StoryEstimate } from '@e/shared';
 
   // The story being estimated
   let story = $derived(

@@ -9,7 +9,7 @@
 import { homedir } from 'os';
 import { join } from 'path';
 import { existsSync, readFileSync, readdirSync } from 'fs';
-import type { DiscoveredMcpSource, DiscoveredMcpServer, MCPTransport } from '@maude/shared';
+import type { DiscoveredMcpSource, DiscoveredMcpServer, MCPTransport } from '@e/shared';
 
 // ── Known Config Locations ──
 

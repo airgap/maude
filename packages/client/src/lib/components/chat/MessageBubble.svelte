@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { Message, MessageContent } from '@maude/shared';
+  import type { Message, MessageContent } from '@e/shared';
   import { settingsStore } from '$lib/stores/settings.svelte';
   import CodeBlock from './CodeBlock.svelte';
   import ThinkingBlock from './ThinkingBlock.svelte';
@@ -374,7 +374,7 @@
                 <ThinkingBlock content={entry.block.thinking} />
               {:else if entry.block.type === 'tool_use'}
                 {#if settingsStore.showToolDetails}
-                  {@const toolBlock = entry.block as import('@maude/shared').ToolUseContent}
+                  {@const toolBlock = entry.block as import('@e/shared').ToolUseContent}
                   <ToolCallBlock
                     toolName={toolBlock.name}
                     input={toolBlock.input}

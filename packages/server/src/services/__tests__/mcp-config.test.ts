@@ -156,7 +156,7 @@ describe('generateMcpConfig', () => {
   test('returns config file path', () => {
     insertServer({ name: 'test' });
     const result = generateMcpConfig();
-    expect(result).toContain('.maude');
+    expect(result).toContain('.e');
     expect(result).toContain('mcp-config.json');
   });
 

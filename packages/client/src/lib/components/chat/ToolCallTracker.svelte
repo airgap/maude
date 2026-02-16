@@ -1,6 +1,6 @@
 <script lang="ts">
   import { streamStore } from '$lib/stores/stream.svelte';
-  import { parseMcpToolName } from '@maude/shared';
+  import { parseMcpToolName } from '@e/shared';
 
   // Track tool calls as they come in
   let toolCalls = $derived.by(() => {

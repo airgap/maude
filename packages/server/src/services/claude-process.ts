@@ -4,13 +4,13 @@ import { EventEmitter } from 'events';
 import { getDb } from '../db/database';
 import { generateMcpConfig } from './mcp-config';
 import { buildCliCommand } from './cli-provider';
-import type { CliProvider } from '@maude/shared';
+import type { CliProvider } from '@e/shared';
 import {
   parseMcpToolName,
   isMcpToolDangerous,
   isMcpFileWriteTool,
   extractFilePath,
-} from '@maude/shared';
+} from '@e/shared';
 import { getSandboxConfig } from '../middleware/sandbox';
 import { verifyFile } from './code-verifier';
 
@@ -1198,6 +1198,6 @@ class ClaudeProcessManager {
 
 // Persist across Bun --hot reloads: store the singleton on globalThis so
 // a module re-evaluation doesn't orphan running CLI processes.
-const GLOBAL_KEY = '__maude_claudeManager';
+const GLOBAL_KEY = '__e_claudeManager';
 export const claudeManager: ClaudeProcessManager =
   (globalThis as any)[GLOBAL_KEY] ?? ((globalThis as any)[GLOBAL_KEY] = new ClaudeProcessManager());

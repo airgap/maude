@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import { getDb } from '../db/database';
 import { discoverMcpConfigs } from '../services/mcp-discovery';
-import type { DiscoveredMcpServer } from '@maude/shared';
+import type { DiscoveredMcpServer } from '@e/shared';
 
 const app = new Hono();
 

@@ -1,4 +1,4 @@
-import type { Task, TaskStatus } from '@maude/shared';
+import type { Task, TaskStatus } from '@e/shared';
 
 function createTaskStore() {
   let tasks = $state<Task[]>([]);

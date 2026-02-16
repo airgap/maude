@@ -1,5 +1,5 @@
-import type { StreamEvent, MessageContent } from '@maude/shared';
-import { isMcpFileWriteTool } from '@maude/shared';
+import type { StreamEvent, MessageContent } from '@e/shared';
+import { isMcpFileWriteTool } from '@e/shared';
 import { editorStore } from './editor.svelte';
 
 // Context key for Svelte 5 context API - ensures proper reactivity tracking

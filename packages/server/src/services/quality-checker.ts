@@ -1,4 +1,4 @@
-import type { QualityCheckConfig, QualityCheckResult } from '@maude/shared';
+import type { QualityCheckConfig, QualityCheckResult } from '@e/shared';
 
 /**
  * Run a single quality check by spawning the configured command.

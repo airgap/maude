@@ -6,7 +6,7 @@ export default defineConfig({
   resolve: {
     alias: {
       $lib: new URL('./src/lib', import.meta.url).pathname,
-      '@maude/shared': new URL('../shared/src', import.meta.url).pathname,
+      '@e/shared': new URL('../shared/src', import.meta.url).pathname,
     },
   },
   test: {

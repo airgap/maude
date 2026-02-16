@@ -111,10 +111,10 @@ export function convertVsCodeTheme(json: VsCodeThemeJson): ConvertedTheme {
   const colors = json.colors || {};
 
   // Map UI colors
-  for (const [vsKey, maudeVars] of Object.entries(UI_COLOR_MAP)) {
+  for (const [vsKey, eVars] of Object.entries(UI_COLOR_MAP)) {
     const value = colors[vsKey];
     if (value) {
-      for (const v of maudeVars) {
+      for (const v of eVars) {
         cssVars[v] = value;
       }
     }

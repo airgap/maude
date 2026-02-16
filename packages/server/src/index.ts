@@ -107,10 +107,10 @@ if (requestedPort === 0) {
     idleTimeout: 120,
   });
   // Machine-parseable line for Tauri to read the actual port
-  console.log(`MAUDE_PORT=${server.port}`);
+  console.log(`E_PORT=${server.port}`);
   console.log(`E server running on ${protocol}://localhost:${server.port}`);
 } else {
-  console.log(`MAUDE_PORT=${requestedPort}`);
+  console.log(`E_PORT=${requestedPort}`);
   console.log(`E server running on ${protocol}://localhost:${requestedPort}`);
 }
 

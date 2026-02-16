@@ -3,7 +3,7 @@ import { join } from 'path';
 import { homedir } from 'os';
 import { writeFileSync, mkdirSync } from 'fs';
 
-const MCP_CONFIG_PATH = join(homedir(), '.maude', 'mcp-config.json');
+const MCP_CONFIG_PATH = join(homedir(), '.e', 'mcp-config.json');
 
 /**
  * Reads MCP servers from the database and generates a config file
@@ -57,7 +57,7 @@ export function generateMcpConfig(): string | null {
   const configContent = JSON.stringify({ mcpServers }, null, 2);
 
   // Ensure directory exists and write config
-  mkdirSync(join(homedir(), '.maude'), { recursive: true });
+  mkdirSync(join(homedir(), '.e'), { recursive: true });
   writeFileSync(MCP_CONFIG_PATH, configContent, 'utf-8');
 
   return MCP_CONFIG_PATH;

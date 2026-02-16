@@ -1,5 +1,5 @@
 {
-  "name": "@maude/server",
+  "name": "@e/server",
   "version": "0.1.0",
   "private": true,
   "license": "MIT",
@@ -8,13 +8,13 @@
     "dev": "bun run --hot src/index.ts",
     "start": "bun run src/index.ts",
     "build": "bun build src/index.ts --outdir dist --target bun",
-    "build:binary": "bun build src/index.ts --compile --outfile ../../src-tauri/binaries/maude-server",
+    "build:binary": "bun build src/index.ts --compile --outfile ../../src-tauri/binaries/e-server",
     "check": "tsc --noEmit",
     "test": "bun test",
     "test:coverage": "bun test --coverage"
   },
   "dependencies": {
-    "@maude/shared": "workspace:*",
+    "@e/shared": "workspace:*",
     "editorconfig": "^3.0.1",
     "hono": "^4.7.0",
     "nanoid": "^5.0.0",

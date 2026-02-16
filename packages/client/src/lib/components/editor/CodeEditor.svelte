@@ -35,7 +35,7 @@
     selectNextOccurrence,
   } from '@codemirror/search';
   import { lintKeymap } from '@codemirror/lint';
-  import { maudeEditorTheme, maudeSyntaxHighlighting } from './maude-cm-theme';
+  import { eEditorTheme, eSyntaxHighlighting } from './e-cm-theme';
   import { loadLanguage } from './language-map';
   import { editorStore, type EditorTab } from '$lib/stores/editor.svelte';
   import { symbolStore } from '$lib/stores/symbols.svelte';
@@ -130,8 +130,8 @@
       crosshairCursor(),
       highlightActiveLine(),
       highlightSelectionMatches(),
-      maudeEditorTheme,
-      maudeSyntaxHighlighting,
+      eEditorTheme,
+      eSyntaxHighlighting,
       keymap.of([
         ...closeBracketsKeymap,
         ...defaultKeymap,

@@ -6,7 +6,7 @@
     DependencyNode,
     DependencyEdge,
     DependencyWarning,
-  } from '@maude/shared';
+  } from '@e/shared';
 
   let { prdId }: { prdId: string } = $props();
 

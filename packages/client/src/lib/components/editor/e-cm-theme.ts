@@ -6,7 +6,7 @@ import { tags } from '@lezer/highlight';
  * CM6 theme that reads from CSS custom properties (--syn-*, --bg-*, etc.)
  * so it automatically adapts to all 6 E themes.
  */
-export const maudeEditorTheme = EditorView.theme(
+export const eEditorTheme = EditorView.theme(
   {
     '&': {
       height: '100%',
@@ -119,7 +119,7 @@ export const maudeEditorTheme = EditorView.theme(
  * We can't use var() in HighlightStyle directly, so we use computed colors
  * that match our theme system. The theme is applied via the EditorView theme above.
  */
-export const maudeHighlightStyle = HighlightStyle.define([
+export const eHighlightStyle = HighlightStyle.define([
   { tag: tags.keyword, color: 'var(--syn-keyword)' },
   { tag: tags.controlKeyword, color: 'var(--syn-keyword)' },
   { tag: tags.operatorKeyword, color: 'var(--syn-keyword)' },
@@ -169,4 +169,4 @@ export const maudeHighlightStyle = HighlightStyle.define([
   { tag: tags.strikethrough, textDecoration: 'line-through' },
 ]);
 
-export const maudeSyntaxHighlighting = syntaxHighlighting(maudeHighlightStyle);
+export const eSyntaxHighlighting = syntaxHighlighting(eHighlightStyle);

@@ -12,7 +12,7 @@ import type {
   UserStory,
   StreamLoopEvent,
   StoryPriority,
-} from '@maude/shared';
+} from '@e/shared';
 
 // Priority ordering for story selection
 const PRIORITY_ORDER: Record<StoryPriority, number> = {

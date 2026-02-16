@@ -24,14 +24,14 @@ let _authToken: string | null = null;
 export function setAuthToken(token: string | null) {
   _authToken = token;
   if (typeof localStorage !== 'undefined') {
-    if (token) localStorage.setItem('maude-auth-token', token);
-    else localStorage.removeItem('maude-auth-token');
+    if (token) localStorage.setItem('e-auth-token', token);
+    else localStorage.removeItem('e-auth-token');
   }
 }
 export function getAuthToken(): string | null {
   if (_authToken) return _authToken;
   if (typeof localStorage !== 'undefined') {
-    _authToken = localStorage.getItem('maude-auth-token');
+    _authToken = localStorage.getItem('e-auth-token');
   }
   return _authToken;
 }
@@ -308,7 +308,7 @@ export const api = {
       return request<{ ok: boolean; data: any[] }>(`/files/tree?${params}`);
     },
     editorConfig: (path: string) =>
-      request<{ ok: boolean; data: import('@maude/shared').EditorConfigProps }>(
+      request<{ ok: boolean; data: import('@e/shared').EditorConfigProps }>(
         `/files/editorconfig?path=${encodeURIComponent(path)}`,
       ),
     directories: (path?: string) => {
@@ -634,12 +634,12 @@ export const api = {
     getDependencyGraph: (prdId: string) =>
       request<{
         ok: boolean;
-        data: import('@maude/shared').DependencyGraph;
+        data: import('@e/shared').DependencyGraph;
       }>(`/prds/${prdId}/dependencies`),
     addDependency: (prdId: string, fromStoryId: string, toStoryId: string, reason?: string) =>
       request<{
         ok: boolean;
-        data: import('@maude/shared').DependencyGraph;
+        data: import('@e/shared').DependencyGraph;
       }>(`/prds/${prdId}/dependencies`, {
         method: 'POST',
         body: JSON.stringify({ fromStoryId, toStoryId, reason }),
@@ -647,7 +647,7 @@ export const api = {
     removeDependency: (prdId: string, fromStoryId: string, toStoryId: string) =>
       request<{
         ok: boolean;
-        data: import('@maude/shared').DependencyGraph;
+        data: import('@e/shared').DependencyGraph;
       }>(`/prds/${prdId}/dependencies`, {
         method: 'DELETE',
         body: JSON.stringify({ fromStoryId, toStoryId }),
@@ -655,7 +655,7 @@ export const api = {
     editDependency: (prdId: string, fromStoryId: string, toStoryId: string, reason: string) =>
       request<{
         ok: boolean;
-        data: import('@maude/shared').DependencyGraph;
+        data: import('@e/shared').DependencyGraph;
       }>(`/prds/${prdId}/dependencies`, {
         method: 'PATCH',
         body: JSON.stringify({ fromStoryId, toStoryId, reason }),
@@ -663,7 +663,7 @@ export const api = {
     analyzeDependencies: (prdId: string, replaceAutoDetected?: boolean) =>
       request<{
         ok: boolean;
-        data: import('@maude/shared').AnalyzeDependenciesResponse;
+        data: import('@e/shared').AnalyzeDependenciesResponse;
       }>(`/prds/${prdId}/dependencies/analyze`, {
         method: 'POST',
         body: JSON.stringify({ replaceAutoDetected }),
@@ -671,7 +671,7 @@ export const api = {
     validateSprint: (prdId: string) =>
       request<{
         ok: boolean;
-        data: import('@maude/shared').SprintValidation;
+        data: import('@e/shared').SprintValidation;
       }>(`/prds/${prdId}/dependencies/validate`),
     // --- Acceptance Criteria Validation ---
     validateCriteria: (
@@ -683,7 +683,7 @@ export const api = {
     ) =>
       request<{
         ok: boolean;
-        data: import('@maude/shared').ValidateACResponse;
+        data: import('@e/shared').ValidateACResponse;
       }>(`/prds/${prdId}/stories/${storyId}/validate-criteria`, {
         method: 'POST',
         body: JSON.stringify({ storyId, criteria, storyTitle, storyDescription }),
@@ -692,7 +692,7 @@ export const api = {
     estimateStory: (prdId: string, storyId: string) =>
       request<{
         ok: boolean;
-        data: import('@maude/shared').EstimateStoryResponse;
+        data: import('@e/shared').EstimateStoryResponse;
       }>(`/prds/${prdId}/stories/${storyId}/estimate`, {
         method: 'POST',
         body: JSON.stringify({ storyId }),
@@ -704,7 +704,7 @@ export const api = {
     ) =>
       request<{
         ok: boolean;
-        data: import('@maude/shared').EstimateStoryResponse;
+        data: import('@e/shared').EstimateStoryResponse;
       }>(`/prds/${prdId}/stories/${storyId}/estimate`, {
         method: 'PUT',
         body: JSON.stringify(body),
@@ -712,7 +712,7 @@ export const api = {
     estimatePrd: (prdId: string, reEstimate?: boolean) =>
       request<{
         ok: boolean;
-        data: import('@maude/shared').EstimatePrdResponse;
+        data: import('@e/shared').EstimatePrdResponse;
       }>(`/prds/${prdId}/estimate`, {
         method: 'POST',
         body: JSON.stringify({ reEstimate }),
@@ -721,7 +721,7 @@ export const api = {
     analyzeCompleteness: (prdId: string, sections?: string[]) =>
       request<{
         ok: boolean;
-        data: import('@maude/shared').AnalyzePrdCompletenessResponse;
+        data: import('@e/shared').AnalyzePrdCompletenessResponse;
       }>(`/prds/${prdId}/completeness`, {
         method: 'POST',
         body: JSON.stringify({ sections }),
@@ -730,15 +730,15 @@ export const api = {
     generateSprintPlan: (prdId: string, capacity: number, capacityMode?: 'points' | 'count') =>
       request<{
         ok: boolean;
-        data: import('@maude/shared').SprintPlanResponse;
+        data: import('@e/shared').SprintPlanResponse;
       }>(`/prds/${prdId}/sprint-plan`, {
         method: 'POST',
         body: JSON.stringify({ capacity, capacityMode }),
       }),
-    saveAdjustedSprintPlan: (prdId: string, plan: import('@maude/shared').SprintPlanResponse) =>
+    saveAdjustedSprintPlan: (prdId: string, plan: import('@e/shared').SprintPlanResponse) =>
       request<{
         ok: boolean;
-        data: import('@maude/shared').SprintPlanResponse;
+        data: import('@e/shared').SprintPlanResponse;
       }>(`/prds/${prdId}/sprint-plan`, {
         method: 'PUT',
         body: JSON.stringify(plan),
@@ -748,29 +748,29 @@ export const api = {
       const q = category ? `?category=${encodeURIComponent(category)}` : '';
       return request<{
         ok: boolean;
-        data: import('@maude/shared').StoryTemplate[];
+        data: import('@e/shared').StoryTemplate[];
       }>(`/prds/templates${q}`);
     },
     getTemplate: (templateId: string) =>
       request<{
         ok: boolean;
-        data: import('@maude/shared').StoryTemplate;
+        data: import('@e/shared').StoryTemplate;
       }>(`/prds/templates/${templateId}`),
-    createTemplate: (body: import('@maude/shared').CreateTemplateRequest) =>
+    createTemplate: (body: import('@e/shared').CreateTemplateRequest) =>
       request<{
         ok: boolean;
-        data: import('@maude/shared').StoryTemplate;
+        data: import('@e/shared').StoryTemplate;
       }>('/prds/templates', {
         method: 'POST',
         body: JSON.stringify(body),
       }),
     updateTemplate: (
       templateId: string,
-      body: Partial<import('@maude/shared').CreateTemplateRequest>,
+      body: Partial<import('@e/shared').CreateTemplateRequest>,
     ) =>
       request<{
         ok: boolean;
-        data: import('@maude/shared').StoryTemplate;
+        data: import('@e/shared').StoryTemplate;
       }>(`/prds/templates/${templateId}`, {
         method: 'PATCH',
         body: JSON.stringify(body),
@@ -784,7 +784,7 @@ export const api = {
     ) =>
       request<{
         ok: boolean;
-        data: import('@maude/shared').CreateStoryFromTemplateResponse;
+        data: import('@e/shared').CreateStoryFromTemplateResponse;
       }>(`/prds/${prdId}/stories/from-template`, {
         method: 'POST',
         body: JSON.stringify({ templateId, variables }),
@@ -793,7 +793,7 @@ export const api = {
     recommendPriority: (prdId: string, storyId: string) =>
       request<{
         ok: boolean;
-        data: import('@maude/shared').PriorityRecommendationResponse;
+        data: import('@e/shared').PriorityRecommendationResponse;
       }>(`/prds/${prdId}/stories/${storyId}/priority`, {
         method: 'POST',
         body: JSON.stringify({ storyId }),
@@ -806,7 +806,7 @@ export const api = {
     recommendAllPriorities: (prdId: string) =>
       request<{
         ok: boolean;
-        data: import('@maude/shared').PriorityRecommendationBulkResponse;
+        data: import('@e/shared').PriorityRecommendationBulkResponse;
       }>(`/prds/${prdId}/priorities`, {
         method: 'POST',
         body: JSON.stringify({}),

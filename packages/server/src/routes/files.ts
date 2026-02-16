@@ -3,7 +3,7 @@ import { readFile, readdir, stat, writeFile, mkdir, unlink, rename } from 'fs/pr
 import { join, relative, dirname } from 'path';
 import { homedir } from 'os';
 import editorconfig from 'editorconfig';
-import type { EditorConfigProps } from '@maude/shared';
+import type { EditorConfigProps } from '@e/shared';
 
 const app = new Hono();
 

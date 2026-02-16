@@ -8,7 +8,7 @@
 import { nanoid } from 'nanoid';
 import { getDb } from '../db/database';
 
-const JWT_SECRET = process.env.JWT_SECRET || 'maude-dev-secret-change-in-production';
+const JWT_SECRET = process.env.JWT_SECRET || 'e-dev-secret-change-in-production';
 const TOKEN_EXPIRY_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
 
 interface JwtPayload {

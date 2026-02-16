@@ -1,6 +1,6 @@
 <script lang="ts">
   import { highlightLines, langFromPath, escapeHtml } from '$lib/utils/highlight';
-  import { parseMcpToolName } from '@maude/shared';
+  import { parseMcpToolName } from '@e/shared';
 
   let {
     toolName,

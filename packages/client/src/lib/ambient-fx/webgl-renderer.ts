@@ -39,7 +39,7 @@ import {
  */
 type AmbientTheme = string;
 
-/** Alias — lyku uses THEME_EFFECTS, maude uses HYPERTHEME_EFFECTS */
+/** Alias — lyku uses THEME_EFFECTS, E uses HYPERTHEME_EFFECTS */
 const THEME_EFFECTS = HYPERTHEME_EFFECTS;
 
 interface Star {

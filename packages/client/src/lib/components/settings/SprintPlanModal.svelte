@@ -1,7 +1,7 @@
 <script lang="ts">
   import { uiStore } from '$lib/stores/ui.svelte';
   import { loopStore } from '$lib/stores/loop.svelte';
-  import type { SprintRecommendation, SprintStoryAssignment } from '@maude/shared';
+  import type { SprintRecommendation, SprintStoryAssignment } from '@e/shared';
 
   let capacity = $state(loopStore.sprintPlanCapacity);
   let capacityMode = $state<'points' | 'count'>(loopStore.sprintPlanCapacityMode);

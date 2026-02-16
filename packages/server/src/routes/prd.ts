@@ -50,7 +50,7 @@ import type {
   PriorityFactor,
   PriorityRecommendationResponse,
   PriorityRecommendationBulkResponse,
-} from '@maude/shared';
+} from '@e/shared';
 import { readFileSync } from 'fs';
 import { join } from 'path';
 import { homedir } from 'os';

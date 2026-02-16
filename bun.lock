@@ -14,7 +14,7 @@
       },
     },
     "packages/client": {
-      "name": "@maude/client",
+      "name": "@e/client",
       "version": "0.1.0",
       "dependencies": {
         "@codemirror/autocomplete": "^6.20.0",
@@ -36,8 +36,8 @@
         "@codemirror/search": "^6.6.0",
         "@codemirror/state": "^6.5.4",
         "@codemirror/view": "^6.39.14",
+        "@e/shared": "workspace:*",
         "@lezer/highlight": "^1.2.3",
-        "@maude/shared": "workspace:*",
         "@xterm/addon-fit": "^0.11.0",
         "@xterm/addon-webgl": "^0.19.0",
         "@xterm/xterm": "^6.0.0",
@@ -58,10 +58,10 @@
       },
     },
     "packages/server": {
-      "name": "@maude/server",
+      "name": "@e/server",
       "version": "0.1.0",
       "dependencies": {
-        "@maude/shared": "workspace:*",
+        "@e/shared": "workspace:*",
         "editorconfig": "^3.0.1",
         "hono": "^4.7.0",
         "nanoid": "^5.0.0",
@@ -74,7 +74,7 @@
       },
     },
     "packages/shared": {
-      "name": "@maude/shared",
+      "name": "@e/shared",
       "version": "0.1.0",
       "devDependencies": {
         "typescript": "^5.6.0",
@@ -151,6 +151,12 @@
     "@csstools/css-syntax-patches-for-csstree": ["@csstools/css-syntax-patches-for-csstree@1.0.27", "", {}, "sha512-sxP33Jwg1bviSUXAV43cVYdmjt2TLnLXNqCWl9xmxHawWVjGz/kEbdkr7F9pxJNBN2Mh+dq0crgItbW6tQvyow=="],
 
     "@csstools/css-tokenizer": ["@csstools/css-tokenizer@4.0.0", "", {}, "sha512-QxULHAm7cNu72w97JUNCBFODFaXpbDg+dP8b/oWFAZ2MTRppA3U00Y2L1HqaS4J6yBqxwa/Y3nMBaxVKbB/NsA=="],
+
+    "@e/client": ["@e/client@workspace:packages/client"],
+
+    "@e/server": ["@e/server@workspace:packages/server"],
+
+    "@e/shared": ["@e/shared@workspace:packages/shared"],
 
     "@esbuild/aix-ppc64": ["@esbuild/aix-ppc64@0.25.12", "", { "os": "aix", "cpu": "ppc64" }, "sha512-Hhmwd6CInZ3dwpuGTF8fJG6yoWmsToE+vYgD4nytZVxcu1ulHpUQRAB1UJ8+N1Am3Mz4+xOByoQoSZf4D+CpkA=="],
 
@@ -243,12 +249,6 @@
     "@lezer/xml": ["@lezer/xml@1.0.6", "", { "dependencies": { "@lezer/common": "^1.2.0", "@lezer/highlight": "^1.0.0", "@lezer/lr": "^1.0.0" } }, "sha512-CdDwirL0OEaStFue/66ZmFSeppuL6Dwjlk8qk153mSQwiSH/Dlri4GNymrNWnUmPl2Um7QfV1FO9KFUyX3Twww=="],
 
     "@marijn/find-cluster-break": ["@marijn/find-cluster-break@1.0.2", "", {}, "sha512-l0h88YhZFyKdXIFNfSWpyjStDjGHwZ/U7iobcK1cQQD8sejsONdQtTVU+1wVN1PBw40PiiHB1vA5S7VTfQiP9g=="],
-
-    "@maude/client": ["@maude/client@workspace:packages/client"],
-
-    "@maude/server": ["@maude/server@workspace:packages/server"],
-
-    "@maude/shared": ["@maude/shared@workspace:packages/shared"],
 
     "@one-ini/wasm": ["@one-ini/wasm@0.2.0", "", {}, "sha512-n+L/BvrwKUn7q5O3wHGo+CJZAqfewh38+37sk+eBzv/39lM9pPgPRd4sOZRvSRzo0ukLxzyXso4WlGj2oKZ5hA=="],
 

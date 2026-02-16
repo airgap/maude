@@ -1,5 +1,5 @@
 {
-  "name": "@maude/client",
+  "name": "@e/client",
   "version": "0.1.0",
   "private": true,
   "license": "MIT",
@@ -33,7 +33,7 @@
     "@codemirror/state": "^6.5.4",
     "@codemirror/view": "^6.39.14",
     "@lezer/highlight": "^1.2.3",
-    "@maude/shared": "workspace:*",
+    "@e/shared": "workspace:*",
     "@xterm/addon-fit": "^0.11.0",
     "@xterm/addon-webgl": "^0.19.0",
     "@xterm/xterm": "^6.0.0",

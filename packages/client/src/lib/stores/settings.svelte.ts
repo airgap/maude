@@ -1,10 +1,10 @@
-import type { ThemeId, CliProvider, Keybinding, PermissionMode } from '@maude/shared';
+import type { ThemeId, CliProvider, Keybinding, PermissionMode } from '@e/shared';
 import { convertVsCodeSnippets, type ConvertedSnippet } from '$lib/utils/vscode-snippet-converter';
 import { convertVsCodeTheme, type ConvertedTheme } from '$lib/utils/vscode-theme-converter';
 import { findHypertheme, getDefaultHypertheme } from '$lib/config/hyperthemes';
 import { getBaseUrl } from '$lib/api/client';
 
-const STORAGE_KEY = 'maude-settings';
+const STORAGE_KEY = 'e-settings';
 
 interface SettingsState {
   theme: ThemeId;

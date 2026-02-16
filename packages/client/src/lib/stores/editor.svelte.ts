@@ -1,7 +1,7 @@
 import { api } from '$lib/api/client';
 import { uiStore } from './ui.svelte';
 import { uuid } from '$lib/utils/uuid';
-import type { EditorConfigProps } from '@maude/shared';
+import type { EditorConfigProps } from '@e/shared';
 
 export interface EditorTab {
   id: string;
