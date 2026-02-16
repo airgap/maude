@@ -150,8 +150,13 @@
   }
 
   :global([data-hypertheme='study']) .topbar::after {
-    background: none;
-    border-bottom: 1px double var(--border-primary);
+    background: linear-gradient(
+      90deg,
+      transparent 5%,
+      rgba(228, 160, 60, 0.08) 50%,
+      transparent 95%
+    );
+    border-bottom: none;
   }
 
   :global([data-hypertheme='astral']) .topbar::after,

@@ -24,7 +24,7 @@ fn main() {
             // Once the sidecar is healthy, we navigate to the sidecar URL instead.
             // This makes ALL API requests same-origin — no CORS needed.
             WebviewWindowBuilder::new(app, "main", WebviewUrl::default())
-            .title("Maude")
+            .title("E")
             .inner_size(1200.0, 800.0)
             .min_inner_size(800.0, 600.0)
             .build()?;
@@ -113,7 +113,7 @@ fn main() {
             }
         })
         .run(tauri::generate_context!())
-        .expect("error while running Maude");
+        .expect("error while running E");
 }
 
 struct SidecarState {

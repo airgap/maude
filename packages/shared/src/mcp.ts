@@ -40,3 +40,23 @@ export interface MCPServerConfig {
   env?: Record<string, string>;
   scope: MCPScope;
 }
+
+// ── MCP Import/Discovery Types ──
+
+export interface DiscoveredMcpServer {
+  name: string;
+  command?: string;
+  args?: string[];
+  url?: string;
+  env?: Record<string, string>;
+  transport: MCPTransport;
+}
+
+export interface DiscoveredMcpSource {
+  /** Human label: "Claude Desktop", "Claude Code", "Cursor", etc. */
+  source: string;
+  /** Path to the config file */
+  configPath: string;
+  /** Servers found in this config */
+  servers: DiscoveredMcpServer[];
+}

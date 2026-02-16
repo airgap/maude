@@ -7,6 +7,7 @@
   import { settingsStore } from '$lib/stores/settings.svelte';
   import { findFont, buildGoogleFontsUrl, type FontOption } from '$lib/config/fonts';
   import { onMount, setContext, tick } from 'svelte';
+  import SparkleCursor from '$lib/components/effects/SparkleCursor.svelte';
 
   // Set stream store in context for proper Svelte 5 reactivity tracking
   setContext(STREAM_CONTEXT_KEY, streamStore);
@@ -27,9 +28,7 @@
 
   $effect(() => {
     const root = document.documentElement;
-
-    // Apply font size
-    root.style.setProperty('--font-size', `${settingsStore.fontSize}px`);
+    const basePx = settingsStore.fontSize;
 
     // Apply mono font
     const monoFont = findFont(settingsStore.fontFamily);
@@ -38,12 +37,20 @@
       root.style.setProperty('--font-family', monoFont.family);
     }
 
-    // Apply sans font
+    // Apply sans font (with per-font size adjustment)
     const sansFont = findFont(settingsStore.fontFamilySans);
     if (sansFont) {
       loadGoogleFont(sansFont);
       root.style.setProperty('--font-family-sans', sansFont.family);
     }
+
+    // Base font size (used by mono / code contexts)
+    root.style.setProperty('--font-size', `${basePx}px`);
+
+    // Sans font size — some typefaces (e.g. Inter) render visually smaller, so
+    // they carry a per-font sizeAdjust offset to compensate.
+    const sansPx = basePx + (sansFont?.sizeAdjust ?? 0);
+    root.style.setProperty('--font-size-sans', `${sansPx}px`);
   });
 
   let { children } = $props();
@@ -100,4 +107,7 @@
   <AppShell>
     {@render children()}
   </AppShell>
+{/if}
+{#if settingsStore.hypertheme === 'study'}
+  <SparkleCursor />
 {/if}

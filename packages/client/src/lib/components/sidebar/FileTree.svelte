@@ -15,6 +15,7 @@
 
   let tree = $state<TreeNode[]>([]);
   let expandedDirs = $state<Set<string>>(new Set());
+  let loadingDirs = $state<Set<string>>(new Set());
   let loading = $state(false);
   let currentPath = $state('');
 
@@ -36,6 +37,7 @@
     loading = true;
     tree = [];
     expandedDirs = new Set();
+    loadingDirs = new Set();
     try {
       const res = await api.files.tree(path, 2);
       tree = res.data;
@@ -43,11 +45,63 @@
     loading = false;
   }
 
-  function toggleDir(path: string) {
+  /** Find a node in the tree by its path and update it in-place */
+  function updateNodeChildren(
+    nodes: TreeNode[],
+    targetPath: string,
+    children: TreeNode[],
+  ): boolean {
+    for (const node of nodes) {
+      if (node.path === targetPath) {
+        node.children = children;
+        return true;
+      }
+      if (node.children && updateNodeChildren(node.children, targetPath, children)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  async function toggleDir(dirPath: string) {
     const next = new Set(expandedDirs);
-    if (next.has(path)) next.delete(path);
-    else next.add(path);
+    if (next.has(dirPath)) {
+      next.delete(dirPath);
+      expandedDirs = next;
+      return;
+    }
+
+    next.add(dirPath);
     expandedDirs = next;
+
+    // Check if this directory's children need to be lazy-loaded.
+    // A directory at the depth boundary will exist as a node with an empty children array.
+    const node = findNode(tree, dirPath);
+    if (node && node.type === 'directory' && (!node.children || node.children.length === 0)) {
+      // Lazy-load this directory's contents
+      const nextLoading = new Set(loadingDirs);
+      nextLoading.add(dirPath);
+      loadingDirs = nextLoading;
+      try {
+        const res = await api.files.tree(dirPath, 1);
+        updateNodeChildren(tree, dirPath, res.data);
+        tree = [...tree]; // trigger reactivity
+      } catch {}
+      const doneLoading = new Set(loadingDirs);
+      doneLoading.delete(dirPath);
+      loadingDirs = doneLoading;
+    }
+  }
+
+  function findNode(nodes: TreeNode[], targetPath: string): TreeNode | undefined {
+    for (const node of nodes) {
+      if (node.path === targetPath) return node;
+      if (node.children) {
+        const found = findNode(node.children, targetPath);
+        if (found) return found;
+      }
+    }
+    return undefined;
   }
 
   function getIcon(node: TreeNode): string {
@@ -117,10 +171,14 @@
     {/if}
   </button>
 
-  {#if node.type === 'directory' && expandedDirs.has(node.path) && node.children}
-    {#each node.children as child}
-      {@render treeNode(child, depth + 1)}
-    {/each}
+  {#if node.type === 'directory' && expandedDirs.has(node.path)}
+    {#if loadingDirs.has(node.path)}
+      <div class="tree-loading" style:padding-left="{8 + (depth + 1) * 16}px">Loading…</div>
+    {:else if node.children}
+      {#each node.children as child}
+        {@render treeNode(child, depth + 1)}
+      {/each}
+    {/if}
   {/if}
 {/snippet}
 
@@ -200,10 +258,15 @@
     color: #73c991;
   }
 
-  .loading {
+  .loading,
+  .tree-loading {
     padding: 20px;
     text-align: center;
     color: var(--text-tertiary);
     font-size: 12px;
+  }
+  .tree-loading {
+    padding: 3px 8px;
+    text-align: left;
   }
 </style>

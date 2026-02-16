@@ -196,6 +196,9 @@
   :global([data-hypertheme='astral-midnight']) .panel-column {
     background: var(--bg-glass, rgba(14, 10, 8, 0.85));
   }
+  :global([data-hypertheme='study']) .panel-column {
+    background: transparent;
+  }
 
   .panel-column.resizing {
     user-select: none;
@@ -217,7 +220,7 @@
   }
 
   .group-divider {
-    height: 3px;
+    height: 6px;
     flex-shrink: 0;
     background: var(--border-primary);
     cursor: row-resize;

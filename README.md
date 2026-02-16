@@ -1,4 +1,4 @@
-# Maude
+# E
 
 A desktop AI assistant powered by Claude. Runs as a native app via Tauri, or as a single-process web server you can open in a browser.
 
@@ -40,7 +40,7 @@ scripts/     Build helpers
 
 ## Desktop App (Tauri)
 
-The desktop build wraps Maude in a native window using Tauri v2. This section is **only needed if you want to build/run the desktop app** — the web UI works without any of this.
+The desktop build wraps E in a native window using Tauri v2. This section is **only needed if you want to build/run the desktop app** — the web UI works without any of this.
 
 ### Additional Prerequisites
 

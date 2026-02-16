@@ -1,5 +1,6 @@
 <script lang="ts">
   import { streamStore } from '$lib/stores/stream.svelte';
+  import { parseMcpToolName } from '@maude/shared';
 
   // Track tool calls as they come in
   let toolCalls = $derived.by(() => {
@@ -113,7 +114,7 @@
                 ○
               {/if}
             </span>
-            <span class="tool-name">{tool.name}</span>
+            <span class="tool-name">{parseMcpToolName(tool.name).displayName}</span>
             {#if tool.duration}
               <span class="tool-duration">{(tool.duration / 1000).toFixed(1)}s</span>
             {/if}

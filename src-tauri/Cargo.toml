@@ -2,7 +2,7 @@
 name = "maude"
 version = "0.1.0"
 edition = "2021"
-description = "Maude desktop shell — Tauri + Bun sidecar"
+description = "E desktop shell — Tauri + Bun sidecar"
 license = "MIT"
 
 [dependencies]

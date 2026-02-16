@@ -1,4 +1,4 @@
-# Maude — Self-hosted AI IDE
+# E — Self-hosted AI IDE
 # Build:   docker build -t maude .
 # Run:     docker run -p 3002:3002 -v maude-data:/root/.maude maude
 

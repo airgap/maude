@@ -257,7 +257,7 @@ All animations can be customized by modifying:
 
 ## CSS Variables Used
 
-Animations use Maude's existing CSS variable system:
+Animations use E's existing CSS variable system:
 
 - `--accent-primary`: Primary accent color (#00b4ff in dark mode)
 - `--accent-secondary`: Secondary accent color (#00ff88 in dark mode)

@@ -2,6 +2,7 @@
   import { streamStore } from '$lib/stores/stream.svelte';
   import { conversationStore } from '$lib/stores/conversation.svelte';
   import { cancelStream } from '$lib/api/sse';
+  import { parseMcpToolName, isMcpToolDangerous } from '@maude/shared';
 
   let { toolCallId, toolName, input, description } = $props<{
     toolCallId: string;
@@ -11,6 +12,9 @@
   }>();
 
   let responding = $state(false);
+
+  // Parse MCP tool names for display
+  const parsed = $derived(parseMcpToolName(toolName));
 
   async function respond(approved: boolean) {
     if (responding) return;
@@ -26,12 +30,17 @@
   }
 
   function formatInput(): string {
-    if (toolName === 'Bash' && input.command) return String(input.command);
-    if (input.file_path) return String(input.file_path);
+    const effectiveName = parsed.renderAs || parsed.toolName;
+    if (effectiveName === 'Bash' && (input.command || input.input))
+      return String(input.command || input.input);
+    if (input.file_path || input.path) return String(input.file_path || input.path);
     return JSON.stringify(input, null, 2);
   }
 
-  const riskLevel = ['Bash', 'Write', 'Edit', 'NotebookEdit'].includes(toolName) ? 'high' : 'low';
+  const builtinHighRisk = ['Bash', 'Write', 'Edit', 'NotebookEdit'];
+  const riskLevel = $derived(
+    builtinHighRisk.includes(toolName) || isMcpToolDangerous(toolName) ? 'high' : 'low',
+  );
 </script>
 
 <div class="approval-dialog" class:high-risk={riskLevel === 'high'}>
@@ -53,7 +62,10 @@
 
   <div class="approval-body">
     <div class="tool-info">
-      <span class="tool-badge">{toolName}</span>
+      <span class="tool-badge">{parsed.displayName}</span>
+      {#if parsed.serverName}
+        <span class="mcp-server-badge">{parsed.serverName}</span>
+      {/if}
       {#if description}
         <span class="tool-desc">{description}</span>
       {/if}
@@ -115,6 +127,16 @@
     border-radius: 3px;
     background: var(--bg-tertiary);
     color: var(--text-primary);
+  }
+
+  .mcp-server-badge {
+    font-size: 9px;
+    padding: 1px 5px;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-secondary);
+    color: var(--text-tertiary);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
   }
 
   .tool-desc {

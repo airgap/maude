@@ -12,6 +12,7 @@ export type StreamEvent =
   | StreamToolUseStart
   | StreamToolResult
   | StreamToolApprovalRequest
+  | StreamUserQuestionRequest
   | StreamError
   | StreamPing
   | StreamTaskUpdate
@@ -100,6 +101,17 @@ export interface StreamToolApprovalRequest {
   toolName: string;
   input: Record<string, unknown>;
   description: string;
+}
+
+export interface StreamUserQuestionRequest {
+  type: 'user_question_request';
+  toolCallId: string;
+  questions: Array<{
+    question: string;
+    header?: string;
+    options?: Array<{ label: string; description?: string }>;
+    multiSelect?: boolean;
+  }>;
 }
 
 export interface StreamError {

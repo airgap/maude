@@ -2,8 +2,8 @@
   AmbientBackground — Canvas-based ambient effects for magic hyperthemes.
   Renders behind all UI elements with pointer-events: none.
 
-  Activated for: arcane (sigils), ethereal (motes), astral (constellations)
-  Inactive for: tech, study (CSS-only effects)
+  Activated for: arcane (sigils), ethereal (motes), study (embers), astral (constellations)
+  Inactive for: tech (CSS-only effects)
 
   Constellation themes use WebGL for GPU-accelerated star projection,
   nebulae, galaxies, and interactive constellation reveal on pointer hover.
@@ -27,9 +27,20 @@
   let mounted = false;
   let usingWebGL = false;
 
+  // Quarter-resolution offscreen buffer for sigil effects
+  // Renders at 0.25x, applies box blur, then scales up for a soft dreamy glow
+  const DOWNSAMPLE_SCALE = 0.25;
+  let offscreenCanvas: OffscreenCanvas | null = null;
+  let offscreenCtx: OffscreenCanvasRenderingContext2D | null = null;
+  let useDownsampledRendering = false;
+
   // Pointer tracking for interactive constellation reveal
   let pointerX = -1000;
   let pointerY = -1000;
+
+  // Optional background image for themes that have one (e.g. Study)
+  let bgImage: HTMLImageElement | null = null;
+  let bgImageReady = false;
 
   // Target ~24fps for Canvas2D effects (decorative, don't need 60fps)
   // WebGL runs at full rAF rate since GPU does the work
@@ -38,6 +49,39 @@
   function isConstellationType(hyperthemeId: string): boolean {
     const config = HYPERTHEME_EFFECTS[hyperthemeId];
     return config?.type === 'constellation';
+  }
+
+  function isSigilType(hyperthemeId: string): boolean {
+    const config = HYPERTHEME_EFFECTS[hyperthemeId];
+    return config?.type === 'sigil';
+  }
+
+  /**
+   * Box blur on ImageData — averages each pixel with its 8 neighbors.
+   * Fast on small buffers (quarter-res means ~6% of full pixel count).
+   */
+  function boxBlur(imageData: ImageData): void {
+    const { data, width, height } = imageData;
+    const copy = new Uint8ClampedArray(data);
+
+    for (let y = 1; y < height - 1; y++) {
+      for (let x = 1; x < width - 1; x++) {
+        const i = (y * width + x) * 4;
+        for (let c = 0; c < 4; c++) {
+          data[i + c] =
+            (copy[((y - 1) * width + (x - 1)) * 4 + c] +
+              copy[((y - 1) * width + x) * 4 + c] +
+              copy[((y - 1) * width + (x + 1)) * 4 + c] +
+              copy[(y * width + (x - 1)) * 4 + c] +
+              copy[i + c] +
+              copy[(y * width + (x + 1)) * 4 + c] +
+              copy[((y + 1) * width + (x - 1)) * 4 + c] +
+              copy[((y + 1) * width + x) * 4 + c] +
+              copy[((y + 1) * width + (x + 1)) * 4 + c]) /
+            9;
+        }
+      }
+    }
   }
 
   function destroyCurrent() {
@@ -54,7 +98,41 @@
       webglRenderer = null;
     }
     usingWebGL = false;
+    useDownsampledRendering = false;
+    offscreenCanvas = null;
+    offscreenCtx = null;
     ctx = null;
+    bgImage = null;
+    bgImageReady = false;
+  }
+
+  /**
+   * Draw background image with cover-fit, darkened and tinted to blend
+   * with the theme's backgroundColor. Only called for themes that specify
+   * a backgroundImage in their HYPERTHEME_EFFECTS config.
+   */
+  function drawBgImage(target: CanvasRenderingContext2D, w: number, h: number, bgColor: string) {
+    if (!bgImage || !bgImageReady) return;
+
+    // Cover-fit: scale image to cover the entire canvas, left-aligned
+    const imgW = bgImage.naturalWidth;
+    const imgH = bgImage.naturalHeight;
+    const scale = Math.max(w / imgW, h / imgH);
+    const drawW = imgW * scale;
+    const drawH = imgH * scale;
+    const ox = 0;
+    const oy = (h - drawH) * 0.5;
+
+    // Draw image at reduced opacity so it's subtle
+    target.globalAlpha = 0.35;
+    target.drawImage(bgImage, ox, oy, drawW, drawH);
+    target.globalAlpha = 1;
+
+    // Darken overlay to push it further into the background
+    target.fillStyle = bgColor;
+    target.globalAlpha = 0.55;
+    target.fillRect(0, 0, w, h);
+    target.globalAlpha = 1;
   }
 
   function initEffect(hyperthemeId: string) {
@@ -91,9 +169,36 @@
 
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
+    // Sigil effects render at quarter resolution with box blur for a soft dreamy glow
+    useDownsampledRendering = isSigilType(hyperthemeId);
+    if (useDownsampledRendering) {
+      const offW = Math.max(1, Math.floor(width * DOWNSAMPLE_SCALE));
+      const offH = Math.max(1, Math.floor(height * DOWNSAMPLE_SCALE));
+      offscreenCanvas = new OffscreenCanvas(offW, offH);
+      offscreenCtx = offscreenCanvas.getContext('2d');
+    }
+
+    // Load background image if the theme specifies one
+    const themeConfig = HYPERTHEME_EFFECTS[hyperthemeId];
+    if (themeConfig?.backgroundImage) {
+      const img = new Image();
+      img.src = themeConfig.backgroundImage;
+      img.onload = () => {
+        bgImage = img;
+        bgImageReady = true;
+      };
+    }
+
     activeEffect = createEffect(hyperthemeId);
     if (activeEffect) {
-      activeEffect.init(width, height);
+      if (useDownsampledRendering) {
+        // Init effect at quarter resolution
+        const offW = Math.floor(width * DOWNSAMPLE_SCALE);
+        const offH = Math.floor(height * DOWNSAMPLE_SCALE);
+        activeEffect.init(offW, offH);
+      } else {
+        activeEffect.init(width, height);
+      }
       lastTime = performance.now();
       tickCanvas2D();
     }
@@ -140,17 +245,59 @@
       activeEffect.setPointerPosition(pointerX, pointerY);
     }
 
-    // Clear canvas
-    const config = HYPERTHEME_EFFECTS[currentHypertheme];
-    if (config) {
-      ctx.fillStyle = config.colors.backgroundColor;
-      ctx.fillRect(0, 0, canvas.clientWidth, canvas.clientHeight);
-    } else {
-      ctx.clearRect(0, 0, canvas.clientWidth, canvas.clientHeight);
-    }
-
     activeEffect.update(deltaTime);
-    activeEffect.render(ctx);
+
+    const themeConfig = HYPERTHEME_EFFECTS[currentHypertheme];
+
+    if (useDownsampledRendering && offscreenCtx && offscreenCanvas) {
+      // ── Quarter-res path: render → box blur → scale up ──────
+      const offW = offscreenCanvas.width;
+      const offH = offscreenCanvas.height;
+
+      // Clear offscreen buffer
+      if (themeConfig) {
+        offscreenCtx.fillStyle = themeConfig.colors.backgroundColor;
+        offscreenCtx.fillRect(0, 0, offW, offH);
+      } else {
+        offscreenCtx.clearRect(0, 0, offW, offH);
+      }
+
+      // Render effect at quarter resolution
+      // OffscreenCanvasRenderingContext2D is API-compatible with CanvasRenderingContext2D
+      // for all drawing operations used by ambient effects
+      activeEffect.render(offscreenCtx as unknown as CanvasRenderingContext2D);
+
+      // Box blur the small buffer — 3 passes approximates a Gaussian
+      const imageData = offscreenCtx.getImageData(0, 0, offW, offH);
+      boxBlur(imageData);
+      boxBlur(imageData);
+      boxBlur(imageData);
+      offscreenCtx.putImageData(imageData, 0, 0);
+
+      // Scale up to main canvas with bilinear interpolation (default)
+      ctx.imageSmoothingEnabled = true;
+      ctx.drawImage(offscreenCanvas, 0, 0, canvas.clientWidth, canvas.clientHeight);
+    } else {
+      // ── Full-res path (motes, embers, fallbacks) ──────────────
+      if (themeConfig) {
+        ctx.fillStyle = themeConfig.colors.backgroundColor;
+        ctx.fillRect(0, 0, canvas.clientWidth, canvas.clientHeight);
+
+        // Draw background image if available (cover-fit, darkened)
+        if (themeConfig.backgroundImage) {
+          drawBgImage(
+            ctx,
+            canvas.clientWidth,
+            canvas.clientHeight,
+            themeConfig.colors.backgroundColor,
+          );
+        }
+      } else {
+        ctx.clearRect(0, 0, canvas.clientWidth, canvas.clientHeight);
+      }
+
+      activeEffect.render(ctx);
+    }
   }
 
   function handleResize() {
@@ -166,7 +313,15 @@
       webglRenderer.resize(width * dpr, height * dpr);
     } else if (ctx && activeEffect) {
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-      activeEffect.resize(width, height);
+      if (useDownsampledRendering && offscreenCanvas) {
+        const offW = Math.max(1, Math.floor(width * DOWNSAMPLE_SCALE));
+        const offH = Math.max(1, Math.floor(height * DOWNSAMPLE_SCALE));
+        offscreenCanvas = new OffscreenCanvas(offW, offH);
+        offscreenCtx = offscreenCanvas.getContext('2d');
+        activeEffect.resize(offW, offH);
+      } else {
+        activeEffect.resize(width, height);
+      }
     }
   }
 

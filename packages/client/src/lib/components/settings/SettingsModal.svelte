@@ -897,8 +897,8 @@
   .toggle {
     position: relative;
     display: inline-block;
-    width: 40px;
-    height: 22px;
+    width: 44px;
+    height: 24px;
     cursor: pointer;
   }
   .toggle input {
@@ -910,14 +910,14 @@
     position: absolute;
     inset: 0;
     background: var(--bg-tertiary);
-    border-radius: 11px;
+    border-radius: 12px;
     transition: background var(--transition);
   }
   .toggle-slider::before {
     content: '';
     position: absolute;
-    width: 18px;
-    height: 18px;
+    width: 20px;
+    height: 20px;
     left: 2px;
     bottom: 2px;
     background: var(--text-primary);
@@ -928,7 +928,7 @@
     background: var(--accent-primary);
   }
   .toggle input:checked + .toggle-slider::before {
-    transform: translateX(18px);
+    transform: translateX(20px);
   }
 
   /* Hypertheme grid */
@@ -1212,10 +1212,10 @@
     position: absolute;
     top: 4px;
     right: 4px;
-    width: 18px;
-    height: 18px;
+    width: 24px;
+    height: 24px;
     font-size: 11px;
-    line-height: 18px;
+    line-height: 24px;
     text-align: center;
     padding: 0;
     background: var(--bg-tertiary);

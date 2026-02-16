@@ -106,11 +106,30 @@ export const api = {
           estimatedCostUsd: number;
         };
       }>(`/conversations/${id}/cost`),
+    deleteMessage: (conversationId: string, messageId: string, deletePair = false) =>
+      request<{ ok: boolean }>(
+        `/conversations/${conversationId}/messages/${messageId}?deletePair=${deletePair}`,
+        { method: 'DELETE' },
+      ),
+    editMessage: (conversationId: string, messageId: string) =>
+      request<{ ok: boolean }>(`/conversations/${conversationId}/messages/${messageId}`, {
+        method: 'PUT',
+      }),
+    fork: (conversationId: string, messageId: string) =>
+      request<{ ok: boolean; data: { id: string } }>(`/conversations/${conversationId}/fork`, {
+        method: 'POST',
+        body: JSON.stringify({ messageId }),
+      }),
   },
 
   // --- Streaming ---
   stream: {
-    send: (conversationId: string, content: string, sessionId?: string | null) => {
+    send: (
+      conversationId: string,
+      content: string,
+      sessionId?: string | null,
+      signal?: AbortSignal,
+    ) => {
       const headers: Record<string, string> = { 'Content-Type': 'application/json' };
       const token = getAuthToken();
       if (token) headers['Authorization'] = `Bearer ${token}`;
@@ -119,6 +138,7 @@ export const api = {
         method: 'POST',
         headers,
         body: JSON.stringify({ content }),
+        signal,
       });
     },
     cancel: (conversationId: string, sessionId: string) =>
@@ -137,12 +157,23 @@ export const api = {
           bufferedEvents: number;
         }>;
       }>('/stream/sessions'),
-    reconnect: (sessionId: string) => {
+    reconnect: (sessionId: string, signal?: AbortSignal) => {
       const headers: Record<string, string> = {};
       const token = getAuthToken();
       if (token) headers['Authorization'] = `Bearer ${token}`;
-      return fetch(`${getBaseUrl()}/stream/reconnect/${sessionId}`, { headers });
+      return fetch(`${getBaseUrl()}/stream/reconnect/${sessionId}`, { headers, signal });
     },
+    answerQuestion: (
+      conversationId: string,
+      sessionId: string,
+      toolCallId: string,
+      answers: Record<string, string>,
+    ) =>
+      request(`/stream/${conversationId}/answer`, {
+        method: 'POST',
+        headers: { 'X-Session-Id': sessionId },
+        body: JSON.stringify({ toolCallId, answers }),
+      }),
   },
 
   // --- Tasks ---
@@ -209,6 +240,27 @@ export const api = {
     removeServer: (name: string) =>
       request<{ ok: boolean }>(`/mcp/servers/${name}`, { method: 'DELETE' }),
     getServer: (name: string) => request<{ ok: boolean; data: any }>(`/mcp/servers/${name}`),
+    discover: () =>
+      request<{
+        ok: boolean;
+        data: Array<{
+          source: string;
+          configPath: string;
+          servers: Array<{
+            name: string;
+            command?: string;
+            args?: string[];
+            url?: string;
+            env?: Record<string, string>;
+            transport: string;
+          }>;
+        }>;
+      }>('/mcp/discover'),
+    importServers: (servers: any[]) =>
+      request<{ ok: boolean; data: { imported: number } }>('/mcp/import', {
+        method: 'POST',
+        body: JSON.stringify({ servers }),
+      }),
   },
 
   // --- Memory ---

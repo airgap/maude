@@ -80,7 +80,7 @@
     align-items: center;
     gap: 6px;
     padding: 0 12px;
-    font-size: 12px;
+    font-size: 14px;
     color: var(--text-secondary);
     border-right: 1px solid var(--border-secondary);
     background: transparent;
@@ -122,8 +122,8 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 16px;
-    height: 16px;
+    width: 24px;
+    height: 24px;
     border-radius: var(--radius-sm);
     color: var(--text-tertiary);
     opacity: 0;

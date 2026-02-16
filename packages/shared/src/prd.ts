@@ -20,7 +20,7 @@ export interface UserStory {
   dependsOn: string[]; // story IDs this story depends on
   dependencyReasons: Record<string, string>; // storyId -> reason for dependency
   status: StoryStatus;
-  taskId?: string; // linked Maude task ID
+  taskId?: string; // linked E task ID
   agentId?: string; // agent that last worked on this
   conversationId?: string; // conversation created for this story
   commitSha?: string; // git commit after successful implementation

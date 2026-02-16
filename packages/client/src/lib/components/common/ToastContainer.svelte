@@ -67,11 +67,11 @@
     backdrop-filter: blur(8px);
   }
   :global([data-hypertheme='study']) .toast {
-    animation: toastUnfold 200ms ease;
-    border: 2px solid var(--border-primary);
+    animation: toastUnfold 250ms ease;
+    border: 1px solid var(--border-primary);
     box-shadow:
       var(--shadow-lg),
-      inset 0 1px 3px rgba(0, 0, 0, 0.12);
+      0 0 20px rgba(228, 160, 60, 0.06);
     padding: 14px 18px;
   }
   :global([data-hypertheme='astral']) .toast,

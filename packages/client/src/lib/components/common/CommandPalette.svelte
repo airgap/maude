@@ -25,6 +25,7 @@
         conversationStore.setActive(null);
         conversationStore.createDraft();
         close();
+        uiStore.focusChatInput();
       },
     },
     {

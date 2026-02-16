@@ -2,7 +2,7 @@
 
 ## Overview
 
-We've implemented multiple fixes to enable real-time message streaming in the Maude IDE. The changes are in place, but we need to **verify they work through testing** to diagnose why messages still don't appear in real-time.
+We've implemented multiple fixes to enable real-time message streaming in the E IDE. The changes are in place, but we need to **verify they work through testing** to diagnose why messages still don't appear in real-time.
 
 ## Fixes Implemented
 

@@ -3,17 +3,17 @@
   import { streamStore } from '$lib/stores/stream.svelte';
   import { projectStore } from '$lib/stores/projects.svelte';
   import { workspaceStore } from '$lib/stores/workspace.svelte';
+  import { uiStore } from '$lib/stores/ui.svelte';
   import { api } from '$lib/api/client';
   import { onMount } from 'svelte';
 
   let search = $state('');
-  let showAllProjects = $state(false);
 
   let filtered = $derived(
     conversationStore.list
       .filter((c) => {
-        // Filter by active project unless "All Projects" is toggled
-        if (!showAllProjects && projectStore.activeProject) {
+        // Always filter by active project — workspace tabs handle project switching
+        if (projectStore.activeProject) {
           return (
             c.projectId === projectStore.activeProjectId ||
             c.projectPath === projectStore.activeProject.path
@@ -80,6 +80,7 @@
     if (!streamStore.isStreaming) {
       streamStore.reset();
     }
+    uiStore.focusChatInput();
   }
 
   async function deleteConversation(e: MouseEvent, id: string) {
@@ -120,25 +121,6 @@
       </svg>
     </button>
   </div>
-  {#if projectStore.activeProject}
-    <div class="project-filter">
-      <button
-        class="filter-toggle"
-        class:active={!showAllProjects}
-        onclick={() => (showAllProjects = false)}
-      >
-        {projectStore.activeProject.name}
-      </button>
-      <button
-        class="filter-toggle"
-        class:active={showAllProjects}
-        onclick={() => (showAllProjects = true)}
-      >
-        All
-      </button>
-    </div>
-  {/if}
-
   <div class="conv-items">
     {#if showDraft}
       <div class="conv-item active draft">
@@ -200,7 +182,7 @@
 
   .search-input {
     flex: 1;
-    font-size: 12px;
+    font-size: 13px;
     font-weight: 600;
     padding: 7px 10px;
     border-radius: var(--radius-sm);
@@ -293,17 +275,18 @@
   }
 
   :global([data-hypertheme='study']) .conv-item {
-    border-left: 4px solid transparent;
+    border-left: 3px solid transparent;
     margin-bottom: 0;
     border-bottom: 1px solid var(--border-secondary);
-    border-radius: 0;
   }
   :global([data-hypertheme='study']) .conv-item:hover {
     border-left-color: var(--border-primary);
+    background: rgba(228, 160, 60, 0.04);
   }
   :global([data-hypertheme='study']) .conv-item.active {
     border-left-color: var(--accent-primary);
-    box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.1);
+    background: rgba(228, 160, 60, 0.06);
+    box-shadow: 0 0 16px rgba(228, 160, 60, 0.04);
   }
 
   :global([data-hypertheme='astral']) .conv-item,
@@ -330,7 +313,7 @@
   }
 
   .conv-title {
-    font-size: 13px;
+    font-size: 14px;
     font-weight: 600;
     color: var(--text-primary);
     margin-bottom: 3px;
@@ -343,7 +326,7 @@
   .conv-meta {
     display: flex;
     gap: 8px;
-    font-size: 10px;
+    font-size: 11px;
     color: var(--text-tertiary);
     letter-spacing: var(--ht-label-spacing);
     font-weight: 600;
@@ -354,8 +337,8 @@
     position: absolute;
     top: 10px;
     right: 10px;
-    width: 22px;
-    height: 22px;
+    width: 24px;
+    height: 24px;
     border-radius: var(--radius-sm);
     display: none;
     align-items: center;
@@ -377,37 +360,9 @@
     padding: 30px 20px;
     text-align: center;
     color: var(--text-tertiary);
-    font-size: 13px;
+    font-size: 14px;
     letter-spacing: var(--ht-label-spacing);
     font-weight: 600;
     text-transform: var(--ht-label-transform);
-  }
-
-  .project-filter {
-    display: flex;
-    gap: 2px;
-    padding: 0 10px 8px;
-  }
-  .filter-toggle {
-    flex: 1;
-    padding: 4px 8px;
-    font-size: 11px;
-    font-weight: 600;
-    text-transform: var(--ht-label-transform);
-    letter-spacing: var(--ht-label-spacing);
-    color: var(--text-tertiary);
-    border-radius: var(--radius-sm);
-    transition: all var(--transition);
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-  .filter-toggle:hover {
-    background: var(--bg-hover);
-    color: var(--text-secondary);
-  }
-  .filter-toggle.active {
-    background: var(--bg-active);
-    color: var(--accent-primary);
   }
 </style>

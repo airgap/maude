@@ -204,7 +204,7 @@
     padding: 0 16px;
     background: var(--bg-secondary);
     border-top: var(--ht-separator);
-    font-size: 11px;
+    font-size: 12px;
     font-weight: 600;
     color: var(--text-tertiary);
     flex-shrink: 0;
@@ -219,6 +219,9 @@
   :global([data-hypertheme='astral']) .statusbar,
   :global([data-hypertheme='astral-midnight']) .statusbar {
     background: var(--bg-glass);
+  }
+  :global([data-hypertheme='study']) .statusbar {
+    background: transparent;
   }
 
   .statusbar-left,
@@ -261,7 +264,7 @@
   }
 
   .git-branch {
-    font-size: 10px;
+    font-size: 11px;
     color: var(--text-secondary);
     text-transform: none;
   }
@@ -274,23 +277,23 @@
 
   .cursor-pos {
     font-family: var(--font-family);
-    font-size: 10px;
+    font-size: 11px;
     color: var(--text-secondary);
   }
 
   .indent-label {
-    font-size: 10px;
+    font-size: 11px;
     color: var(--text-secondary);
   }
 
   .lang-label {
-    font-size: 10px;
+    font-size: 11px;
     text-transform: uppercase;
     color: var(--text-secondary);
   }
 
   .layout-toggle {
-    font-size: 10px;
+    font-size: 11px;
     padding: 1px 8px;
     background: var(--bg-tertiary);
     border: 1px solid var(--border-secondary);
@@ -309,7 +312,7 @@
 
   .tokens {
     font-family: var(--font-family);
-    font-size: 10px;
+    font-size: 11px;
     letter-spacing: 0.5px;
     color: var(--accent-primary);
   }
@@ -319,12 +322,12 @@
     border: 1px solid var(--border-primary);
     border-radius: var(--radius-sm);
     font-weight: 700;
-    font-size: 9px;
+    font-size: 10px;
     margin-left: 4px;
   }
   .session-cost {
     font-family: var(--font-family);
-    font-size: 10px;
+    font-size: 11px;
     letter-spacing: 0.5px;
     color: var(--accent-secondary);
     font-weight: 700;
@@ -344,13 +347,13 @@
     background: var(--bg-tertiary);
     border: 1px solid var(--border-secondary);
     border-radius: var(--radius-sm);
-    font-size: 10px;
+    font-size: 11px;
     font-weight: 700;
     color: var(--text-secondary);
   }
 
   .lsp-status {
-    font-size: 10px;
+    font-size: 11px;
     color: var(--text-secondary);
     text-transform: uppercase;
   }
@@ -373,7 +376,7 @@
   }
 
   .lsp-install {
-    font-size: 10px;
+    font-size: 11px;
     padding: 1px 8px;
     background: var(--bg-tertiary);
     border: 1px solid var(--accent-primary);

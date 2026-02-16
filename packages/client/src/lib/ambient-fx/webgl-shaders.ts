@@ -42,7 +42,7 @@ void main() {
     return;
   }
 
-  float k = 1.0 / (1.0 + cosC);  // Stereographic scale factor
+  float k = 2.0 / (1.0 + cosC);  // Stereographic scale factor (matches CPU projection)
 
   float projX = k * cosDec * sin(ra - viewRa);
   float projY = k * (cosViewDec * sinDec - sinViewDec * cosDec * cosRaDiff);

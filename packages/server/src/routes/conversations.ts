@@ -90,9 +90,9 @@ app.post('/', async (c) => {
   db.query(
     `
     INSERT INTO conversations (id, title, model, system_prompt, project_path,
-      permission_mode, effort, max_budget_usd, max_turns, allowed_tools, disallowed_tools,
+      plan_mode, permission_mode, effort, max_budget_usd, max_turns, allowed_tools, disallowed_tools,
       created_at, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `,
   ).run(
     id,
@@ -100,6 +100,7 @@ app.post('/', async (c) => {
     body.model || 'claude-sonnet-4-5-20250929',
     body.systemPrompt || null,
     body.projectPath || process.cwd(),
+    body.planMode ? 1 : 0,
     body.permissionMode || 'default',
     body.effort || 'high',
     body.maxBudgetUsd ?? null,
@@ -217,6 +218,142 @@ app.get('/:id/cost', (c) => {
       estimatedCostUsd: Math.round(cost * 10000) / 10000,
     },
   });
+});
+
+// Delete a message (optionally its paired assistant response)
+app.delete('/:id/messages/:messageId', (c) => {
+  const db = getDb();
+  const conversationId = c.req.param('id');
+  const messageId = c.req.param('messageId');
+  const deletePair = c.req.query('deletePair') === 'true';
+
+  const message = db
+    .query('SELECT * FROM messages WHERE id = ? AND conversation_id = ?')
+    .get(messageId, conversationId) as any;
+  if (!message) return c.json({ ok: false, error: 'Message not found' }, 404);
+
+  if (deletePair && message.role === 'user') {
+    // Get all messages ordered by timestamp to find the paired assistant response
+    const allMessages = db
+      .query(
+        'SELECT id, role, timestamp FROM messages WHERE conversation_id = ? ORDER BY timestamp ASC',
+      )
+      .all(conversationId) as any[];
+
+    const idx = allMessages.findIndex((m: any) => m.id === messageId);
+    const idsToDelete = [messageId];
+
+    // If the next message is an assistant message, delete it too
+    if (idx + 1 < allMessages.length && allMessages[idx + 1].role === 'assistant') {
+      idsToDelete.push(allMessages[idx + 1].id);
+    }
+
+    const placeholders = idsToDelete.map(() => '?').join(',');
+    db.query(`DELETE FROM messages WHERE id IN (${placeholders})`).run(...idsToDelete);
+  } else {
+    db.query('DELETE FROM messages WHERE id = ? AND conversation_id = ?').run(
+      messageId,
+      conversationId,
+    );
+  }
+
+  // Invalidate CLI session so next message creates a fresh one
+  db.query('UPDATE conversations SET cli_session_id = NULL, updated_at = ? WHERE id = ?').run(
+    Date.now(),
+    conversationId,
+  );
+
+  return c.json({ ok: true });
+});
+
+// Edit a message: delete it and all subsequent messages (caller resends via stream)
+app.put('/:id/messages/:messageId', async (c) => {
+  const db = getDb();
+  const conversationId = c.req.param('id');
+  const messageId = c.req.param('messageId');
+
+  const message = db
+    .query('SELECT * FROM messages WHERE id = ? AND conversation_id = ?')
+    .get(messageId, conversationId) as any;
+  if (!message) return c.json({ ok: false, error: 'Message not found' }, 404);
+
+  // Delete this message and everything after it (by timestamp).
+  // The caller will then use sendAndStream to re-insert the edited message + get a new response.
+  db.query('DELETE FROM messages WHERE conversation_id = ? AND timestamp >= ?').run(
+    conversationId,
+    message.timestamp,
+  );
+
+  // Invalidate CLI session
+  db.query('UPDATE conversations SET cli_session_id = NULL, updated_at = ? WHERE id = ?').run(
+    Date.now(),
+    conversationId,
+  );
+
+  return c.json({ ok: true });
+});
+
+// Fork conversation from a specific message
+app.post('/:id/fork', async (c) => {
+  const db = getDb();
+  const conversationId = c.req.param('id');
+  const body = await c.req.json();
+  const { messageId } = body;
+
+  const conv = db.query('SELECT * FROM conversations WHERE id = ?').get(conversationId) as any;
+  if (!conv) return c.json({ ok: false, error: 'Conversation not found' }, 404);
+
+  const targetMsg = db
+    .query('SELECT * FROM messages WHERE id = ? AND conversation_id = ?')
+    .get(messageId, conversationId) as any;
+  if (!targetMsg) return c.json({ ok: false, error: 'Message not found' }, 404);
+
+  // Get all messages up to and including the target
+  const messages = db
+    .query(
+      'SELECT * FROM messages WHERE conversation_id = ? AND timestamp <= ? ORDER BY timestamp ASC',
+    )
+    .all(conversationId, targetMsg.timestamp) as any[];
+
+  // Create the new conversation
+  const newId = nanoid();
+  const now = Date.now();
+  db.query(
+    `
+    INSERT INTO conversations (id, title, model, system_prompt, project_path, project_id,
+      plan_mode, permission_mode, effort, max_budget_usd, max_turns,
+      allowed_tools, disallowed_tools, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `,
+  ).run(
+    newId,
+    (conv.title || 'Conversation') + ' (fork)',
+    conv.model,
+    conv.system_prompt,
+    conv.project_path,
+    conv.project_id,
+    conv.plan_mode,
+    conv.permission_mode,
+    conv.effort,
+    conv.max_budget_usd,
+    conv.max_turns,
+    conv.allowed_tools,
+    conv.disallowed_tools,
+    now,
+    now,
+  );
+
+  // Copy messages with new IDs
+  for (const msg of messages) {
+    db.query(
+      `
+      INSERT INTO messages (id, conversation_id, role, content, model, token_count, timestamp)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+    `,
+    ).run(nanoid(), newId, msg.role, msg.content, msg.model, msg.token_count, msg.timestamp);
+  }
+
+  return c.json({ ok: true, data: { id: newId } }, 201);
 });
 
 // Delete conversation

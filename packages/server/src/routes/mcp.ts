@@ -1,5 +1,7 @@
 import { Hono } from 'hono';
 import { getDb } from '../db/database';
+import { discoverMcpConfigs } from '../services/mcp-discovery';
+import type { DiscoveredMcpServer } from '@maude/shared';
 
 const app = new Hono();
 
@@ -72,6 +74,55 @@ app.get('/servers/:name', (c) => {
       status: row.status,
     },
   });
+});
+
+// ── MCP Import/Discovery ──
+
+// Discover MCP servers from external tool configs
+app.get('/discover', (c) => {
+  try {
+    const sources = discoverMcpConfigs();
+    return c.json({ ok: true, data: sources });
+  } catch (e) {
+    return c.json({ ok: false, error: String(e) }, 500);
+  }
+});
+
+// Bulk import selected MCP servers
+app.post('/import', async (c) => {
+  const body = await c.req.json();
+  const servers: DiscoveredMcpServer[] = body.servers;
+
+  if (!Array.isArray(servers) || servers.length === 0) {
+    return c.json({ ok: false, error: 'No servers provided' }, 400);
+  }
+
+  const db = getDb();
+  let imported = 0;
+
+  for (const server of servers) {
+    if (!server.name) continue;
+    try {
+      db.query(
+        `
+        INSERT OR IGNORE INTO mcp_servers (name, transport, command, args, url, env, scope, status)
+        VALUES (?, ?, ?, ?, ?, ?, 'local', 'disconnected')
+      `,
+      ).run(
+        server.name,
+        server.transport || 'stdio',
+        server.command || null,
+        server.args ? JSON.stringify(server.args) : null,
+        server.url || null,
+        server.env ? JSON.stringify(server.env) : null,
+      );
+      imported++;
+    } catch {
+      // Duplicate or other error — skip
+    }
+  }
+
+  return c.json({ ok: true, data: { imported } }, 201);
 });
 
 export { app as mcpRoutes };

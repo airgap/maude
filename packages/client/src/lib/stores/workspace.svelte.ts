@@ -420,3 +420,9 @@ function createWorkspaceStore() {
 }
 
 export const workspaceStore = createWorkspaceStore();
+
+// Persist the workspace snapshot whenever the active conversation changes,
+// so page reloads restore the most recent conversation — not a stale one.
+conversationStore.onActiveChange(() => {
+  workspaceStore.updateActiveSnapshot();
+});

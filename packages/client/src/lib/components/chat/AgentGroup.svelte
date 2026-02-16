@@ -183,7 +183,7 @@
     line-height: 1.7;
     color: var(--text-primary);
     font-family: var(--font-family-sans);
-    font-size: 14px;
+    font-size: var(--font-size-sans);
     font-weight: 500;
   }
 

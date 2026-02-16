@@ -1,5 +1,5 @@
 /**
- * Converts a VS Code theme JSON file to Maude CSS variable values.
+ * Converts a VS Code theme JSON file to E CSS variable values.
  */
 
 export interface VsCodeThemeJson {
@@ -62,7 +62,7 @@ function rgbToHex(r: number, g: number, b: number): string {
   return `#${[r, g, b].map((v) => v.toString(16).padStart(2, '0')).join('')}`;
 }
 
-/** Map VS Code `colors` keys to Maude CSS variables. */
+/** Map VS Code `colors` keys to E CSS variables. */
 const UI_COLOR_MAP: Record<string, string[]> = {
   'editor.background': ['--bg-code', '--bg-primary'],
   'editor.foreground': ['--text-primary'],
@@ -84,7 +84,7 @@ const UI_COLOR_MAP: Record<string, string[]> = {
 };
 
 /**
- * Map VS Code tokenColors scopes to Maude `--syn-*` variables.
+ * Map VS Code tokenColors scopes to E `--syn-*` variables.
  * The first matching scope wins for each variable.
  */
 const SCOPE_MAP: Array<{ patterns: string[]; cssVar: string }> = [

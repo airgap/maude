@@ -108,10 +108,10 @@ if (requestedPort === 0) {
   });
   // Machine-parseable line for Tauri to read the actual port
   console.log(`MAUDE_PORT=${server.port}`);
-  console.log(`Maude server running on ${protocol}://localhost:${server.port}`);
+  console.log(`E server running on ${protocol}://localhost:${server.port}`);
 } else {
   console.log(`MAUDE_PORT=${requestedPort}`);
-  console.log(`Maude server running on ${protocol}://localhost:${requestedPort}`);
+  console.log(`E server running on ${protocol}://localhost:${requestedPort}`);
 }
 
 // Used by Bun's module loader when requestedPort !== 0 (supports --hot reload in dev)

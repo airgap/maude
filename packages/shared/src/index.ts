@@ -49,7 +49,17 @@ export type {
   MCPTool,
   MCPResource,
   MCPServerConfig,
+  DiscoveredMcpServer,
+  DiscoveredMcpSource,
 } from './mcp.js';
+
+export {
+  parseMcpToolName,
+  isMcpToolDangerous,
+  isMcpFileWriteTool,
+  extractFilePath,
+} from './mcp-tools.js';
+export type { ParsedToolName } from './mcp-tools.js';
 
 export type { ThemeId, CliProvider, Settings, Keybinding, ServerOnlySettings } from './settings.js';
 

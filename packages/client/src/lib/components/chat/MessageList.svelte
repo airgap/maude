@@ -8,7 +8,10 @@
   import { streamStore } from '$lib/stores/stream.svelte';
   import { loopStore } from '$lib/stores/loop.svelte';
   import { scrollStore } from '$lib/stores/scroll.svelte';
+  import { uiStore } from '$lib/stores/ui.svelte';
   import { hasStoryActions } from '$lib/utils/story-parser';
+  import { sendAndStream } from '$lib/api/sse';
+  import { api } from '$lib/api/client';
   import { tick } from 'svelte';
 
   // Check if the current conversation is a planning conversation with edits enabled
@@ -17,6 +20,54 @@
       loopStore.planConversationId === conversationStore.activeId &&
       conversationStore.active?.title?.startsWith('[Plan]'),
   );
+
+  // ── Message action handlers ──
+
+  async function handleEdit(messageId: string, newText: string) {
+    if (!conversationStore.active) return;
+    const isStreamingHere =
+      streamStore.isStreaming && streamStore.conversationId === conversationStore.activeId;
+    if (isStreamingHere) return;
+
+    const convId = conversationStore.active.id;
+    const success = await conversationStore.editMessage(messageId, newText);
+    if (success) {
+      // Reset stream session so a fresh CLI session is created
+      streamStore.reset();
+      await sendAndStream(convId, newText);
+    }
+  }
+
+  async function handleDelete(messageId: string) {
+    if (!conversationStore.active) return;
+    const isStreamingHere =
+      streamStore.isStreaming && streamStore.conversationId === conversationStore.activeId;
+    if (isStreamingHere) return;
+
+    const msg = conversationStore.active.messages.find((m) => m.id === messageId);
+    if (!msg) return;
+
+    const deletePair = msg.role === 'user';
+    await conversationStore.deleteMessage(messageId, deletePair);
+    uiStore.toast('Message deleted', 'info');
+  }
+
+  async function handleFork(messageId: string) {
+    if (!conversationStore.active) return;
+
+    const newId = await conversationStore.forkFromMessage(messageId);
+    if (newId) {
+      uiStore.toast('Conversation forked', 'success');
+      conversationStore.setLoading(true);
+      try {
+        const res = await api.conversations.get(newId);
+        conversationStore.setActive(res.data);
+        streamStore.reset();
+      } finally {
+        conversationStore.setLoading(false);
+      }
+    }
+  }
 
   let scrollContainer: HTMLDivElement;
   let userScrolled = $state(false);
@@ -83,7 +134,7 @@
       {@const isStreamingHere =
         streamStore.isStreaming && streamStore.conversationId === conversationStore.activeId}
       {#if !(isStreamingHere && i === msgs.length - 1 && message.role === 'assistant')}
-        <MessageBubble {message} />
+        <MessageBubble {message} onEdit={handleEdit} onDelete={handleDelete} onFork={handleFork} />
         {#if isPlanningWithEdits && message.role === 'assistant'}
           <StoryActionCards {message} />
         {/if}

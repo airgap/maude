@@ -2,7 +2,7 @@
 
 ## Problem
 
-Maude was not displaying all CLI output until the page was reloaded. Users would run commands and see nothing in the terminal panel, but after a page refresh, the output would appear.
+E was not displaying all CLI output until the page was reloaded. Users would run commands and see nothing in the terminal panel, but after a page refresh, the output would appear.
 
 ## Root Cause
 

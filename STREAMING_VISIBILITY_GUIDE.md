@@ -56,7 +56,7 @@ Shows summary stats instead of full list:
 
 **Styling:**
 
-- Uses existing Maude theme variables
+- Uses existing E theme variables
 - Matches application color scheme
 - Left border accent (primary color)
 - Semi-transparent background (tertiary)

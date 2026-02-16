@@ -107,11 +107,11 @@
     z-index: 5;
   }
   .horizontal > .split-handle {
-    width: 2px;
+    width: 6px;
     cursor: col-resize;
   }
   .vertical > .split-handle {
-    height: 2px;
+    height: 6px;
     cursor: row-resize;
   }
   .split-handle:hover,

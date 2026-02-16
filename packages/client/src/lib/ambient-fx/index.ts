@@ -4,17 +4,19 @@
  * Each magic hypertheme gets a unique effect system:
  * - Arcane: Rotating sigil circles with Elder Futhark runes (Canvas2D)
  * - Ethereal: Floating luminous motes (Canvas2D)
+ * - Study: Rising embers, smoke wisps & candle glow pools (Canvas2D)
  * - Astral: Real star catalog with constellations, nebulae, galaxies (WebGL)
  *
  * Constellation themes use WebGL by default (AmbientBackground.svelte handles
  * the WebGLRenderer directly). The Canvas2D ConstellationEffect serves as
  * fallback if WebGL is unavailable.
  *
- * Tech and Study hyperthemes use CSS-only effects (no canvas needed).
+ * Tech hypertheme uses CSS-only effects (no canvas needed).
  */
 
 export { SigilEffect } from './sigil';
 export { MotesEffect } from './motes';
+export { EmberEffect } from './embers';
 export { StarsEffect } from './stars';
 export { ConstellationEffect } from './constellation';
 export { WebGLRenderer } from './webgl-renderer';
@@ -25,6 +27,7 @@ import type { AmbientEffect } from './types';
 import { HYPERTHEME_EFFECTS } from './types';
 import { SigilEffect } from './sigil';
 import { MotesEffect } from './motes';
+import { EmberEffect } from './embers';
 import { StarsEffect } from './stars';
 import { ConstellationEffect } from './constellation';
 
@@ -40,6 +43,8 @@ export function createEffect(hyperthemeId: string): AmbientEffect | null {
       return new SigilEffect(config.config, config.colors);
     case 'motes':
       return new MotesEffect(config.config, config.colors);
+    case 'embers':
+      return new EmberEffect(config.config, config.colors);
     case 'stars':
       return new StarsEffect(config.config, config.colors);
     case 'constellation':

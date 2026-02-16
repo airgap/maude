@@ -6,7 +6,7 @@
 </script>
 
 <svelte:head>
-  <title>{conversationStore.active?.title ?? 'Maude'}</title>
+  <title>{conversationStore.active?.title ?? 'E'}</title>
 </svelte:head>
 
 <div class="chat-page">

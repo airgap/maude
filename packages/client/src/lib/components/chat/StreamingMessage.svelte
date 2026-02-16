@@ -6,6 +6,7 @@
   import ThinkingBlock from './ThinkingBlock.svelte';
   import ToolCallBlock from './ToolCallBlock.svelte';
   import ToolApprovalDialog from './ToolApprovalDialog.svelte';
+  import UserQuestionDialog from './UserQuestionDialog.svelte';
   import AgentGroup from './AgentGroup.svelte';
   import StreamingText from './StreamingText.svelte';
   import MessageAnimation from './MessageAnimation.svelte';
@@ -151,6 +152,10 @@
             description={approval.description}
           />
         {/each}
+
+        {#each streamStore.pendingQuestions as pq}
+          <UserQuestionDialog question={pq} />
+        {/each}
       </div>
 
       {#if settingsStore.streamingProgressBar !== 'none'}
@@ -292,7 +297,7 @@
     line-height: 1.7;
     color: var(--text-primary);
     font-family: var(--font-family-sans);
-    font-size: 14px;
+    font-size: var(--font-size-sans);
     font-weight: 500;
   }
 

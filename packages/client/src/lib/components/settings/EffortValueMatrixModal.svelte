@@ -567,8 +567,8 @@
   /* Story Dots */
   .story-dot {
     position: absolute;
-    width: 10px;
-    height: 10px;
+    width: 16px;
+    height: 16px;
     border-radius: 50%;
     background: var(--dot-color, var(--accent-primary));
     border: 2px solid var(--bg-primary);
@@ -582,15 +582,15 @@
   }
   .story-dot:hover,
   .story-dot.hovered {
-    width: 14px;
-    height: 14px;
+    width: 20px;
+    height: 20px;
     z-index: 10;
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
   }
   .story-dot.dragging {
     cursor: grabbing;
-    width: 14px;
-    height: 14px;
+    width: 20px;
+    height: 20px;
     z-index: 20;
     box-shadow: 0 3px 12px rgba(0, 0, 0, 0.5);
   }

@@ -1,7 +1,11 @@
 /**
  * Motes Effect — Floating luminous particles for Ethereal hypertheme
  *
- * Performance optimization: pre-renders each mote's glow to an offscreen
+ * Two particle layers:
+ * 1. Motes: Gentle floating luminous orbs with breathing opacity/size
+ * 2. Shimmers: Tiny bright sparkles that pop in, twinkle, and fade out quickly
+ *
+ * Performance optimization: pre-renders each particle's glow to an offscreen
  * canvas sprite at init time, then uses drawImage() instead of creating
  * new radial gradients every frame.
  */
@@ -23,6 +27,23 @@ interface Mote {
   phase: number;
   phaseSpeed: number;
   /** Pre-rendered glow sprite */
+  sprite: OffscreenCanvas;
+  spriteSize: number;
+}
+
+// ── Shimmer sparkles ────────────────────────────────────────────
+interface Shimmer {
+  x: number;
+  y: number;
+  size: number;
+  /** Lifetime 0→1, dies at 1 */
+  life: number;
+  lifeSpeed: number;
+  opacity: number;
+  maxOpacity: number;
+  /** Twinkle frequency */
+  twinkleSpeed: number;
+  twinklePhase: number;
   sprite: OffscreenCanvas;
   spriteSize: number;
 }
@@ -70,11 +91,69 @@ function createMoteSprite(
   return { canvas: oc, size: dim };
 }
 
+/**
+ * Pre-render a shimmer sparkle — tiny white-hot core with a soft colored halo.
+ * Much smaller and brighter than mote sprites, with a 4-point star shape.
+ */
+function createShimmerSprite(
+  r: number,
+  g: number,
+  b: number,
+): { canvas: OffscreenCanvas; size: number } {
+  const dim = 24;
+  const oc = new OffscreenCanvas(dim, dim);
+  const ctx = oc.getContext('2d')!;
+  const cx = dim / 2;
+  const cy = dim / 2;
+
+  // Soft colored halo
+  const halo = ctx.createRadialGradient(cx, cy, 0, cx, cy, dim * 0.45);
+  halo.addColorStop(0, `rgba(${r}, ${g}, ${b}, 0.4)`);
+  halo.addColorStop(0.5, `rgba(${r}, ${g}, ${b}, 0.1)`);
+  halo.addColorStop(1, `rgba(${r}, ${g}, ${b}, 0)`);
+  ctx.fillStyle = halo;
+  ctx.fillRect(0, 0, dim, dim);
+
+  // 4-point star cross — horizontal and vertical spikes
+  ctx.globalCompositeOperation = 'lighter';
+  for (const [sx, sy] of [
+    [1, 0.15],
+    [0.15, 1],
+  ] as const) {
+    ctx.save();
+    ctx.translate(cx, cy);
+    ctx.scale(sx, sy);
+    const spike = ctx.createRadialGradient(0, 0, 0, 0, 0, dim * 0.4);
+    spike.addColorStop(0, 'rgba(255, 255, 255, 0.9)');
+    spike.addColorStop(0.3, `rgba(${r}, ${g}, ${b}, 0.3)`);
+    spike.addColorStop(1, 'rgba(255, 255, 255, 0)');
+    ctx.fillStyle = spike;
+    ctx.fillRect(-dim * 0.4, -dim * 0.4, dim * 0.8, dim * 0.8);
+    ctx.restore();
+  }
+  ctx.globalCompositeOperation = 'source-over';
+
+  // Bright white core
+  const core = ctx.createRadialGradient(cx, cy, 0, cx, cy, 2);
+  core.addColorStop(0, 'rgba(255, 255, 255, 1)');
+  core.addColorStop(1, 'rgba(255, 255, 255, 0)');
+  ctx.fillStyle = core;
+  ctx.beginPath();
+  ctx.arc(cx, cy, 2, 0, Math.PI * 2);
+  ctx.fill();
+
+  return { canvas: oc, size: dim };
+}
+
 export class MotesEffect implements AmbientEffect {
   private motes: Mote[] = [];
+  private shimmers: Shimmer[] = [];
   private width = 0;
   private height = 0;
   private time = 0;
+
+  // Pre-rendered shimmer sprites (one per color)
+  private shimmerSprites: { canvas: OffscreenCanvas; size: number }[] = [];
 
   constructor(
     private config: ParticleConfig,
@@ -91,7 +170,7 @@ export class MotesEffect implements AmbientEffect {
       this.colors.particleColor3,
     ];
 
-    // Pre-render sprites per color
+    // Pre-render mote sprites per color
     const spriteCache = new Map<string, { canvas: OffscreenCanvas; size: number }>();
 
     this.motes = Array.from({ length: this.config.count }, (_, i) => {
@@ -127,6 +206,38 @@ export class MotesEffect implements AmbientEffect {
         spriteSize: spriteData.size,
       };
     });
+
+    // Pre-render shimmer sprites (one per color variant)
+    this.shimmerSprites = colorStrings.map((colorStr) => {
+      const { r, g, b } = parseColor(colorStr);
+      return createShimmerSprite(r, g, b);
+    });
+
+    // Spawn initial shimmers at random lifetimes
+    this.initShimmers();
+  }
+
+  private initShimmers(): void {
+    const count = 18;
+    this.shimmers = Array.from({ length: count }, () => this.spawnShimmer(true));
+  }
+
+  private spawnShimmer(randomLife: boolean): Shimmer {
+    const spriteIdx = Math.floor(Math.random() * this.shimmerSprites.length);
+    const sprite = this.shimmerSprites[spriteIdx];
+    return {
+      x: Math.random() * this.width,
+      y: Math.random() * this.height,
+      size: 0.4 + Math.random() * 0.8,
+      life: randomLife ? Math.random() : 0,
+      lifeSpeed: 0.15 + Math.random() * 0.35,
+      opacity: 0,
+      maxOpacity: 0.3 + Math.random() * 0.7,
+      twinkleSpeed: 3 + Math.random() * 6,
+      twinklePhase: Math.random() * Math.PI * 2,
+      sprite: sprite.canvas,
+      spriteSize: sprite.size,
+    };
   }
 
   resize(width: number, height: number): void {
@@ -138,11 +249,17 @@ export class MotesEffect implements AmbientEffect {
       m.x *= scaleX;
       m.y *= scaleY;
     }
+    for (const s of this.shimmers) {
+      s.x *= scaleX;
+      s.y *= scaleY;
+    }
   }
 
   update(deltaTime: number): void {
-    this.time += deltaTime * 0.001;
+    const dt = deltaTime * 0.001;
+    this.time += dt;
 
+    // ── Update motes ──────────────────────────────────────────────
     for (const mote of this.motes) {
       // Gentle floating motion
       mote.angle += (Math.random() - 0.5) * 0.02;
@@ -163,9 +280,28 @@ export class MotesEffect implements AmbientEffect {
       if (mote.y < -10) mote.y = this.height + 10;
       if (mote.y > this.height + 10) mote.y = -10;
     }
+
+    // ── Update shimmers ───────────────────────────────────────────
+    for (let i = 0; i < this.shimmers.length; i++) {
+      const s = this.shimmers[i];
+      s.life += s.lifeSpeed * dt;
+
+      if (s.life >= 1) {
+        // Respawn at new random position
+        this.shimmers[i] = this.spawnShimmer(false);
+        continue;
+      }
+
+      // Sharp fade in, twinkle, sharp fade out
+      const fadeIn = Math.min(1, s.life * 6); // 0→0.17 = pop in
+      const fadeOut = Math.max(0, 1 - (s.life - 0.6) / 0.4); // 0.6→1.0 = fade out
+      const twinkle = 0.5 + 0.5 * Math.sin(this.time * s.twinkleSpeed + s.twinklePhase);
+      s.opacity = s.maxOpacity * fadeIn * fadeOut * twinkle;
+    }
   }
 
   render(ctx: CanvasRenderingContext2D): void {
+    // ── Layer 1: Motes (bottom) ────────────────────────────────────
     for (const mote of this.motes) {
       if (mote.opacity < 0.02) continue;
 
@@ -181,10 +317,22 @@ export class MotesEffect implements AmbientEffect {
         drawSize,
       );
     }
+
+    // ── Layer 2: Shimmers (top) ────────────────────────────────────
+    ctx.globalCompositeOperation = 'lighter';
+    for (const s of this.shimmers) {
+      if (s.opacity < 0.02) continue;
+      const drawSize = s.spriteSize * s.size;
+      ctx.globalAlpha = s.opacity;
+      ctx.drawImage(s.sprite, s.x - drawSize * 0.5, s.y - drawSize * 0.5, drawSize, drawSize);
+    }
+    ctx.globalCompositeOperation = 'source-over';
     ctx.globalAlpha = 1;
   }
 
   destroy(): void {
     this.motes = [];
+    this.shimmers = [];
+    this.shimmerSprites = [];
   }
 }

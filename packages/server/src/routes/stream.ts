@@ -6,6 +6,22 @@ import { getDb } from '../db/database';
 
 const app = new Hono();
 
+const PLAN_MODE_DIRECTIVE = `## Plan Mode
+
+You are in PLAN MODE. Do NOT write code or make file changes. Instead:
+
+1. **Analyze** the request and ask clarifying questions if the intent is ambiguous
+2. **Break down** the work into clear, numbered implementation steps
+3. **Identify** key files that need to change and what changes are needed
+4. **Flag risks** — edge cases, breaking changes, dependencies, or unknowns
+5. **Estimate scope** — is this a small tweak or a multi-file refactor?
+
+Present your plan in clean markdown. Use headers, bullet points, and code references (backtick file paths and symbol names). Do NOT produce code blocks with full implementations — keep it at the planning level.
+
+When the user is satisfied with the plan, they will turn off plan mode and ask you to execute.
+
+`;
+
 function getProjectMemoryContext(projectPath: string | null): string {
   if (!projectPath) return '';
   try {
@@ -49,15 +65,21 @@ function getSessionOpts(conv: any) {
     if (conv.disallowed_tools) disallowedTools = JSON.parse(conv.disallowed_tools);
   } catch {}
 
-  // Inject project memories into system prompt
+  // Build system prompt: plan mode directive + user system prompt + project memories
   const memoryContext = getProjectMemoryContext(conv.project_path);
-  const systemPrompt = conv.system_prompt
-    ? conv.system_prompt + memoryContext
-    : memoryContext || undefined;
+  let systemPrompt = conv.system_prompt || '';
+
+  if (conv.plan_mode) {
+    systemPrompt = PLAN_MODE_DIRECTIVE + systemPrompt;
+  }
+
+  if (memoryContext) {
+    systemPrompt = systemPrompt ? systemPrompt + memoryContext : memoryContext;
+  }
 
   return {
     model: conv.model,
-    systemPrompt,
+    systemPrompt: systemPrompt || undefined,
     projectPath: conv.project_path,
     effort: conv.effort,
     maxBudgetUsd: conv.max_budget_usd,
@@ -91,11 +113,15 @@ app.post('/:conversationId', async (c) => {
   const isOllama = conv.model?.startsWith('ollama:');
   if (isOllama) {
     const ollamaModel = conv.model.replace('ollama:', '');
+    let ollamaSystemPrompt = conv.system_prompt || '';
+    if (conv.plan_mode) {
+      ollamaSystemPrompt = PLAN_MODE_DIRECTIVE + ollamaSystemPrompt;
+    }
     const stream = createOllamaStream({
       model: ollamaModel,
       content,
       conversationId,
-      systemPrompt: conv.system_prompt || undefined,
+      systemPrompt: ollamaSystemPrompt || undefined,
     });
     return new Response(stream, {
       headers: {
@@ -148,6 +174,27 @@ app.post('/:conversationId/cancel', (c) => {
   if (sessionId) {
     claudeManager.cancelGeneration(sessionId);
   }
+  return c.json({ ok: true });
+});
+
+// Submit answer to an AskUserQuestion prompt
+app.post('/:conversationId/answer', async (c) => {
+  const sessionId = c.req.header('x-session-id');
+  if (!sessionId) return c.json({ ok: false, error: 'Missing session ID' }, 400);
+
+  const body = await c.req.json();
+  const { toolCallId, answers } = body;
+  if (!toolCallId || !answers) {
+    return c.json({ ok: false, error: 'Missing toolCallId or answers' }, 400);
+  }
+
+  // Format as JSON that the CLI can read as a tool result on stdin
+  const answerPayload = JSON.stringify({ answers }) + '\n';
+  const written = claudeManager.writeStdin(sessionId, answerPayload);
+  if (!written) {
+    return c.json({ ok: false, error: 'Failed to write to CLI stdin' }, 500);
+  }
+
   return c.json({ ok: true });
 });
 

@@ -4,7 +4,7 @@ import { tags } from '@lezer/highlight';
 
 /**
  * CM6 theme that reads from CSS custom properties (--syn-*, --bg-*, etc.)
- * so it automatically adapts to all 6 Maude themes.
+ * so it automatically adapts to all 6 E themes.
  */
 export const maudeEditorTheme = EditorView.theme(
   {

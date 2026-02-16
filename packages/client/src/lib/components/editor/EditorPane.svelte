@@ -86,7 +86,7 @@
   }
 
   .terminal-resize-handle {
-    height: 3px;
+    height: 6px;
     cursor: row-resize;
     background: transparent;
     flex-shrink: 0;

@@ -24,7 +24,7 @@ const PRIORITY_ORDER: Record<StoryPriority, number> = {
 
 /**
  * Manages the autonomous loop lifecycle. Singleton, like claudeManager.
- * Each loop run creates real Maude conversations and tasks for traceability.
+ * Each loop run creates real E conversations and tasks for traceability.
  */
 class LoopOrchestrator {
   private runners = new Map<string, LoopRunner>();
@@ -223,7 +223,7 @@ class LoopRunner {
         }
       }
 
-      // Create a Maude conversation for this story
+      // Create an E conversation for this story
       const conversationId = nanoid();
       const now = Date.now();
       db.query(
@@ -241,7 +241,7 @@ class LoopRunner {
 
       this.updateStory(story.id, { conversationId });
 
-      // Create a Maude task linked to this story
+      // Create an E task linked to this story
       const taskId = nanoid(8);
       db.query(
         `INSERT INTO tasks (id, subject, description, active_form, status, owner, metadata, created_at, updated_at)
@@ -775,7 +775,7 @@ ${criteria}
       if (diffExit === 0) return null; // No changes to commit
 
       // Commit
-      const msg = `[loop] ${story.title}\n\nImplemented by Maude autonomous loop.\nPRD: ${this.prdId}\nStory: ${story.id}`;
+      const msg = `[loop] ${story.title}\n\nImplemented by E autonomous loop.\nPRD: ${this.prdId}\nStory: ${story.id}`;
       const commitProc = Bun.spawn(['git', 'commit', '-m', msg], {
         cwd: this.projectPath,
         stdout: 'pipe',

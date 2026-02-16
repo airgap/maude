@@ -1,5 +1,6 @@
 <script lang="ts">
   import { highlightLines, langFromPath, escapeHtml } from '$lib/utils/highlight';
+  import { parseMcpToolName } from '@maude/shared';
 
   let {
     toolName,
@@ -16,7 +17,28 @@
     compact?: boolean;
   }>();
 
+  // ── MCP Tool Name Resolution ──
+  // Parse MCP-prefixed names (e.g. "mcp__desktop-commander__read_file")
+  // into a resolved name that routes to existing rich rendering templates.
+  const parsed = $derived(parseMcpToolName(toolName));
+  /** The built-in tool name to use for icons, colors, and rendering templates */
+  const effectiveName = $derived(parsed.renderAs || parsed.toolName);
+  /** Short display name for the header */
+  const displayName = $derived(parsed.displayName);
+  /** MCP server name shown as a badge, null for built-in tools */
+  const serverLabel = $derived(parsed.serverName);
+
+  // AskUserQuestion should auto-expand so questions are visible
+  const isAskUser = $derived(effectiveName === 'AskUserQuestion' || toolName === 'AskUserQuestion');
   let expanded = $state(false);
+  let autoExpanded = $state(false);
+
+  $effect(() => {
+    if (isAskUser && !autoExpanded) {
+      expanded = true;
+      autoExpanded = true;
+    }
+  });
 
   const toolIcons: Record<string, string> = {
     Read: 'M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z',
@@ -31,6 +53,8 @@
     TodoWrite: 'M9 11l3 3L22 4M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11',
     NotebookEdit:
       'M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2zM22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z',
+    AskUserQuestion:
+      'M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10zm0-6v.01M12 8a2 2 0 0 0-2 2',
   };
 
   /** Short filename from a full path */
@@ -38,15 +62,39 @@
     return path.split('/').pop() || path;
   }
 
+  /**
+   * Extract file path from input — handles both built-in (file_path)
+   * and MCP (path) parameter naming conventions.
+   */
+  function getFilePath(): string {
+    return String(input.file_path || input.path || '');
+  }
+
   function formatInput(input: Record<string, unknown>): string {
-    if (toolName === 'Read' && input.file_path) return String(input.file_path);
-    if (toolName === 'Bash' && input.command) return String(input.command);
-    if (toolName === 'Edit' && input.file_path) return String(input.file_path);
-    if (toolName === 'Write' && input.file_path) return String(input.file_path);
-    if (toolName === 'Glob' && input.pattern) return String(input.pattern);
-    if (toolName === 'Grep' && input.pattern) return String(input.pattern);
-    if (toolName === 'TodoWrite') return 'update tasks';
-    if (toolName === 'Task' && input.description) return String(input.description);
+    const fp = getFilePath();
+    if (effectiveName === 'Read' && fp) return fp;
+    if (effectiveName === 'Bash' && input.command) return String(input.command);
+    if (effectiveName === 'Edit' && fp) return fp;
+    if (effectiveName === 'Write' && fp) return fp;
+    if (effectiveName === 'Glob' && input.pattern) return String(input.pattern);
+    if (effectiveName === 'Grep' && input.pattern) return String(input.pattern);
+    if (effectiveName === 'AskUserQuestion' || toolName === 'AskUserQuestion') {
+      const qs = parseQuestions();
+      if (qs.length === 1) return qs[0].header || qs[0].question.slice(0, 80);
+      return `${qs.length} questions`;
+    }
+    if (effectiveName === 'TodoWrite' || toolName === 'TodoWrite') return 'update tasks';
+    if ((effectiveName === 'Task' || toolName === 'Task') && input.description)
+      return String(input.description);
+    // For MCP tools, show a concise summary rather than raw JSON
+    if (parsed.isMcp) {
+      const keys = Object.keys(input).filter((k) => input[k] !== undefined && input[k] !== null);
+      if (keys.length === 0) return '';
+      // Show the first meaningful value
+      const firstKey = keys[0];
+      const val = String(input[firstKey]);
+      return val.length > 120 ? val.slice(0, 120) + '...' : val;
+    }
     return JSON.stringify(input, null, 2).slice(0, 200);
   }
 
@@ -67,11 +115,12 @@
     const oldLines = oldStr.split('\n');
     const newLines = newStr.split('\n');
     const lines: DiffLine[] = [];
+    const fp = getFilePath();
 
     lines.push({
       type: 'header',
-      text: `@@ ${basename(String(input.file_path || ''))}`,
-      html: escapeHtml(`@@ ${basename(String(input.file_path || ''))}`),
+      text: `@@ ${basename(fp)}`,
+      html: escapeHtml(`@@ ${basename(fp)}`),
     });
 
     // Find common prefix/suffix
@@ -163,21 +212,80 @@
     WebSearch: 'var(--accent-purple)',
     Task: 'var(--accent-secondary)',
     TodoWrite: 'var(--accent-info)',
+    AskUserQuestion: 'var(--accent-primary)',
   };
+
+  // ── AskUserQuestion helpers ──
+  interface AskOption {
+    label: string;
+    description?: string;
+  }
+  interface AskQuestion {
+    question: string;
+    header?: string;
+    options?: AskOption[];
+    multiSelect?: boolean;
+  }
+
+  function parseQuestions(): AskQuestion[] {
+    const raw = input.questions;
+    if (Array.isArray(raw)) return raw as AskQuestion[];
+    return [];
+  }
+
+  /**
+   * Parse the tool result to extract selected answers.
+   * The result format from Claude CLI can vary:
+   *   - JSON: { "answers": { "q0": "OptionLabel", ... } }
+   *   - JSON: { "question": "OptionLabel" }
+   *   - Plain text matching an option label
+   */
+  function getSelectedLabels(): Set<string> {
+    if (!result?.content) return new Set();
+    const content = result.content.trim();
+    const labels = new Set<string>();
+
+    // Try JSON parsing first
+    try {
+      const parsed = JSON.parse(content);
+      if (parsed.answers && typeof parsed.answers === 'object') {
+        for (const v of Object.values(parsed.answers)) {
+          if (typeof v === 'string') labels.add(v);
+        }
+        if (labels.size > 0) return labels;
+      }
+      // Single answer object: { "someKey": "value" }
+      for (const v of Object.values(parsed)) {
+        if (typeof v === 'string') labels.add(v);
+      }
+      if (labels.size > 0) return labels;
+    } catch {
+      // Not JSON — try matching against option labels
+    }
+
+    // Plain text: check if the result mentions any option label
+    const allOptions = parseQuestions().flatMap((q) => q.options || []);
+    for (const opt of allOptions) {
+      if (content.includes(opt.label)) {
+        labels.add(opt.label);
+      }
+    }
+    return labels;
+  }
 
   // ── Async syntax highlighting state ──
 
   let diffLines = $state<DiffLine[]>([]);
   let writeHighlightedHtml = $state('');
 
-  // Recompute highlighted content when expanded
+  // Recompute highlighted content when expanded — use effectiveName for template routing
   $effect(() => {
     if (!expanded) return;
 
-    const filePath = String(input.file_path || '');
+    const filePath = getFilePath();
     const lang = langFromPath(filePath);
 
-    if (toolName === 'Edit') {
+    if (effectiveName === 'Edit') {
       const oldStr = String(input.old_string || '');
       const newStr = String(input.new_string || '');
 
@@ -194,7 +302,7 @@
           },
         );
       }
-    } else if (toolName === 'Write') {
+    } else if (effectiveName === 'Write') {
       const content = String(input.content || '');
       const preview = truncateLines(content, 20);
 
@@ -224,7 +332,7 @@
     >
       <path d="M9 18l6-6-6-6" />
     </svg>
-    <span class="tool-icon" style:color={categoryColors[toolName] || 'var(--text-tertiary)'}>
+    <span class="tool-icon" style:color={categoryColors[effectiveName] || 'var(--text-tertiary)'}>
       <svg
         width="14"
         height="14"
@@ -234,12 +342,15 @@
         stroke-width="2"
       >
         <path
-          d={toolIcons[toolName] ||
+          d={toolIcons[effectiveName] ||
             'M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z'}
         />
       </svg>
     </span>
-    <span class="tool-name">{toolName}</span>
+    <span class="tool-name">{displayName}</span>
+    {#if serverLabel}
+      <span class="mcp-badge">{serverLabel}</span>
+    {/if}
     <span class="tool-summary truncate">{formatInput(input)}</span>
     {#if running}
       <span class="running-indicator"></span>
@@ -252,10 +363,10 @@
 
   {#if expanded && !compact}
     <div class="tool-details">
-      {#if toolName === 'Edit'}
-        <!-- Unified diff view for Edit -->
+      {#if effectiveName === 'Edit'}
+        <!-- Unified diff view for Edit / edit_block -->
         <div class="detail-section">
-          <span class="detail-label">{basename(String(input.file_path || ''))}</span>
+          <span class="detail-label">{basename(getFilePath())}</span>
           <div class="diff-view">
             {#each diffLines as line}
               <div
@@ -278,8 +389,10 @@
               </div>
             {/each}
           </div>
-          {#if input.replace_all}
-            <span class="edit-flag">replace all</span>
+          {#if input.replace_all || input.expected_replacements}
+            <span class="edit-flag"
+              >{input.replace_all ? 'replace all' : `×${input.expected_replacements}`}</span
+            >
           {/if}
         </div>
         {#if result}
@@ -288,11 +401,11 @@
             <pre class="detail-content" class:error-output={result.is_error}>{result.content}</pre>
           </div>
         {/if}
-      {:else if toolName === 'Write'}
-        <!-- Content preview for Write -->
+      {:else if effectiveName === 'Write'}
+        <!-- Content preview for Write / write_file -->
         <div class="detail-section">
           <div class="write-header">
-            <span class="detail-label">{String(input.file_path || '')}</span>
+            <span class="detail-label">{getFilePath()}</span>
             <span class="write-meta">{lineCount(String(input.content || ''))} lines</span>
           </div>
           <pre class="detail-content write-preview">{@html writeHighlightedHtml}</pre>
@@ -308,14 +421,15 @@
             <pre class="detail-content" class:error-output={result.is_error}>{result.content}</pre>
           </div>
         {/if}
-      {:else if toolName === 'Read'}
-        <!-- File path + result content for Read -->
+      {:else if effectiveName === 'Read'}
+        <!-- File path + result content for Read / read_file -->
         <div class="detail-section">
-          <span class="detail-label">{String(input.file_path || '')}</span>
-          {#if input.offset || input.limit}
+          <span class="detail-label">{getFilePath()}</span>
+          {#if input.offset || input.limit || input.length}
             <span class="read-range">
               {#if input.offset}offset: {input.offset}{/if}
-              {#if input.limit}{input.offset ? ', ' : ''}limit: {input.limit}{/if}
+              {#if input.limit || input.length}{input.offset ? ', ' : ''}limit: {input.limit ||
+                  input.length}{/if}
             </span>
           {/if}
         </div>
@@ -332,11 +446,13 @@
             {/if}
           </div>
         {/if}
-      {:else if toolName === 'Bash'}
-        <!-- Command + output for Bash -->
+      {:else if effectiveName === 'Bash'}
+        <!-- Command + output for Bash / start_process / execute_command -->
         <div class="detail-section">
           <span class="detail-label">Command</span>
-          <pre class="detail-content bash-command">{String(input.command || '')}</pre>
+          <pre class="detail-content bash-command">{String(
+              input.command || input.input || '',
+            )}</pre>
           {#if input.description}
             <span class="bash-desc">{String(input.description)}</span>
           {/if}
@@ -355,8 +471,8 @@
             {/if}
           </div>
         {/if}
-      {:else if toolName === 'Grep'}
-        <!-- Pattern + path + results for Grep -->
+      {:else if effectiveName === 'Grep'}
+        <!-- Pattern + path + results for Grep / search -->
         <div class="detail-section">
           <span class="detail-label">Search</span>
           <div class="grep-params">
@@ -364,6 +480,9 @@
             {#if input.path}<span class="grep-path">in {String(input.path)}</span>{/if}
             {#if input.glob}<span class="grep-flag">glob: {String(input.glob)}</span>{/if}
             {#if input.type}<span class="grep-flag">type: {String(input.type)}</span>{/if}
+            {#if input.filePattern}<span class="grep-flag">files: {String(input.filePattern)}</span
+              >{/if}
+            {#if input.searchType}<span class="grep-flag">{String(input.searchType)}</span>{/if}
           </div>
         </div>
         {#if result}
@@ -380,13 +499,16 @@
             {/if}
           </div>
         {/if}
-      {:else if toolName === 'Glob'}
-        <!-- Pattern + results for Glob -->
+      {:else if effectiveName === 'Glob'}
+        <!-- Pattern + results for Glob / list_directory -->
         <div class="detail-section">
           <span class="detail-label">Pattern</span>
-          <pre class="detail-content">{String(input.pattern || '')}</pre>
-          {#if input.path}
+          <pre class="detail-content">{String(input.pattern || input.path || '')}</pre>
+          {#if input.path && input.pattern}
             <span class="grep-path">in {String(input.path)}</span>
+          {/if}
+          {#if input.depth}
+            <span class="grep-flag">depth: {String(input.depth)}</span>
           {/if}
         </div>
         {#if result}
@@ -401,6 +523,65 @@
                 >... {truncateLines(result.content, 30).total - 30} more lines</span
               >
             {/if}
+          </div>
+        {/if}
+      {:else if effectiveName === 'AskUserQuestion' || toolName === 'AskUserQuestion'}
+        <!-- Question prompt display for AskUserQuestion -->
+        {@const questions = parseQuestions()}
+        {@const selected = getSelectedLabels()}
+        {@const hasResult = !!result}
+        {@const isWaiting = running && !hasResult}
+        {#each questions as q}
+          <div class="detail-section ask-question-section">
+            {#if q.header}
+              <span class="ask-header">{q.header}</span>
+            {/if}
+            <p class="ask-question-text">{q.question}</p>
+            {#if q.options && q.options.length > 0}
+              <div class="ask-options">
+                {#each q.options as opt}
+                  {@const isSelected = selected.has(opt.label)}
+                  <div
+                    class="ask-option"
+                    class:ask-option-selected={isSelected}
+                    class:ask-option-waiting={isWaiting}
+                  >
+                    <span class="ask-option-indicator">
+                      {#if isSelected}
+                        <svg
+                          width="14"
+                          height="14"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          stroke-width="2.5"><path d="M20 6L9 17l-5-5" /></svg
+                        >
+                      {:else if isWaiting}
+                        ○
+                      {:else}
+                        ·
+                      {/if}
+                    </span>
+                    <div class="ask-option-content">
+                      <span class="ask-option-label">{opt.label}</span>
+                      {#if opt.description}
+                        <span class="ask-option-desc">{opt.description}</span>
+                      {/if}
+                    </div>
+                  </div>
+                {/each}
+              </div>
+            {/if}
+            {#if isWaiting}
+              <span class="ask-waiting">Waiting for response...</span>
+            {/if}
+          </div>
+        {/each}
+        {#if hasResult && selected.size === 0}
+          <!-- Result didn't match any option — show raw answer -->
+          <div class="detail-section">
+            <span class="detail-label">Answer</span>
+            <pre class="detail-content" class:error-output={result.is_error}>{result.content}</pre>
           </div>
         {/if}
       {:else}
@@ -445,6 +626,18 @@
     font-weight: 600;
     color: var(--text-primary);
     font-size: 12px;
+  }
+
+  .mcp-badge {
+    font-size: 9px;
+    padding: 1px 5px;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-secondary);
+    color: var(--text-tertiary);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    white-space: nowrap;
+    flex-shrink: 0;
   }
 
   .tool-summary {
@@ -735,6 +928,93 @@
     border: 1px solid var(--border-secondary);
     color: var(--text-tertiary);
     font-family: var(--font-family);
+  }
+
+  /* ── AskUserQuestion ── */
+  .ask-question-section {
+    padding: 10px 12px;
+  }
+  .ask-header {
+    display: inline-block;
+    font-size: 9px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    padding: 2px 7px;
+    background: color-mix(in srgb, var(--accent-primary) 12%, transparent);
+    border: 1px solid color-mix(in srgb, var(--accent-primary) 25%, transparent);
+    color: var(--accent-primary);
+    border-radius: 3px;
+    margin-bottom: 6px;
+  }
+  .ask-question-text {
+    font-size: 13px;
+    line-height: 1.5;
+    color: var(--text-primary);
+    font-weight: 500;
+    margin: 4px 0 8px;
+  }
+  .ask-options {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .ask-option {
+    display: flex;
+    gap: 8px;
+    align-items: flex-start;
+    padding: 6px 10px;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border-secondary);
+    background: var(--bg-tertiary);
+    transition: all var(--transition);
+  }
+  .ask-option-selected {
+    border-color: var(--accent-secondary);
+    background: color-mix(in srgb, var(--accent-secondary) 8%, var(--bg-tertiary));
+  }
+  .ask-option-indicator {
+    flex-shrink: 0;
+    font-size: 10px;
+    line-height: 18px;
+    color: var(--text-tertiary);
+    display: flex;
+    align-items: center;
+    width: 14px;
+    justify-content: center;
+  }
+  .ask-option-selected .ask-option-indicator {
+    color: var(--accent-secondary);
+  }
+  .ask-option-waiting {
+    opacity: 0.7;
+  }
+  .ask-option-content {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+  }
+  .ask-option-label {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-primary);
+  }
+  .ask-option-selected .ask-option-label {
+    color: var(--accent-secondary);
+  }
+  .ask-option-desc {
+    font-size: 11px;
+    line-height: 1.4;
+    color: var(--text-tertiary);
+  }
+  .ask-waiting {
+    display: block;
+    margin-top: 6px;
+    font-size: 11px;
+    color: var(--text-tertiary);
+    font-style: italic;
+    animation: hudPulse 1.2s infinite linear;
   }
 
   @keyframes pulse {

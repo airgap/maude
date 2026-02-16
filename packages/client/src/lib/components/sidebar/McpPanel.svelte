@@ -12,6 +12,19 @@
     scope: string;
   }
 
+  interface DiscoveredSource {
+    source: string;
+    configPath: string;
+    servers: Array<{
+      name: string;
+      command?: string;
+      args?: string[];
+      url?: string;
+      env?: Record<string, string>;
+      transport: string;
+    }>;
+  }
+
   const PRESETS = [
     {
       name: 'filesystem',
@@ -77,6 +90,13 @@
     env: '',
   });
 
+  // ── Import/Discovery state ──
+  let discoveredSources = $state<DiscoveredSource[]>([]);
+  let discovering = $state(false);
+  let showImport = $state(false);
+  let selectedImports = $state<Set<string>>(new Set());
+  let importing = $state(false);
+
   async function loadServers() {
     try {
       const res = await api.mcp.listServers();
@@ -133,9 +153,79 @@
     }
   }
 
+  // ── Import/Discovery ──
+  async function discoverConfigs() {
+    discovering = true;
+    try {
+      const res = await api.mcp.discover();
+      discoveredSources = res.data;
+      showImport = true;
+      if (res.data.length === 0) {
+        uiStore.toast('No external MCP configs found', 'info');
+      }
+    } catch (e) {
+      uiStore.toast(`Discovery failed: ${e}`, 'error');
+    }
+    discovering = false;
+  }
+
+  function toggleImport(key: string) {
+    const next = new Set(selectedImports);
+    if (next.has(key)) {
+      next.delete(key);
+    } else {
+      next.add(key);
+    }
+    selectedImports = next;
+  }
+
+  function selectAllFromSource(source: DiscoveredSource) {
+    const next = new Set(selectedImports);
+    for (const server of source.servers) {
+      const key = `${source.source}:${server.name}`;
+      if (!installedNames.has(server.name)) {
+        next.add(key);
+      }
+    }
+    selectedImports = next;
+  }
+
+  async function importSelected() {
+    if (selectedImports.size === 0) return;
+    importing = true;
+    const toImport: any[] = [];
+    for (const source of discoveredSources) {
+      for (const server of source.servers) {
+        if (selectedImports.has(`${source.source}:${server.name}`)) {
+          toImport.push(server);
+        }
+      }
+    }
+    try {
+      const res = await api.mcp.importServers(toImport);
+      uiStore.toast(
+        `Imported ${res.data.imported} server${res.data.imported !== 1 ? 's' : ''}`,
+        'success',
+      );
+      selectedImports = new Set();
+      discoveredSources = [];
+      showImport = false;
+      await loadServers();
+    } catch (e) {
+      uiStore.toast(`Import failed: ${e}`, 'error');
+    }
+    importing = false;
+  }
+
   onMount(loadServers);
 
   let installedNames = $derived(new Set(servers.map((s) => s.name)));
+  let totalDiscovered = $derived(
+    discoveredSources.reduce(
+      (sum, s) => sum + s.servers.filter((sv) => !installedNames.has(sv.name)).length,
+      0,
+    ),
+  );
 </script>
 
 <div class="mcp-panel">
@@ -203,6 +293,78 @@
       </div>
     {/if}
 
+    <!-- ── Import from other tools ── -->
+    <div class="import-section">
+      <h4 class="section-title">Import</h4>
+      {#if !showImport || discoveredSources.length === 0}
+        <button class="discover-btn" onclick={discoverConfigs} disabled={discovering}>
+          {#if discovering}
+            <span class="discover-spinner"></span>
+            Scanning...
+          {:else}
+            Detect external MCP configs
+          {/if}
+        </button>
+      {:else}
+        <div class="discovered-list">
+          {#each discoveredSources as source}
+            {@const importable = source.servers.filter((s) => !installedNames.has(s.name))}
+            {#if importable.length > 0 || source.servers.some((s) => installedNames.has(s.name))}
+              <div class="import-source">
+                <div class="source-header">
+                  <span class="source-label">{source.source}</span>
+                  {#if importable.length > 1}
+                    <button class="select-all-btn" onclick={() => selectAllFromSource(source)}
+                      >Select all</button
+                    >
+                  {/if}
+                </div>
+                <span class="source-path">{source.configPath}</span>
+                {#each source.servers as server}
+                  {@const key = `${source.source}:${server.name}`}
+                  {@const alreadyInstalled = installedNames.has(server.name)}
+                  <label class="import-item" class:disabled={alreadyInstalled}>
+                    <input
+                      type="checkbox"
+                      checked={selectedImports.has(key)}
+                      disabled={alreadyInstalled}
+                      onchange={() => toggleImport(key)}
+                    />
+                    <span class="import-name">{server.name}</span>
+                    <span class="import-transport">{server.transport}</span>
+                    {#if alreadyInstalled}
+                      <span class="preset-installed">Installed</span>
+                    {/if}
+                  </label>
+                {/each}
+              </div>
+            {/if}
+          {/each}
+        </div>
+        <div class="import-actions">
+          <button
+            class="save-btn"
+            onclick={importSelected}
+            disabled={selectedImports.size === 0 || importing}
+          >
+            {importing
+              ? 'Importing...'
+              : `Import ${selectedImports.size} server${selectedImports.size !== 1 ? 's' : ''}`}
+          </button>
+          <button
+            class="cancel-btn"
+            onclick={() => {
+              showImport = false;
+              discoveredSources = [];
+              selectedImports = new Set();
+            }}
+          >
+            Cancel
+          </button>
+        </div>
+      {/if}
+    </div>
+
     <div class="presets-section">
       <h4 class="section-title">Quick Add</h4>
       <div class="preset-grid">
@@ -247,8 +409,8 @@
     margin: 0;
   }
   .add-btn {
-    width: 22px;
-    height: 22px;
+    width: 24px;
+    height: 24px;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -335,6 +497,11 @@
     cursor: pointer;
     line-height: 1;
     padding: 0 2px;
+    min-width: 24px;
+    min-height: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
   }
   .remove-btn:hover {
     color: var(--accent-error);
@@ -370,10 +537,16 @@
     letter-spacing: 0.5px;
     cursor: pointer;
   }
-  .save-btn:hover {
+  .save-btn:hover:not(:disabled) {
     opacity: 0.9;
   }
-  .presets-section {
+  .save-btn:disabled {
+    opacity: 0.5;
+    cursor: default;
+  }
+
+  /* ── Import Section ── */
+  .import-section {
     margin-top: 8px;
   }
   .section-title {
@@ -383,6 +556,137 @@
     letter-spacing: 1px;
     color: var(--text-tertiary);
     margin: 0 0 6px 8px;
+  }
+  .discover-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    width: 100%;
+    padding: 8px 12px;
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    background: var(--bg-tertiary);
+    border: 1px dashed var(--border-secondary);
+    cursor: pointer;
+    transition: all var(--transition);
+  }
+  .discover-btn:hover:not(:disabled) {
+    border-color: var(--accent-primary);
+    color: var(--accent-primary);
+  }
+  .discover-btn:disabled {
+    opacity: 0.7;
+    cursor: default;
+  }
+  .discover-spinner {
+    display: inline-block;
+    width: 10px;
+    height: 10px;
+    border: 2px solid var(--text-tertiary);
+    border-top-color: var(--accent-primary);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
+  .discovered-list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .import-source {
+    padding: 8px;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-primary);
+  }
+  .source-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 2px;
+  }
+  .source-label {
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--accent-primary);
+  }
+  .select-all-btn {
+    font-size: 9px;
+    padding: 1px 6px;
+    background: none;
+    border: 1px solid var(--border-secondary);
+    color: var(--text-tertiary);
+    cursor: pointer;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  .select-all-btn:hover {
+    border-color: var(--accent-primary);
+    color: var(--accent-primary);
+  }
+  .source-path {
+    display: block;
+    font-size: 9px;
+    color: var(--text-tertiary);
+    font-family: var(--font-family);
+    word-break: break-all;
+    margin-bottom: 6px;
+  }
+  .import-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 6px;
+    cursor: pointer;
+    font-size: 11px;
+    transition: background var(--transition);
+  }
+  .import-item:hover:not(.disabled) {
+    background: var(--bg-hover);
+  }
+  .import-item.disabled {
+    opacity: 0.5;
+    cursor: default;
+  }
+  .import-item input[type='checkbox'] {
+    margin: 0;
+    accent-color: var(--accent-primary);
+  }
+  .import-name {
+    font-weight: 600;
+    color: var(--text-primary);
+    flex: 1;
+  }
+  .import-transport {
+    font-size: 9px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--text-tertiary);
+    padding: 1px 4px;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-secondary);
+  }
+  .import-actions {
+    display: flex;
+    gap: 6px;
+    margin-top: 8px;
+  }
+  .cancel-btn {
+    font-size: 11px;
+    padding: 4px 12px;
+    background: var(--bg-tertiary);
+    color: var(--text-secondary);
+    border: 1px solid var(--border-secondary);
+    cursor: pointer;
+    font-weight: 600;
+  }
+  .cancel-btn:hover {
+    border-color: var(--text-tertiary);
+  }
+
+  /* ── Presets Section ── */
+  .presets-section {
+    margin-top: 8px;
   }
   .preset-grid {
     display: flex;
@@ -424,5 +728,11 @@
     color: var(--accent-secondary);
     text-transform: uppercase;
     letter-spacing: 0.5px;
+  }
+
+  @keyframes spin {
+    to {
+      transform: rotate(360deg);
+    }
   }
 </style>

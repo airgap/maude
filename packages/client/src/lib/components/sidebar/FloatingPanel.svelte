@@ -349,6 +349,8 @@
     align-items: center;
     justify-content: center;
     padding: 3px;
+    min-width: 24px;
+    min-height: 24px;
     color: var(--text-tertiary);
     background: none;
     border: none;

@@ -49,6 +49,7 @@ interface Star {
   // Screen position (computed from projection)
   x: number;
   y: number;
+  visible: boolean; // Whether the star is in front of the viewer (not behind the sphere)
   size: number;
   baseSize: number;
   r: number;
@@ -189,6 +190,8 @@ export class WebGLRenderer {
   // Constellation connections
   private connections: Connection[] = [];
   private lineData: Float32Array | null = null;
+  /** All star indices that appear as endpoints in any constellation connection */
+  private constellationStarIndices: Set<number> = new Set();
 
   // Render-to-texture for card viewports
   private framebuffer: WebGLFramebuffer | null = null;
@@ -772,6 +775,7 @@ export class WebGLRenderer {
         dec: catalogStar.dec,
         x: 0,
         y: 0,
+        visible: true,
         size: baseSize,
         baseSize,
         r: color.r,
@@ -818,6 +822,7 @@ export class WebGLRenderer {
         dec,
         x: 0,
         y: 0,
+        visible: true,
         size,
         baseSize: size,
         ...color,
@@ -864,6 +869,7 @@ export class WebGLRenderer {
    */
   private buildConnections(): void {
     this.connections = [];
+    this.constellationStarIndices.clear();
     const addedConnections = new Set<string>();
 
     for (let i = 0; i < this.stars.length; i++) {
@@ -874,6 +880,9 @@ export class WebGLRenderer {
         if (!addedConnections.has(key)) {
           addedConnections.add(key);
           this.connections.push({ star1: i, star2: connIndex });
+          // Track BOTH endpoints so they get projected for line rendering
+          this.constellationStarIndices.add(i);
+          this.constellationStarIndices.add(connIndex);
         }
       }
     }
@@ -893,9 +902,9 @@ export class WebGLRenderer {
       const s1 = this.stars[conn.star1];
       const s2 = this.stars[conn.star2];
 
-      // Only draw line if both stars are visible and near the pointer
+      // Only draw line if both stars are in front of the viewer and near the pointer
       let alpha = 0;
-      if (s1.opacity > 0 && s2.opacity > 0 && this.pointerX > 0) {
+      if (s1.visible && s2.visible && this.pointerX > 0) {
         // Check distance from pointer to each star
         const dx1 = s1.x - this.pointerX;
         const dy1 = s1.y - this.pointerY;
@@ -1133,10 +1142,12 @@ export class WebGLRenderer {
     const centerX = this.width / 2;
     const centerY = this.height / 2;
 
-    // Only project stars that have constellation connections
-    for (const star of this.stars) {
-      if (star.connectionIndices.length > 0) {
-        const proj = this.projectStar(star.ra, star.dec, this.viewRa, this.viewDec, scale);
+    // Project all stars that appear in any constellation connection (both endpoints)
+    for (const idx of this.constellationStarIndices) {
+      const star = this.stars[idx];
+      const proj = this.projectStar(star.ra, star.dec, this.viewRa, this.viewDec, scale);
+      star.visible = proj.visible;
+      if (proj.visible) {
         star.x = centerX + proj.x;
         star.y = centerY + proj.y;
       }
@@ -1153,8 +1164,11 @@ export class WebGLRenderer {
 
     for (const star of this.stars) {
       const proj = this.projectStar(star.ra, star.dec, this.viewRa, this.viewDec, scale);
-      star.x = centerX + proj.x;
-      star.y = centerY + proj.y;
+      star.visible = proj.visible;
+      if (proj.visible) {
+        star.x = centerX + proj.x;
+        star.y = centerY + proj.y;
+      }
     }
   }
 

@@ -1,6 +1,7 @@
 import type { StreamEvent, Conversation } from '@maude/shared';
 import { streamStore } from '$lib/stores/stream.svelte';
 import { conversationStore } from '$lib/stores/conversation.svelte';
+import { workspaceStore } from '$lib/stores/workspace.svelte';
 import { projectMemoryStore } from '$lib/stores/project-memory.svelte';
 import { api } from './client';
 import { uuid } from '$lib/utils/uuid';
@@ -45,7 +46,12 @@ export async function sendAndStream(conversationId: string, content: string): Pr
   });
 
   try {
-    const response = await api.stream.send(conversationId, content, streamStore.sessionId);
+    const response = await api.stream.send(
+      conversationId,
+      content,
+      streamStore.sessionId,
+      abortController.signal,
+    );
     // console.log('[sse] Got response:', response.status, response.ok);
 
     if (!response.ok) {
@@ -132,7 +138,13 @@ export async function sendAndStream(conversationId: string, content: string): Pr
     // Ensure streaming state is cleared when the SSE connection closes.
     // The message_stop event should have already done this, but if it was
     // lost (e.g. stream closed before the event was flushed), clean up.
-    if (streamStore.isStreaming) {
+    // Check for tool_pending too — the CLI may finish while the UI is
+    // waiting on an approval dialog that's already moot.
+    if (
+      streamStore.isStreaming ||
+      streamStore.status === 'tool_pending' ||
+      streamStore.status === 'connecting'
+    ) {
       streamStore.handleEvent({ type: 'message_stop' } as any);
     }
 
@@ -193,8 +205,15 @@ export async function reconnectActiveStream(): Promise<string | null> {
     const active = sessionsRes.data.find(
       (s) => s.status === 'running' || (s.bufferedEvents > 0 && !s.streamComplete),
     );
-    // Also check for sessions that just completed but haven't been consumed
-    const justCompleted = sessionsRes.data.find((s) => s.streamComplete && s.bufferedEvents > 0);
+
+    // For completed sessions, only reconnect if the conversation matches the
+    // one the user was last looking at. Otherwise stale completed sessions
+    // (whose events were never consumed) hijack the page on reload and load
+    // an old conversation instead of the most recent one.
+    const savedConversationId = workspaceStore.activeWorkspace?.snapshot.activeConversationId;
+    const justCompleted = sessionsRes.data.find(
+      (s) => s.streamComplete && s.bufferedEvents > 0 && s.conversationId === savedConversationId,
+    );
 
     const target = active || justCompleted;
     if (!target) {
@@ -222,7 +241,9 @@ export async function reconnectActiveStream(): Promise<string | null> {
     conversationStore.setActive(convRes.data);
     const targetConversation = convRes.data as Conversation;
 
-    const response = await api.stream.reconnect(target.id);
+    const abortController = new AbortController();
+    streamStore.setAbortController(abortController);
+    const response = await api.stream.reconnect(target.id, abortController.signal);
     if (!response.ok || !response.body) {
       streamStore.handleEvent({ type: 'message_stop' } as any);
       streamStore.setReconnecting(false);
@@ -275,7 +296,8 @@ export async function reconnectActiveStream(): Promise<string | null> {
     }
 
     // Ensure streaming state is cleared when the SSE connection closes.
-    if (streamStore.status === 'streaming' || streamStore.status === 'connecting') {
+    const s = streamStore.status;
+    if (s === 'streaming' || s === 'connecting' || s === 'tool_pending') {
       streamStore.handleEvent({ type: 'message_stop' } as any);
     }
 
@@ -288,7 +310,8 @@ export async function reconnectActiveStream(): Promise<string | null> {
     return target.conversationId;
   } catch (err) {
     console.error('[sse] Reconnection failed:', err);
-    if (streamStore.status === 'streaming' || streamStore.status === 'connecting') {
+    const errStatus = streamStore.status;
+    if (errStatus === 'streaming' || errStatus === 'connecting' || errStatus === 'tool_pending') {
       streamStore.handleEvent({ type: 'message_stop' } as any);
     }
     streamStore.setReconnecting(false);

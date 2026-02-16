@@ -8,8 +8,83 @@
   import MessageAnimation from './MessageAnimation.svelte';
   import { renderMarkdown } from '$lib/utils/markdown';
 
-  let { message } = $props<{ message: Message }>();
+  let { message, onEdit, onDelete, onFork } = $props<{
+    message: Message;
+    onEdit?: (messageId: string, newText: string) => void;
+    onDelete?: (messageId: string) => void;
+    onFork?: (messageId: string) => void;
+  }>();
 
+  // ── Edit state ──
+  let editing = $state(false);
+  let editText = $state('');
+  let editTextarea = $state<HTMLTextAreaElement>();
+
+  function getTextContent(): string {
+    return (message.content as any[])
+      .filter((c: any) => c.type === 'text')
+      .map((c: any) => c.text as string)
+      .join('\n\n');
+  }
+
+  function startEdit() {
+    editText = getTextContent();
+    editing = true;
+    requestAnimationFrame(() => {
+      if (editTextarea) {
+        editTextarea.focus();
+        editTextarea.style.height = 'auto';
+        editTextarea.style.height = Math.min(editTextarea.scrollHeight, 400) + 'px';
+      }
+    });
+  }
+
+  function cancelEdit() {
+    editing = false;
+    editText = '';
+  }
+
+  function submitEdit() {
+    const text = editText.trim();
+    if (text && onEdit) {
+      onEdit(message.id, text);
+    }
+    editing = false;
+    editText = '';
+  }
+
+  // ── Context menu state ──
+  let showContextMenu = $state(false);
+  let contextMenuX = $state(0);
+  let contextMenuY = $state(0);
+
+  function handleContextMenu(e: MouseEvent) {
+    e.preventDefault();
+    contextMenuX = e.clientX;
+    contextMenuY = e.clientY;
+    showContextMenu = true;
+  }
+
+  function closeContextMenu() {
+    showContextMenu = false;
+  }
+
+  function contextEdit() {
+    closeContextMenu();
+    startEdit();
+  }
+
+  function contextFork() {
+    closeContextMenu();
+    onFork?.(message.id);
+  }
+
+  function contextDelete() {
+    closeContextMenu();
+    onDelete?.(message.id);
+  }
+
+  // ── Markdown rendering ──
   let renderedHtml = $state('');
 
   // Render user message text as markdown (single blob for user messages)
@@ -18,11 +93,7 @@
       renderedHtml = '';
       return;
     }
-    const textContent = (message.content as any[])
-      .filter((c: any) => c.type === 'text')
-      .map((c: any) => c.text as string)
-      .join('\n\n');
-
+    const textContent = getTextContent();
     if (textContent) {
       renderMarkdown(textContent).then((html) => {
         renderedHtml = html;
@@ -57,7 +128,6 @@
   }
 
   // Group content blocks: top-level items + agent groups, preserving original order
-  // Text blocks are now included so they render interleaved with tool calls.
   interface GroupedItem {
     kind: 'block';
     block: MessageContent;
@@ -75,7 +145,6 @@
     if (message.role !== 'assistant') return [];
     const entries: GroupedEntry[] = [];
 
-    // Collect agent task block IDs (top-level Task tool_use blocks)
     const agentIds = new Set<string>();
     for (const b of blocks) {
       if (b.type === 'tool_use' && b.name === 'Task' && !b.parentToolUseId) {
@@ -83,7 +152,6 @@
       }
     }
 
-    // Group children by parent
     const childrenMap = new Map<string, MessageContent[]>();
     for (const b of blocks) {
       const pid = b.parentToolUseId;
@@ -93,7 +161,6 @@
       }
     }
 
-    // Build entries in original order — include text blocks for interleaved rendering
     for (let i = 0; i < blocks.length; i++) {
       const b = blocks[i];
       if (b.type === 'tool_result') continue;
@@ -113,32 +180,181 @@
   });
 </script>
 
+<!-- Close context menu on any click outside -->
+{#if showContextMenu}
+  <!-- svelte-ignore a11y_no_static_element_interactions -->
+  <div
+    class="context-backdrop"
+    onclick={closeContextMenu}
+    oncontextmenu={(e) => {
+      e.preventDefault();
+      closeContextMenu();
+    }}
+  ></div>
+{/if}
+
+{#snippet messageHeader()}
+  <div class="message-header">
+    <span class="role-label">{message.role === 'user' ? 'You' : 'Claude'}</span>
+    {#if message.model}
+      <span class="model-label">{message.model.split('-').slice(1, 3).join(' ')}</span>
+    {/if}
+    <span class="timestamp">
+      {new Date(message.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+    </span>
+    {#if !editing}
+      <div class="message-actions">
+        <button class="action-btn" title="Edit" onclick={() => startEdit()}>
+          <svg
+            width="12"
+            height="12"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+          >
+            <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7" /><path
+              d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"
+            />
+          </svg>
+        </button>
+        <button class="action-btn" title="Fork from here" onclick={() => onFork?.(message.id)}>
+          <svg
+            width="12"
+            height="12"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+          >
+            <line x1="6" y1="3" x2="6" y2="15" /><circle cx="18" cy="6" r="3" /><circle
+              cx="6"
+              cy="18"
+              r="3"
+            /><path d="M18 9a9 9 0 0 1-9 9" />
+          </svg>
+        </button>
+        <button
+          class="action-btn action-delete"
+          title="Delete"
+          onclick={() => onDelete?.(message.id)}
+        >
+          <svg
+            width="12"
+            height="12"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+          >
+            <path d="M18 6L6 18M6 6l12 12" />
+          </svg>
+        </button>
+      </div>
+    {/if}
+  </div>
+{/snippet}
+
+{#snippet editUI()}
+  <div class="edit-container">
+    <textarea
+      class="edit-textarea"
+      bind:this={editTextarea}
+      bind:value={editText}
+      onkeydown={(e) => {
+        if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+          e.preventDefault();
+          submitEdit();
+        }
+        if (e.key === 'Escape') cancelEdit();
+      }}
+      oninput={() => {
+        if (editTextarea) {
+          editTextarea.style.height = 'auto';
+          editTextarea.style.height = Math.min(editTextarea.scrollHeight, 400) + 'px';
+        }
+      }}
+    ></textarea>
+    <div class="edit-actions">
+      <button class="edit-btn edit-cancel" onclick={cancelEdit}>Cancel</button>
+      <button class="edit-btn edit-submit" onclick={submitEdit} disabled={!editText.trim()}
+        >Save & Resend</button
+      >
+    </div>
+  </div>
+{/snippet}
+
+{#snippet contextMenu()}
+  {#if showContextMenu}
+    <div class="context-menu" style="left: {contextMenuX}px; top: {contextMenuY}px;">
+      <button class="context-item" onclick={contextEdit}>
+        <svg
+          width="12"
+          height="12"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+        >
+          <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7" /><path
+            d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"
+          />
+        </svg>
+        Edit
+      </button>
+      <button class="context-item" onclick={contextFork}>
+        <svg
+          width="12"
+          height="12"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+        >
+          <line x1="6" y1="3" x2="6" y2="15" /><circle cx="18" cy="6" r="3" /><circle
+            cx="6"
+            cy="18"
+            r="3"
+          /><path d="M18 9a9 9 0 0 1-9 9" />
+        </svg>
+        Fork from here
+      </button>
+      <div class="context-divider"></div>
+      <button class="context-item context-item-danger" onclick={contextDelete}>
+        <svg
+          width="12"
+          height="12"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+        >
+          <path
+            d="M3 6h18M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"
+          />
+        </svg>
+        Delete
+      </button>
+    </div>
+  {/if}
+{/snippet}
+
 {#if message.role === 'assistant'}
   <MessageAnimation>
     {#snippet children()}
+      <!-- svelte-ignore a11y_no_static_element_interactions -->
       <div
         class="message"
         class:user={message.role === 'user'}
         class:assistant={message.role === 'assistant'}
+        class:editing
+        oncontextmenu={handleContextMenu}
       >
-        <div class="message-header">
-          <span class="role-label">{message.role === 'user' ? 'You' : 'Claude'}</span>
-          {#if message.model}
-            <span class="model-label">{message.model.split('-').slice(1, 3).join(' ')}</span>
-          {/if}
-          <span class="timestamp">
-            {new Date(message.timestamp).toLocaleTimeString([], {
-              hour: '2-digit',
-              minute: '2-digit',
-            })}
-          </span>
-        </div>
+        {@render messageHeader()}
 
         <div class="message-body">
-          {#if message.role === 'user'}
-            {#if renderedHtml}
-              <div class="prose">{@html renderedHtml}</div>
-            {/if}
+          {#if editing}
+            {@render editUI()}
           {:else}
             {#each grouped as entry}
               {#if entry.kind === 'agent'}
@@ -175,28 +391,27 @@
     {/snippet}
   </MessageAnimation>
 {:else}
+  <!-- svelte-ignore a11y_no_static_element_interactions -->
   <div
     class="message"
     class:user={message.role === 'user'}
     class:assistant={message.role === 'assistant'}
+    class:editing
+    oncontextmenu={handleContextMenu}
   >
-    <div class="message-header">
-      <span class="role-label">{message.role === 'user' ? 'You' : 'Claude'}</span>
-      {#if message.model}
-        <span class="model-label">{message.model.split('-').slice(1, 3).join(' ')}</span>
-      {/if}
-      <span class="timestamp">
-        {new Date(message.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-      </span>
-    </div>
+    {@render messageHeader()}
 
     <div class="message-body">
-      {#if renderedHtml}
+      {#if editing}
+        {@render editUI()}
+      {:else if renderedHtml}
         <div class="prose">{@html renderedHtml}</div>
       {/if}
     </div>
   </div>
 {/if}
+
+{@render contextMenu()}
 
 <style>
   .message {
@@ -233,6 +448,10 @@
     border-left-color: var(--accent-primary);
   }
 
+  .message.editing {
+    border-left-color: var(--accent-primary);
+  }
+
   /* ── Hypertheme message variants ── */
 
   /* Ethereal: no left border, floating card with glow halo */
@@ -259,17 +478,17 @@
     box-shadow: inset 0 0 20px rgba(139, 92, 246, 0.04);
   }
 
-  /* Study: thick left border, inset book-page feel */
+  /* Study: warm ember glow, subtle left accent */
   :global([data-hypertheme='study']) .message {
-    border: 2px solid var(--border-secondary);
-    border-left: 4px solid var(--border-primary);
-    box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.1);
+    border: 1px solid var(--border-secondary);
+    border-left: 3px solid var(--border-primary);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
   }
   :global([data-hypertheme='study']) .message:hover {
     border-left-color: var(--accent-primary);
     box-shadow:
-      inset 0 1px 3px rgba(0, 0, 0, 0.1),
-      0 0 8px rgba(218, 165, 50, 0.08);
+      0 2px 12px rgba(0, 0, 0, 0.2),
+      0 0 20px rgba(228, 160, 60, 0.06);
   }
 
   /* Astral: thin luminous top-border, clean geometric */
@@ -294,6 +513,8 @@
     border-top-color: var(--accent-primary);
     box-shadow: 0 0 15px rgba(140, 160, 220, 0.05);
   }
+
+  /* ── Header ── */
 
   .message-header {
     display: flex;
@@ -342,6 +563,157 @@
     opacity: 1;
   }
 
+  /* ── Hover action buttons ── */
+
+  .message-actions {
+    display: none;
+    align-items: center;
+    gap: 2px;
+    margin-left: 4px;
+  }
+  .message:hover .message-actions {
+    display: flex;
+  }
+
+  .action-btn {
+    width: 22px;
+    height: 22px;
+    border-radius: var(--radius-sm);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-tertiary);
+    border: 1px solid transparent;
+    background: transparent;
+    cursor: pointer;
+    transition: all var(--transition);
+    padding: 0;
+  }
+  .action-btn:hover {
+    color: var(--accent-primary);
+    border-color: var(--border-primary);
+    background: var(--bg-hover);
+  }
+  .action-delete:hover {
+    color: var(--accent-error);
+    border-color: var(--accent-error);
+  }
+
+  /* ── Inline edit ── */
+
+  .edit-container {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .edit-textarea {
+    width: 100%;
+    min-height: 60px;
+    max-height: 400px;
+    padding: 10px 12px;
+    font-family: var(--font-family-sans);
+    font-size: var(--font-size-sans);
+    font-weight: 500;
+    line-height: 1.6;
+    background: var(--bg-input);
+    border: 1px solid var(--accent-primary);
+    border-radius: var(--radius-sm);
+    color: var(--text-primary);
+    resize: vertical;
+    outline: none;
+  }
+  .edit-textarea:focus {
+    box-shadow: var(--shadow-glow-sm);
+  }
+  .edit-actions {
+    display: flex;
+    gap: 8px;
+    justify-content: flex-end;
+  }
+  .edit-btn {
+    padding: 4px 14px;
+    font-size: 12px;
+    font-weight: 600;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    transition: all var(--transition);
+    letter-spacing: var(--ht-label-spacing);
+  }
+  .edit-cancel {
+    background: transparent;
+    border: 1px solid var(--border-primary);
+    color: var(--text-secondary);
+  }
+  .edit-cancel:hover {
+    border-color: var(--text-primary);
+    color: var(--text-primary);
+  }
+  .edit-submit {
+    background: var(--accent-primary);
+    border: 1px solid var(--accent-primary);
+    color: var(--bg-primary);
+  }
+  .edit-submit:hover:not(:disabled) {
+    filter: brightness(1.1);
+    box-shadow: var(--shadow-glow-sm);
+  }
+  .edit-submit:disabled {
+    opacity: 0.3;
+    cursor: not-allowed;
+  }
+
+  /* ── Context menu ── */
+
+  .context-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 999;
+  }
+
+  .context-menu {
+    position: fixed;
+    z-index: 1000;
+    min-width: 160px;
+    background: var(--bg-elevated);
+    border: 1px solid var(--border-primary);
+    border-radius: var(--radius);
+    padding: 4px;
+    box-shadow: var(--shadow-lg, 0 8px 24px rgba(0, 0, 0, 0.3));
+    animation: fadeIn 0.1s linear;
+  }
+
+  .context-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    padding: 6px 10px;
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--text-secondary);
+    background: transparent;
+    border: none;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    transition: all var(--transition);
+    text-align: left;
+  }
+  .context-item:hover {
+    background: var(--bg-hover);
+    color: var(--text-primary);
+  }
+  .context-item-danger:hover {
+    color: var(--accent-error);
+  }
+
+  .context-divider {
+    height: 1px;
+    background: var(--border-secondary);
+    margin: 4px 6px;
+  }
+
+  /* ── Body & prose ── */
+
   .message-body {
     display: flex;
     flex-direction: column;
@@ -352,7 +724,7 @@
     line-height: 1.7;
     color: var(--text-primary);
     font-family: var(--font-family-sans);
-    font-size: 14px;
+    font-size: var(--font-size-sans);
     font-weight: 500;
   }
 

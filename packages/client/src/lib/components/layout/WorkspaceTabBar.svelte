@@ -118,24 +118,26 @@
         {#if workspaceStore.hasDirtyTabs(workspace.projectId)}
           <span class="dirty-dot" title="Unsaved changes"></span>
         {/if}
-        {#if workspaceStore.hasActiveStream(workspace.projectId)}
-          <span class="stream-indicator" title="Stream active"></span>
-        {/if}
         <button
           class="close-btn"
           onclick={(e) => closeTab(e, workspace.projectId)}
           title="Close workspace"
         >
-          <svg
-            width="10"
-            height="10"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-          >
-            <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
-          </svg>
+          <span class="close-icon">
+            <svg
+              width="10"
+              height="10"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+            >
+              <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
+            </svg>
+          </span>
+          {#if workspaceStore.hasActiveStream(workspace.projectId)}
+            <span class="stream-indicator" title="Stream active"></span>
+          {/if}
         </button>
       </div>
     {/each}
@@ -258,7 +260,11 @@
     border-radius: var(--radius-sm);
     border: 1px solid transparent;
     white-space: nowrap;
-    transition: all var(--transition);
+    transition:
+      color var(--transition),
+      background var(--transition),
+      border-color var(--transition),
+      box-shadow var(--transition);
     max-width: 160px;
     flex-shrink: 0;
     cursor: pointer;
@@ -291,13 +297,56 @@
     flex-shrink: 0;
   }
 
+  .close-btn {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 16px;
+    height: 16px;
+    border-radius: 2px;
+    color: var(--text-tertiary);
+    flex-shrink: 0;
+    transition:
+      background 80ms ease,
+      color 80ms ease;
+  }
+
+  .close-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    transition: opacity 80ms ease;
+  }
+
   .stream-indicator {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: opacity 80ms ease;
+  }
+  .stream-indicator::after {
+    content: '';
     width: 6px;
     height: 6px;
     border-radius: 50%;
     background: var(--accent-primary);
-    flex-shrink: 0;
     animation: pulse 1.5s infinite;
+  }
+
+  .tab:hover .close-icon {
+    opacity: 1;
+  }
+  .tab:hover .stream-indicator {
+    opacity: 0;
+  }
+
+  .close-btn:hover {
+    background: var(--bg-hover);
+    color: var(--text-primary);
   }
 
   @keyframes pulse {
@@ -308,25 +357,6 @@
     50% {
       opacity: 0.3;
     }
-  }
-
-  .close-btn {
-    display: none;
-    align-items: center;
-    justify-content: center;
-    width: 16px;
-    height: 16px;
-    border-radius: 2px;
-    color: var(--text-tertiary);
-    flex-shrink: 0;
-    transition: all var(--transition);
-  }
-  .tab:hover .close-btn {
-    display: flex;
-  }
-  .close-btn:hover {
-    background: var(--bg-hover);
-    color: var(--text-primary);
   }
 
   .add-wrapper {

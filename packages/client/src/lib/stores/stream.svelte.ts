@@ -1,4 +1,5 @@
 import type { StreamEvent, MessageContent } from '@maude/shared';
+import { isMcpFileWriteTool } from '@maude/shared';
 import { editorStore } from './editor.svelte';
 
 // Context key for Svelte 5 context API - ensures proper reactivity tracking
@@ -19,6 +20,16 @@ interface PendingApproval {
   description: string;
 }
 
+export interface PendingQuestion {
+  toolCallId: string;
+  questions: Array<{
+    question: string;
+    header?: string;
+    options?: Array<{ label: string; description?: string }>;
+    multiSelect?: boolean;
+  }>;
+}
+
 export interface StreamSnapshot {
   status: StreamStatus;
   sessionId: string | null;
@@ -27,6 +38,7 @@ export interface StreamSnapshot {
   partialThinking: string;
   contentBlocks: MessageContent[];
   pendingApprovals: PendingApproval[];
+  pendingQuestions: PendingQuestion[];
   tokenUsage: { input: number; output: number };
   error: string | null;
   abortController: AbortController | null;
@@ -48,6 +60,7 @@ function createStreamStore() {
   let currentBlockIndex = $state(-1);
   let currentBlockType = $state<string>('');
   let pendingApprovals = $state<PendingApproval[]>([]);
+  let pendingQuestions = $state<PendingQuestion[]>([]);
   let tokenUsage = $state({ input: 0, output: 0 });
   let error = $state<string | null>(null);
   let abortController = $state<AbortController | null>(null);
@@ -90,6 +103,9 @@ function createStreamStore() {
     },
     get pendingApprovals() {
       return pendingApprovals;
+    },
+    get pendingQuestions() {
+      return pendingQuestions;
     },
     get tokenUsage() {
       return tokenUsage;
@@ -134,6 +150,7 @@ function createStreamStore() {
       currentBlockIndex = -1;
       error = null;
       toolResults = new Map();
+      pendingQuestions = [];
       indexOffset = 0;
       currentParentId = null;
       if (targetConversationId) conversationId = targetConversationId;
@@ -253,6 +270,17 @@ function createStreamStore() {
           ];
           break;
 
+        case 'user_question_request':
+          status = 'tool_pending';
+          pendingQuestions = [
+            ...pendingQuestions,
+            {
+              toolCallId: event.toolCallId,
+              questions: event.questions,
+            },
+          ];
+          break;
+
         case 'tool_result': {
           // Track the result
           const newResults = new Map(toolResults);
@@ -264,8 +292,9 @@ function createStreamStore() {
           toolResults = newResults;
 
           // Refresh editor tabs when file-writing tools complete
+          // Supports both built-in tools and MCP tools (e.g. desktop-commander)
           if (!event.isError && event.toolName) {
-            const fileWriteTools = [
+            const builtinFileWriteTools = [
               'write_file',
               'edit_file',
               'create_file',
@@ -273,7 +302,9 @@ function createStreamStore() {
               'Write',
               'Edit',
             ];
-            if (fileWriteTools.includes(event.toolName) && event.filePath) {
+            const isFileWrite =
+              builtinFileWriteTools.includes(event.toolName) || isMcpFileWriteTool(event.toolName);
+            if (isFileWrite && event.filePath) {
               editorStore.refreshFile(event.filePath);
             }
           }
@@ -308,7 +339,12 @@ function createStreamStore() {
 
     resolveApproval(toolCallId: string) {
       pendingApprovals = pendingApprovals.filter((a) => a.toolCallId !== toolCallId);
-      if (pendingApprovals.length === 0) status = 'streaming';
+      if (pendingApprovals.length === 0 && pendingQuestions.length === 0) status = 'streaming';
+    },
+
+    resolveQuestion(toolCallId: string) {
+      pendingQuestions = pendingQuestions.filter((q) => q.toolCallId !== toolCallId);
+      if (pendingQuestions.length === 0 && pendingApprovals.length === 0) status = 'streaming';
     },
 
     cancel() {
@@ -330,6 +366,7 @@ function createStreamStore() {
       contentBlocks = [];
       currentBlockIndex = -1;
       pendingApprovals = [];
+      pendingQuestions = [];
       toolResults = new Map();
       verifications = new Map();
       error = null;
@@ -347,6 +384,7 @@ function createStreamStore() {
         partialThinking,
         contentBlocks: [...contentBlocks],
         pendingApprovals: [...pendingApprovals],
+        pendingQuestions: [...pendingQuestions],
         tokenUsage: { ...tokenUsage },
         error,
         abortController,
@@ -370,6 +408,7 @@ function createStreamStore() {
       currentBlockIndex = -1;
       currentBlockType = '';
       pendingApprovals = snapshot.pendingApprovals;
+      pendingQuestions = snapshot.pendingQuestions;
       tokenUsage = snapshot.tokenUsage;
       error = snapshot.error;
       abortController = snapshot.abortController;

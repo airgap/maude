@@ -1,5 +1,5 @@
 /**
- * Ambient FX types — adapted from lyku/ambient-fx for Maude hyperthemes
+ * Ambient FX types — adapted from lyku/ambient-fx for E hyperthemes
  */
 
 export interface AmbientThemeColors {
@@ -41,7 +41,7 @@ export interface AmbientEffect {
  */
 export const HYPERTHEME_EFFECTS: Record<
   string,
-  { type: string; config: ParticleConfig; colors: AmbientThemeColors }
+  { type: string; config: ParticleConfig; colors: AmbientThemeColors; backgroundImage?: string }
 > = {
   arcane: {
     type: 'sigil',
@@ -76,11 +76,11 @@ export const HYPERTHEME_EFFECTS: Record<
       blur: 2,
     },
     colors: {
-      particleColor1: 'rgba(180, 160, 220, 0.3)',
-      particleColor2: 'rgba(160, 200, 220, 0.25)',
-      particleColor3: 'rgba(200, 160, 190, 0.2)',
-      glowColor: 'rgba(180, 160, 220, 0.4)',
-      backgroundColor: '#0c0814',
+      particleColor1: 'rgba(125, 211, 192, 0.3)',
+      particleColor2: 'rgba(232, 160, 184, 0.25)',
+      particleColor3: 'rgba(212, 192, 144, 0.2)',
+      glowColor: 'rgba(125, 211, 192, 0.4)',
+      backgroundColor: '#08090f',
     },
   },
   astral: {
@@ -122,5 +122,26 @@ export const HYPERTHEME_EFFECTS: Record<
       glowColor: 'rgba(80, 120, 200, 0.4)',
       backgroundColor: '#000000',
     },
+  },
+  study: {
+    type: 'embers',
+    config: {
+      count: 50,
+      sizeMin: 1.5,
+      sizeMax: 4,
+      speedMin: 0.2,
+      speedMax: 0.8,
+      opacity: 0.7,
+      drift: 25,
+      blur: 1,
+    },
+    colors: {
+      particleColor1: 'rgba(228, 160, 60, 0.85)',
+      particleColor2: 'rgba(210, 120, 40, 0.75)',
+      particleColor3: 'rgba(240, 190, 100, 0.65)',
+      glowColor: 'rgba(228, 160, 60, 0.6)',
+      backgroundColor: '#110d14',
+    },
+    backgroundImage: '/study-bg.jpg',
   },
 };

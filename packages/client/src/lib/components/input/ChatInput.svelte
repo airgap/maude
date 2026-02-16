@@ -7,6 +7,8 @@
   import { sendAndStream, cancelStream } from '$lib/api/sse';
   import { api } from '$lib/api/client';
   import { executeSlashCommand, type SlashCommandContext } from '$lib/commands/slash-commands';
+  import { onFocusChatInput } from '$lib/stores/ui.svelte';
+  import { onMount } from 'svelte';
   import SlashCommandMenu from './SlashCommandMenu.svelte';
 
   let inputText = $state('');
@@ -23,6 +25,13 @@
   let pathInputValue = $state('');
   let pathInput = $state<HTMLInputElement>();
   let contextFiles = $state<Set<string>>(new Set());
+
+  onMount(() => {
+    onFocusChatInput(() => {
+      // Small delay to let Svelte finish any pending state updates (e.g. clearing active conversation)
+      requestAnimationFrame(() => textarea?.focus());
+    });
+  });
 
   function toggleContextFile(tabId: string) {
     const next = new Set(contextFiles);
@@ -477,7 +486,8 @@
   :global([data-hypertheme='arcane']) .chat-input-container,
   :global([data-hypertheme='ethereal']) .chat-input-container,
   :global([data-hypertheme='astral']) .chat-input-container,
-  :global([data-hypertheme='astral-midnight']) .chat-input-container {
+  :global([data-hypertheme='astral-midnight']) .chat-input-container,
+  :global([data-hypertheme='study']) .chat-input-container {
     background: transparent;
   }
 
@@ -605,7 +615,7 @@
 
   .input-wrapper {
     display: flex;
-    align-items: flex-end;
+    align-items: center;
     gap: 10px;
     background: var(--bg-input);
     border: none;
@@ -649,14 +659,12 @@
     background: transparent;
   }
 
-  /* Study */
+  /* Study — warm inner glow, no ruled-paper lines */
   :global([data-hypertheme='study']) .input-wrapper {
-    background-image: repeating-linear-gradient(
-      0deg,
-      transparent,
-      transparent 27px,
-      rgba(180, 130, 60, 0.03) 27px,
-      rgba(180, 130, 60, 0.03) 28px
+    background-image: radial-gradient(
+      ellipse 80% 60% at 50% 100%,
+      rgba(228, 160, 60, 0.03) 0%,
+      transparent 70%
     );
   }
 
@@ -666,13 +674,13 @@
     background: transparent;
     resize: none;
     font-family: var(--font-family-sans);
-    font-size: 14px;
+    font-size: var(--font-size-sans);
     font-weight: 500;
     line-height: 1.5;
     color: var(--text-primary);
-    min-height: 34px;
+    min-height: 24px;
     max-height: 300px;
-    padding: 5px 0;
+    padding: 0;
     outline: none;
     box-shadow: none;
     letter-spacing: 0.3px;

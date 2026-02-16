@@ -1,6 +1,6 @@
 /**
  * Sigil Effect — 3D magical circles with Elder Futhark runes
- * Adapted from lyku/ambient-fx for Maude's Arcane hypertheme
+ * Adapted from lyku/ambient-fx for E's Arcane hypertheme
  *
  * Performance optimizations:
  * - Pre-renders all 24 rune glyphs to offscreen canvases at init time

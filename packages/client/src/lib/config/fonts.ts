@@ -15,6 +15,8 @@ export interface FontOption {
   family: string;
   googleFont: string | null;
   category: 'mono' | 'sans';
+  /** Pixel offset added to the base font-size to compensate for visual sizing differences between typefaces. */
+  sizeAdjust?: number;
 }
 
 export const MONO_FONTS: FontOption[] = [
@@ -153,6 +155,7 @@ export const SANS_FONTS: FontOption[] = [
     family: "'Rajdhani', sans-serif",
     googleFont: 'Rajdhani:wght@400;500;600;700',
     category: 'sans',
+    sizeAdjust: 3,
   },
   {
     id: 'inter',
@@ -209,6 +212,30 @@ export const SANS_FONTS: FontOption[] = [
     family: "'Crimson Pro', Georgia, serif",
     googleFont: 'Crimson+Pro:wght@400;500;600;700',
     category: 'sans',
+  },
+  {
+    id: 'cinzel',
+    label: 'Cinzel',
+    family: "'Cinzel', 'Garamond', serif",
+    googleFont: 'Cinzel:wght@400;500;600;700',
+    category: 'sans',
+    sizeAdjust: -1,
+  },
+  {
+    id: 'cormorant-garamond',
+    label: 'Cormorant Garamond',
+    family: "'Cormorant Garamond', 'Garamond', serif",
+    googleFont: 'Cormorant+Garamond:wght@400;500;600;700',
+    category: 'sans',
+    sizeAdjust: 2,
+  },
+  {
+    id: 'uncial-antiqua',
+    label: 'Uncial Antiqua',
+    family: "'Uncial Antiqua', cursive",
+    googleFont: 'Uncial+Antiqua',
+    category: 'sans',
+    sizeAdjust: 1,
   },
   {
     id: 'system-sans',

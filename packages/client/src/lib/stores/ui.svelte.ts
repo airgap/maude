@@ -37,6 +37,12 @@ export function onSidebarTabChange(cb: (tab: SidebarTab) => void) {
   _onSidebarTabChange = cb;
 }
 
+/** Callback for focusing the chat input from anywhere (avoids circular import) */
+let _onFocusChatInput: (() => void) | null = null;
+export function onFocusChatInput(cb: () => void) {
+  _onFocusChatInput = cb;
+}
+
 function createUIStore() {
   let sidebarOpen = $state(true);
   let sidebarTab = $state<SidebarTab>('conversations');
@@ -132,6 +138,10 @@ function createUIStore() {
 
     setFocusedPane(pane: FocusedPane) {
       focusedPane = pane;
+    },
+
+    focusChatInput() {
+      _onFocusChatInput?.();
     },
 
     restoreState(state: { sidebarTab: SidebarTab; sidebarOpen: boolean }) {

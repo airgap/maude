@@ -358,7 +358,8 @@
   }
   .filter-chip {
     font-size: 9px;
-    padding: 2px 6px;
+    padding: 4px 8px;
+    min-height: 24px;
     background: var(--bg-tertiary);
     border: 1px solid var(--border-primary);
     color: var(--text-tertiary);
@@ -377,8 +378,8 @@
     background: var(--bg-hover);
   }
   .add-btn {
-    width: 22px;
-    height: 22px;
+    width: 24px;
+    height: 24px;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -522,8 +523,8 @@
   }
   .action-icon {
     font-size: 10px;
-    width: 18px;
-    height: 18px;
+    width: 24px;
+    height: 24px;
     display: flex;
     align-items: center;
     justify-content: center;

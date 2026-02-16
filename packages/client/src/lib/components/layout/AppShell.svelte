@@ -338,14 +338,10 @@
   /* Canvas-based hyperthemes: hide CSS overlay, canvas handles it */
   :global([data-hypertheme='arcane']) .app-shell::before,
   :global([data-hypertheme='ethereal']) .app-shell::before,
+  :global([data-hypertheme='study']) .app-shell::before,
   :global([data-hypertheme='astral']) .app-shell::before,
   :global([data-hypertheme='astral-midnight']) .app-shell::before {
     display: none;
-  }
-
-  :global([data-hypertheme='study']) .app-shell::before {
-    background: none;
-    animation: none;
   }
 
   .app-body {
@@ -358,7 +354,7 @@
   }
 
   .resize-handle {
-    width: 2px;
+    width: 6px;
     cursor: col-resize;
     background: transparent;
     flex-shrink: 0;
@@ -430,5 +426,8 @@
   :global([data-hypertheme='astral']) .main-content,
   :global([data-hypertheme='astral-midnight']) .main-content {
     background: var(--bg-glass, rgba(14, 10, 8, 0.85));
+  }
+  :global([data-hypertheme='study']) .main-content {
+    background: transparent;
   }
 </style>

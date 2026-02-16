@@ -351,8 +351,8 @@
         title={tabDef.label}
       >
         <svg
-          width="14"
-          height="14"
+          width="20"
+          height="20"
           viewBox="0 0 24 24"
           fill="none"
           stroke="currentColor"
@@ -377,8 +377,8 @@
       title="Add tab"
     >
       <svg
-        width="14"
-        height="14"
+        width="20"
+        height="20"
         viewBox="0 0 24 24"
         fill="none"
         stroke="currentColor"
@@ -396,8 +396,8 @@
           <button class="menu-item" role="menuitem" onclick={() => handleAddTab(tab.id)}>
             <svg
               class="menu-item-icon"
-              width="14"
-              height="14"
+              width="16"
+              height="16"
               viewBox="0 0 24 24"
               fill="none"
               stroke="currentColor"
@@ -456,8 +456,8 @@
       <button class="menu-item" onclick={() => handleRemoveFromGroup(contextMenu!.tabId)}>
         <svg
           class="menu-item-icon"
-          width="14"
-          height="14"
+          width="16"
+          height="16"
           viewBox="0 0 24 24"
           fill="none"
           stroke="currentColor"
@@ -475,8 +475,8 @@
   .tab-group-bar {
     display: flex;
     border-bottom: 1px solid var(--border-primary);
-    padding: 3px 4px;
-    gap: 1px;
+    padding: 4px 6px;
+    gap: 2px;
     flex-shrink: 0;
     background: var(--bg-elevated);
     transition: background 150ms ease;
@@ -491,13 +491,14 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    padding: 4px 3px;
+    padding: 5px 6px;
     color: var(--text-tertiary);
     border-radius: var(--radius-sm);
     transition: all var(--transition);
     position: relative;
     border: 1px solid transparent;
-    min-width: 24px;
+    min-width: 32px;
+    min-height: 32px;
     background: none;
     cursor: pointer;
   }
@@ -577,10 +578,11 @@
   .menu-item {
     display: flex;
     align-items: center;
-    gap: 6px;
+    gap: 8px;
     width: 100%;
-    padding: 5px 12px;
-    font-size: 11px;
+    padding: 6px 12px;
+    min-height: 28px;
+    font-size: 12px;
     font-weight: 500;
     color: var(--text-secondary);
     background: none;
@@ -603,7 +605,7 @@
 
   .menu-empty {
     padding: 8px 12px;
-    font-size: 11px;
+    font-size: 12px;
     color: var(--text-tertiary);
     font-style: italic;
   }

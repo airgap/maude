@@ -5,13 +5,188 @@ import { getDb } from '../db/database';
 import { generateMcpConfig } from './mcp-config';
 import { buildCliCommand } from './cli-provider';
 import type { CliProvider } from '@maude/shared';
+import {
+  parseMcpToolName,
+  isMcpToolDangerous,
+  isMcpFileWriteTool,
+  extractFilePath,
+} from '@maude/shared';
 import { getSandboxConfig } from '../middleware/sandbox';
 import { verifyFile } from './code-verifier';
+
+// Check if `script` utility is available (util-linux) for PTY-wrapped spawning.
+// This avoids native addon issues with node-pty in Bun.
+import { execSync } from 'child_process';
+let hasScript = false;
+try {
+  execSync('which script', { stdio: 'ignore' });
+  hasScript = true;
+} catch {
+  console.warn('[claude] `script` not available — pipe mode may buffer stdout');
+}
+
+/** Map signal number to name for diagnostic messages */
+function signalName(sig: number): string {
+  const names: Record<number, string> = {
+    1: 'SIGHUP',
+    2: 'SIGINT',
+    3: 'SIGQUIT',
+    6: 'SIGABRT',
+    9: 'SIGKILL',
+    14: 'SIGALRM',
+    15: 'SIGTERM',
+  };
+  return names[sig] || `SIG${sig}`;
+}
+
+/** Abstraction over Bun.spawn and node-pty so the streaming code works with either. */
+interface CliProcess {
+  readonly pid: number;
+  /** ReadableStream of stdout data (for pipe mode) or combined pty output. */
+  readonly stdout: ReadableStream<Uint8Array>;
+  /** Separate stderr stream (pipe mode only; null in PTY mode where stderr is merged). */
+  readonly stderr: ReadableStream<Uint8Array> | null;
+  /** Write to the process's stdin / pty input. */
+  write(data: string): void;
+  /** Kill the process. */
+  kill(signal?: string): void;
+  /** Promise that resolves with the exit code when the process exits. */
+  readonly exited: Promise<number>;
+  /** The exit code if the process has already exited, or null. */
+  readonly exitCode: number | null;
+}
+
+/** Shell-escape a string for use in single-quoted shell arguments. */
+function shellEscape(s: string): string {
+  return "'" + s.replace(/'/g, "'\\''") + "'";
+}
+
+/**
+ * Spawn the CLI wrapped in `script -qec` (allocates a real PTY via util-linux).
+ * This forces the child process to see a TTY on stdout, preventing full-buffer mode
+ * that causes the CLI to withhold output until its buffer fills or it exits.
+ */
+function spawnWithScript(
+  binary: string,
+  args: string[],
+  cwd: string,
+  env: Record<string, string>,
+): CliProcess {
+  // Build shell-safe command string for `script -c`.
+  // Disable PTY echo (stty -echo) so stdin writes aren't reflected in stdout.
+  const escaped = [binary, ...args].map(shellEscape).join(' ');
+  const command = `stty -echo 2>/dev/null; ${escaped}`;
+  // -q: quiet (no "Script started/done" messages)
+  // -e: return child's exit code (--return)
+  // -c: command to run
+  // /dev/null: typescript file (discard PTY recording)
+  const proc = Bun.spawn(['script', '-qec', command, '/dev/null'], {
+    cwd,
+    stdin: 'pipe',
+    stdout: 'pipe',
+    stderr: 'pipe',
+    env: { ...env, TERM: 'dumb' },
+  });
+
+  return {
+    get pid() {
+      return proc.pid;
+    },
+    get stdout() {
+      return proc.stdout as ReadableStream<Uint8Array>;
+    },
+    get stderr() {
+      return proc.stderr as ReadableStream<Uint8Array>;
+    },
+    write(data: string) {
+      try {
+        const stdin = proc.stdin as any;
+        if (stdin?.write) {
+          stdin.write(new TextEncoder().encode(data));
+          stdin.flush?.();
+        }
+      } catch {
+        /* stdin closed */
+      }
+    },
+    kill(signal?: string) {
+      try {
+        if (signal === 'SIGINT') proc.kill(2);
+        else if (signal === 'SIGTERM') proc.kill(15);
+        else proc.kill();
+      } catch {
+        /* already dead */
+      }
+    },
+    get exited() {
+      return proc.exited;
+    },
+    get exitCode() {
+      return proc.exitCode;
+    },
+  };
+}
+
+/** Spawn the CLI using Bun.spawn (pipe mode — used as fallback if node-pty is unavailable). */
+function spawnWithPipe(
+  binary: string,
+  args: string[],
+  cwd: string,
+  env: Record<string, string>,
+): CliProcess {
+  const proc = Bun.spawn([binary, ...args], {
+    cwd,
+    stdin: 'pipe',
+    stdout: 'pipe',
+    stderr: 'pipe',
+    env,
+  });
+
+  return {
+    get pid() {
+      return proc.pid;
+    },
+    get stdout() {
+      return proc.stdout as ReadableStream<Uint8Array>;
+    },
+    get stderr() {
+      return proc.stderr as ReadableStream<Uint8Array>;
+    },
+    write(data: string) {
+      try {
+        // Bun's proc.stdin is a FileSink, not a WritableStream
+        const stdin = proc.stdin as any;
+        if (stdin?.write) {
+          stdin.write(new TextEncoder().encode(data));
+          stdin.flush?.();
+        }
+      } catch {
+        /* stdin closed */
+      }
+    },
+    kill(signal?: string) {
+      try {
+        if (signal === 'SIGINT') proc.kill(2);
+        else if (signal === 'SIGTERM') proc.kill(15);
+        else proc.kill();
+      } catch {
+        /* already dead */
+      }
+    },
+    get exited() {
+      return proc.exited;
+    },
+    get exitCode() {
+      return proc.exitCode;
+    },
+  };
+}
 
 interface ClaudeSession {
   id: string;
   cliSessionId?: string;
   process?: Subprocess;
+  cliProcess?: CliProcess;
   conversationId: string;
   projectPath?: string;
   model?: string;
@@ -191,6 +366,23 @@ export function translateCliEvent(event: any): string[] {
 
 class ClaudeProcessManager {
   private sessions = new Map<string, ClaudeSession>();
+  /** Timers for auto-removing completed sessions after a grace period. */
+  private cleanupTimers = new Map<string, ReturnType<typeof setTimeout>>();
+
+  /** Schedule removal of a completed session after 60s — enough time for
+   *  the client to reconnect after a page reload, but prevents stale sessions
+   *  from accumulating indefinitely and loading old conversations on reload. */
+  private scheduleCleanup(sessionId: string) {
+    // Clear any existing timer for this session
+    const existing = this.cleanupTimers.get(sessionId);
+    if (existing) clearTimeout(existing);
+
+    const timer = setTimeout(() => {
+      this.sessions.delete(sessionId);
+      this.cleanupTimers.delete(sessionId);
+    }, 60_000);
+    this.cleanupTimers.set(sessionId, timer);
+  }
 
   async createSession(
     conversationId: string,
@@ -269,32 +461,35 @@ class ClaudeProcessManager {
       mcpConfigPath: mcpConfigPath || undefined,
     });
 
-    console.log(`[${provider}] Spawning: ${binary} ${args.join(' ').slice(0, 120)}...`);
+    console.log(`[${provider}] Spawning: ${binary} ${args.join(' ').slice(0, 200)}...`);
 
-    let proc: Subprocess;
+    // Build a clean env: remove CLAUDECODE to avoid "nested session" detection,
+    // strip FORCE_COLOR to get plain output, and enable unbuffered I/O for real-time
+    // streaming of events from the Claude CLI.
+    const spawnEnv: Record<string, string> = {
+      ...(process.env as Record<string, string>),
+      FORCE_COLOR: '0',
+      PYTHONUNBUFFERED: '1',
+      PYTHONIOENCODING: 'utf-8:strict',
+      CI: '1',
+      NONINTERACTIVE: '1',
+    };
+    delete spawnEnv.CLAUDECODE;
+
+    let cliProc: CliProcess;
     try {
-      // Build a clean env: remove CLAUDECODE to avoid "nested session" detection,
-      // strip FORCE_COLOR to get plain output, and enable unbuffered I/O for real-time
-      // streaming of events from the Claude CLI.
-      const spawnEnv = {
-        ...process.env,
-        FORCE_COLOR: '0',
-        PYTHONUNBUFFERED: '1',
-        PYTHONIOENCODING: 'utf-8:strict',
-      };
-      delete (spawnEnv as any).CLAUDECODE;
-
-      proc = Bun.spawn([binary, ...args], {
-        cwd: session.projectPath || process.cwd(),
-        stdout: 'pipe',
-        stderr: 'pipe',
-        env: spawnEnv,
-      });
+      const cwd = session.projectPath || process.cwd();
+      if (hasScript) {
+        cliProc = spawnWithScript(binary, args, cwd, spawnEnv);
+        console.log(`[${provider}] Spawned PID ${cliProc.pid} (script/pty)`);
+      } else {
+        cliProc = spawnWithPipe(binary, args, cwd, spawnEnv);
+        console.log(`[${provider}] Spawned PID ${cliProc.pid} (pipe)`);
+      }
     } catch (spawnErr) {
       const msg = String(spawnErr);
       console.error(`[${provider}] Failed to spawn: ${msg}`);
       session.status = 'idle';
-      // Return a stream containing just the error event
       const encoder = new TextEncoder();
       return new ReadableStream({
         start(controller) {
@@ -308,14 +503,14 @@ class ClaudeProcessManager {
       });
     }
 
-    session.process = proc;
+    session.cliProcess = cliProc;
 
     return this.createSSEStream(session);
   }
 
   private createSSEStream(session: ClaudeSession): ReadableStream {
     const encoder = new TextEncoder();
-    const proc = session.process!;
+    const proc = session.cliProcess!;
     let cancelled = false;
 
     // Reset event buffer for this stream
@@ -333,26 +528,37 @@ class ClaudeProcessManager {
       }
     };
 
-    // Accumulate stderr for error reporting
+    // Accumulate stderr for error reporting.
+    // In PTY mode, stderr is merged with stdout (no separate stream).
     const stderrChunks: string[] = [];
-    const stderrDecoder = new TextDecoder();
-    const stderrReader = async () => {
-      try {
-        for await (const chunk of proc.stderr as ReadableStream<Uint8Array>) {
-          const text = stderrDecoder.decode(chunk, { stream: true });
-          stderrChunks.push(text);
-          console.error(`[claude:${session.id}]`, text);
+    let stderrStreamReader: ReadableStreamDefaultReader<Uint8Array> | null = null;
+    if (proc.stderr) {
+      const stderrDecoder = new TextDecoder();
+      stderrStreamReader = proc.stderr.getReader();
+      const readStderr = async () => {
+        try {
+          while (true) {
+            const { done, value } = await stderrStreamReader!.read();
+            if (done) break;
+            const text = stderrDecoder.decode(value, { stream: true });
+            stderrChunks.push(text);
+            for (const line of text.split('\n')) {
+              if (line.trim()) console.error(`[claude:${session.id}:stderr] ${line}`);
+            }
+          }
+        } catch {
+          /* process ended */
         }
-      } catch {
-        /* process ended */
-      }
-    };
-    stderrReader();
+      };
+      readStderr();
+    }
 
     // Hoist assistant content accumulator so the cancel handler can persist
     // any partial response that was already received before cancellation.
     let assistantContent: any[] | null = null;
     let assistantModel: string | null = null;
+
+    const scheduleCleanup = () => this.scheduleCleanup(session.id);
 
     return new ReadableStream({
       start(controller) {
@@ -365,8 +571,47 @@ class ClaudeProcessManager {
           }
         }, 15000);
 
+        // Timeout: if the CLI produces no content events within 120s, report an error.
+        // This catches cases where the CLI hangs during API auth, MCP server startup, etc.
+        // Hoisted here so both the cancel handler and the streaming loop can clear it.
+        let receivedContentEvent = false;
+        let contentTimeoutId: ReturnType<typeof setTimeout> | null = setTimeout(() => {
+          if (!receivedContentEvent && !cancelled) {
+            console.error(
+              `[claude:${session.id}] Content timeout — no content received within 120s`,
+            );
+            const errEvt = JSON.stringify({
+              type: 'error',
+              error: {
+                type: 'timeout',
+                message:
+                  'No response received from CLI within 120 seconds. The model may be overloaded or the CLI may have failed to start.',
+              },
+            });
+            enqueueEvent(controller, `data: ${errEvt}\n\n`);
+            // Also send message_stop so client exits streaming state
+            enqueueEvent(controller, `data: {"type":"message_stop"}\n\n`);
+            session.streamComplete = true;
+            scheduleCleanup();
+            try {
+              controller.close();
+            } catch {
+              /* already closed */
+            }
+            session.status = 'idle';
+            proc.kill('SIGTERM');
+          }
+        }, 120_000);
+        const clearContentTimeout = () => {
+          if (contentTimeoutId) {
+            clearTimeout(contentTimeoutId);
+            contentTimeoutId = null;
+          }
+        };
+
         session.emitter.once('cancel', () => {
           cancelled = true;
+          clearContentTimeout();
           clearInterval(pingInterval);
           proc.kill('SIGINT');
 
@@ -396,6 +641,7 @@ class ClaudeProcessManager {
 
           enqueueEvent(controller, `data: {"type":"message_stop","reason":"cancelled"}\n\n`);
           session.streamComplete = true;
+          scheduleCleanup();
           try {
             controller.close();
           } catch {
@@ -415,19 +661,53 @@ class ClaudeProcessManager {
             let sentMessageStart = false;
             let receivedAnyEvent = false;
 
-            // Read stdout using async iteration (stdout is always a ReadableStream when spawned with 'pipe')
-            for await (const chunk of proc.stdout as ReadableStream<Uint8Array>) {
-              console.log('[stream] Starting to read from CLI stdout');
-              if (cancelled) break;
-              buffer += decoder.decode(chunk, { stream: true });
+            // Read stdout (or combined pty output) using explicit reader.
+            // Race each read against process exit to avoid blocking forever.
+            console.log(`[claude:${session.id}] Starting to read from CLI output`);
+            const stdoutReader = proc.stdout.getReader();
+
+            // Sentinel that resolves when the process exits.
+            let processExitCode: number | undefined;
+            const exitSentinel = proc.exited.then(async (code) => {
+              processExitCode = code;
+              console.log(`[claude:${session.id}] CLI process exited with code ${code}`);
+              await new Promise((r) => setTimeout(r, 1000));
+              return { done: true as const, value: undefined as Uint8Array | undefined };
+            });
+
+            while (true) {
+              const result = await Promise.race([stdoutReader.read(), exitSentinel]);
+              if (result.done || cancelled) {
+                // If the process exited and the reader is stalled, cancel it to clean up
+                if (processExitCode !== undefined) {
+                  try {
+                    stdoutReader.cancel();
+                  } catch {
+                    /* ignore */
+                  }
+                }
+                break;
+              }
+              const value = result.value;
+              if (!value) continue;
+              buffer += decoder.decode(value, { stream: true });
               const lines = buffer.split('\n');
               buffer = lines.pop() || '';
 
-              for (const line of lines) {
+              for (let line of lines) {
+                // Strip \r from PTY/script output (\r\n line endings)
+                line = line.replace(/\r/g, '');
                 if (!line.trim()) continue;
+                let cliEvent: any;
                 try {
-                  const cliEvent = JSON.parse(line);
+                  cliEvent = JSON.parse(line);
+                } catch {
+                  // Non-JSON line from CLI — log it so it's visible for debugging
+                  console.warn(`[claude:${session.id}] Non-JSON stdout: ${line.slice(0, 200)}`);
+                  continue;
+                }
 
+                try {
                   // Log event receipt for debugging streaming delays
                   if (cliEvent.type !== 'system') {
                     console.log(`[claude:${session.id}] Received ${cliEvent.type} event`);
@@ -461,6 +741,12 @@ class ClaudeProcessManager {
                       console.log('[stream] Enqueuing message_start event');
                       enqueueEvent(controller, `data: ${messageStartEvent}\n\n`);
                     }
+                  }
+
+                  // Track whether we've received actual content (not just system init)
+                  if (cliEvent.type === 'assistant' || cliEvent.type === 'result') {
+                    receivedContentEvent = true;
+                    clearContentTimeout();
                   }
 
                   // Accumulate all assistant content blocks across multi-turn tool execution
@@ -498,22 +784,25 @@ class ClaudeProcessManager {
                       'NotebookEdit',
                     ];
                     for (const block of cliEvent.message.content) {
+                      // Skip non-tool blocks (e.g. text blocks don't have .name)
+                      if (block.type !== 'tool_use') continue;
+
                       // Emit tool_approval_request for dangerous tools in safe mode
-                      if (
-                        block.type === 'tool_use' &&
-                        approvalTools.includes(block.name) &&
-                        (permMode === 'safe' || permMode === 'plan')
-                      ) {
-                        const filePath =
-                          block.input?.file_path || block.input?.path || block.input?.filePath;
+                      // Check both built-in tool names and MCP-prefixed tool names
+                      const needsApproval =
+                        approvalTools.includes(block.name) || isMcpToolDangerous(block.name);
+                      if (needsApproval && (permMode === 'safe' || permMode === 'plan')) {
+                        const parsed = parseMcpToolName(block.name);
+                        const filePath = extractFilePath(block.input || {});
+                        const effectiveName = parsed.renderAs || parsed.toolName;
                         const desc =
-                          block.name === 'Bash' ||
+                          effectiveName === 'Bash' ||
                           block.name === 'bash' ||
                           block.name === 'execute_command'
                             ? `Run: ${String(block.input?.command || '').slice(0, 100)}`
                             : filePath
                               ? `Write to ${filePath}`
-                              : `Execute ${block.name}`;
+                              : `Execute ${parsed.displayName}`;
                         const approvalEvent = JSON.stringify({
                           type: 'tool_approval_request',
                           toolCallId: block.id || nanoid(),
@@ -524,9 +813,21 @@ class ClaudeProcessManager {
                         enqueueEvent(controller, `data: ${approvalEvent}\n\n`);
                       }
 
-                      if (block.type === 'tool_use' && fileWriteTools.includes(block.name)) {
-                        const filePath =
-                          block.input?.file_path || block.input?.path || block.input?.filePath;
+                      // Emit user_question_request for AskUserQuestion tool
+                      if (block.name === 'AskUserQuestion') {
+                        const questionEvent = JSON.stringify({
+                          type: 'user_question_request',
+                          toolCallId: block.id || nanoid(),
+                          questions: block.input?.questions || [],
+                        });
+                        enqueueEvent(controller, `data: ${questionEvent}\n\n`);
+                      }
+
+                      // Trigger file verification for file-writing tools (both built-in and MCP)
+                      const isFileWrite =
+                        fileWriteTools.includes(block.name) || isMcpFileWriteTool(block.name);
+                      if (isFileWrite) {
+                        const filePath = extractFilePath(block.input || {});
                         if (filePath && typeof filePath === 'string') {
                           // Run async verification after a short delay to let the file be written
                           setTimeout(async () => {
@@ -557,18 +858,23 @@ class ClaudeProcessManager {
                   if (cliEvent.type === 'user' && cliEvent.message?.content) {
                     for (const block of cliEvent.message.content) {
                       if (block.type === 'tool_result') {
-                        // Look up tool name from accumulated assistant content
+                        // Look up tool name + filePath from accumulated assistant content
                         let toolName: string | undefined;
+                        let filePath: string | undefined;
                         if (assistantContent) {
                           const toolBlock = assistantContent.find(
                             (b: any) => b.type === 'tool_use' && b.id === block.tool_use_id,
                           );
-                          if (toolBlock) toolName = toolBlock.name;
+                          if (toolBlock) {
+                            toolName = toolBlock.name;
+                            filePath = extractFilePath(toolBlock.input || {}) || undefined;
+                          }
                         }
                         const resultEvent = JSON.stringify({
                           type: 'tool_result',
                           toolCallId: block.tool_use_id || '',
                           toolName,
+                          filePath,
                           result:
                             typeof block.content === 'string'
                               ? block.content
@@ -607,29 +913,54 @@ class ClaudeProcessManager {
                       }
                     }
                   }
-                } catch {
-                  // Non-JSON line, skip
+                } catch (eventErr) {
+                  console.error(`[claude:${session.id}] Error processing event:`, eventErr);
                 }
               }
             }
 
+            clearContentTimeout();
             clearInterval(pingInterval);
 
-            // Check exit code and report errors if no events received
-            if (!cancelled && !receivedAnyEvent) {
-              // Wait briefly for stderr to finish
-              await new Promise((r) => setTimeout(r, 100));
-              const exitCode = proc.exitCode;
+            // Check exit code and report errors if no content events received.
+            // We check receivedContentEvent (not receivedAnyEvent) because the
+            // CLI may send a 'system' init event and then hang — in that case
+            // the client already shows the streaming indicator but never gets content.
+            if (!cancelled && !receivedContentEvent) {
+              // Wait for process to fully exit and stderr to finish flushing
+              // BEFORE cancelling the stderr reader — otherwise we lose the error output.
+              await proc.exited.catch(() => {});
+              await new Promise((r) => setTimeout(r, 500));
+              const exitCode = processExitCode ?? proc.exitCode;
               const stderr = stderrChunks.join('').trim();
+
+              // Decode exit code for clarity
+              let exitDetail = `code ${exitCode}`;
+              if (exitCode !== null && exitCode !== undefined) {
+                if (exitCode > 128)
+                  exitDetail += ` (signal ${exitCode - 128}: ${signalName(exitCode - 128)})`;
+                else if (exitCode === 127) exitDetail += ' (command not found)';
+                else if (exitCode === 126) exitDetail += ' (permission denied)';
+              }
+
               const errMsg = stderr
-                ? `CLI exited (code ${exitCode}) with: ${stderr.slice(0, 500)}`
-                : `CLI exited with code ${exitCode} and produced no output`;
+                ? `CLI exited (${exitDetail}) with: ${stderr.slice(0, 500)}`
+                : `CLI exited with ${exitDetail} and produced no output`;
               console.error(`[claude:${session.id}] ${errMsg}`);
               const errEvt = JSON.stringify({
                 type: 'error',
                 error: { type: 'cli_error', message: errMsg },
               });
               enqueueEvent(controller, `data: ${errEvt}\n\n`);
+            }
+
+            // Cancel the stderr reader after error reporting is done
+            if (stderrStreamReader) {
+              try {
+                stderrStreamReader.cancel();
+              } catch {
+                /* ignore */
+              }
             }
 
             // Save assistant message to DB (skip if cancel handler already saved it)
@@ -663,6 +994,7 @@ class ClaudeProcessManager {
               enqueueEvent(controller, `data: {"type":"message_stop"}\n\n`);
             }
             session.streamComplete = true;
+            scheduleCleanup();
             if (!cancelled) {
               try {
                 controller.close();
@@ -672,6 +1004,7 @@ class ClaudeProcessManager {
             }
             session.status = 'idle';
           } catch (err) {
+            clearContentTimeout();
             clearInterval(pingInterval);
 
             // Save any accumulated assistant content even on error/disconnect.
@@ -708,6 +1041,7 @@ class ClaudeProcessManager {
                 `data: {"type":"error","error":{"type":"stream_error","message":"${msg}"}}\n\n`,
               );
               session.streamComplete = true;
+              scheduleCleanup();
               try {
                 controller.close();
               } catch {
@@ -721,6 +1055,19 @@ class ClaudeProcessManager {
     });
   }
 
+  /** Write data to the CLI process's stdin / pty input (for answering AskUserQuestion) */
+  writeStdin(sessionId: string, data: string): boolean {
+    const session = this.sessions.get(sessionId);
+    if (!session?.cliProcess) return false;
+    try {
+      session.cliProcess.write(data);
+      return true;
+    } catch (err) {
+      console.error(`[claude:${sessionId}] Failed to write to stdin:`, err);
+      return false;
+    }
+  }
+
   cancelGeneration(sessionId: string): void {
     const session = this.sessions.get(sessionId);
     if (session) {
@@ -732,8 +1079,13 @@ class ClaudeProcessManager {
     const session = this.sessions.get(sessionId);
     if (session) {
       session.status = 'terminated';
-      session.process?.kill();
+      session.cliProcess?.kill();
       this.sessions.delete(sessionId);
+      const timer = this.cleanupTimers.get(sessionId);
+      if (timer) {
+        clearTimeout(timer);
+        this.cleanupTimers.delete(sessionId);
+      }
     }
   }
 
@@ -844,4 +1196,8 @@ class ClaudeProcessManager {
   }
 }
 
-export const claudeManager = new ClaudeProcessManager();
+// Persist across Bun --hot reloads: store the singleton on globalThis so
+// a module re-evaluation doesn't orphan running CLI processes.
+const GLOBAL_KEY = '__maude_claudeManager';
+export const claudeManager: ClaudeProcessManager =
+  (globalThis as any)[GLOBAL_KEY] ?? ((globalThis as any)[GLOBAL_KEY] = new ClaudeProcessManager());
