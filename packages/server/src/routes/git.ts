@@ -157,6 +157,41 @@ app.post('/snapshot', async (c) => {
   }
 });
 
+// Git diff for a specific file
+app.get('/diff', async (c) => {
+  const rootPath = c.req.query('path') || process.cwd();
+  const filePath = c.req.query('file');
+  const staged = c.req.query('staged') === 'true';
+
+  if (!filePath) {
+    return c.json({ ok: false, error: 'file parameter required' }, 400);
+  }
+
+  try {
+    const args = staged
+      ? ['git', 'diff', '--cached', '--', filePath]
+      : ['git', 'diff', '--', filePath];
+
+    const proc = Bun.spawn(args, {
+      cwd: rootPath,
+      stdout: 'pipe',
+      stderr: 'pipe',
+    });
+
+    const output = await new Response(proc.stdout).text();
+    const exitCode = await proc.exited;
+
+    if (exitCode !== 0) {
+      const err = await new Response(proc.stderr).text();
+      return c.json({ ok: false, error: err.trim() || 'git diff failed' }, 500);
+    }
+
+    return c.json({ ok: true, data: { diff: output } });
+  } catch (err) {
+    return c.json({ ok: false, error: String(err) }, 500);
+  }
+});
+
 // List snapshots for a project
 app.get('/snapshots', (c) => {
   const rootPath = c.req.query('path');

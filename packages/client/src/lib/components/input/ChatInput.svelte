@@ -10,11 +10,13 @@
   import { onFocusChatInput } from '$lib/stores/ui.svelte';
   import { onMount } from 'svelte';
   import SlashCommandMenu from './SlashCommandMenu.svelte';
+  import VoiceButton from './VoiceButton.svelte';
 
   let inputText = $state('');
   let textarea: HTMLTextAreaElement;
   let lastShiftTab = 0;
   let localPlanMode = $state(false);
+  let localTeachMode = $state(false);
   let showSlashMenu = $state(false);
   let slashQuery = $state('');
   let showDirPicker = $state(false);
@@ -25,6 +27,8 @@
   let pathInputValue = $state('');
   let pathInput = $state<HTMLInputElement>();
   let contextFiles = $state<Set<string>>(new Set());
+  let diffPreview = $state<any>(null);
+  let diffLoading = $state(false);
 
   onMount(() => {
     onFocusChatInput(() => {
@@ -50,6 +54,23 @@
       }
     }
     return parts.length > 0 ? parts.join('\n') + '\n\n' : '';
+  }
+
+  async function detectAndParseDiff(text: string) {
+    const trimmed = text.trim();
+    const isGitHubUrl = /https:\/\/github\.com\/[^/]+\/[^/]+\/(pull|commit)\/\w+/.test(trimmed);
+    const isRawDiff = trimmed.startsWith('diff --git') || trimmed.startsWith('---');
+    if (!isGitHubUrl && !isRawDiff) return;
+
+    diffLoading = true;
+    try {
+      const res = await api.diff.parse(trimmed, settingsStore.workspacePath || undefined);
+      if (res.ok) diffPreview = res.data;
+    } catch {
+      /* ignore */
+    } finally {
+      diffLoading = false;
+    }
   }
 
   function getDisplayPath(): string {
@@ -176,10 +197,12 @@
     }
 
     const contextPrefix = buildContextPrefix();
+    const diffContext = diffPreview ? diffPreview.contextBlock + '\n\n' : '';
+    diffPreview = null;
     inputText = '';
     resizeTextarea();
     contextFiles = new Set();
-    await sendAndStream(conversationStore.activeId!, contextPrefix + text);
+    await sendAndStream(conversationStore.activeId!, diffContext + contextPrefix + text);
   }
 
   async function createConversation(text: string) {
@@ -191,7 +214,7 @@
       title: text.slice(0, 60),
       model: settingsStore.model,
       workspacePath,
-      permissionMode: settingsStore.permissionMode,
+      permissionMode: localTeachMode ? 'teach' : settingsStore.permissionMode,
       effort: settingsStore.effort,
       maxBudgetUsd: settingsStore.maxBudgetUsd ?? undefined,
       maxTurns: settingsStore.maxTurns ?? undefined,
@@ -208,6 +231,7 @@
       model: convRes.data.model,
     });
     localPlanMode = false;
+    localTeachMode = false;
   }
 
   function handleKeydown(e: KeyboardEvent) {
@@ -276,12 +300,23 @@
     } else {
       showSlashMenu = false;
     }
+    // Detect if the entire input is a diff/URL and show preview
+    if (inputText.trim().length > 10) {
+      detectAndParseDiff(inputText.trim());
+    } else {
+      diffPreview = null;
+    }
   }
 
   function resizeTextarea() {
     if (!textarea) return;
     textarea.style.height = 'auto';
     textarea.style.height = Math.min(textarea.scrollHeight, 300) + 'px';
+  }
+
+  function handleVoiceTranscript(text: string) {
+    inputText = inputText ? inputText + ' ' + text : text;
+    resizeTextarea();
   }
 
   function selectSlashCommand(command: string) {
@@ -316,6 +351,31 @@
       onSelect={selectSlashCommand}
       onClose={() => (showSlashMenu = false)}
     />
+  {/if}
+
+  {#if diffLoading}
+    <div class="diff-detecting">Detecting diff...</div>
+  {:else if diffPreview}
+    <div class="diff-preview">
+      <div class="diff-preview-header">
+        <span class="diff-type-badge">{diffPreview.type.replace('_', ' ')}</span>
+        {#if diffPreview.title}<span class="diff-title">{diffPreview.title}</span>{/if}
+        <span class="diff-stats">
+          {diffPreview.summary.filesChanged} files
+          <span class="insertions">+{diffPreview.summary.insertions}</span>
+          <span class="deletions">-{diffPreview.summary.deletions}</span>
+        </span>
+        <button class="diff-dismiss" onclick={() => (diffPreview = null)}>×</button>
+      </div>
+      <div class="diff-files">
+        {#each diffPreview.files.slice(0, 5) as f}
+          <span class="diff-file">{f.path}</span>
+        {/each}
+        {#if diffPreview.files.length > 5}
+          <span class="diff-more">+{diffPreview.files.length - 5} more</span>
+        {/if}
+      </div>
+    </div>
   {/if}
 
   <div class="dir-scope" bind:this={dirScopeEl}>
@@ -434,6 +494,18 @@
       {#if conversationStore.active?.planMode || localPlanMode}
         <span class="plan-indicator">PLAN</span>
       {/if}
+
+      {#if localTeachMode}
+        <span class="teach-indicator">TEACH</span>
+      {/if}
+      <button
+        class="btn-icon-sm"
+        class:active={localTeachMode}
+        onclick={() => (localTeachMode = !localTeachMode)}
+        title="Teach Me Mode — Claude guides you with questions instead of answers">🎓</button
+      >
+
+      <VoiceButton onTranscript={handleVoiceTranscript} />
 
       {#if streamStore.isStreaming && streamStore.conversationId === conversationStore.activeId}
         <button
@@ -715,6 +787,34 @@
     text-transform: var(--ht-label-transform);
   }
 
+  .teach-indicator {
+    font-size: 10px;
+    font-weight: 700;
+    padding: 2px 10px;
+    border-radius: var(--radius-sm);
+    background: var(--accent-secondary, #10b981);
+    color: var(--text-on-accent);
+    letter-spacing: var(--ht-label-spacing);
+    text-transform: var(--ht-label-transform);
+  }
+  .btn-icon-sm {
+    font-size: 14px;
+    width: 28px;
+    height: 28px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: var(--radius-sm);
+    transition: all var(--transition);
+    color: var(--text-tertiary);
+    opacity: 0.6;
+  }
+  .btn-icon-sm:hover,
+  .btn-icon-sm.active {
+    opacity: 1;
+    background: var(--bg-hover);
+  }
+
   .btn-action {
     display: flex;
     align-items: center;
@@ -747,5 +847,84 @@
     border-color: var(--accent-error);
     background: var(--bg-hover);
     box-shadow: var(--shadow-glow-sm);
+  }
+
+  .diff-detecting {
+    font-size: 11px;
+    color: var(--text-tertiary);
+    padding: 4px 8px;
+    animation: pulse 1s infinite;
+  }
+  .diff-preview {
+    margin-bottom: 8px;
+    padding: 8px 12px;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-primary);
+    border-left: 3px solid var(--accent-primary);
+    border-radius: var(--radius-sm);
+    font-size: 12px;
+  }
+  .diff-preview-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 4px;
+  }
+  .diff-type-badge {
+    font-size: 9px;
+    font-weight: 700;
+    text-transform: uppercase;
+    padding: 1px 6px;
+    background: var(--bg-active);
+    color: var(--accent-primary);
+    border-radius: var(--radius-sm);
+  }
+  .diff-title {
+    flex: 1;
+    color: var(--text-primary);
+    font-weight: 500;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .diff-stats {
+    color: var(--text-tertiary);
+    font-size: 11px;
+    margin-left: auto;
+    display: flex;
+    gap: 6px;
+  }
+  .insertions {
+    color: #22c55e;
+  }
+  .deletions {
+    color: #ef4444;
+  }
+  .diff-dismiss {
+    color: var(--text-tertiary);
+    font-size: 16px;
+    padding: 0 4px;
+    margin-left: 4px;
+  }
+  .diff-dismiss:hover {
+    color: var(--text-primary);
+  }
+  .diff-files {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+  }
+  .diff-file {
+    font-size: 10px;
+    font-family: var(--font-family);
+    color: var(--text-secondary);
+    background: var(--bg-hover);
+    padding: 1px 6px;
+    border-radius: var(--radius-sm);
+  }
+  .diff-more {
+    font-size: 10px;
+    color: var(--text-tertiary);
+    padding: 1px 6px;
   }
 </style>

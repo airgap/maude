@@ -475,6 +475,10 @@ export const api = {
       request<{ ok: boolean; data: { restored: boolean } }>(`/git/snapshot/${id}/restore`, {
         method: 'POST',
       }),
+    diff: (path: string, file: string, staged: boolean) =>
+      request<{ ok: boolean; data: { diff: string } }>(
+        `/git/diff?path=${encodeURIComponent(path)}&file=${encodeURIComponent(file)}&staged=${staged}`,
+      ),
   },
 
   // --- Workspace Memory ---
@@ -983,5 +987,261 @@ export const api = {
         data: { id: string; username: string; isAdmin: boolean };
       }>('/auth/me'),
     users: () => request<{ ok: boolean; data: any[] }>('/auth/users'),
+  },
+  // --- TODO Scanner ---
+  scan: {
+    scanTodos: (
+      workspacePath: string,
+      opts?: { extensions?: string[]; maxResults?: number; prdId?: string },
+    ) =>
+      request<{
+        ok: boolean;
+        data: {
+          todos: Array<{
+            id: string;
+            file: string;
+            relativePath: string;
+            line: number;
+            type: string;
+            text: string;
+            context: string[];
+            suggestedTitle: string;
+            suggestedDescription: string;
+            priority: string;
+          }>;
+          total: number;
+        };
+      }>('/scan/todos', {
+        method: 'POST',
+        body: JSON.stringify({ workspacePath, ...opts }),
+      }),
+    importTodos: (body: {
+      workspacePath: string;
+      todos: Array<{
+        file: string;
+        line: number;
+        type: string;
+        text: string;
+        suggestedTitle: string;
+        suggestedDescription: string;
+        priority: string;
+      }>;
+      prdId?: string;
+    }) =>
+      request<{ ok: boolean; data: { created: number; storyIds: string[] } }>(
+        '/scan/todos/import',
+        {
+          method: 'POST',
+          body: JSON.stringify(body),
+        },
+      ),
+    todoCount: (workspacePath: string) =>
+      request<{ ok: boolean; data: { count: number; byType: Record<string, number> } }>(
+        `/scan/todos/count?workspacePath=${encodeURIComponent(workspacePath)}`,
+      ),
+  },
+
+  // --- Ambient Background Agent ---
+  ambient: {
+    startWatching: (workspacePath: string) =>
+      request<{ ok: boolean }>('/ambient/watch', {
+        method: 'POST',
+        body: JSON.stringify({ workspacePath }),
+      }),
+    stopWatching: (workspacePath: string) =>
+      request<{ ok: boolean }>(
+        `/ambient/watch?workspacePath=${encodeURIComponent(workspacePath)}`,
+        {
+          method: 'DELETE',
+        },
+      ),
+    getNotifications: (workspacePath: string) =>
+      request<{
+        ok: boolean;
+        data: Array<{
+          id: string;
+          workspacePath: string;
+          type: string;
+          severity: string;
+          title: string;
+          message: string;
+          file?: string;
+          line?: number;
+          suggestion?: string;
+          createdAt: number;
+          dismissed: boolean;
+        }>;
+      }>(`/ambient/notifications?workspacePath=${encodeURIComponent(workspacePath)}`),
+    dismissNotification: (id: string) =>
+      request<{ ok: boolean }>(`/ambient/notifications/${id}`, { method: 'DELETE' }),
+    clearNotifications: (workspacePath: string) =>
+      request<{ ok: boolean }>(
+        `/ambient/notifications?workspacePath=${encodeURIComponent(workspacePath)}`,
+        { method: 'DELETE' },
+      ),
+    status: (workspacePath: string) =>
+      request<{ ok: boolean; data: { watching: boolean; notificationCount: number } }>(
+        `/ambient/status?workspacePath=${encodeURIComponent(workspacePath)}`,
+      ),
+  },
+
+  // --- Cost Dashboard ---
+  costs: {
+    summary: (opts?: { workspacePath?: string; since?: number; until?: number }) => {
+      const params = new URLSearchParams();
+      if (opts?.workspacePath) params.set('workspacePath', opts.workspacePath);
+      if (opts?.since) params.set('since', String(opts.since));
+      if (opts?.until) params.set('until', String(opts.until));
+      const q = params.toString();
+      return request<{
+        ok: boolean;
+        data: {
+          totalCostUsd: number;
+          totalTokens: number;
+          inputTokens: number;
+          outputTokens: number;
+          conversationCount: number;
+          byModel: Array<{ model: string; costUsd: number; tokens: number; conversations: number }>;
+          byDay: Array<{ date: string; costUsd: number; tokens: number }>;
+          topConversations: Array<{
+            id: string;
+            title: string;
+            costUsd: number;
+            tokens: number;
+            model: string;
+            updatedAt: number;
+          }>;
+        };
+      }>(`/costs/summary${q ? '?' + q : ''}`);
+    },
+  },
+
+  // --- Diff Parser ---
+  diff: {
+    parse: (input: string, workspacePath?: string) =>
+      request<{ ok: boolean; data: any }>('/diff/parse', {
+        method: 'POST',
+        body: JSON.stringify({ input, workspacePath }),
+      }),
+  },
+
+  // --- Session Replay ---
+  replay: {
+    getTimeline: (conversationId: string) =>
+      request<{ ok: boolean; data: any }>(`/replay/${conversationId}`),
+    getChanges: (conversationId: string) =>
+      request<{ ok: boolean; data: any }>(`/replay/${conversationId}/changes`),
+  },
+
+  // --- Custom Tools ---
+  customTools: {
+    list: (workspacePath?: string) => {
+      const q = workspacePath ? `?workspacePath=${encodeURIComponent(workspacePath)}` : '';
+      return request<{ ok: boolean; data: any[] }>(`/custom-tools${q}`);
+    },
+    create: (body: {
+      name: string;
+      description: string;
+      inputSchema: any;
+      handlerType: string;
+      handlerCommand: string;
+      workspacePath?: string;
+    }) =>
+      request<{ ok: boolean; data: any }>('/custom-tools', {
+        method: 'POST',
+        body: JSON.stringify(body),
+      }),
+    update: (id: string, body: Record<string, any>) =>
+      request<{ ok: boolean; data: any }>(`/custom-tools/${id}`, {
+        method: 'PATCH',
+        body: JSON.stringify(body),
+      }),
+    delete: (id: string) => request<{ ok: boolean }>(`/custom-tools/${id}`, { method: 'DELETE' }),
+    test: (id: string, input: Record<string, any>) =>
+      request<{ ok: boolean; data: { output: string; exitCode: number; duration: number } }>(
+        `/custom-tools/${id}/test`,
+        { method: 'POST', body: JSON.stringify({ input }) },
+      ),
+  },
+
+  // --- Live Pair Mode ---
+  pair: {
+    createRoom: (body: { conversationId: string; hostName: string }) =>
+      request<{ ok: boolean; data: { roomId: string; shareUrl: string } }>('/pair/rooms', {
+        method: 'POST',
+        body: JSON.stringify(body),
+      }),
+    getRoom: (roomId: string) => request<{ ok: boolean; data: any }>(`/pair/rooms/${roomId}`),
+    joinRoom: (roomId: string, observerName: string) =>
+      request<{ ok: boolean }>(`/pair/rooms/${roomId}/join`, {
+        method: 'POST',
+        body: JSON.stringify({ observerName }),
+      }),
+    broadcast: (roomId: string, event: string, data: any) =>
+      request<{ ok: boolean }>(`/pair/rooms/${roomId}/broadcast`, {
+        method: 'POST',
+        body: JSON.stringify({ event, data }),
+      }),
+    closeRoom: (roomId: string) =>
+      request<{ ok: boolean }>(`/pair/rooms/${roomId}`, { method: 'DELETE' }),
+  },
+
+  // --- Multi-Workspace Initiatives ---
+  initiatives: {
+    list: () => request<{ ok: boolean; data: any[] }>('/initiatives'),
+    create: (body: {
+      name: string;
+      description?: string;
+      workspacePaths?: string[];
+      prdIds?: string[];
+      color?: string;
+    }) =>
+      request<{ ok: boolean; data: any }>('/initiatives', {
+        method: 'POST',
+        body: JSON.stringify(body),
+      }),
+    get: (id: string) => request<{ ok: boolean; data: any }>(`/initiatives/${id}`),
+    update: (id: string, body: Record<string, any>) =>
+      request<{ ok: boolean; data: any }>(`/initiatives/${id}`, {
+        method: 'PATCH',
+        body: JSON.stringify(body),
+      }),
+    delete: (id: string) => request<{ ok: boolean }>(`/initiatives/${id}`, { method: 'DELETE' }),
+    addWorkspace: (id: string, workspacePath: string) =>
+      request<{ ok: boolean }>(`/initiatives/${id}/workspaces`, {
+        method: 'POST',
+        body: JSON.stringify({ workspacePath }),
+      }),
+    removeWorkspace: (id: string, workspacePath: string) =>
+      request<{ ok: boolean }>(`/initiatives/${id}/workspaces`, {
+        method: 'DELETE',
+        body: JSON.stringify({ workspacePath }),
+      }),
+    addPrd: (id: string, prdId: string) =>
+      request<{ ok: boolean }>(`/initiatives/${id}/prds`, {
+        method: 'POST',
+        body: JSON.stringify({ prdId }),
+      }),
+    removePrd: (id: string, prdId: string) =>
+      request<{ ok: boolean }>(`/initiatives/${id}/prds`, {
+        method: 'DELETE',
+        body: JSON.stringify({ prdId }),
+      }),
+    getProgress: (id: string) => request<{ ok: boolean; data: any }>(`/initiatives/${id}/progress`),
+  },
+
+  // --- Daily Digest ---
+  digest: {
+    today: (workspacePath?: string, date?: string) => {
+      const params = new URLSearchParams();
+      if (workspacePath) params.set('workspacePath', workspacePath);
+      if (date) params.set('date', date);
+      return request<{ ok: boolean; data: any }>(`/digest/today?${params}`);
+    },
+    week: (workspacePath?: string) => {
+      const params = new URLSearchParams();
+      if (workspacePath) params.set('workspacePath', workspacePath);
+      return request<{ ok: boolean; data: any[] }>(`/digest/week?${params}`);
+    },
   },
 };

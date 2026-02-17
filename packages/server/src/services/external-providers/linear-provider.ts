@@ -145,7 +145,7 @@ export class LinearProvider implements IExternalProvider {
     // Post a comment
     const commentParts: string[] = [];
     if (status === 'completed') {
-      commentParts.push('✅ Implemented automatically by Maude.');
+      commentParts.push('✅ Implemented automatically by E.');
     } else {
       commentParts.push('❌ Automatic implementation failed.');
     }

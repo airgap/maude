@@ -58,11 +58,11 @@ From the [Kiro blog](https://kiro.dev/blog/multimodal-development-with-kiro-from
 
 > "Instead of manually translating my diagram, I uploaded a photo of my whiteboard directly to Kiro and started a conversation about what I wanted to build. Kiro understood the entities, relationships, and business logic represented in my hand-drawn diagram. Within minutes, it analyzed the visual input and created comprehensive specifications."
 
-## Current Status in Maude
+## Current Status in E
 
 ### ⚠️ Not Yet Integrated
 
-While kiro-cli supports images via ACP, **Maude's kiro provider hasn't implemented the ACP protocol yet**.
+While kiro-cli supports images via ACP, **E's kiro provider hasn't implemented the ACP protocol yet**.
 
 Current implementation:
 
@@ -79,7 +79,7 @@ function buildKiroCommand(opts: CliSessionOpts): CliCommand {
 
 ### What's Needed
 
-To enable image support in Maude with kiro-cli, we need to:
+To enable image support in E with kiro-cli, we need to:
 
 1. **Implement ACP Protocol** (from earlier TODO comments)
    - Send `initialize` JSON-RPC request

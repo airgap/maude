@@ -15,6 +15,10 @@ export interface EditorTab {
   scrollTop: number;
   scrollLeft: number;
   editorConfig?: EditorConfigProps;
+  /** Set to 'diff' for git diff tabs — renders diffContent instead of code editor */
+  kind?: 'file' | 'diff';
+  /** Raw unified diff string, only used when kind === 'diff' */
+  diffContent?: string;
 }
 
 export type LayoutMode = 'chat-only' | 'editor-only' | 'split-horizontal' | 'split-vertical';
@@ -220,6 +224,39 @@ function createEditorStore() {
       if (layoutMode === 'chat-only') {
         layoutMode = 'split-horizontal';
       }
+    },
+
+    openDiffTab(filePath: string, diffContent: string, staged: boolean) {
+      const fileName = `${filePath.split('/').pop() ?? filePath} (${staged ? 'staged' : 'unstaged'})`;
+      // Reuse existing diff tab for the same file+staged combo
+      const existing = tabs.find(
+        (t) => t.kind === 'diff' && t.filePath === filePath && t.fileName === fileName,
+      );
+      if (existing) {
+        existing.diffContent = diffContent;
+        activeTabId = existing.id;
+        tabs = [...tabs];
+        if (layoutMode === 'chat-only') layoutMode = 'split-horizontal';
+        return;
+      }
+      const id = uuid();
+      const tab: EditorTab = {
+        id,
+        filePath,
+        fileName,
+        language: 'text',
+        content: '',
+        originalContent: '',
+        cursorLine: 1,
+        cursorCol: 1,
+        scrollTop: 0,
+        scrollLeft: 0,
+        kind: 'diff',
+        diffContent,
+      };
+      tabs = [...tabs, tab];
+      activeTabId = id;
+      if (layoutMode === 'chat-only') layoutMode = 'split-horizontal';
     },
 
     closeTab(id: string) {

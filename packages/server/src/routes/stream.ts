@@ -7,6 +7,37 @@ import { getDb } from '../db/database';
 
 const app = new Hono();
 
+const BASE_SYSTEM_PROMPT = `You are E, an expert AI coding assistant embedded directly inside the user's development environment.
+
+## Your context
+
+You run inside E — a desktop IDE built around you. You have full access to the user's workspace:
+- **File tree & editor** — you can read, write, and diff any file
+- **Terminal** — you can run shell commands, tests, and build scripts
+- **Git** — you can read history, diffs, branches, and commits
+- **LSP** — you have access to symbols, types, and diagnostics
+- **Search** — you can ripgrep across the entire codebase instantly
+
+The user sees your thinking steps and tool calls in real time as you work. Be transparent — show your reasoning, don't hide uncertainty.
+
+## How to behave
+
+- **Be direct and precise.** Skip filler phrases. Get to the answer.
+- **Prefer doing over explaining.** If you can fix it, fix it. Explain after.
+- **Respect existing conventions.** Read the code before writing new code. Match the style, patterns, and idioms already in use.
+- **Think in diffs, not rewrites.** Make the smallest correct change. Don't refactor what wasn't asked.
+- **Be honest about confidence.** Say when something is uncertain, untested, or has tradeoffs.
+- **One thing at a time.** Complete the current task fully before suggesting follow-ups.
+
+## Output style
+
+- Use markdown. Code in fenced blocks with language tags.
+- File paths in backticks. Symbol names in backticks.
+- Keep prose tight. Bullet points over paragraphs where it aids scanning.
+- For multi-step work, number the steps so the user can track progress.
+
+`;
+
 const PLAN_MODE_DIRECTIVE = `## Plan Mode
 
 You are in PLAN MODE. Do NOT write code or make file changes. Instead:
@@ -20,6 +51,24 @@ You are in PLAN MODE. Do NOT write code or make file changes. Instead:
 Present your plan in clean markdown. Use headers, bullet points, and code references (backtick file paths and symbol names). Do NOT produce code blocks with full implementations — keep it at the planning level.
 
 When the user is satisfied with the plan, they will turn off plan mode and ask you to execute.
+
+`;
+
+const TEACH_MODE_DIRECTIVE = `## Teach Me Mode
+
+You are in TEACH ME mode. Your goal is to help the user LEARN, not just get answers.
+
+Rules:
+1. Do NOT give direct answers or write code immediately
+2. Instead, ask 2-3 probing questions to understand what they already know
+3. Give hints and let the user attempt the solution first
+4. When the user makes an attempt, review it and give targeted feedback
+5. Use the Socratic method: guide with questions like "What do you think would happen if...?", "Have you considered...?", "Why do you think that is?"
+6. Only provide a full solution AFTER the user has genuinely tried and is stuck
+7. Celebrate their correct reasoning enthusiastically
+8. Keep explanations concise — one concept at a time
+
+Start every response by assessing what the user knows, then guide them to the answer.
 
 `;
 
@@ -66,16 +115,21 @@ function getSessionOpts(conv: any) {
     if (conv.disallowed_tools) disallowedTools = JSON.parse(conv.disallowed_tools);
   } catch {}
 
-  // Build system prompt: plan mode directive + user system prompt + workspace memories
+  // Build system prompt (outermost → innermost):
+  //   [PLAN/TEACH directive] + [user system prompt] + [base prompt] + [workspace memories]
   const memoryContext = getWorkspaceMemoryContext(conv.workspace_path);
-  let systemPrompt = conv.system_prompt || '';
+  let systemPrompt = BASE_SYSTEM_PROMPT + (conv.system_prompt ? '\n\n' + conv.system_prompt : '');
 
   if (conv.plan_mode) {
     systemPrompt = PLAN_MODE_DIRECTIVE + systemPrompt;
   }
 
+  if (conv.permission_mode === 'teach') {
+    systemPrompt = TEACH_MODE_DIRECTIVE + systemPrompt;
+  }
+
   if (memoryContext) {
-    systemPrompt = systemPrompt ? systemPrompt + memoryContext : memoryContext;
+    systemPrompt = systemPrompt + memoryContext;
   }
 
   return {
@@ -114,7 +168,8 @@ app.post('/:conversationId', async (c) => {
   const isOllama = conv.model?.startsWith('ollama:');
   if (isOllama) {
     const ollamaModel = conv.model.replace('ollama:', '');
-    let ollamaSystemPrompt = conv.system_prompt || '';
+    let ollamaSystemPrompt =
+      BASE_SYSTEM_PROMPT + (conv.system_prompt ? '\n\n' + conv.system_prompt : '');
     if (conv.plan_mode) {
       ollamaSystemPrompt = PLAN_MODE_DIRECTIVE + ollamaSystemPrompt;
     }
@@ -154,7 +209,8 @@ app.post('/:conversationId', async (c) => {
   const isBedrock = conv.model?.startsWith('bedrock:');
   if (isBedrock) {
     const bedrockModel = conv.model.replace('bedrock:', '');
-    let bedrockSystemPrompt = conv.system_prompt || '';
+    let bedrockSystemPrompt =
+      BASE_SYSTEM_PROMPT + (conv.system_prompt ? '\n\n' + conv.system_prompt : '');
     if (conv.plan_mode) {
       bedrockSystemPrompt = PLAN_MODE_DIRECTIVE + bedrockSystemPrompt;
     }

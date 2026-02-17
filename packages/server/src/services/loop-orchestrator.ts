@@ -636,7 +636,7 @@ ${criteria}
       commitSha: story.commitSha,
       comment:
         status === 'completed'
-          ? `Implemented automatically by Maude. Commit: ${story.commitSha || 'N/A'}`
+          ? `Implemented automatically by E. Commit: ${story.commitSha || 'N/A'}`
           : `Automatic implementation failed after ${story.attempts} attempt(s).`,
     });
 

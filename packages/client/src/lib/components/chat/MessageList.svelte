@@ -134,7 +134,13 @@
       {@const isStreamingHere =
         streamStore.isStreaming && streamStore.conversationId === conversationStore.activeId}
       {#if !(isStreamingHere && i === msgs.length - 1 && message.role === 'assistant')}
-        <MessageBubble {message} onEdit={handleEdit} onDelete={handleDelete} onFork={handleFork} />
+        <MessageBubble
+          {message}
+          conversationId={conversationStore.activeId ?? undefined}
+          onEdit={handleEdit}
+          onDelete={handleDelete}
+          onFork={handleFork}
+        />
         {#if isPlanningWithEdits && message.role === 'assistant'}
           <StoryActionCards {message} />
         {/if}

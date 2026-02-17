@@ -1,6 +1,6 @@
 # Provider Feature Matrix
 
-This document tracks feature support across all AI providers in Maude.
+This document tracks feature support across all AI providers in E.
 
 Last Updated: 2026-02-16
 
@@ -130,7 +130,7 @@ Last Updated: 2026-02-16
 - ✅ `promptCapabilities.image: true` advertised
 - ✅ Can process whiteboard photos, diagrams, screenshots
 - ✅ Supports visual development workflows
-- ⚠️ Full implementation pending in Maude (ACP protocol integration needed)
+- ⚠️ Full implementation pending in E (ACP protocol integration needed)
 
 ### Fully Implemented (Bedrock)
 

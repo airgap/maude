@@ -125,7 +125,7 @@ export class AsanaProvider implements IExternalProvider {
     // Add a story (comment) to the task
     const commentParts: string[] = [];
     if (status === 'completed') {
-      commentParts.push('✅ Implemented automatically by Maude.');
+      commentParts.push('✅ Implemented automatically by E.');
     } else {
       commentParts.push('❌ Automatic implementation failed.');
     }

@@ -36,7 +36,7 @@
   }
 
   let drag = $state<DragState | null>(null);
-  let tabBtnEls: HTMLButtonElement[] = [];
+  let tabBtnEls: HTMLButtonElement[] = $state([]);
 
   function handleDragStart(tabId: SidebarTab, index: number, e: MouseEvent) {
     if (e.button !== 0) return;

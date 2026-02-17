@@ -3,13 +3,14 @@
   import { editorStore } from '$lib/stores/editor.svelte';
   import SplitPane from './SplitPane.svelte';
   import EditorPane from '../editor/EditorPane.svelte';
+  import PrimaryPane from './PrimaryPane.svelte';
 
   let { children } = $props<{ children: Snippet }>();
 </script>
 
 {#if editorStore.layoutMode === 'chat-only'}
   <div class="pane-full">
-    {@render children()}
+    <PrimaryPane {children} />
   </div>
 {:else if editorStore.layoutMode === 'editor-only'}
   <div class="pane-full">
@@ -23,7 +24,7 @@
   >
     {#snippet first()}
       <div class="pane-full">
-        {@render children()}
+        <PrimaryPane {children} />
       </div>
     {/snippet}
     {#snippet second()}
@@ -38,7 +39,7 @@
   >
     {#snippet first()}
       <div class="pane-full">
-        {@render children()}
+        <PrimaryPane {children} />
       </div>
     {/snippet}
     {#snippet second()}

@@ -5,6 +5,7 @@
   import EditorBreadcrumb from './EditorBreadcrumb.svelte';
   import CodeEditor from './CodeEditor.svelte';
   import TerminalPanel from './TerminalPanel.svelte';
+  import UnifiedDiffView from './UnifiedDiffView.svelte';
 
   let resizingTerminal = $state(false);
   let startY = 0;
@@ -38,7 +39,14 @@
       <EditorBreadcrumb />
       {#if editorStore.activeTab}
         {#key editorStore.activeTabId}
-          <CodeEditor tab={editorStore.activeTab} />
+          {#if editorStore.activeTab.kind === 'diff'}
+            <UnifiedDiffView
+              diffContent={editorStore.activeTab.diffContent ?? ''}
+              fileName={editorStore.activeTab.filePath}
+            />
+          {:else}
+            <CodeEditor tab={editorStore.activeTab} />
+          {/if}
         {/key}
       {/if}
     {:else}

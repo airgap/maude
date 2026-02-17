@@ -8,7 +8,15 @@ export type SidebarTab =
   | 'memory'
   | 'agents'
   | 'symbols'
-  | 'mcp';
+  | 'mcp'
+  | 'todos'
+  | 'costs'
+  | 'ambient'
+  | 'digest'
+  | 'custom-tools'
+  | 'initiatives'
+  | 'help'
+  | 'git';
 type ModalId =
   | 'settings'
   | 'command-palette'

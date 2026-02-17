@@ -12,7 +12,7 @@ This document outlines how to implement tool calling support for Bedrock and Oll
 
 ## Architecture Overview
 
-Tool calling in Maude follows this flow:
+Tool calling in E follows this flow:
 
 ```
 User Message

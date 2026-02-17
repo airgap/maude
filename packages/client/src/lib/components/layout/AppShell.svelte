@@ -4,6 +4,7 @@
   import { terminalStore } from '$lib/stores/terminal.svelte';
   import { workspaceStore } from '$lib/stores/workspace.svelte';
   import { sidebarLayoutStore } from '$lib/stores/sidebarLayout.svelte';
+  import { primaryPaneStore } from '$lib/stores/primaryPane.svelte';
   import { panelDragStore } from '$lib/stores/panelDrag.svelte';
   import TopBar from './TopBar.svelte';
   import StatusBar from './StatusBar.svelte';
@@ -39,6 +40,7 @@
     waitForServer().then(async () => {
       workspaceStore.init();
       sidebarLayoutStore.init();
+      primaryPaneStore.init();
 
       // Check for in-flight streaming sessions and reconnect if found.
       // This handles page reloads during active Claude responses.
@@ -190,6 +192,17 @@
     if (e.key === 'Escape' && uiStore.activeModal) {
       e.preventDefault();
       uiStore.closeModal();
+    }
+    // ?: Open help panel (when not typing in an input)
+    if (
+      e.key === '?' &&
+      !e.ctrlKey &&
+      !e.metaKey &&
+      !(e.target instanceof HTMLInputElement) &&
+      !(e.target instanceof HTMLTextAreaElement)
+    ) {
+      e.preventDefault();
+      uiStore.setSidebarTab('help');
     }
   }
 </script>

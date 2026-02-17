@@ -138,7 +138,7 @@ export class JiraProvider implements IExternalProvider {
     // Post a comment with results
     const commentParts: string[] = [];
     if (status === 'completed') {
-      commentParts.push('✅ *Implemented automatically by Maude.*');
+      commentParts.push('✅ *Implemented automatically by E.*');
     } else {
       commentParts.push('❌ *Automatic implementation failed.*');
     }

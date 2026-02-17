@@ -47,6 +47,46 @@ export const SIDEBAR_TABS: TabDefinition[] = [
     label: 'MCP',
     icon: 'M4 4h16v4H4zM4 10h16v4H4zM4 16h16v4H4z',
   },
+  {
+    id: 'todos',
+    label: 'TODOs',
+    icon: 'M9 11l3 3 5-5M5 12a7 7 0 1 0 14 0 7 7 0 0 0-14 0z',
+  },
+  {
+    id: 'costs',
+    label: 'Costs',
+    icon: 'M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z',
+  },
+  {
+    id: 'ambient',
+    label: 'Ambient',
+    icon: 'M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm0 4a6 6 0 1 1 0 12A6 6 0 0 1 12 6zm0 3a3 3 0 1 0 0 6 3 3 0 0 0 0-6z',
+  },
+  {
+    id: 'digest',
+    label: 'Digest',
+    icon: 'M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01',
+  },
+  {
+    id: 'custom-tools',
+    label: 'Tools',
+    icon: 'M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z',
+  },
+  {
+    id: 'initiatives',
+    label: 'Initiatives',
+    icon: 'M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5',
+  },
+  {
+    id: 'help',
+    label: 'Help',
+    icon: 'M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10zM9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3M12 17h.01',
+  },
+  {
+    id: 'git',
+    label: 'Git',
+    icon: 'M6 3a3 3 0 1 1 0 6 3 3 0 0 1 0-6zm12 12a3 3 0 1 1 0 6 3 3 0 0 1 0-6zM6 9c0 3.314 2.686 6 6 6h2M18 15V9m0 0-2-2m2 2 2-2',
+  },
 ];
 
 export function getTabDef(id: SidebarTab): TabDefinition {

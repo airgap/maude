@@ -7,9 +7,13 @@
   import AgentGroupStatic from './AgentGroupStatic.svelte';
   import MessageAnimation from './MessageAnimation.svelte';
   import { renderMarkdown } from '$lib/utils/markdown';
+  import ConversationBranchButton from './ConversationBranchButton.svelte';
+  import { ttsStore } from '$lib/stores/tts.svelte';
+  import ReplayModal from './ReplayModal.svelte';
 
-  let { message, onEdit, onDelete, onFork } = $props<{
+  let { message, conversationId, onEdit, onDelete, onFork } = $props<{
     message: Message;
+    conversationId?: string;
     onEdit?: (messageId: string, newText: string) => void;
     onDelete?: (messageId: string) => void;
     onFork?: (messageId: string) => void;
@@ -52,6 +56,9 @@
     editing = false;
     editText = '';
   }
+
+  // ── Replay state ──
+  let showReplay = $state(false);
 
   // ── Context menu state ──
   let showContextMenu = $state(false);
@@ -234,6 +241,30 @@
             /><path d="M18 9a9 9 0 0 1-9 9" />
           </svg>
         </button>
+        {#if conversationId}
+          <ConversationBranchButton {conversationId} messageId={message.id} role={message.role} />
+        {/if}
+        {#if message.role === 'assistant'}
+          <button
+            class="btn-icon"
+            class:active={ttsStore.currentId === message.id}
+            onclick={() => {
+              const text = message.content
+                .filter((b: any) => b.type === 'text')
+                .map((b: any) => b.text)
+                .join(' ');
+              ttsStore.toggle(text, message.id);
+            }}
+            title={ttsStore.currentId === message.id ? 'Stop reading' : 'Read aloud'}
+          >
+            {ttsStore.currentId === message.id ? '⏹' : '🔊'}
+          </button>
+          {#if conversationId}
+            <button class="btn-icon" onclick={() => (showReplay = true)} title="Replay session"
+              >▶</button
+            >
+          {/if}
+        {/if}
         <button
           class="action-btn action-delete"
           title="Delete"
@@ -413,6 +444,10 @@
 
 {@render contextMenu()}
 
+{#if showReplay && conversationId}
+  <ReplayModal {conversationId} onClose={() => (showReplay = false)} />
+{/if}
+
 <style>
   .message {
     padding: var(--ht-msg-padding);
@@ -574,6 +609,9 @@
   .message:hover .message-actions {
     display: flex;
   }
+  .message:hover :global(.branch-btn) {
+    opacity: 1;
+  }
 
   .action-btn {
     width: 22px;
@@ -597,6 +635,30 @@
   .action-delete:hover {
     color: var(--accent-error);
     border-color: var(--accent-error);
+  }
+
+  .btn-icon {
+    width: 22px;
+    height: 22px;
+    border-radius: var(--radius-sm);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-tertiary);
+    border: 1px solid transparent;
+    background: transparent;
+    cursor: pointer;
+    transition: all var(--transition);
+    padding: 0;
+    font-size: 12px;
+  }
+  .btn-icon:hover {
+    color: var(--accent-primary);
+    border-color: var(--border-primary);
+    background: var(--bg-hover);
+  }
+  .btn-icon.active {
+    color: var(--accent-primary);
   }
 
   /* ── Inline edit ── */

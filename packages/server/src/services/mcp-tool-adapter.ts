@@ -73,7 +73,7 @@ async function discoverServerTools(server: MCPServerConfig): Promise<MCPToolInfo
             protocolVersion: '2024-11-05',
             capabilities: {},
             clientInfo: {
-              name: 'maude-mcp-adapter',
+              name: 'e-mcp-adapter',
               version: '1.0.0',
             },
           },
@@ -238,7 +238,7 @@ export async function executeMcpTool(
             protocolVersion: '2024-11-05',
             capabilities: {},
             clientInfo: {
-              name: 'maude-mcp-adapter',
+              name: 'e-mcp-adapter',
               version: '1.0.0',
             },
           },

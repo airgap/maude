@@ -2,7 +2,7 @@
 
 ## Overview
 
-Maude now supports **MCP (Model Context Protocol)** integration across all providers (Bedrock, Ollama). MCP allows you to connect external tool servers that extend the AI's capabilities with custom tools.
+E now supports **MCP (Model Context Protocol)** integration across all providers (Bedrock, Ollama). MCP allows you to connect external tool servers that extend the AI's capabilities with custom tools.
 
 MCP tools are automatically discovered from configured servers and integrated alongside built-in tools, enabling the AI to seamlessly use both native and external capabilities.
 
@@ -116,7 +116,7 @@ Tools are discovered automatically when providers initialize:
      "params": {
        "protocolVersion": "2024-11-05",
        "capabilities": {},
-       "clientInfo": { "name": "maude-mcp-adapter", "version": "1.0.0" }
+       "clientInfo": { "name": "e-mcp-adapter", "version": "1.0.0" }
      }
    }
    ```

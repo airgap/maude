@@ -8,6 +8,14 @@
   import SearchPanel from './SearchPanel.svelte';
   import SymbolOutline from '../editor/SymbolOutline.svelte';
   import McpPanel from './McpPanel.svelte';
+  import TodoScanPanel from './TodoScanPanel.svelte';
+  import CostPanel from './CostPanel.svelte';
+  import AmbientPanel from './AmbientPanel.svelte';
+  import DigestPanel from './DigestPanel.svelte';
+  import CustomToolsPanel from './CustomToolsPanel.svelte';
+  import InitiativesPanel from './InitiativesPanel.svelte';
+  import HelpPanel from './HelpPanel.svelte';
+  import GitPanel from './GitPanel.svelte';
 
   let { tabId }: { tabId: SidebarTab } = $props();
 </script>
@@ -28,4 +36,20 @@
   <AgentPanel />
 {:else if tabId === 'mcp'}
   <McpPanel />
+{:else if tabId === 'todos'}
+  <TodoScanPanel />
+{:else if tabId === 'costs'}
+  <CostPanel />
+{:else if tabId === 'ambient'}
+  <AmbientPanel />
+{:else if tabId === 'digest'}
+  <DigestPanel />
+{:else if tabId === 'custom-tools'}
+  <CustomToolsPanel />
+{:else if tabId === 'initiatives'}
+  <InitiativesPanel />
+{:else if tabId === 'help'}
+  <HelpPanel />
+{:else if tabId === 'git'}
+  <GitPanel />
 {/if}

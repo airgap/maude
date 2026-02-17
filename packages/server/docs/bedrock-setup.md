@@ -1,6 +1,6 @@
 # AWS Bedrock Integration
 
-This document explains how to use AWS Bedrock models with Maude.
+This document explains how to use AWS Bedrock models with E.
 
 ## Overview
 

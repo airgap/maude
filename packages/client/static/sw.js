@@ -13,15 +13,27 @@ const CACHE = 'e-v1';
 // App shell: the minimum set of resources needed to render the UI offline.
 // SvelteKit's immutable chunk names change each build, so we only pre-cache
 // the entry points that are stable by path.
-const PRECACHE = ['/', '/index.html', '/E.png', '/E.json', '/manifest.webmanifest'];
+const PRECACHE = ['/', '/E.png', '/manifest.webmanifest'];
 
 // ── Install: pre-cache the app shell ────────────────────────────────────────
 self.addEventListener('install', (event) => {
   event.waitUntil(
-    caches
-      .open(CACHE)
-      .then((cache) => cache.addAll(PRECACHE))
-      .then(() => self.skipWaiting()), // activate immediately, don't wait for old SW to die
+    caches.open(CACHE).then(async (cache) => {
+      // addAll is atomic — one 404 kills the install. Cache each URL individually
+      // so a missing optional asset doesn't break the whole SW install.
+      await Promise.all(
+        PRECACHE.map((url) =>
+          fetch(url)
+            .then((res) => {
+              if (res.ok) cache.put(url, res);
+            })
+            .catch(() => {
+              /* ignore — asset unavailable, skip silently */
+            }),
+        ),
+      );
+      await self.skipWaiting(); // activate immediately
+    }),
   );
 });
 
