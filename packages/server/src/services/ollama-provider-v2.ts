@@ -9,6 +9,7 @@ import { nanoid } from 'nanoid';
 import { getDb } from '../db/database';
 import { getAllToolsWithMcp, toOllamaFunctions } from './tool-schemas';
 import { executeTool } from './tool-executor';
+import { loadConversationHistory, getRecommendedOptions } from './chat-compaction';
 
 const DEFAULT_OLLAMA_BASE = 'http://localhost:11434';
 
@@ -52,33 +53,45 @@ export function createOllamaStreamV2(opts: OllamaStreamOptions): ReadableStream 
     async start(controller) {
       const messages: Array<{ role: string; content: string; images?: string[] }> = [];
 
-      // Load conversation history from DB
+      // Load conversation history with compaction
       try {
-        const db = getDb();
-        const rows = db
-          .query(
-            'SELECT role, content FROM messages WHERE conversation_id = ? ORDER BY timestamp ASC',
-          )
-          .all(opts.conversationId) as any[];
+        const compactionOptions = getRecommendedOptions(`ollama:${opts.model}`);
+        const history = loadConversationHistory(opts.conversationId, compactionOptions);
 
-        for (const row of rows) {
-          try {
-            const parsed = JSON.parse(row.content);
-            if (Array.isArray(parsed)) {
-              const text = parsed
-                .filter((b: any) => b.type === 'text')
-                .map((b: any) => b.text)
-                .join('\n');
-              if (text) messages.push({ role: row.role, content: text });
-            } else {
-              messages.push({ role: row.role, content: String(parsed) });
-            }
-          } catch {
-            messages.push({ role: row.role, content: row.content });
+        // Log compaction results if it occurred
+        if (history.compacted) {
+          console.log(
+            `[ollama-v2] Compacted conversation: ${history.originalCount} → ${history.compactedCount} messages, removed ~${history.tokensRemoved} tokens`,
+          );
+
+          // Emit compaction event to client
+          controller.enqueue(
+            encoder.encode(
+              `data: ${JSON.stringify({
+                type: 'compaction_info',
+                original_count: history.originalCount,
+                compacted_count: history.compactedCount,
+                tokens_removed: history.tokensRemoved,
+                summary: history.summary,
+              })}\n\n`,
+            ),
+          );
+        }
+
+        // Convert compacted messages to Ollama format
+        for (const msg of history.messages) {
+          if (Array.isArray(msg.content)) {
+            const text = msg.content
+              .filter((b: any) => b.type === 'text')
+              .map((b: any) => b.text)
+              .join('\n');
+            if (text) messages.push({ role: msg.role, content: text });
+          } else {
+            messages.push({ role: msg.role, content: String(msg.content) });
           }
         }
-      } catch {
-        /* fresh conversation */
+      } catch (e) {
+        console.error('[ollama-v2] Failed to load conversation history:', e);
       }
 
       // Build current message

@@ -46,13 +46,21 @@ function resolveBinary(name: string): string {
  * Claude Code:
  *   claude -p <msg> --output-format stream-json --verbose --dangerously-skip-permissions [flags...]
  *
- * Kiro CLI:
- *   kiro-cli chat --no-interactive --output-format stream-json --trust-all-tools [flags...] <msg>
+ * Kiro CLI (ACP mode for JSON-RPC output):
+ *   kiro-cli acp
+ *   Communicates via JSON-RPC 2.0 over stdin/stdout for reliable structured output.
+ *
+ * Bedrock & Ollama:
+ *   No CLI — handled via direct API calls in bedrock-provider.ts and ollama-provider.ts
  */
 export function buildCliCommand(provider: CliProvider, opts: CliSessionOpts): CliCommand {
   switch (provider) {
     case 'kiro':
       return buildKiroCommand(opts);
+    case 'bedrock':
+    case 'ollama':
+      // Bedrock and Ollama use direct API calls, not CLI processes
+      throw new Error(`${provider} provider does not use CLI commands — use API streaming instead`);
     case 'claude':
     default:
       return buildClaudeCommand(opts);
@@ -83,27 +91,36 @@ function buildClaudeCommand(opts: CliSessionOpts): CliCommand {
 }
 
 function buildKiroCommand(opts: CliSessionOpts): CliCommand {
-  const args = ['chat', '--no-interactive', '--output-format', 'stream-json', '--trust-all-tools'];
+  // Use ACP (Agent Client Protocol) mode for JSON-RPC communication.
+  // ACP provides reliable, structured JSON-RPC 2.0 output over stdin/stdout.
+  const args = ['acp'];
 
-  if (opts.resumeSessionId) args.push('--resume');
-  if (opts.allowedTools?.length) args.push('--trust-tools', opts.allowedTools.join(','));
+  // TODO: The caller (claude-process.ts) needs to implement ACP protocol initialization:
+  // 1. After spawning, send initialize request:
+  //    {"jsonrpc":"2.0","id":1,"method":"initialize","params":{"capabilities":{}}}
+  //    Response will include: promptCapabilities.image: true (multimodal support!)
+  // 2. Then send session/new or session/prompt with the actual prompt:
+  //    {"jsonrpc":"2.0","id":2,"method":"session/prompt","params":{"prompt": [text and image blocks]}}
+  // 3. Handle JSON-RPC responses and notifications (AgentMessageChunk, ToolCall, TurnEnd)
+  //
+  // Note: Kiro CLI supports images via ACP! Can send base64-encoded images in prompt blocks.
+  // See docs/kiro-cli-images.md for details on multimodal support.
+  //
+  // For now, we warn about unsupported options until full ACP integration is implemented.
 
-  // Kiro doesn't support these as CLI flags — they're configured via agent configs.
-  // We pass them where possible and log warnings for unsupported options.
   if (
     opts.model ||
     opts.systemPrompt ||
     opts.effort ||
     opts.maxTurns != null ||
-    opts.maxBudgetUsd != null
+    opts.maxBudgetUsd != null ||
+    opts.allowedTools?.length ||
+    opts.resumeSessionId
   ) {
     console.warn(
-      '[kiro] --model, --system-prompt, --effort, --max-turns, --max-budget-usd are not supported as CLI flags in kiro-cli. Configure these via a Kiro agent config instead.',
+      '[kiro-acp] Options like --model, --system-prompt, --effort, --max-turns, --max-budget-usd, --allowed-tools, and --resume need to be sent via JSON-RPC protocol or configured in Kiro agent config. Full ACP integration pending.',
     );
   }
-
-  // Prompt goes as positional arg at the end
-  args.push(opts.content);
 
   return { binary: resolveBinary('kiro-cli'), args };
 }

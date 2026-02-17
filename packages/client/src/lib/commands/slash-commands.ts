@@ -241,19 +241,38 @@ const commands: SlashCommand[] = [
   },
   {
     name: 'loop',
-    description: 'Open autonomous loop panel',
+    description: 'Open autonomous loop / work panel',
     execute: (ctx) => {
-      uiStore.setSidebarTab('loop');
+      uiStore.setSidebarTab('work');
       uiStore.setSidebarOpen(true);
       return { handled: true };
     },
   },
   {
     name: 'prd',
-    description: 'Open PRD / autonomous loop panel',
+    description: 'Open PRD / work panel',
     execute: () => {
-      uiStore.setSidebarTab('loop');
+      uiStore.setSidebarTab('work');
       uiStore.setSidebarOpen(true);
+      return { handled: true };
+    },
+  },
+  {
+    name: 'work',
+    description: 'Open work panel',
+    execute: () => {
+      uiStore.setSidebarTab('work');
+      uiStore.setSidebarOpen(true);
+      return { handled: true };
+    },
+  },
+  {
+    name: 'import',
+    description: 'Import issues from Jira/Linear/Asana',
+    execute: () => {
+      uiStore.setSidebarTab('work');
+      uiStore.setSidebarOpen(true);
+      uiStore.openModal('external-provider-config');
       return { handled: true };
     },
   },

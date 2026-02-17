@@ -23,6 +23,7 @@
   import TemplateLibraryModal from '../settings/TemplateLibraryModal.svelte';
   import PriorityRecommendationModal from '../settings/PriorityRecommendationModal.svelte';
   import EffortValueMatrixModal from '../settings/EffortValueMatrixModal.svelte';
+  import ExternalProviderConfigModal from '../settings/ExternalProviderConfigModal.svelte';
   import CommandPalette from '../common/CommandPalette.svelte';
   import ToastContainer from '../common/ToastContainer.svelte';
   import QuickOpen from '../editor/QuickOpen.svelte';
@@ -298,6 +299,10 @@
 
   {#if uiStore.activeModal === 'effort-value-matrix'}
     <EffortValueMatrixModal />
+  {/if}
+
+  {#if uiStore.activeModal === 'external-provider-config'}
+    <ExternalProviderConfigModal />
   {/if}
 
   {#if uiStore.activeModal === 'command-palette'}

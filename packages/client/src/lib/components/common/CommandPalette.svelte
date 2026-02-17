@@ -94,11 +94,11 @@
       },
     },
     {
-      id: 'tab-tasks',
-      label: 'Show Tasks',
+      id: 'tab-work',
+      label: 'Show Work',
       category: 'View',
       action: () => {
-        uiStore.setSidebarTab('tasks');
+        uiStore.setSidebarTab('work');
         close();
       },
     },
@@ -137,21 +137,22 @@
       },
     },
     {
-      id: 'tab-loop',
-      label: 'Show Autonomous Loop',
-      category: 'View',
-      action: () => {
-        uiStore.setSidebarTab('loop');
-        close();
-      },
-    },
-    {
       id: 'loop-start',
       label: 'Start Autonomous Loop',
       category: 'Loop',
       action: () => {
-        uiStore.setSidebarTab('loop');
+        uiStore.setSidebarTab('work');
         uiStore.openModal('loop-config');
+      },
+    },
+    {
+      id: 'import-external',
+      label: 'Import from Jira/Linear/Asana',
+      category: 'Work',
+      action: () => {
+        uiStore.setSidebarTab('work');
+        uiStore.setSidebarOpen(true);
+        uiStore.openModal('external-provider-config');
       },
     },
   ];

@@ -4,12 +4,11 @@ export type SidebarTab =
   | 'conversations'
   | 'files'
   | 'search'
-  | 'tasks'
+  | 'work'
   | 'memory'
   | 'agents'
   | 'symbols'
-  | 'mcp'
-  | 'loop';
+  | 'mcp';
 type ModalId =
   | 'settings'
   | 'command-palette'
@@ -28,6 +27,7 @@ type ModalId =
   | 'template-library'
   | 'priority-recommendation'
   | 'effort-value-matrix'
+  | 'external-provider-config'
   | null;
 type FocusedPane = 'chat' | 'editor';
 

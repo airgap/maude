@@ -309,9 +309,14 @@ function createStreamStore() {
             }
           }
 
-          // Remove from pending if it was there
+          // Remove from pending approvals or questions if it was there
           pendingApprovals = pendingApprovals.filter((a) => a.toolCallId !== event.toolCallId);
-          if (pendingApprovals.length === 0 && status === 'tool_pending') {
+          pendingQuestions = pendingQuestions.filter((q) => q.toolCallId !== event.toolCallId);
+          if (
+            pendingApprovals.length === 0 &&
+            pendingQuestions.length === 0 &&
+            status === 'tool_pending'
+          ) {
             status = 'streaming';
           }
           break;

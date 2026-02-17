@@ -4,11 +4,16 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="color-scheme" content="dark light" />
+    <meta name="description" content="AI assistant powered by Claude" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="E" />
+    <meta name="theme-color" content="#0a0a0a" />
     <title>E</title>
-    <link
-      rel="icon"
-      href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⚡</text></svg>"
-    />
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <link rel="icon" href="/icons/icon.svg" type="image/svg+xml" />
+    <link rel="apple-touch-icon" href="/icons/icon-maskable.svg" />
     <script>
       // Set --bg-primary from saved theme BEFORE first paint so splash isn't grey
       try {
@@ -23,6 +28,13 @@
         }[s.hypertheme];
         if (bg) document.documentElement.style.setProperty('--bg-primary', bg);
       } catch (e) {}
+
+      // Register service worker for PWA (install prompt + offline support)
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', function () {
+          navigator.serviceWorker.register('/sw.js').catch(function () {});
+        });
+      }
     </script>
     <style>
       /* Splash screen — renders immediately, before any JS */

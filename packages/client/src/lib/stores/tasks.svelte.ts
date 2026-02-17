@@ -1,3 +1,8 @@
+/**
+ * @deprecated Use workStore (work.svelte.ts) instead.
+ * Standalone tasks are now stories with prdId=null in the unified Work pane.
+ * This store is kept for backward compatibility during transition.
+ */
 import type { Task, TaskStatus } from '@e/shared';
 
 function createTaskStore() {

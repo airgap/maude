@@ -199,6 +199,7 @@
     { id: 'github-light', label: 'GitHub Light' },
     { id: 'one-dark', label: 'One Dark' },
     { id: 'everforest', label: 'Everforest' },
+    { id: 'goth', label: 'Redrum' },
   ];
 
   const cloudModels = [
@@ -378,7 +379,6 @@
                 >
                   <span class="ht-icon">{ht.icon}</span>
                   <span class="ht-label">{ht.label}</span>
-                  <span class="ht-desc">{ht.description}</span>
                 </button>
               {/each}
             </div>

@@ -19,7 +19,6 @@
   async function respond(approved: boolean) {
     if (responding) return;
     responding = true;
-    streamStore.resolveApproval(toolCallId);
     if (!approved) {
       // Cancel the stream to stop further agent execution
       const convId = conversationStore.active?.id;
@@ -27,6 +26,8 @@
         await cancelStream(convId);
       }
     }
+    // Dismiss the dialog only after the action has been taken
+    streamStore.resolveApproval(toolCallId);
   }
 
   function formatInput(): string {

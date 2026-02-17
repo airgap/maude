@@ -5,7 +5,7 @@ import { uuid } from '$lib/utils/uuid';
 
 const STORAGE_KEY = 'e-sidebar-layout';
 
-const DEFAULT_TABS: SidebarTab[] = ['conversations', 'files', 'search', 'tasks'];
+const DEFAULT_TABS: SidebarTab[] = ['conversations', 'files', 'search', 'work'];
 
 // ── New panel-groups data model ──
 

@@ -43,8 +43,6 @@
       answers[key] = selections[i];
     }
 
-    streamStore.resolveQuestion(question.toolCallId);
-
     const convId = conversationStore.active?.id;
     const sessionId = streamStore.sessionId;
     if (convId && sessionId) {
@@ -52,8 +50,13 @@
         await api.stream.answerQuestion(convId, sessionId, question.toolCallId, answers);
       } catch (err) {
         console.error('[UserQuestionDialog] Failed to submit answer:', err);
+        responding = false;
+        return;
       }
     }
+
+    // Only dismiss the dialog after the answer has been successfully sent
+    streamStore.resolveQuestion(question.toolCallId);
   }
 </script>
 

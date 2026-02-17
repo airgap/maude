@@ -4,6 +4,16 @@
 
 @import url('https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700&family=Share+Tech+Mono&display=swap');
 
+/* ── Tauri frameless window ──────────────────────────────────────────────────
+   Prevent accidental text selection when the user click-drags on the
+   topbar's designated drag region. Interactive children are unaffected
+   because they don't carry this attribute.                                    */
+[data-tauri-drag-region] {
+  cursor: default;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
 :root {
   /* Base sizing */
   --font-size: 14px;
@@ -1214,6 +1224,57 @@
   --syn-type: #dbbc7f;
   --syn-variable: #d3c6aa;
   --syn-operator: #e69875;
+}
+
+/* ---- REDRUM ---- */
+[data-theme='goth'] {
+  --rainbow-l: 0.45;
+  --bg-primary: #080808;
+  --bg-secondary: #0e0e0e;
+  --bg-tertiary: #161616;
+  --bg-elevated: #1e1e1e;
+  --bg-input: rgba(5, 5, 5, 0.98);
+  --bg-hover: rgba(139, 0, 0, 0.08);
+  --bg-active: rgba(139, 0, 0, 0.16);
+  --bg-selection: rgba(139, 0, 0, 0.28);
+  --bg-code: rgba(5, 5, 5, 0.98);
+  --bg-diff-add: rgba(100, 0, 0, 0.15);
+  --bg-diff-remove: rgba(180, 0, 0, 0.12);
+  --bg-glass: rgba(8, 8, 8, 0.92);
+  --bg-message-user: rgba(120, 0, 0, 0.05);
+  --bg-message-assistant: rgba(100, 0, 0, 0.07);
+  --border-primary: rgba(180, 10, 10, 0.25);
+  --border-secondary: rgba(180, 10, 10, 0.1);
+  --border-focus: #8b0000;
+  --border-glow: rgba(160, 0, 0, 0.5);
+  --text-primary: #d8cfc4;
+  --text-secondary: #7a706a;
+  --text-tertiary: #4a4240;
+  --text-link: #a03030;
+  --text-on-accent: #d8cfc4;
+  --accent-primary: #8b0000;
+  --accent-secondary: #5a0a0a;
+  --accent-warning: #7a3a00;
+  --accent-error: #cc1a1a;
+  --accent-info: #4a3a5a;
+  --accent-purple: #4a2060;
+  --accent-pink: #6a1030;
+  --accent-gradient: linear-gradient(135deg, #3a0000, #8b0000);
+  --accent-gradient-vivid: linear-gradient(135deg, #200000, #8b0000, #3a1040);
+  --scrollbar-track: rgba(100, 0, 0, 0.04);
+  --scrollbar-thumb: rgba(139, 0, 0, 0.25);
+  --shadow: 0 4px 20px rgba(0, 0, 0, 0.9), 0 0 40px rgba(100, 0, 0, 0.06);
+  --shadow-lg: 0 10px 36px rgba(0, 0, 0, 0.95), 0 0 60px rgba(100, 0, 0, 0.08);
+  --shadow-glow: 0 0 18px rgba(139, 0, 0, 0.28), 0 0 50px rgba(139, 0, 0, 0.08);
+  --shadow-glow-sm: 0 0 10px rgba(139, 0, 0, 0.18);
+  --syn-keyword: #cc2222;
+  --syn-string: #7a4a2a;
+  --syn-number: #8b4513;
+  --syn-function: #a03030;
+  --syn-comment: #4a4240;
+  --syn-type: #6a2040;
+  --syn-variable: #d8cfc4;
+  --syn-operator: #8b0000;
 }
 
 /* ---- COSMIC ---- */

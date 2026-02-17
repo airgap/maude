@@ -1,5 +1,5 @@
 import type { Task } from './tasks.js';
-import type { StreamLoopEvent } from './prd.js';
+import type { UserStory, StreamLoopEvent } from './prd.js';
 
 // SSE event types matching Claude's stream-json format
 export type StreamEvent =
@@ -16,6 +16,7 @@ export type StreamEvent =
   | StreamError
   | StreamPing
   | StreamTaskUpdate
+  | StreamStoryUpdate
   | StreamAgentEvent
   | StreamVerificationResult
   | StreamLoopEvent;
@@ -126,9 +127,18 @@ export interface StreamPing {
   type: 'ping';
 }
 
+/**
+ * @deprecated Use StreamStoryUpdate instead. Tasks have been unified into stories.
+ */
 export interface StreamTaskUpdate {
   type: 'task_update';
   task: Task;
+}
+
+/** Emitted when a story's status or data changes during loop execution or manual updates. */
+export interface StreamStoryUpdate {
+  type: 'story_update';
+  story: UserStory;
 }
 
 export interface StreamAgentEvent {

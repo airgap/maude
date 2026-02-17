@@ -138,13 +138,9 @@ export async function sendAndStream(conversationId: string, content: string): Pr
     // Ensure streaming state is cleared when the SSE connection closes.
     // The message_stop event should have already done this, but if it was
     // lost (e.g. stream closed before the event was flushed), clean up.
-    // Check for tool_pending too — the CLI may finish while the UI is
-    // waiting on an approval dialog that's already moot.
-    if (
-      streamStore.isStreaming ||
-      streamStore.status === 'tool_pending' ||
-      streamStore.status === 'connecting'
-    ) {
+    // Do NOT reset tool_pending — approval/question dialogs are still live
+    // and waiting for user input. They will resolve themselves.
+    if (streamStore.isStreaming || streamStore.status === 'connecting') {
       streamStore.handleEvent({ type: 'message_stop' } as any);
     }
 
@@ -296,8 +292,9 @@ export async function reconnectActiveStream(): Promise<string | null> {
     }
 
     // Ensure streaming state is cleared when the SSE connection closes.
+    // Do NOT reset tool_pending — approval/question dialogs are still live.
     const s = streamStore.status;
-    if (s === 'streaming' || s === 'connecting' || s === 'tool_pending') {
+    if (s === 'streaming' || s === 'connecting') {
       streamStore.handleEvent({ type: 'message_stop' } as any);
     }
 
@@ -311,7 +308,7 @@ export async function reconnectActiveStream(): Promise<string | null> {
   } catch (err) {
     console.error('[sse] Reconnection failed:', err);
     const errStatus = streamStore.status;
-    if (errStatus === 'streaming' || errStatus === 'connecting' || errStatus === 'tool_pending') {
+    if (errStatus === 'streaming' || errStatus === 'connecting') {
       streamStore.handleEvent({ type: 'message_stop' } as any);
     }
     streamStore.setReconnecting(false);

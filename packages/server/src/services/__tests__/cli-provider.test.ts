@@ -96,47 +96,35 @@ describe('buildCliCommand - claude', () => {
 });
 
 describe('buildCliCommand - kiro', () => {
-  test('builds minimal kiro command', () => {
+  test('builds kiro-cli acp command', () => {
     const { binary, args } = buildCliCommand('kiro', { content: 'hello' });
     expect(binary).toBe('kiro-cli');
-    expect(args).toContain('chat');
-    expect(args).toContain('--no-interactive');
-    expect(args).toContain('--output-format');
-    expect(args).toContain('stream-json');
-    expect(args).toContain('--trust-all-tools');
-    // prompt is positional arg at the end
-    expect(args[args.length - 1]).toBe('hello');
+    expect(args).toEqual(['acp']);
   });
 
-  test('includes resume flag', () => {
-    const { args } = buildCliCommand('kiro', { content: 'hi', resumeSessionId: 'sess-1' });
-    expect(args).toContain('--resume');
-  });
-
-  test('includes trust-tools for allowed tools', () => {
+  test('uses acp mode regardless of options', () => {
     const { args } = buildCliCommand('kiro', {
       content: 'hi',
-      allowedTools: ['Bash', 'Read'],
-    });
-    expect(args).toContain('--trust-tools');
-    expect(args).toContain('Bash,Read');
-  });
-
-  test('prompt is always last argument', () => {
-    const { args } = buildCliCommand('kiro', {
-      content: 'my prompt',
       resumeSessionId: 'sess-1',
-      allowedTools: ['Bash'],
+      allowedTools: ['Bash', 'Read'],
+      model: 'opus',
+      systemPrompt: 'be concise',
     });
-    expect(args[args.length - 1]).toBe('my prompt');
+    // ACP mode always uses just ['acp'] - options are sent via JSON-RPC
+    expect(args).toEqual(['acp']);
   });
 
-  test('does not include claude-specific flags', () => {
+  test('does not include chat command flags', () => {
     const { args } = buildCliCommand('kiro', {
       content: 'test',
       model: 'opus',
       systemPrompt: 'be concise',
     });
+    expect(args).not.toContain('chat');
+    expect(args).not.toContain('--no-interactive');
+    expect(args).not.toContain('--output-format');
+    expect(args).not.toContain('stream-json');
+    expect(args).not.toContain('--trust-all-tools');
     expect(args).not.toContain('--model');
     expect(args).not.toContain('--system-prompt');
     expect(args).not.toContain('-p');

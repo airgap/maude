@@ -633,7 +633,7 @@ function createLoopStore() {
     },
 
     async startLoop(
-      prdId: string,
+      prdId: string | null,
       workspacePath: string,
       config: LoopConfig,
     ): Promise<{ ok: boolean; error?: string }> {

@@ -21,6 +21,8 @@ import { authRoutes } from './routes/auth';
 import { workspaceMemoryRoutes } from './routes/project-memory';
 import { prdRoutes } from './routes/prd';
 import { loopRoutes } from './routes/loop';
+import { externalRoutes } from './routes/external';
+import compactionRoutes from './routes/compaction';
 import { authMiddleware } from './middleware/auth';
 import { websocket } from './ws';
 import { initDatabase } from './db/database';
@@ -79,6 +81,8 @@ app.route('/api/auth', authRoutes);
 app.route('/api/workspace-memory', workspaceMemoryRoutes);
 app.route('/api/prds', prdRoutes);
 app.route('/api/loops', loopRoutes);
+app.route('/api/external', externalRoutes);
+app.route('/api/compaction', compactionRoutes);
 
 // Initialize database
 initDatabase();

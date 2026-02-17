@@ -30,21 +30,41 @@ class LoopOrchestrator {
   private runners = new Map<string, LoopRunner>();
   readonly events = new EventEmitter();
 
-  async startLoop(prdId: string, workspacePath: string, config: LoopConfig): Promise<string> {
+  async startLoop(
+    prdId: string | null,
+    workspacePath: string,
+    config: LoopConfig,
+  ): Promise<string> {
     const db = getDb();
-    const prd = db.query('SELECT * FROM prds WHERE id = ?').get(prdId) as any;
-    if (!prd) throw new Error(`PRD ${prdId} not found`);
+    let label: string;
 
-    // Validate that the PRD has at least one pending story
-    const storyCount = db
-      .query(
-        "SELECT COUNT(*) as count FROM prd_stories WHERE prd_id = ? AND status IN ('pending', 'in_progress')",
-      )
-      .get(prdId) as any;
-    if (!storyCount || storyCount.count === 0) {
-      throw new Error(
-        'Cannot start loop: PRD has no pending stories. Add at least one story first.',
-      );
+    if (prdId) {
+      // PRD mode: validate PRD exists and has pending stories
+      const prd = db.query('SELECT * FROM prds WHERE id = ?').get(prdId) as any;
+      if (!prd) throw new Error(`PRD ${prdId} not found`);
+
+      const storyCount = db
+        .query(
+          "SELECT COUNT(*) as count FROM prd_stories WHERE prd_id = ? AND status IN ('pending', 'in_progress')",
+        )
+        .get(prdId) as any;
+      if (!storyCount || storyCount.count === 0) {
+        throw new Error(
+          'Cannot start loop: PRD has no pending stories. Add at least one story first.',
+        );
+      }
+      label = `PRD: ${prd.name}`;
+    } else {
+      // Standalone mode: validate standalone stories exist in this workspace
+      const storyCount = db
+        .query(
+          "SELECT COUNT(*) as count FROM prd_stories WHERE prd_id IS NULL AND workspace_path = ? AND status IN ('pending', 'in_progress')",
+        )
+        .get(workspacePath) as any;
+      if (!storyCount || storyCount.count === 0) {
+        throw new Error('Cannot start loop: No pending standalone stories in this workspace.');
+      }
+      label = 'Standalone stories';
     }
 
     const loopId = nanoid(12);
@@ -65,7 +85,7 @@ class LoopOrchestrator {
       this.emitEvent(loopId, 'cancelled', { message: String(err) });
     });
 
-    this.emitEvent(loopId, 'started', { message: `Loop started for PRD: ${prd.name}` });
+    this.emitEvent(loopId, 'started', { message: `Loop started for ${label}` });
 
     return loopId;
   }
@@ -150,7 +170,7 @@ class LoopRunner {
 
   constructor(
     private loopId: string,
-    private prdId: string,
+    private prdId: string | null,
     private workspacePath: string,
     private config: LoopConfig,
     private events: EventEmitter,
@@ -241,22 +261,8 @@ class LoopRunner {
 
       this.updateStory(story.id, { conversationId });
 
-      // Create an E task linked to this story
-      const taskId = nanoid(8);
-      db.query(
-        `INSERT INTO tasks (id, subject, description, active_form, status, owner, metadata, created_at, updated_at)
-         VALUES (?, ?, ?, ?, 'in_progress', ?, ?, ?, ?)`,
-      ).run(
-        taskId,
-        story.title,
-        story.description,
-        `Implementing: ${story.title}`,
-        `loop:${this.loopId}`,
-        JSON.stringify({ prdId: this.prdId, storyId: story.id, loopId: this.loopId, iteration }),
-        now,
-        now,
-      );
-      this.updateStory(story.id, { taskId });
+      // NOTE: Task creation side-effect removed — the story itself is now the
+      // canonical work item. Previously created a `tasks` table entry here.
 
       // Build the prompt
       const prompt = this.buildStoryPrompt(story);
@@ -333,9 +339,6 @@ class LoopRunner {
       if (passed) {
         // Story succeeded!
         this.updateStory(story.id, { status: 'completed' });
-        db.query(
-          "UPDATE tasks SET status = 'completed', active_form = NULL, updated_at = ? WHERE id = ?",
-        ).run(Date.now(), taskId);
 
         // Increment completed counter
         const loop = db.query('SELECT * FROM loops WHERE id = ?').get(this.loopId) as any;
@@ -377,6 +380,14 @@ class LoopRunner {
 
         // Record learnings from success
         this.recordLearning(story, 'Completed successfully', qualityResults);
+
+        // External status writeback hook
+        const completedStory = this.getStory(story.id);
+        if (completedStory?.externalRef) {
+          this.pushExternalStatus(completedStory, 'completed').catch((err) => {
+            console.error(`[loop:${this.loopId}] External status push failed:`, err);
+          });
+        }
       } else {
         // Story failed
         const failReason = hasAgentError
@@ -393,18 +404,20 @@ class LoopRunner {
         const updatedStory = this.getStory(story.id);
         if (updatedStory && updatedStory.attempts >= updatedStory.maxAttempts) {
           this.updateStory(story.id, { status: 'failed' });
-          db.query(
-            "UPDATE tasks SET status = 'pending', active_form = NULL, updated_at = ? WHERE id = ?",
-          ).run(Date.now(), taskId);
 
           const loop = db.query('SELECT * FROM loops WHERE id = ?').get(this.loopId) as any;
           this.updateLoopDb({ total_stories_failed: (loop?.total_stories_failed || 0) + 1 });
+
+          // External status writeback hook for failures
+          const failedStory = this.getStory(story.id);
+          if (failedStory?.externalRef) {
+            this.pushExternalStatus(failedStory, 'failed').catch((err) => {
+              console.error(`[loop:${this.loopId}] External status push failed:`, err);
+            });
+          }
         } else {
           // Reset to pending for retry
           this.updateStory(story.id, { status: 'pending' });
-          db.query(
-            "UPDATE tasks SET status = 'pending', active_form = NULL, updated_at = ? WHERE id = ?",
-          ).run(Date.now(), taskId);
         }
 
         this.emitEvent('story_failed', {
@@ -585,9 +598,19 @@ ${criteria}
 
   private getAllStories(): UserStory[] {
     const db = getDb();
-    const rows = db
-      .query('SELECT * FROM prd_stories WHERE prd_id = ? ORDER BY sort_order ASC')
-      .all(this.prdId) as any[];
+    let rows: any[];
+    if (this.prdId) {
+      rows = db
+        .query('SELECT * FROM prd_stories WHERE prd_id = ? ORDER BY sort_order ASC')
+        .all(this.prdId) as any[];
+    } else {
+      // Standalone mode: get stories with no PRD in this workspace
+      rows = db
+        .query(
+          'SELECT * FROM prd_stories WHERE prd_id IS NULL AND workspace_path = ? ORDER BY sort_order ASC',
+        )
+        .all(this.workspacePath) as any[];
+    }
     return rows.map(storyFromRow);
   }
 
@@ -595,6 +618,36 @@ ${criteria}
     const db = getDb();
     const row = db.query('SELECT * FROM prd_stories WHERE id = ?').get(storyId) as any;
     return row ? storyFromRow(row) : null;
+  }
+
+  /** Push status back to external provider (Jira/Linear/Asana) if story has an externalRef */
+  private async pushExternalStatus(
+    story: UserStory,
+    status: 'completed' | 'failed',
+  ): Promise<void> {
+    if (!story.externalRef) return;
+
+    const { getProviderConfig, getExternalProvider } = await import('./external-providers');
+    const config = getProviderConfig(story.externalRef.provider);
+    if (!config) return; // provider not configured, skip silently
+
+    const provider = getExternalProvider(story.externalRef.provider);
+    await provider.pushStatus(config, story.externalRef.externalId, status, {
+      commitSha: story.commitSha,
+      comment:
+        status === 'completed'
+          ? `Implemented automatically by Maude. Commit: ${story.commitSha || 'N/A'}`
+          : `Automatic implementation failed after ${story.attempts} attempt(s).`,
+    });
+
+    // Update syncedAt
+    const db = getDb();
+    const updatedRef = { ...story.externalRef, syncedAt: Date.now() };
+    db.query('UPDATE prd_stories SET external_ref = ?, updated_at = ? WHERE id = ?').run(
+      JSON.stringify(updatedRef),
+      Date.now(),
+      story.id,
+    );
   }
 
   private updateStory(storyId: string, updates: Record<string, any>): void {
@@ -775,7 +828,9 @@ ${criteria}
       if (diffExit === 0) return null; // No changes to commit
 
       // Commit
-      const msg = `[loop] ${story.title}\n\nImplemented by E autonomous loop.\nPRD: ${this.prdId}\nStory: ${story.id}`;
+      const msg = this.prdId
+        ? `[loop] ${story.title}\n\nImplemented by E autonomous loop.\nPRD: ${this.prdId}\nStory: ${story.id}`
+        : `[loop] ${story.title}\n\nImplemented by E autonomous loop.\nStory: ${story.id}`;
       const commitProc = Bun.spawn(['git', 'commit', '-m', msg], {
         cwd: this.workspacePath,
         stdout: 'pipe',
@@ -841,7 +896,8 @@ ${criteria}
 function storyFromRow(row: any): UserStory {
   return {
     id: row.id,
-    prdId: row.prd_id,
+    prdId: row.prd_id || null,
+    workspacePath: row.workspace_path || undefined,
     title: row.title,
     description: row.description,
     acceptanceCriteria: JSON.parse(row.acceptance_criteria || '[]'),
@@ -856,6 +912,8 @@ function storyFromRow(row: any): UserStory {
     attempts: row.attempts,
     maxAttempts: row.max_attempts,
     learnings: JSON.parse(row.learnings || '[]'),
+    externalRef: row.external_ref ? JSON.parse(row.external_ref) : undefined,
+    externalStatus: row.external_status || undefined,
     sortOrder: row.sort_order,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
@@ -865,7 +923,7 @@ function storyFromRow(row: any): UserStory {
 function loopFromRow(row: any): LoopState {
   return {
     id: row.id,
-    prdId: row.prd_id,
+    prdId: row.prd_id || null,
     workspacePath: row.workspace_path,
     status: row.status,
     config: JSON.parse(row.config || '{}'),

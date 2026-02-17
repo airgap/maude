@@ -1,7 +1,7 @@
 <script lang="ts">
   import { streamStore } from '$lib/stores/stream.svelte';
   import { settingsStore } from '$lib/stores/settings.svelte';
-  import { taskStore } from '$lib/stores/tasks.svelte';
+  import { workStore } from '$lib/stores/work.svelte';
   import { editorStore } from '$lib/stores/editor.svelte';
   import { gitStore } from '$lib/stores/git.svelte';
   import { lspStore } from '$lib/stores/lsp.svelte';
@@ -83,9 +83,9 @@
       </span>
     {/if}
 
-    {#if taskStore.inProgress.length > 0}
+    {#if workStore.inProgressStories.length > 0}
       <span class="status-item task-status">
-        {taskStore.inProgress[0].activeForm || taskStore.inProgress[0].subject}
+        {workStore.inProgressStories[0].title}
       </span>
     {/if}
   </div>

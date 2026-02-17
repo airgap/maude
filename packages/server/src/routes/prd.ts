@@ -50,6 +50,7 @@ import type {
   PriorityFactor,
   PriorityRecommendationResponse,
   PriorityRecommendationBulkResponse,
+  StandaloneStoryCreateInput,
 } from '@e/shared';
 import { readFileSync } from 'fs';
 import { join } from 'path';
@@ -75,6 +76,327 @@ app.get('/', (c) => {
     ok: true,
     data: rows.map(prdFromRow),
   });
+});
+
+// ============================================================================
+// --- Standalone Story Routes ---
+// NOTE: These routes MUST be defined before /:id to avoid being caught by the catch-all param route.
+// Standalone stories have prd_id = NULL and belong directly to a workspace.
+// ============================================================================
+
+// List standalone stories for a workspace
+app.get('/stories', (c) => {
+  const db = getDb();
+  const workspacePath = c.req.query('workspacePath');
+  if (!workspacePath) {
+    return c.json({ ok: false, error: 'workspacePath query parameter is required' }, 400);
+  }
+
+  const rows = db
+    .query(
+      'SELECT * FROM prd_stories WHERE prd_id IS NULL AND workspace_path = ? ORDER BY sort_order ASC, created_at ASC',
+    )
+    .all(workspacePath) as any[];
+
+  return c.json({ ok: true, data: rows.map(storyFromRow) });
+});
+
+// List all stories (standalone + PRD-bound) for a workspace
+app.get('/stories/all', (c) => {
+  const db = getDb();
+  const workspacePath = c.req.query('workspacePath');
+  if (!workspacePath) {
+    return c.json({ ok: false, error: 'workspacePath query parameter is required' }, 400);
+  }
+
+  // Standalone stories
+  const standaloneRows = db
+    .query(
+      'SELECT * FROM prd_stories WHERE prd_id IS NULL AND workspace_path = ? ORDER BY sort_order ASC, created_at ASC',
+    )
+    .all(workspacePath) as any[];
+
+  // PRD-bound stories via JOIN
+  const prdStoryRows = db
+    .query(
+      `SELECT ps.*, p.name as prd_name FROM prd_stories ps
+       JOIN prds p ON ps.prd_id = p.id
+       WHERE p.workspace_path = ?
+       ORDER BY ps.prd_id, ps.sort_order ASC`,
+    )
+    .all(workspacePath) as any[];
+
+  return c.json({
+    ok: true,
+    data: {
+      standalone: standaloneRows.map(storyFromRow),
+      byPrd: prdStoryRows.map((row: any) => ({
+        ...storyFromRow(row),
+        prdName: row.prd_name,
+      })),
+    },
+  });
+});
+
+// Create a standalone story
+app.post('/stories', async (c) => {
+  const body = (await c.req.json()) as StandaloneStoryCreateInput;
+  const db = getDb();
+
+  if (!body.workspacePath || !body.title?.trim()) {
+    return c.json({ ok: false, error: 'workspacePath and title are required' }, 400);
+  }
+
+  const id = nanoid(12);
+  const now = Date.now();
+
+  const criteria = (body.acceptanceCriteria || []).map((desc: string) => ({
+    id: nanoid(6),
+    description: desc,
+    passed: false,
+  }));
+
+  db.query(
+    `INSERT INTO prd_stories (
+      id, prd_id, workspace_path, title, description, acceptance_criteria,
+      priority, depends_on, dependency_reasons, status,
+      attempts, max_attempts, learnings, sort_order, created_at, updated_at
+    )
+    VALUES (?, NULL, ?, ?, ?, ?, ?, ?, '{}', 'pending', 0, 3, '[]', 0, ?, ?)`,
+  ).run(
+    id,
+    body.workspacePath,
+    body.title.trim(),
+    body.description || '',
+    JSON.stringify(criteria),
+    body.priority || 'medium',
+    JSON.stringify(body.dependsOn || []),
+    now,
+    now,
+  );
+
+  const row = db.query('SELECT * FROM prd_stories WHERE id = ?').get(id) as any;
+  return c.json({ ok: true, data: storyFromRow(row) }, 201);
+});
+
+// Update a standalone story
+app.patch('/stories/:storyId', async (c) => {
+  const db = getDb();
+  const storyId = c.req.param('storyId');
+  const body = await c.req.json();
+
+  const existing = db
+    .query('SELECT * FROM prd_stories WHERE id = ? AND prd_id IS NULL')
+    .get(storyId) as any;
+  if (!existing) {
+    return c.json({ ok: false, error: 'Standalone story not found' }, 404);
+  }
+
+  const updates: string[] = [];
+  const values: any[] = [];
+
+  const fieldMap: Record<string, string> = {
+    title: 'title',
+    description: 'description',
+    priority: 'priority',
+    status: 'status',
+    sortOrder: 'sort_order',
+    externalStatus: 'external_status',
+  };
+
+  for (const [key, col] of Object.entries(fieldMap)) {
+    if (body[key] !== undefined) {
+      updates.push(`${col} = ?`);
+      values.push(body[key]);
+    }
+  }
+
+  // JSON fields
+  if (body.acceptanceCriteria !== undefined) {
+    const criteria = body.acceptanceCriteria.map((ac: any) =>
+      typeof ac === 'string' ? { id: nanoid(6), description: ac, passed: false } : ac,
+    );
+    updates.push('acceptance_criteria = ?');
+    values.push(JSON.stringify(criteria));
+  }
+  if (body.dependsOn !== undefined) {
+    updates.push('depends_on = ?');
+    values.push(JSON.stringify(body.dependsOn));
+  }
+  if (body.dependencyReasons !== undefined) {
+    updates.push('dependency_reasons = ?');
+    values.push(JSON.stringify(body.dependencyReasons));
+  }
+  if (body.externalRef !== undefined) {
+    updates.push('external_ref = ?');
+    values.push(body.externalRef ? JSON.stringify(body.externalRef) : null);
+  }
+
+  if (updates.length === 0) {
+    return c.json({ ok: true, data: storyFromRow(existing) });
+  }
+
+  updates.push('updated_at = ?');
+  values.push(Date.now());
+  values.push(storyId);
+
+  db.query(`UPDATE prd_stories SET ${updates.join(', ')} WHERE id = ?`).run(...values);
+
+  const updated = db.query('SELECT * FROM prd_stories WHERE id = ?').get(storyId) as any;
+  return c.json({ ok: true, data: storyFromRow(updated) });
+});
+
+// Delete a standalone story
+app.delete('/stories/:storyId', (c) => {
+  const db = getDb();
+  const storyId = c.req.param('storyId');
+
+  const existing = db
+    .query('SELECT * FROM prd_stories WHERE id = ? AND prd_id IS NULL')
+    .get(storyId) as any;
+  if (!existing) {
+    return c.json({ ok: false, error: 'Standalone story not found' }, 404);
+  }
+
+  db.query('DELETE FROM prd_stories WHERE id = ? AND prd_id IS NULL').run(storyId);
+  return c.json({ ok: true });
+});
+
+// Estimate a standalone story
+app.post('/stories/:storyId/estimate', async (c) => {
+  const db = getDb();
+  const storyId = c.req.param('storyId');
+
+  const storyRow = db
+    .query('SELECT * FROM prd_stories WHERE id = ? AND prd_id IS NULL')
+    .get(storyId) as any;
+  if (!storyRow) {
+    return c.json({ ok: false, error: 'Standalone story not found' }, 404);
+  }
+
+  const story = storyFromRow(storyRow);
+
+  // Reuse the AI estimation logic (same as PRD story estimation)
+  const criteriaText = story.acceptanceCriteria.map((ac: any) => ac.description).join('\n- ');
+
+  const systemPrompt = `You are a senior software engineer who estimates user stories using the Fibonacci story points scale (1, 2, 3, 5, 8, 13).
+
+Return a JSON object with EXACTLY this structure:
+{
+  "size": "small" | "medium" | "large",
+  "storyPoints": <number: 1|2|3|5|8|13>,
+  "confidence": "low" | "medium" | "high",
+  "confidenceScore": <number: 0-100>,
+  "factors": [{"factor": "<description>", "impact": "increases"|"decreases"|"neutral", "weight": "minor"|"moderate"|"major"}],
+  "reasoning": "<brief explanation>",
+  "suggestedBreakdown": ["<sub-task>"] // ONLY for stories >= 8 points
+}
+
+Guidelines:
+- small (1-2 pts): simple change, single file, no dependencies
+- medium (3-5 pts): moderate complexity, 2-4 files, some dependencies
+- large (8-13 pts): high complexity, many files, significant dependencies
+- suggestedBreakdown is ONLY for stories estimated at 8+ points`;
+
+  const userPrompt = `Estimate the complexity of this story:
+
+Title: ${story.title}
+Description: ${story.description}
+${criteriaText ? `Acceptance Criteria:\n- ${criteriaText}` : ''}
+Priority: ${story.priority}
+
+Provide a complexity estimate with story points, confidence level, and key factors.`;
+
+  try {
+    const auth = getAnthropicAuth();
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+      'anthropic-version': '2023-06-01',
+    };
+    if (auth.type === 'oauth') {
+      headers['Authorization'] = `Bearer ${auth.token}`;
+    } else {
+      headers['x-api-key'] = auth.token;
+    }
+
+    const apiResponse = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-5-20250929',
+        max_tokens: 2048,
+        system: systemPrompt,
+        messages: [{ role: 'user', content: userPrompt }],
+      }),
+    });
+
+    if (!apiResponse.ok) {
+      throw new Error(`API request failed: ${apiResponse.status}`);
+    }
+
+    const apiData = (await apiResponse.json()) as any;
+    const response = apiData.content?.[0]?.text || '';
+    const jsonMatch = response.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) throw new Error('No JSON found in response');
+    const parsed = JSON.parse(jsonMatch[0]);
+
+    const estimate: StoryEstimate = {
+      storyId,
+      size: parsed.size || 'medium',
+      storyPoints: parsed.storyPoints || 3,
+      confidence: parsed.confidence || 'medium',
+      confidenceScore: parsed.confidenceScore || 50,
+      factors: parsed.factors || [],
+      reasoning: (parsed.reasoning || 'Estimate based on story content analysis.').trim(),
+      suggestedBreakdown: parsed.suggestedBreakdown,
+      isManualOverride: false,
+    };
+
+    db.query('UPDATE prd_stories SET estimate = ?, updated_at = ? WHERE id = ?').run(
+      JSON.stringify(estimate),
+      Date.now(),
+      storyId,
+    );
+
+    return c.json({ ok: true, data: { storyId, estimate } });
+  } catch (err) {
+    return c.json({ ok: false, error: `Estimation failed: ${String(err)}` }, 500);
+  }
+});
+
+// Save a manual estimate for a standalone story
+app.put('/stories/:storyId/estimate', async (c) => {
+  const db = getDb();
+  const storyId = c.req.param('storyId');
+  const body = await c.req.json();
+
+  const storyRow = db
+    .query('SELECT * FROM prd_stories WHERE id = ? AND prd_id IS NULL')
+    .get(storyId) as any;
+  if (!storyRow) {
+    return c.json({ ok: false, error: 'Standalone story not found' }, 404);
+  }
+
+  const existingEstimate = storyRow.estimate ? JSON.parse(storyRow.estimate) : {};
+
+  const estimate: StoryEstimate = {
+    ...existingEstimate,
+    storyId,
+    size: body.size || existingEstimate.size || 'medium',
+    storyPoints: body.storyPoints ?? existingEstimate.storyPoints ?? 3,
+    confidence: 'high',
+    confidenceScore: 100,
+    reasoning: body.reasoning || 'Manual estimate',
+    isManualOverride: true,
+  };
+
+  db.query('UPDATE prd_stories SET estimate = ?, updated_at = ? WHERE id = ?').run(
+    JSON.stringify(estimate),
+    Date.now(),
+    storyId,
+  );
+
+  return c.json({ ok: true, data: { storyId, estimate } });
 });
 
 // --- List all templates ---
@@ -4274,6 +4596,7 @@ function prdFromRow(row: any) {
     description: row.description,
     branchName: row.branch_name,
     qualityChecks: JSON.parse(row.quality_checks || '[]'),
+    externalRef: row.external_ref ? JSON.parse(row.external_ref) : undefined,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -4282,7 +4605,8 @@ function prdFromRow(row: any) {
 function storyFromRow(row: any) {
   return {
     id: row.id,
-    prdId: row.prd_id,
+    prdId: row.prd_id || null,
+    workspacePath: row.workspace_path || undefined,
     title: row.title,
     description: row.description,
     acceptanceCriteria: JSON.parse(row.acceptance_criteria || '[]'),
@@ -4301,6 +4625,8 @@ function storyFromRow(row: any) {
     priorityRecommendation: row.priority_recommendation
       ? JSON.parse(row.priority_recommendation)
       : undefined,
+    externalRef: row.external_ref ? JSON.parse(row.external_ref) : undefined,
+    externalStatus: row.external_status || undefined,
     sortOrder: row.sort_order,
     createdAt: row.created_at,
     updatedAt: row.updated_at,

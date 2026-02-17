@@ -2,6 +2,7 @@ import { Database } from 'bun:sqlite';
 import { join } from 'path';
 import { homedir } from 'os';
 import { mkdirSync } from 'fs';
+import { nanoid } from 'nanoid';
 
 const DB_PATH = join(homedir(), '.e', 'e.db');
 
@@ -133,13 +134,14 @@ export function initDatabase(): void {
       description TEXT NOT NULL DEFAULT '',
       branch_name TEXT,
       quality_checks TEXT NOT NULL DEFAULT '[]',
+      external_ref TEXT,
       created_at INTEGER NOT NULL,
       updated_at INTEGER NOT NULL
     );
 
     CREATE TABLE IF NOT EXISTS prd_stories (
       id TEXT PRIMARY KEY,
-      prd_id TEXT NOT NULL,
+      prd_id TEXT,
       title TEXT NOT NULL,
       description TEXT NOT NULL DEFAULT '',
       acceptance_criteria TEXT NOT NULL DEFAULT '[]',
@@ -154,6 +156,9 @@ export function initDatabase(): void {
       max_attempts INTEGER NOT NULL DEFAULT 3,
       learnings TEXT NOT NULL DEFAULT '[]',
       sort_order INTEGER NOT NULL DEFAULT 0,
+      workspace_path TEXT,
+      external_ref TEXT,
+      external_status TEXT,
       created_at INTEGER NOT NULL,
       updated_at INTEGER NOT NULL,
       FOREIGN KEY (prd_id) REFERENCES prds(id) ON DELETE CASCADE
@@ -161,7 +166,7 @@ export function initDatabase(): void {
 
     CREATE TABLE IF NOT EXISTS loops (
       id TEXT PRIMARY KEY,
-      prd_id TEXT NOT NULL,
+      prd_id TEXT,
       workspace_path TEXT NOT NULL,
       status TEXT NOT NULL DEFAULT 'idle',
       config TEXT NOT NULL DEFAULT '{}',
@@ -250,4 +255,196 @@ export function initDatabase(): void {
     CREATE INDEX IF NOT EXISTS idx_workspace_memories_category ON workspace_memories(workspace_path, category);
     CREATE INDEX IF NOT EXISTS idx_prds_workspace_path ON prds(workspace_path);
   `);
+
+  // --- Work pane unification migrations ---
+
+  // Add new columns (safe ALTER TABLE — no-ops if already exist)
+  const workPaneColumns = [
+    // Standalone stories need workspace_path directly on the story
+    `ALTER TABLE prd_stories ADD COLUMN workspace_path TEXT`,
+    // External integration scaffolding (Jira/Linear/Asana)
+    `ALTER TABLE prd_stories ADD COLUMN external_ref TEXT`,
+    `ALTER TABLE prd_stories ADD COLUMN external_status TEXT`,
+    `ALTER TABLE prds ADD COLUMN external_ref TEXT`,
+  ];
+  for (const sql of workPaneColumns) {
+    try {
+      db.exec(sql);
+    } catch {
+      /* column already exists */
+    }
+  }
+
+  // Make prd_id nullable on prd_stories and loops.
+  // SQLite doesn't support ALTER COLUMN, so we rebuild the tables.
+  migrateNullablePrdId(db);
+
+  // Migrate existing tasks into standalone stories
+  migrateTasksToStories(db);
+
+  // Create indexes for standalone story queries
+  db.exec(`
+    CREATE INDEX IF NOT EXISTS idx_prd_stories_workspace ON prd_stories(workspace_path);
+  `);
+}
+
+/**
+ * Rebuild prd_stories and loops tables to make prd_id nullable.
+ * SQLite requires a full table rebuild to change column constraints.
+ */
+function migrateNullablePrdId(db: Database): void {
+  // Check if prd_stories.prd_id is still NOT NULL
+  const storyInfo = db.prepare('PRAGMA table_info(prd_stories)').all() as any[];
+  const prdIdCol = storyInfo.find((c: any) => c.name === 'prd_id');
+
+  if (prdIdCol && prdIdCol.notnull === 1) {
+    // Must temporarily disable foreign keys for table rebuild
+    db.exec('PRAGMA foreign_keys=OFF');
+    db.exec('BEGIN TRANSACTION');
+    try {
+      db.exec(`
+        CREATE TABLE prd_stories_new (
+          id TEXT PRIMARY KEY,
+          prd_id TEXT,
+          title TEXT NOT NULL,
+          description TEXT NOT NULL DEFAULT '',
+          acceptance_criteria TEXT NOT NULL DEFAULT '[]',
+          priority TEXT NOT NULL DEFAULT 'medium',
+          depends_on TEXT NOT NULL DEFAULT '[]',
+          status TEXT NOT NULL DEFAULT 'pending',
+          task_id TEXT,
+          agent_id TEXT,
+          conversation_id TEXT,
+          commit_sha TEXT,
+          attempts INTEGER NOT NULL DEFAULT 0,
+          max_attempts INTEGER NOT NULL DEFAULT 3,
+          learnings TEXT NOT NULL DEFAULT '[]',
+          estimate TEXT,
+          dependency_reasons TEXT NOT NULL DEFAULT '{}',
+          priority_recommendation TEXT,
+          sort_order INTEGER NOT NULL DEFAULT 0,
+          workspace_path TEXT,
+          external_ref TEXT,
+          external_status TEXT,
+          created_at INTEGER NOT NULL,
+          updated_at INTEGER NOT NULL,
+          FOREIGN KEY (prd_id) REFERENCES prds(id) ON DELETE CASCADE
+        );
+
+        INSERT INTO prd_stories_new (
+          id, prd_id, title, description, acceptance_criteria, priority,
+          depends_on, status, task_id, agent_id, conversation_id, commit_sha,
+          attempts, max_attempts, learnings, estimate, dependency_reasons,
+          priority_recommendation, sort_order, workspace_path, external_ref,
+          external_status, created_at, updated_at
+        )
+        SELECT
+          id, prd_id, title, description, acceptance_criteria, priority,
+          depends_on, status, task_id, agent_id, conversation_id, commit_sha,
+          attempts, max_attempts, learnings, estimate, dependency_reasons,
+          priority_recommendation, sort_order, workspace_path, external_ref,
+          external_status, created_at, updated_at
+        FROM prd_stories;
+
+        DROP TABLE prd_stories;
+        ALTER TABLE prd_stories_new RENAME TO prd_stories;
+        CREATE INDEX IF NOT EXISTS idx_prd_stories_prd ON prd_stories(prd_id);
+      `);
+      db.exec('COMMIT');
+    } catch (err) {
+      db.exec('ROLLBACK');
+      throw err;
+    }
+    db.exec('PRAGMA foreign_keys=ON');
+  }
+
+  // Check if loops.prd_id is still NOT NULL
+  const loopInfo = db.prepare('PRAGMA table_info(loops)').all() as any[];
+  const loopPrdIdCol = loopInfo.find((c: any) => c.name === 'prd_id');
+
+  if (loopPrdIdCol && loopPrdIdCol.notnull === 1) {
+    db.exec('PRAGMA foreign_keys=OFF');
+    db.exec('BEGIN TRANSACTION');
+    try {
+      db.exec(`
+        CREATE TABLE loops_new (
+          id TEXT PRIMARY KEY,
+          prd_id TEXT,
+          workspace_path TEXT NOT NULL,
+          status TEXT NOT NULL DEFAULT 'idle',
+          config TEXT NOT NULL DEFAULT '{}',
+          current_iteration INTEGER NOT NULL DEFAULT 0,
+          current_story_id TEXT,
+          current_agent_id TEXT,
+          started_at INTEGER NOT NULL,
+          paused_at INTEGER,
+          completed_at INTEGER,
+          total_stories_completed INTEGER NOT NULL DEFAULT 0,
+          total_stories_failed INTEGER NOT NULL DEFAULT 0,
+          total_iterations INTEGER NOT NULL DEFAULT 0,
+          iteration_log TEXT NOT NULL DEFAULT '[]',
+          FOREIGN KEY (prd_id) REFERENCES prds(id) ON DELETE CASCADE
+        );
+
+        INSERT INTO loops_new SELECT * FROM loops;
+        DROP TABLE loops;
+        ALTER TABLE loops_new RENAME TO loops;
+        CREATE INDEX IF NOT EXISTS idx_loops_prd ON loops(prd_id);
+        CREATE INDEX IF NOT EXISTS idx_loops_status ON loops(status);
+      `);
+      db.exec('COMMIT');
+    } catch (err) {
+      db.exec('ROLLBACK');
+      throw err;
+    }
+    db.exec('PRAGMA foreign_keys=ON');
+  }
+}
+
+/**
+ * One-time migration: convert existing tasks into standalone stories (prd_id=NULL).
+ * Gated by a settings key so it only runs once.
+ */
+function migrateTasksToStories(db: Database): void {
+  const marker = db
+    .query("SELECT value FROM settings WHERE key = 'tasks_migrated_to_stories'")
+    .get() as any;
+  if (marker) return;
+
+  const tasks = db.query("SELECT * FROM tasks WHERE status != 'deleted'").all() as any[];
+
+  const statusMap: Record<string, string> = {
+    pending: 'pending',
+    in_progress: 'in_progress',
+    completed: 'completed',
+  };
+
+  for (const task of tasks) {
+    const storyId = nanoid(12);
+    const status = statusMap[task.status] || 'pending';
+
+    db.query(
+      `
+      INSERT INTO prd_stories (
+        id, prd_id, workspace_path, title, description, acceptance_criteria,
+        priority, depends_on, dependency_reasons, status, task_id,
+        attempts, max_attempts, learnings, sort_order, created_at, updated_at
+      )
+      VALUES (?, NULL, NULL, ?, ?, '[]', 'medium', ?, '{}', ?, ?, 0, 3, '[]', 0, ?, ?)
+    `,
+    ).run(
+      storyId,
+      task.subject,
+      task.description || '',
+      task.blocked_by || '[]',
+      status,
+      task.id,
+      task.created_at,
+      task.updated_at || Date.now(),
+    );
+  }
+
+  db.query(
+    "INSERT OR REPLACE INTO settings (key, value) VALUES ('tasks_migrated_to_stories', '1')",
+  ).run();
 }

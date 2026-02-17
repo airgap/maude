@@ -17,6 +17,7 @@ import {
 } from '@aws-sdk/client-bedrock-runtime';
 import { getToolDefinitions, getAllToolsWithMcp, requiresApproval } from './tool-schemas';
 import { executeTool } from './tool-executor';
+import { loadConversationHistory, getRecommendedOptions } from './chat-compaction';
 
 const DEFAULT_REGION = 'us-east-1';
 
@@ -136,33 +137,34 @@ export function createBedrockStreamV2(opts: BedrockStreamOptions): ReadableStrea
     async start(controller) {
       const messages: Message[] = [];
 
-      // Load conversation history from DB
+      // Load conversation history with compaction
       try {
-        const db = getDb();
-        const rows = db
-          .query(
-            'SELECT role, content FROM messages WHERE conversation_id = ? ORDER BY timestamp ASC',
-          )
-          .all(opts.conversationId) as any[];
+        const compactionOptions = getRecommendedOptions(`bedrock:${opts.model}`);
+        const history = loadConversationHistory(opts.conversationId, compactionOptions);
 
-        for (const row of rows) {
-          try {
-            const parsed = JSON.parse(row.content);
-            if (Array.isArray(parsed)) {
-              const textBlocks = parsed.filter((b: any) => b.type === 'text');
-              if (textBlocks.length > 0) {
-                messages.push({
-                  role: row.role === 'user' ? 'user' : 'assistant',
-                  content: textBlocks,
-                });
-              }
-            }
-          } catch {
-            // Skip invalid messages
-          }
+        // Log compaction results if it occurred
+        if (history.compacted) {
+          console.log(
+            `[bedrock-v2] Compacted conversation: ${history.originalCount} → ${history.compactedCount} messages, removed ~${history.tokensRemoved} tokens`,
+          );
+
+          // Emit compaction event to client
+          controller.enqueue(
+            encoder.encode(
+              `data: ${JSON.stringify({
+                type: 'compaction_info',
+                original_count: history.originalCount,
+                compacted_count: history.compactedCount,
+                tokens_removed: history.tokensRemoved,
+                summary: history.summary,
+              })}\n\n`,
+            ),
+          );
         }
-      } catch {
-        /* fresh conversation */
+
+        messages.push(...(history.messages as Message[]));
+      } catch (e) {
+        console.error('[bedrock-v2] Failed to load conversation history:', e);
       }
 
       // Build current message with text and optional images

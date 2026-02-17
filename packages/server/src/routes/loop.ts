@@ -5,16 +5,17 @@ import type { StreamLoopEvent } from '@e/shared';
 const app = new Hono();
 
 // Start a new loop
+// prdId is optional — if null/omitted, loops over standalone stories in the workspace
 app.post('/start', async (c) => {
   const body = await c.req.json();
   const { prdId, workspacePath, config } = body;
 
-  if (!prdId || !workspacePath || !config) {
-    return c.json({ ok: false, error: 'prdId, workspacePath, and config are required' }, 400);
+  if (!workspacePath || !config) {
+    return c.json({ ok: false, error: 'workspacePath and config are required' }, 400);
   }
 
   try {
-    const loopId = await loopOrchestrator.startLoop(prdId, workspacePath, config);
+    const loopId = await loopOrchestrator.startLoop(prdId || null, workspacePath, config);
     return c.json({ ok: true, data: { loopId } }, 201);
   } catch (err) {
     return c.json({ ok: false, error: String(err) }, 500);

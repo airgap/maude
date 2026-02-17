@@ -28,8 +28,8 @@ export const SIDEBAR_TABS: TabDefinition[] = [
     icon: 'M4 7h16M4 12h10M4 17h6',
   },
   {
-    id: 'tasks',
-    label: 'Tasks',
+    id: 'work',
+    label: 'Work',
     icon: 'M9 11l3 3L22 4M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11',
   },
   {
@@ -46,11 +46,6 @@ export const SIDEBAR_TABS: TabDefinition[] = [
     id: 'mcp',
     label: 'MCP',
     icon: 'M4 4h16v4H4zM4 10h16v4H4zM4 16h16v4H4z',
-  },
-  {
-    id: 'loop',
-    label: 'Loop',
-    icon: 'M17 1l4 4-4 4M3 11V9a4 4 0 0 1 4-4h14M7 23l-4-4 4-4M21 13v2a4 4 0 0 1-4 4H3',
   },
 ];
 

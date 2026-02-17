@@ -25,9 +25,10 @@ export type ThemeId =
   | 'github-light'
   | 'one-dark'
   | 'everforest'
+  | 'goth'
   | (string & {});
 
-export type CliProvider = 'claude' | 'kiro' | 'ollama';
+export type CliProvider = 'claude' | 'kiro' | 'ollama' | 'bedrock';
 
 export interface Settings {
   theme: ThemeId;

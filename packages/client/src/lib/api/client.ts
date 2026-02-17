@@ -811,11 +811,54 @@ export const api = {
         method: 'POST',
         body: JSON.stringify({}),
       }),
+
+    // --- Standalone Story Routes (prd_id = NULL) ---
+    listStandaloneStories: (workspacePath: string) => {
+      const q = `?workspacePath=${encodeURIComponent(workspacePath)}`;
+      return request<{ ok: boolean; data: any[] }>(`/prds/stories${q}`);
+    },
+    listAllStories: (workspacePath: string) => {
+      const q = `?workspacePath=${encodeURIComponent(workspacePath)}`;
+      return request<{ ok: boolean; data: { standalone: any[]; byPrd: any[] } }>(
+        `/prds/stories/all${q}`,
+      );
+    },
+    createStandaloneStory: (body: {
+      workspacePath: string;
+      title: string;
+      description?: string;
+      acceptanceCriteria?: string[];
+      priority?: string;
+    }) =>
+      request<{ ok: boolean; data: any }>('/prds/stories', {
+        method: 'POST',
+        body: JSON.stringify(body),
+      }),
+    updateStandaloneStory: (storyId: string, body: Record<string, any>) =>
+      request<{ ok: boolean; data: any }>(`/prds/stories/${storyId}`, {
+        method: 'PATCH',
+        body: JSON.stringify(body),
+      }),
+    deleteStandaloneStory: (storyId: string) =>
+      request<{ ok: boolean }>(`/prds/stories/${storyId}`, { method: 'DELETE' }),
+    estimateStandaloneStory: (storyId: string) =>
+      request<{ ok: boolean; data: any }>(`/prds/stories/${storyId}/estimate`, {
+        method: 'POST',
+        body: JSON.stringify({}),
+      }),
+    saveStandaloneEstimate: (
+      storyId: string,
+      body: { size: string; storyPoints: number; reasoning?: string },
+    ) =>
+      request<{ ok: boolean; data: any }>(`/prds/stories/${storyId}/estimate`, {
+        method: 'PUT',
+        body: JSON.stringify(body),
+      }),
   },
 
   // --- Loops ---
   loops: {
-    start: (body: { prdId: string; workspacePath: string; config: any }) =>
+    start: (body: { prdId: string | null; workspacePath: string; config: any }) =>
       request<{ ok: boolean; data: { loopId: string } }>('/loops/start', {
         method: 'POST',
         body: JSON.stringify(body),
@@ -829,6 +872,84 @@ export const api = {
       return request<{ ok: boolean; data: any[] }>(`/loops${q}`);
     },
     log: (id: string) => request<{ ok: boolean; data: any[] }>(`/loops/${id}/log`),
+  },
+
+  // --- External Providers (Jira, Linear, Asana) ---
+  external: {
+    saveConfig: (config: {
+      provider: string;
+      apiKey: string;
+      email?: string;
+      baseUrl?: string;
+      teamId?: string;
+      workspaceGid?: string;
+    }) =>
+      request<{ ok: boolean }>('/external/config', {
+        method: 'POST',
+        body: JSON.stringify(config),
+      }),
+    getConfigStatus: (provider: string) =>
+      request<{
+        ok: boolean;
+        data: {
+          configured: boolean;
+          provider: string;
+          baseUrl?: string;
+          email?: string;
+          teamId?: string;
+          workspaceGid?: string;
+        };
+      }>(`/external/config/${provider}`),
+    testConnection: (provider: string) =>
+      request<{ ok: boolean; data: { connected: boolean; error?: string } }>(
+        `/external/test/${provider}`,
+        { method: 'POST' },
+      ),
+    listProjects: (provider: string) =>
+      request<{ ok: boolean; data: any[] }>(`/external/projects/${provider}`),
+    listIssues: (provider: string, projectKey: string, status?: string) => {
+      const params = new URLSearchParams();
+      if (status) params.set('status', status);
+      const q = params.toString();
+      return request<{ ok: boolean; data: any[] }>(
+        `/external/issues/${provider}/${encodeURIComponent(projectKey)}${q ? '?' + q : ''}`,
+      );
+    },
+    importIssues: (body: {
+      provider: string;
+      projectKey: string;
+      workspacePath: string;
+      issueIds?: string[];
+      prdId?: string;
+    }) =>
+      request<{
+        ok: boolean;
+        data: { imported: number; skipped: number; storyIds: string[]; errors: string[] };
+      }>('/external/import', {
+        method: 'POST',
+        body: JSON.stringify(body),
+      }),
+    refreshStory: (storyId: string) =>
+      request<{ ok: boolean; data: any }>(`/external/refresh/${storyId}`, { method: 'POST' }),
+    refreshAll: (workspacePath: string) =>
+      request<{ ok: boolean; data: { refreshed: number; total: number; errors: string[] } }>(
+        '/external/refresh-all',
+        {
+          method: 'POST',
+          body: JSON.stringify({ workspacePath }),
+        },
+      ),
+    pushStatus: (body: {
+      storyId: string;
+      status: 'completed' | 'failed';
+      commitSha?: string;
+      prUrl?: string;
+      comment?: string;
+    }) =>
+      request<{ ok: boolean }>('/external/push-status', {
+        method: 'POST',
+        body: JSON.stringify(body),
+      }),
   },
 
   // --- Auth ---

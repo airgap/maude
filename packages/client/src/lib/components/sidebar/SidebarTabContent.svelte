@@ -1,14 +1,13 @@
 <script lang="ts">
   import type { SidebarTab } from '$lib/stores/ui.svelte';
   import ConversationList from './ConversationList.svelte';
-  import TaskPanel from './TaskPanel.svelte';
+  import WorkPanel from './WorkPanel.svelte';
   import FileTree from './FileTree.svelte';
   import MemoryPanel from './MemoryPanel.svelte';
   import AgentPanel from './AgentPanel.svelte';
   import SearchPanel from './SearchPanel.svelte';
   import SymbolOutline from '../editor/SymbolOutline.svelte';
   import McpPanel from './McpPanel.svelte';
-  import LoopPanel from './LoopPanel.svelte';
 
   let { tabId }: { tabId: SidebarTab } = $props();
 </script>
@@ -21,14 +20,12 @@
   <SearchPanel />
 {:else if tabId === 'symbols'}
   <SymbolOutline />
-{:else if tabId === 'tasks'}
-  <TaskPanel />
+{:else if tabId === 'work'}
+  <WorkPanel />
 {:else if tabId === 'memory'}
   <MemoryPanel />
 {:else if tabId === 'agents'}
   <AgentPanel />
 {:else if tabId === 'mcp'}
   <McpPanel />
-{:else if tabId === 'loop'}
-  <LoopPanel />
 {/if}

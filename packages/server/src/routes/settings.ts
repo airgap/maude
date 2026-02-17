@@ -5,7 +5,14 @@ import { listOllamaModels, checkOllamaHealth } from '../services/ollama-provider
 const app = new Hono();
 
 // Sensitive keys that should never be sent to the client
-const SENSITIVE_KEYS = new Set(['anthropicApiKey', 'openaiApiKey', 'googleApiKey']);
+const SENSITIVE_KEYS = new Set([
+  'anthropicApiKey',
+  'openaiApiKey',
+  'googleApiKey',
+  'jiraConfig',
+  'linearConfig',
+  'asanaConfig',
+]);
 
 // Get all settings
 app.get('/', (c) => {

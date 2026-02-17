@@ -1,3 +1,4 @@
+<!-- @deprecated Use WorkPanel.svelte instead. This component is no longer mounted. -->
 <script lang="ts">
   import { taskStore } from '$lib/stores/tasks.svelte';
   import { conversationStore } from '$lib/stores/conversation.svelte';

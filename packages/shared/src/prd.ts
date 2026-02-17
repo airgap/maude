@@ -10,9 +10,76 @@ export interface AcceptanceCriterion {
   passed: boolean;
 }
 
+/** Supported external issue tracker providers */
+export type ExternalProvider = 'jira' | 'linear' | 'asana';
+
+/** Reference to an external issue tracker (Jira, Linear, Asana, etc.) */
+export interface ExternalRef {
+  provider: ExternalProvider;
+  externalId: string; // e.g. "PROJ-123", Linear UUID, Asana GID
+  externalUrl: string; // link back to the issue/epic
+  syncedAt: number;
+  syncDirection?: 'pull' | 'push' | 'bidirectional';
+}
+
+/** Normalized issue shape from any external provider */
+export interface ExternalIssue {
+  externalId: string;
+  externalUrl: string;
+  provider: ExternalProvider;
+  title: string;
+  description: string;
+  acceptanceCriteria: string[];
+  status: string; // raw status from provider (e.g. "To Do", "In Progress")
+  statusCategory: 'todo' | 'in_progress' | 'done';
+  priority: string; // raw priority from provider
+  priorityNormalized: StoryPriority;
+  assignee?: string;
+  labels: string[];
+  projectKey: string;
+  projectName: string;
+  updatedAt: number;
+}
+
+/** Configuration for connecting to an external provider */
+export interface ExternalProviderConfig {
+  provider: ExternalProvider;
+  apiKey: string;
+  email?: string; // Jira: email for Basic auth
+  baseUrl?: string; // Jira: instance URL (e.g. https://myorg.atlassian.net)
+  teamId?: string; // Linear: team ID
+  workspaceGid?: string; // Asana: workspace GID
+}
+
+/** A project/board from an external provider (for the project picker UI) */
+export interface ExternalProject {
+  id: string;
+  name: string;
+  provider: ExternalProvider;
+  issueCount?: number;
+}
+
+/** Request to import issues from an external provider */
+export interface ImportExternalIssuesRequest {
+  provider: ExternalProvider;
+  projectKey: string;
+  workspacePath: string;
+  issueIds?: string[]; // specific issues; omit to import all open
+  prdId?: string; // attach to PRD instead of standalone
+}
+
+/** Result of importing external issues */
+export interface ImportExternalIssuesResult {
+  imported: number;
+  skipped: number;
+  storyIds: string[];
+  errors: string[];
+}
+
 export interface UserStory {
   id: string;
-  prdId: string;
+  prdId: string | null; // null = standalone story (no PRD parent)
+  workspacePath?: string; // for standalone stories; PRD stories get this from PRD
   title: string;
   description: string;
   acceptanceCriteria: AcceptanceCriterion[];
@@ -20,7 +87,7 @@ export interface UserStory {
   dependsOn: string[]; // story IDs this story depends on
   dependencyReasons: Record<string, string>; // storyId -> reason for dependency
   status: StoryStatus;
-  taskId?: string; // linked E task ID
+  taskId?: string; // linked E task ID (legacy, from task migration)
   agentId?: string; // agent that last worked on this
   conversationId?: string; // conversation created for this story
   commitSha?: string; // git commit after successful implementation
@@ -29,9 +96,21 @@ export interface UserStory {
   learnings: string[]; // accumulated learnings from attempts
   estimate?: StoryEstimate; // AI or manual complexity/effort estimate
   priorityRecommendation?: PriorityRecommendation; // AI-suggested priority with explanation
+  externalRef?: ExternalRef; // link to Jira/Linear/Asana issue
+  externalStatus?: string; // raw status string from external tool
   sortOrder: number;
   createdAt: number;
   updatedAt: number;
+}
+
+/** Input for creating a standalone story (no PRD) */
+export interface StandaloneStoryCreateInput {
+  workspacePath: string;
+  title: string;
+  description?: string;
+  acceptanceCriteria?: string[];
+  priority?: StoryPriority;
+  dependsOn?: string[];
 }
 
 export interface PRD {
@@ -42,6 +121,7 @@ export interface PRD {
   branchName?: string;
   stories: UserStory[];
   qualityChecks: QualityCheckConfig[];
+  externalRef?: ExternalRef; // link to Jira Epic / Linear Project / Asana Project
   createdAt: number;
   updatedAt: number;
 }
@@ -103,7 +183,7 @@ export interface LoopConfig {
 
 export interface LoopState {
   id: string;
-  prdId: string;
+  prdId: string | null; // null = standalone loop (no PRD)
   workspacePath: string;
   status: LoopStatus;
   config: LoopConfig;
