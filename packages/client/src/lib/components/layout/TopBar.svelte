@@ -4,7 +4,6 @@
   import { streamStore } from '$lib/stores/stream.svelte';
   import { uiStore } from '$lib/stores/ui.svelte';
   import WorkspaceTabBar from './WorkspaceTabBar.svelte';
-  import SpriteAnimation from '$lib/components/ui/SpriteAnimation.svelte';
   import WindowControls from './WindowControls.svelte';
 
   const models = [
@@ -39,7 +38,6 @@
         <line x1="9" y1="3" x2="9" y2="21" />
       </svg>
     </button>
-    <SpriteAnimation size={24} class="brand-sprite" />
     <WorkspaceTabBar />
   </div>
 
@@ -185,11 +183,6 @@
     flex: 1;
     text-align: center;
     min-width: 0;
-  }
-
-  :global(.brand-sprite) {
-    flex-shrink: 0;
-    filter: drop-shadow(0 0 4px var(--accent-primary));
   }
 
   .conv-title {
