@@ -1,7 +1,8 @@
 import { Hono } from 'hono';
 import { nanoid } from 'nanoid';
 import { claudeManager } from '../services/claude-process';
-import { createOllamaStream } from '../services/ollama-provider';
+import { createOllamaStreamV2 } from '../services/ollama-provider-v2';
+import { createBedrockStreamV2 } from '../services/bedrock-provider-v2';
 import { getDb } from '../db/database';
 
 const app = new Hono();
@@ -117,11 +118,68 @@ app.post('/:conversationId', async (c) => {
     if (conv.plan_mode) {
       ollamaSystemPrompt = PLAN_MODE_DIRECTIVE + ollamaSystemPrompt;
     }
-    const stream = createOllamaStream({
+
+    // Get allowed/disallowed tools
+    let allowedTools: string[] | undefined;
+    let disallowedTools: string[] | undefined;
+    try {
+      if (conv.allowed_tools) allowedTools = JSON.parse(conv.allowed_tools);
+      if (conv.disallowed_tools) disallowedTools = JSON.parse(conv.disallowed_tools);
+    } catch {}
+
+    // Extract images from body if provided
+    const images = body.images || [];
+
+    const stream = createOllamaStreamV2({
       model: ollamaModel,
       content,
       conversationId,
       systemPrompt: ollamaSystemPrompt || undefined,
+      workspacePath: conv.workspace_path,
+      allowedTools,
+      disallowedTools,
+      images,
+    });
+    return new Response(stream, {
+      headers: {
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache',
+        Connection: 'keep-alive',
+        'Access-Control-Expose-Headers': 'X-Session-Id',
+      },
+    });
+  }
+
+  // Route to Bedrock provider for AWS Bedrock models (prefixed with "bedrock:")
+  const isBedrock = conv.model?.startsWith('bedrock:');
+  if (isBedrock) {
+    const bedrockModel = conv.model.replace('bedrock:', '');
+    let bedrockSystemPrompt = conv.system_prompt || '';
+    if (conv.plan_mode) {
+      bedrockSystemPrompt = PLAN_MODE_DIRECTIVE + bedrockSystemPrompt;
+    }
+
+    // Get allowed/disallowed tools
+    let allowedTools: string[] | undefined;
+    let disallowedTools: string[] | undefined;
+    try {
+      if (conv.allowed_tools) allowedTools = JSON.parse(conv.allowed_tools);
+      if (conv.disallowed_tools) disallowedTools = JSON.parse(conv.disallowed_tools);
+    } catch {}
+
+    // Extract images from body if provided
+    const images = body.images || [];
+
+    const stream = createBedrockStreamV2({
+      model: bedrockModel,
+      content,
+      conversationId,
+      systemPrompt: bedrockSystemPrompt || undefined,
+      workspacePath: conv.workspace_path,
+      allowedTools,
+      disallowedTools,
+      permissionMode: conv.permission_mode,
+      images,
     });
     return new Response(stream, {
       headers: {

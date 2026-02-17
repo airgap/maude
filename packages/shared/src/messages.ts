@@ -27,7 +27,22 @@ export interface ThinkingContent {
   parentToolUseId?: string;
 }
 
-export type MessageContent = TextContent | ToolUseContent | ToolResultContent | ThinkingContent;
+export interface ImageContent {
+  type: 'image';
+  source: {
+    type: 'base64' | 'url';
+    media_type: string; // e.g., 'image/png', 'image/jpeg'
+    data?: string; // base64-encoded image data
+    url?: string; // image URL
+  };
+}
+
+export type MessageContent =
+  | TextContent
+  | ToolUseContent
+  | ToolResultContent
+  | ThinkingContent
+  | ImageContent;
 
 export interface Message {
   id: string;
