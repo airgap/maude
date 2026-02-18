@@ -627,7 +627,7 @@
                   class:active={settingsStore.hypertheme === ht.id}
                   onclick={() => settingsStore.setHypertheme(ht.id)}
                 >
-                  <span class="ht-icon">{ht.icon}</span>
+                  <span class="ht-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d={ht.icon} /></svg></span>
                   <span class="ht-label">{ht.label}</span>
                 </button>
               {/each}
@@ -1677,8 +1677,13 @@
     background: var(--bg-active);
   }
   .ht-icon {
-    font-size: var(--fs-2xl);
-    line-height: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-secondary);
+  }
+  .hypertheme-option.active .ht-icon {
+    color: var(--accent-primary);
   }
   .ht-label {
     font-size: var(--fs-xs);

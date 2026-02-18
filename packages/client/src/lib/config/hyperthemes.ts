@@ -11,6 +11,7 @@ export interface HyperthemeConfig {
   id: string;
   label: string;
   description: string;
+  /** SVG path data for the icon (rendered in a 24×24 viewBox) */
   icon: string;
   /** Shape / motion / text CSS vars (always applied) */
   cssVars: Record<string, string>;
@@ -31,7 +32,7 @@ export const HYPERTHEMES: HyperthemeConfig[] = [
     id: 'tech',
     label: 'Tech',
     description: 'Sharp edges, scanlines, grid overlay',
-    icon: '⬡',
+    icon: 'M12 2l9 5.27v9.46L12 22l-9-5.27V7.27L12 2z',
     suggestedMonoFont: 'share-tech-mono',
     suggestedSansFont: 'rajdhani',
     cssVars: {
@@ -72,7 +73,7 @@ export const HYPERTHEMES: HyperthemeConfig[] = [
     id: 'arcane',
     label: 'Arcane',
     description: 'Mystical sigils, purple glow, Elder Futhark runes',
-    icon: '᚛',
+    icon: 'M12 2l3 7h7l-5.5 4.5 2 7L12 16l-6.5 4.5 2-7L2 9h7l3-7z',
     suggestedMonoFont: 'fira-code',
     suggestedSansFont: 'exo-2',
     cssVars: {
@@ -166,7 +167,7 @@ export const HYPERTHEMES: HyperthemeConfig[] = [
     id: 'ethereal',
     label: 'Ethereal',
     description: 'Soft rounds, floating motes, opalescent shimmer',
-    icon: '✦',
+    icon: 'M12 3c-1.2 3-3.8 5.6-9 6 5.2.4 7.8 3 9 6 1.2-3 3.8-5.6 9-6-5.2-.4-7.8-3-9-6z',
     suggestedMonoFont: 'victor-mono',
     suggestedSansFont: 'outfit',
     cssVars: {
@@ -261,7 +262,7 @@ export const HYPERTHEMES: HyperthemeConfig[] = [
     id: 'study',
     label: "Wizard's Study",
     description: 'Floating embers, molten amber, alchemical glow',
-    icon: '🜂',
+    icon: 'M12 2c-4 6-8 9.5-8 13a8 8 0 0 0 16 0c0-3.5-4-7-8-13z',
     suggestedMonoFont: 'fira-code',
     suggestedSansFont: 'cinzel',
     cssVars: {
@@ -357,7 +358,7 @@ export const HYPERTHEMES: HyperthemeConfig[] = [
     id: 'astral',
     label: 'Astral · Twilight',
     description: 'Deep space blue, nebula glow, constellations',
-    icon: '✧',
+    icon: 'M12 2l2.4 7.4H22l-6.2 4.5 2.4 7.4L12 16.8l-6.2 4.5 2.4-7.4L2 9.4h7.6L12 2z M5 3l1 2M19 3l-1 2M3 12l2 .5M21 12l-2 .5',
     suggestedMonoFont: 'space-mono',
     suggestedSansFont: 'space-grotesk',
     cssVars: {
@@ -452,7 +453,7 @@ export const HYPERTHEMES: HyperthemeConfig[] = [
     id: 'astral-midnight',
     label: 'Astral · Midnight',
     description: 'OLED black, bright stars, maximum contrast',
-    icon: '★',
+    icon: 'M12 2l2.4 7.4H22l-6.2 4.5 2.4 7.4L12 16.8l-6.2 4.5 2.4-7.4L2 9.4h7.6L12 2z',
     suggestedMonoFont: 'space-mono',
     suggestedSansFont: 'space-grotesk',
     cssVars: {
@@ -547,7 +548,7 @@ export const HYPERTHEMES: HyperthemeConfig[] = [
     id: 'goth',
     label: 'Redrum',
     description: 'Void black, dried blood, aged bone',
-    icon: '🖤',
+    icon: 'M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78L12 21.23l8.84-8.84a5.5 5.5 0 0 0 0-7.78z',
     suggestedMonoFont: 'fira-code',
     suggestedSansFont: 'cinzel',
     cssVars: {
@@ -643,7 +644,7 @@ export const HYPERTHEMES: HyperthemeConfig[] = [
     id: 'candyland',
     label: 'Candyland',
     description: 'Bubblegum pinks, cotton candy, sugar-rush pastels',
-    icon: '🍬',
+    icon: 'M9.5 2A6.5 6.5 0 0 0 3 8.5c0 2.5 1.5 4.5 3.5 5.5L8 22h8l1.5-8c2-1 3.5-3 3.5-5.5A6.5 6.5 0 0 0 14.5 2h-5z',
     suggestedMonoFont: 'victor-mono',
     suggestedSansFont: 'outfit',
     cssVars: {
@@ -738,7 +739,7 @@ export const HYPERTHEMES: HyperthemeConfig[] = [
     id: 'magic-forest',
     label: 'Magic Forest',
     description: 'Enchanted woods, bioluminescent glow, fairy dust',
-    icon: '🌿',
+    icon: 'M17 8c.7-1 1-2.2 1-3.5C18 2 16 2 16 2s0 2-2.5 3.5S9 8 9 8s-1.5 2-1.5 4.5c0 3 2 5.5 4.5 5.5 1 0 2-.3 2.8-.8M7 16c-1 1.5-1 3.5-1 3.5s2 0 3.5-1.5M12 22v-4',
     suggestedMonoFont: 'victor-mono',
     suggestedSansFont: 'cormorant-garamond',
     cssVars: {
