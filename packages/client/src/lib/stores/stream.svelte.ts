@@ -335,6 +335,10 @@ function createStreamStore() {
               builtinFileWriteTools.includes(event.toolName) || isMcpFileWriteTool(event.toolName);
             if (isFileWrite && event.filePath) {
               editorStore.refreshFile(event.filePath);
+              if (editorStore.followAlong) {
+                // Follow Along: open + activate the file (splits if needed)
+                editorStore.openFile(event.filePath);
+              }
             }
           }
 

@@ -5,6 +5,7 @@
   import { editorStore } from '$lib/stores/editor.svelte';
   import { gitStore } from '$lib/stores/git.svelte';
   import { lspStore } from '$lib/stores/lsp.svelte';
+  import { terminalStore } from '$lib/stores/terminal.svelte';
 
   // Client-side pricing table (per million tokens)
   const PRICING: Record<string, { input: number; output: number }> = {
@@ -172,6 +173,17 @@
       {/if}
     {/if}
 
+    <button
+      class="status-item terminal-toggle"
+      class:active={terminalStore.isOpen}
+      onclick={() => terminalStore.toggle()}
+      title="Toggle terminal (Ctrl+`)"
+    >
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <polyline points="4 17 10 11 4 5" /><line x1="12" y1="19" x2="20" y2="19" />
+      </svg>
+    </button>
+
     <span class="status-item mode">
       {settingsStore.permissionMode}
     </span>
@@ -249,25 +261,14 @@
   .statusbar-throbber.matrix {
     background: repeating-linear-gradient(
       90deg,
-      transparent 0px,
-      #00ff4120 1px,
-      transparent 2px,
-      transparent 4px
+      #00220080 0px,
+      #00ff41cc 1px,
+      #00ff4166 2px,
+      #00220080 4px
     );
     background-size: 200% 100%;
     animation: matrixRain 0.8s linear infinite;
-    box-shadow: 0 0 6px #00ff4160;
-  }
-
-  /* ── Plasma: multi-color warping wave ── */
-  .statusbar-throbber.plasma {
-    background: linear-gradient(
-      90deg,
-      #ff00ff80, #00ffff80, #ff880080, #ff00ff80, #00ffff80
-    );
-    background-size: 300% 100%;
-    animation: plasmaWave 3s ease-in-out infinite;
-    filter: blur(0.5px) saturate(1.5);
+    box-shadow: 0 0 8px #00ff4199, 0 0 3px #00ff41cc;
   }
 
   /* ── Comet: bright dot streaking across ── */
@@ -308,23 +309,6 @@
     background-size: 200% 100%, 200% 100%;
     animation: helixSlide 1.5s linear infinite;
     opacity: 0.7;
-  }
-
-  /* ── Glitch: digital jitter ── */
-  .statusbar-throbber.glitch {
-    background: var(--accent-primary);
-    animation: glitchBar 0.3s steps(2) infinite;
-  }
-
-  /* ── Aurora: northern lights shimmer ── */
-  .statusbar-throbber.aurora {
-    background: linear-gradient(
-      90deg,
-      #00ff8840, #00b4ff60, #ff00ff40, #00ffcc60, #7b00ff40, #00ff8840
-    );
-    background-size: 400% 100%;
-    animation: auroraShimmer 4s ease-in-out infinite;
-    filter: blur(0.5px);
   }
 
   /* ── Fire: warm blaze gradient ── */
@@ -443,11 +427,6 @@
     0% { background-position: 0% 0%; }
     100% { background-position: -4px 0%; }
   }
-  @keyframes plasmaWave {
-    0% { background-position: 0% 0%; }
-    50% { background-position: 150% 0%; }
-    100% { background-position: 300% 0%; }
-  }
   @keyframes cometStreak {
     0% { left: -10%; opacity: 0; }
     10% { opacity: 1; }
@@ -457,21 +436,6 @@
   @keyframes helixSlide {
     0% { background-position: 0% 0%, 0% 0%; }
     100% { background-position: 20px 0%, -20px 0%; }
-  }
-  @keyframes glitchBar {
-    0% { opacity: 0.9; clip-path: inset(0 0 0 0); }
-    20% { opacity: 0.3; clip-path: inset(0 60% 0 0); }
-    40% { opacity: 1; clip-path: inset(0 0 0 40%); }
-    60% { opacity: 0.5; clip-path: inset(0 20% 0 30%); }
-    80% { opacity: 0.8; clip-path: inset(0 0 0 0); }
-    100% { opacity: 0.4; clip-path: inset(0 80% 0 0); }
-  }
-  @keyframes auroraShimmer {
-    0% { background-position: 0% 0%; opacity: 0.4; }
-    25% { opacity: 0.8; }
-    50% { background-position: 200% 0%; opacity: 0.5; }
-    75% { opacity: 0.9; }
-    100% { background-position: 400% 0%; opacity: 0.4; }
   }
   @keyframes fireFlicker {
     0% { background-position: 0% 0%; opacity: 0.6; }
@@ -628,6 +592,23 @@
     animation: pulse 1.2s infinite;
   }
 
+  .terminal-toggle {
+    cursor: pointer;
+    padding: 2px 4px;
+    border-radius: var(--radius-sm);
+    color: var(--text-tertiary);
+    transition: all var(--transition);
+    border: none;
+    background: none;
+  }
+  .terminal-toggle:hover {
+    color: var(--text-primary);
+    background: var(--bg-hover);
+  }
+  .terminal-toggle.active {
+    color: var(--accent-primary);
+  }
+
   .mode {
     text-transform: var(--ht-label-transform);
     letter-spacing: var(--ht-label-spacing);
@@ -657,7 +638,6 @@
   }
   .lsp-dot.connecting {
     background: var(--accent-warning);
-    animation: pulse 1.2s infinite;
   }
   .lsp-dot.error {
     background: var(--accent-error);

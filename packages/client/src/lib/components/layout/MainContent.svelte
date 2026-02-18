@@ -36,21 +36,6 @@
       <EditorPane />
     {/snippet}
   </SplitPane>
-{:else if effectiveLayout === 'split-vertical'}
-  <SplitPane
-    ratio={editorStore.splitRatio}
-    direction="vertical"
-    onRatioChange={(r) => editorStore.setSplitRatio(r)}
-  >
-    {#snippet first()}
-      <div class="pane-full">
-        <PrimaryPane {children} />
-      </div>
-    {/snippet}
-    {#snippet second()}
-      <EditorPane />
-    {/snippet}
-  </SplitPane>
 {/if}
 
 <style>

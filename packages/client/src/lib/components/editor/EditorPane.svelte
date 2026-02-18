@@ -1,38 +1,12 @@
 <script lang="ts">
   import { editorStore } from '$lib/stores/editor.svelte';
-  import { terminalStore } from '$lib/stores/terminal.svelte';
   import EditorTabBar from './EditorTabBar.svelte';
   import EditorBreadcrumb from './EditorBreadcrumb.svelte';
   import CodeEditor from './CodeEditor.svelte';
-  import TerminalPanel from './TerminalPanel.svelte';
   import UnifiedDiffView from './UnifiedDiffView.svelte';
-
-  let resizingTerminal = $state(false);
-  let startY = 0;
-  let startHeight = 0;
-
-  function onTerminalResizeStart(e: MouseEvent) {
-    resizingTerminal = true;
-    startY = e.clientY;
-    startHeight = terminalStore.panelHeight;
-    document.addEventListener('mousemove', onTerminalResizeMove);
-    document.addEventListener('mouseup', onTerminalResizeEnd);
-  }
-
-  function onTerminalResizeMove(e: MouseEvent) {
-    if (!resizingTerminal) return;
-    const delta = startY - e.clientY;
-    terminalStore.setPanelHeight(startHeight + delta);
-  }
-
-  function onTerminalResizeEnd() {
-    resizingTerminal = false;
-    document.removeEventListener('mousemove', onTerminalResizeMove);
-    document.removeEventListener('mouseup', onTerminalResizeEnd);
-  }
 </script>
 
-<div class="editor-pane" class:resizing-terminal={resizingTerminal}>
+<div class="editor-pane">
   <div class="editor-area">
     {#if editorStore.hasOpenTabs}
       <EditorTabBar />
@@ -69,12 +43,6 @@
       </div>
     {/if}
   </div>
-
-  {#if terminalStore.isOpen}
-    <!-- svelte-ignore a11y_no_static_element_interactions -->
-    <div class="terminal-resize-handle" onmousedown={onTerminalResizeStart}></div>
-    <TerminalPanel />
-  {/if}
 </div>
 
 <style>
@@ -91,19 +59,6 @@
     flex-direction: column;
     flex: 1;
     min-height: 0;
-  }
-
-  .terminal-resize-handle {
-    height: 6px;
-    cursor: row-resize;
-    background: transparent;
-    flex-shrink: 0;
-    transition: background var(--transition);
-  }
-  .terminal-resize-handle:hover,
-  .resizing-terminal .terminal-resize-handle {
-    background: var(--accent-primary);
-    box-shadow: var(--shadow-glow-sm);
   }
 
   .empty-state {

@@ -2,6 +2,8 @@
   import { uiStore } from '$lib/stores/ui.svelte';
   import { settingsStore } from '$lib/stores/settings.svelte';
   import { conversationStore } from '$lib/stores/conversation.svelte';
+  import { editorStore } from '$lib/stores/editor.svelte';
+  import { api } from '$lib/api/client';
 
   let query = $state('');
   let selectedIndex = $state(0);
@@ -70,8 +72,13 @@
       category: 'Mode',
       shortcut: 'Shift+Tab x2',
       action: () => {
-        conversationStore.active &&
-          conversationStore.setPlanMode(!conversationStore.active.planMode);
+        if (conversationStore.active) {
+          const newMode = !conversationStore.active.planMode;
+          conversationStore.setPlanMode(newMode);
+          if (conversationStore.activeId) {
+            api.conversations.update(conversationStore.activeId, { planMode: newMode });
+          }
+        }
         close();
       },
     },
@@ -154,6 +161,15 @@
         uiStore.setSidebarTab('work');
         uiStore.setSidebarOpen(true);
         uiStore.openModal('external-provider-config');
+      },
+    },
+    {
+      id: 'follow-along',
+      label: 'Toggle Follow Along',
+      category: 'Editor',
+      action: () => {
+        editorStore.toggleFollowAlong();
+        close();
       },
     },
   ];

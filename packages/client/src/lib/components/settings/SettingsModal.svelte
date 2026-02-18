@@ -18,11 +18,11 @@
   import { MONO_FONTS, SANS_FONTS, findFont } from '$lib/config/fonts';
   import { HYPERTHEMES } from '$lib/config/hyperthemes';
 
-  const cliProviders: { id: CliProvider; label: string; desc: string; icon: string }[] = [
-    { id: 'claude', label: 'Claude Code', desc: 'Anthropic Claude CLI', icon: '⚡' },
-    { id: 'kiro', label: 'Kiro CLI', desc: 'AWS Kiro CLI', icon: '☁️' },
-    { id: 'gemini-cli', label: 'Gemini CLI', desc: 'Google Gemini CLI', icon: '💎' },
-    { id: 'copilot', label: 'Copilot CLI', desc: 'GitHub Copilot CLI', icon: '🐙' },
+  const cliProviders: { id: CliProvider; label: string; desc: string }[] = [
+    { id: 'claude', label: 'Claude Code', desc: 'Anthropic Claude CLI' },
+    { id: 'kiro', label: 'Kiro CLI', desc: 'AWS Kiro CLI' },
+    { id: 'gemini-cli', label: 'Gemini CLI', desc: 'Google Gemini CLI' },
+    { id: 'copilot', label: 'Copilot CLI', desc: 'GitHub Copilot CLI' },
   ];
 
   // Check if the profiles tab was requested via localStorage flag
@@ -541,7 +541,6 @@
                   class:active={settingsStore.cliProvider === p.id}
                   onclick={() => settingsStore.update({ cliProvider: p.id })}
                 >
-                  <span class="provider-icon">{p.icon}</span>
                   <span class="provider-name">{p.label}</span>
                   <span class="provider-desc">{p.desc}</span>
                 </button>
@@ -851,11 +850,8 @@
                   <option value="neon">Neon</option>
                   <option value="cylon">Cylon</option>
                   <option value="matrix">Matrix</option>
-                  <option value="plasma">Plasma</option>
                   <option value="comet">Comet</option>
                   <option value="helix">Helix</option>
-                  <option value="glitch">Glitch</option>
-                  <option value="aurora">Aurora</option>
                   <option value="fire">Fire</option>
                   <option value="ocean">Ocean</option>
                   <option value="electric">Electric</option>
@@ -1770,10 +1766,6 @@
   .provider-option.active {
     border-color: var(--accent-primary);
     background: var(--bg-active);
-  }
-  .provider-icon {
-    font-size: var(--fs-lg);
-    margin-bottom: 2px;
   }
   .provider-name {
     font-size: var(--fs-base);

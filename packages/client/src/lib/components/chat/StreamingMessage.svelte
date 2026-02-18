@@ -125,6 +125,24 @@
           {:else if entry.block.type === 'text' && entry.block.text}
             {@const isStreaming = entry.index === totalBlocks - 1}
             <StreamingText text={entry.block.text} streaming={isStreaming} />
+          {:else if entry.block.type === 'image'}
+            <div class="message-image">
+              {#if entry.block.source?.type === 'base64' && entry.block.source.data}
+                <img
+                  src="data:{entry.block.source.media_type};base64,{entry.block.source.data}"
+                  alt="Attached image"
+                  loading="lazy"
+                  style="max-width: 100%; max-height: 400px; object-fit: contain; border-radius: var(--radius); border: 1px solid var(--border-secondary);"
+                />
+              {:else if entry.block.source?.type === 'url' && entry.block.source.url}
+                <img
+                  src={entry.block.source.url}
+                  alt="Attached image"
+                  loading="lazy"
+                  style="max-width: 100%; max-height: 400px; object-fit: contain; border-radius: var(--radius); border: 1px solid var(--border-secondary);"
+                />
+              {/if}
+            </div>
           {:else if entry.block.type === 'tool_use'}
             {@const hasResult = streamStore.toolResults.has(entry.block.id)}
             {@const toolResult = hasResult ? streamStore.toolResults.get(entry.block.id)! : null}
@@ -406,34 +424,18 @@
   .progress-bar.matrix {
     background: repeating-linear-gradient(
       90deg,
-      transparent 0px,
-      #00ff4120 1px,
-      transparent 2px,
-      transparent 4px
+      #00220080 0px,
+      #00ff41cc 1px,
+      #00ff4166 2px,
+      #00220080 4px
     );
     background-size: 200% 100%;
     animation: matrixRain 0.8s linear infinite;
-    box-shadow: 0 0 6px #00ff4160;
+    box-shadow: 0 0 8px #00ff4199, 0 0 3px #00ff41cc;
   }
   @keyframes matrixRain {
     0% { background-position: 0% 0%; }
     100% { background-position: -4px 0%; }
-  }
-
-  /* ── Plasma: multi-color warping wave ── */
-  .progress-bar.plasma {
-    background: linear-gradient(
-      90deg,
-      #ff00ff80, #00ffff80, #ff880080, #ff00ff80, #00ffff80
-    );
-    background-size: 300% 100%;
-    animation: plasmaWave 3s ease-in-out infinite;
-    filter: blur(0.5px) saturate(1.5);
-  }
-  @keyframes plasmaWave {
-    0% { background-position: 0% 0%; }
-    50% { background-position: 150% 0%; }
-    100% { background-position: 300% 0%; }
   }
 
   /* ── Comet: bright dot streaking across ── */
@@ -485,38 +487,6 @@
   @keyframes helixSlide {
     0% { background-position: 0% 0%, 0% 0%; }
     100% { background-position: 20px 0%, -20px 0%; }
-  }
-
-  /* ── Glitch: digital jitter ── */
-  .progress-bar.glitch {
-    background: var(--accent-primary);
-    animation: glitchBar 0.3s steps(2) infinite;
-  }
-  @keyframes glitchBar {
-    0% { opacity: 0.9; clip-path: inset(0 0 0 0); }
-    20% { opacity: 0.3; clip-path: inset(0 60% 0 0); }
-    40% { opacity: 1; clip-path: inset(0 0 0 40%); }
-    60% { opacity: 0.5; clip-path: inset(0 20% 0 30%); }
-    80% { opacity: 0.8; clip-path: inset(0 0 0 0); }
-    100% { opacity: 0.4; clip-path: inset(0 80% 0 0); }
-  }
-
-  /* ── Aurora: northern lights shimmer ── */
-  .progress-bar.aurora {
-    background: linear-gradient(
-      90deg,
-      #00ff8840, #00b4ff60, #ff00ff40, #00ffcc60, #7b00ff40, #00ff8840
-    );
-    background-size: 400% 100%;
-    animation: auroraShimmer 4s ease-in-out infinite;
-    filter: blur(0.5px);
-  }
-  @keyframes auroraShimmer {
-    0% { background-position: 0% 0%; opacity: 0.4; }
-    25% { opacity: 0.8; }
-    50% { background-position: 200% 0%; opacity: 0.5; }
-    75% { opacity: 0.9; }
-    100% { background-position: 400% 0%; opacity: 0.4; }
   }
 
   /* ── Fire: warm blaze gradient ── */

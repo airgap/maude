@@ -10,6 +10,7 @@
   import TopBar from './TopBar.svelte';
   import StatusBar from './StatusBar.svelte';
   import MainContent from './MainContent.svelte';
+  import TerminalPanel from '../editor/TerminalPanel.svelte';
   import PanelColumn from '../sidebar/PanelColumn.svelte';
   import FloatingPanelContainer from '../sidebar/FloatingPanelContainer.svelte';
   import DragOverlay from '../sidebar/DragOverlay.svelte';
@@ -132,6 +133,31 @@
     resizing = false;
   }
 
+  // --- Terminal resize ---
+  let resizingTerminal = $state(false);
+  let termStartY = 0;
+  let termStartHeight = 0;
+
+  function onTerminalResizeStart(e: MouseEvent) {
+    resizingTerminal = true;
+    termStartY = e.clientY;
+    termStartHeight = terminalStore.panelHeight;
+    document.addEventListener('mousemove', onTerminalResizeMove);
+    document.addEventListener('mouseup', onTerminalResizeEnd);
+  }
+
+  function onTerminalResizeMove(e: MouseEvent) {
+    if (!resizingTerminal) return;
+    const delta = termStartY - e.clientY;
+    terminalStore.setPanelHeight(termStartHeight + delta);
+  }
+
+  function onTerminalResizeEnd() {
+    resizingTerminal = false;
+    document.removeEventListener('mousemove', onTerminalResizeMove);
+    document.removeEventListener('mouseup', onTerminalResizeEnd);
+  }
+
   // Derived from device store — true when touch-primary and no hardware keyboard
   const isMobileUI = $derived(deviceStore.isMobileUI);
 
@@ -186,14 +212,10 @@
     // Ctrl+\: Toggle split pane
     if ((e.ctrlKey || e.metaKey) && e.key === '\\') {
       e.preventDefault();
-      if (editorStore.layoutMode === 'chat-only') {
-        editorStore.setLayoutMode('split-horizontal');
-      } else if (editorStore.layoutMode === 'split-horizontal') {
+      if (editorStore.layoutMode === 'split-horizontal') {
         editorStore.setLayoutMode('chat-only');
-      } else if (editorStore.layoutMode === 'editor-only') {
-        editorStore.setLayoutMode('split-horizontal');
       } else {
-        editorStore.setLayoutMode('chat-only');
+        editorStore.setLayoutMode('split-horizontal');
       }
     }
     // Ctrl+W: Close active tab
@@ -310,17 +332,24 @@
       ></div>
     {/if}
 
-    <main class="main-content" onclick={onMainContentClick}>
+    <main class="main-content" class:resizing-terminal={resizingTerminal} onclick={onMainContentClick}>
       <!-- Mobile sidebar overlay backdrop -->
       {#if isMobileUI && uiStore.sidebarOpen}
         <!-- svelte-ignore a11y_no_static_element_interactions -->
         <div class="mobile-sidebar-backdrop" onclick={onMainContentClick}></div>
       {/if}
-      <MainContent>
-        {#snippet children()}
-          {@render appChildren()}
-        {/snippet}
-      </MainContent>
+      <div class="main-content-upper">
+        <MainContent>
+          {#snippet children()}
+            {@render appChildren()}
+          {/snippet}
+        </MainContent>
+      </div>
+      {#if terminalStore.isOpen}
+        <!-- svelte-ignore a11y_no_static_element_interactions -->
+        <div class="terminal-resize-handle" onmousedown={onTerminalResizeStart}></div>
+        <TerminalPanel />
+      {/if}
     </main>
 
     {#if sidebarLayoutStore.rightColumn}
@@ -549,6 +578,27 @@
     background: var(--bg-primary);
     position: relative;
     z-index: 1;
+  }
+
+  .main-content-upper {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  .terminal-resize-handle {
+    height: 6px;
+    cursor: row-resize;
+    background: transparent;
+    flex-shrink: 0;
+    transition: background var(--transition);
+  }
+  .terminal-resize-handle:hover,
+  .resizing-terminal .terminal-resize-handle {
+    background: var(--accent-primary);
+    box-shadow: var(--shadow-glow-sm);
   }
 
   /* ── Mobile layout (data-mobile set by deviceStore when touch + no HW keyboard) ── */

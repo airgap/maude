@@ -21,7 +21,7 @@ export interface EditorTab {
   diffContent?: string;
 }
 
-export type LayoutMode = 'chat-only' | 'editor-only' | 'split-horizontal' | 'split-vertical';
+export type LayoutMode = 'chat-only' | 'editor-only' | 'split-horizontal';
 
 function detectLanguage(fileName: string): string {
   const ext = fileName.split('.').pop()?.toLowerCase() ?? '';
@@ -103,6 +103,7 @@ function createEditorStore() {
   let splitRatio = $state(0.5);
   let previewTabId = $state<string | null>(null);
   let pendingGoTo = $state<{ line: number; col: number } | null>(null);
+  let followAlong = $state(true);
 
   const activeTab = $derived(tabs.find((t) => t.id === activeTabId) ?? null);
   const dirtyTabs = $derived(tabs.filter((t) => t.content !== t.originalContent));
@@ -139,6 +140,16 @@ function createEditorStore() {
       return hasOpenTabs;
     },
     isDirty,
+
+    get followAlong() {
+      return followAlong;
+    },
+    setFollowAlong(enabled: boolean) {
+      followAlong = enabled;
+    },
+    toggleFollowAlong() {
+      followAlong = !followAlong;
+    },
 
     get pendingGoTo() {
       return pendingGoTo;
@@ -185,6 +196,18 @@ function createEditorStore() {
         }
       } catch {
         // No .editorconfig or server error — that's fine
+      }
+
+      // Re-check after async gap — another openFile call for the same path
+      // may have completed while we were fetching content / editorconfig.
+      const raceWinner = tabs.find((t) => t.filePath === filePath);
+      if (raceWinner) {
+        activeTabId = raceWinner.id;
+        if (previewTabId === raceWinner.id && !preview) {
+          previewTabId = null;
+        }
+        if (goTo) pendingGoTo = goTo;
+        return;
       }
 
       const tab: EditorTab = {
@@ -378,7 +401,13 @@ function createEditorStore() {
       splitRatio: number;
       previewTabId: string | null;
     }) {
-      tabs = state.tabs;
+      // Deduplicate tabs by filePath (keep first occurrence)
+      const seen = new Set<string>();
+      tabs = state.tabs.filter((t) => {
+        if (seen.has(t.filePath)) return false;
+        seen.add(t.filePath);
+        return true;
+      });
       activeTabId = state.activeTabId;
       layoutMode = state.layoutMode;
       splitRatio = state.splitRatio;

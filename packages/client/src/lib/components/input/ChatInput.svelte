@@ -519,6 +519,24 @@
       return;
     }
 
+    // Intercept "show me <file>" / "open <file>" as quick file open
+    const showMatch = text.match(/^(?:show\s+me|open|view)\s+(.+)$/i);
+    if (showMatch) {
+      const raw = showMatch[1].replace(/^["'`]+|["'`]+$/g, '').trim();
+      const wsPath = conversationStore.active?.workspacePath || settingsStore.workspacePath;
+      const filePath = raw.startsWith('/') ? raw : (wsPath && wsPath !== '.' ? wsPath + '/' + raw : raw);
+      // Verify the file exists before intercepting — if not, fall through to Claude
+      try {
+        await api.files.read(filePath);
+        await editorStore.openFile(filePath);
+        inputText = '';
+        resizeTextarea();
+        return;
+      } catch {
+        // Not a real file path — let Claude handle the message
+      }
+    }
+
     // Check for slash commands
     if (text.startsWith('/')) {
       const parts = text.split(/\s+/);
@@ -697,7 +715,11 @@
       if (now - lastShiftTab < 500) {
         lastShiftTab = 0;
         if (conversationStore.active) {
-          conversationStore.setPlanMode(!conversationStore.active.planMode);
+          const newMode = !conversationStore.active.planMode;
+          conversationStore.setPlanMode(newMode);
+          if (conversationStore.activeId) {
+            api.conversations.update(conversationStore.activeId, { planMode: newMode });
+          }
         } else {
           localPlanMode = !localPlanMode;
         }

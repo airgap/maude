@@ -3,6 +3,7 @@
   import { conversationStore } from '$lib/stores/conversation.svelte';
   import { streamStore } from '$lib/stores/stream.svelte';
   import { uiStore } from '$lib/stores/ui.svelte';
+  import { api } from '$lib/api/client';
   import WorkspaceTabBar from './WorkspaceTabBar.svelte';
   import WindowControls from './WindowControls.svelte';
   import ProfileSwitcher from './ProfileSwitcher.svelte';
@@ -15,7 +16,11 @@
 
   function togglePlanMode() {
     if (!conversationStore.active) return;
-    conversationStore.setPlanMode(!conversationStore.active.planMode);
+    const newMode = !conversationStore.active.planMode;
+    conversationStore.setPlanMode(newMode);
+    if (conversationStore.activeId) {
+      api.conversations.update(conversationStore.activeId, { planMode: newMode });
+    }
   }
 </script>
 

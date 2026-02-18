@@ -126,7 +126,6 @@ export const TUTORIAL_STEPS: TutorialStep[] = [
       <h3>Layout modes</h3>
       <ul>
         <li><kbd>Ctrl+\\</kbd> — Toggle between chat-only and split view</li>
-        <li><strong>Chat Only</strong> / <strong>Split</strong> / <strong>Editor Only</strong> — Cycle with the status bar button</li>
       </ul>
       <h3>Terminal</h3>
       <p>Press <kbd>Ctrl+\`</kbd> to toggle the integrated terminal. E can run commands here when given permission.</p>
