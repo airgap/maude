@@ -1,4 +1,4 @@
-import type { UserStory } from '@e/shared';
+import type { UserStory, StoryPriority } from '@e/shared';
 import { loopStore } from './loop.svelte';
 import { api } from '../api/client';
 
@@ -11,10 +11,32 @@ import { api } from '../api/client';
  */
 export type WorkFilter = 'all' | 'standalone' | 'external' | (string & {});
 
+/** Priority weight map — higher = more important */
+const PRIORITY_WEIGHT: Record<StoryPriority, number> = {
+  critical: 0,
+  high: 1,
+  medium: 2,
+  low: 3,
+};
+
 function createWorkStore() {
   let standaloneStories = $state<UserStory[]>([]);
   let activeFilter = $state<WorkFilter>('standalone');
   let loading = $state(false);
+  /** When true, manual order is preserved; when false, priority auto-sort is active */
+  let manualOrderOverride = $state(false);
+
+  /**
+   * Sort stories by priority (critical first) then by sortOrder within same priority.
+   */
+  function sortByPriority(stories: UserStory[]): UserStory[] {
+    return [...stories].sort((a, b) => {
+      const pa = PRIORITY_WEIGHT[a.priority] ?? 2;
+      const pb = PRIORITY_WEIGHT[b.priority] ?? 2;
+      if (pa !== pb) return pa - pb;
+      return a.sortOrder - b.sortOrder;
+    });
+  }
 
   return {
     // --- State getters ---
@@ -26,6 +48,9 @@ function createWorkStore() {
     },
     get loading() {
       return loading;
+    },
+    get manualOrderOverride() {
+      return manualOrderOverride;
     },
 
     // --- Delegate to loopStore for PRD data ---
@@ -64,7 +89,9 @@ function createWorkStore() {
     },
 
     get pendingStories() {
-      return this.filteredStories.filter((s) => s.status === 'pending');
+      const pending = this.filteredStories.filter((s) => s.status === 'pending');
+      // Apply priority auto-sort unless user has manually reordered
+      return manualOrderOverride ? pending : sortByPriority(pending);
     },
     get inProgressStories() {
       return this.filteredStories.filter((s) => s.status === 'in_progress');
@@ -188,6 +215,56 @@ function createWorkStore() {
 
     setStandaloneStories(stories: UserStory[]) {
       standaloneStories = stories;
+    },
+
+    // --- Reorder ---
+
+    /**
+     * Reorder pending stories via drag-and-drop.
+     * This enables manual override and persists the new order to the server.
+     */
+    async reorderPendingStories(reorderedPending: UserStory[]) {
+      manualOrderOverride = true;
+
+      // Rebuild standaloneStories preserving non-pending stories in place
+      // but replacing pending stories (non-external) with the new order
+      const nonPendingNonExternal = standaloneStories.filter(
+        (s) => s.status !== 'pending' || !!s.externalRef,
+      );
+      const allStories = [...nonPendingNonExternal, ...reorderedPending];
+
+      // Update sortOrder locally based on new positions
+      standaloneStories = allStories.map((s, i) => ({ ...s, sortOrder: i }));
+
+      // Persist to server
+      const storyIds = standaloneStories.map((s) => s.id);
+      await api.prds.reorderStories(storyIds);
+    },
+
+    /**
+     * Sort pending stories by priority automatically.
+     * Disables manual override and persists the new order.
+     */
+    async sortByPriority() {
+      manualOrderOverride = false;
+
+      // Get pending non-external stories and sort by priority
+      const pendingNonExternal = standaloneStories
+        .filter((s) => s.status === 'pending' && !s.externalRef);
+      const sorted = sortByPriority(pendingNonExternal);
+
+      // Rebuild in a stable order: non-pending + sorted pending
+      const nonPending = standaloneStories.filter(
+        (s) => s.status !== 'pending' || !!s.externalRef,
+      );
+      const allStories = [...nonPending, ...sorted];
+
+      // Update sortOrder based on new positions
+      standaloneStories = allStories.map((s, i) => ({ ...s, sortOrder: i }));
+
+      // Persist to server
+      const storyIds = standaloneStories.map((s) => s.id);
+      await api.prds.reorderStories(storyIds);
     },
 
     // --- External provider operations ---

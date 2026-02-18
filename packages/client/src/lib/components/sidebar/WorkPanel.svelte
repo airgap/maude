@@ -1,4 +1,5 @@
 <script lang="ts">
+  import type { UserStory } from '@e/shared';
   import { workStore } from '$lib/stores/work.svelte';
   import { loopStore } from '$lib/stores/loop.svelte';
   import { settingsStore } from '$lib/stores/settings.svelte';
@@ -10,6 +11,11 @@
   let workspacePath = $derived(settingsStore.workspacePath || '');
   let newStoryTitle = $state('');
   let estimatingStoryId = $state<string | null>(null);
+
+  // --- Drag-and-drop state ---
+  let draggedStoryId = $state<string | null>(null);
+  let dragOverStoryId = $state<string | null>(null);
+  let dragOverPosition = $state<'above' | 'below' | null>(null);
 
   onMount(() => {
     if (workspacePath) {
@@ -81,6 +87,93 @@
   async function startStandaloneLoop() {
     if (!workspacePath) return;
     uiStore.openModal('loop-config');
+  }
+
+  // --- Drag-and-drop handlers for pending stories ---
+
+  function handleDragStart(e: DragEvent, storyId: string) {
+    draggedStoryId = storyId;
+    if (e.dataTransfer) {
+      e.dataTransfer.effectAllowed = 'move';
+      e.dataTransfer.setData('text/plain', storyId);
+    }
+  }
+
+  function handleDragOver(e: DragEvent, storyId: string) {
+    if (!draggedStoryId || draggedStoryId === storyId) return;
+    e.preventDefault();
+    if (e.dataTransfer) {
+      e.dataTransfer.dropEffect = 'move';
+    }
+    dragOverStoryId = storyId;
+
+    // Determine if we're above or below the midpoint
+    const target = (e.currentTarget as HTMLElement);
+    const rect = target.getBoundingClientRect();
+    const midY = rect.top + rect.height / 2;
+    dragOverPosition = e.clientY < midY ? 'above' : 'below';
+  }
+
+  function handleDragLeave() {
+    dragOverStoryId = null;
+    dragOverPosition = null;
+  }
+
+  function handleDrop(e: DragEvent, _targetStoryId: string) {
+    e.preventDefault();
+    if (!draggedStoryId) return;
+
+    const pending = [...workStore.pendingStories];
+    const fromIdx = pending.findIndex((s) => s.id === draggedStoryId);
+    const toIdx = pending.findIndex((s) => s.id === _targetStoryId);
+
+    if (fromIdx === -1 || toIdx === -1 || fromIdx === toIdx) {
+      resetDragState();
+      return;
+    }
+
+    // Remove dragged item
+    const [dragged] = pending.splice(fromIdx, 1);
+
+    // Insert at new position, adjusting for above/below
+    let insertIdx = toIdx;
+    if (dragOverPosition === 'below') {
+      insertIdx = fromIdx < toIdx ? toIdx : toIdx + 1;
+    } else {
+      insertIdx = fromIdx < toIdx ? toIdx - 1 : toIdx;
+    }
+    // Clamp
+    insertIdx = Math.max(0, Math.min(insertIdx, pending.length));
+    pending.splice(insertIdx, 0, dragged);
+
+    // Persist the new order
+    workStore.reorderPendingStories(pending);
+    resetDragState();
+  }
+
+  function handleDragEnd() {
+    resetDragState();
+  }
+
+  function resetDragState() {
+    draggedStoryId = null;
+    dragOverStoryId = null;
+    dragOverPosition = null;
+  }
+
+  // --- Move up/down with keyboard for accessibility ---
+
+  async function moveStory(storyId: string, direction: 'up' | 'down') {
+    const pending = [...workStore.pendingStories];
+    const idx = pending.findIndex((s) => s.id === storyId);
+    if (idx === -1) return;
+
+    const newIdx = direction === 'up' ? idx - 1 : idx + 1;
+    if (newIdx < 0 || newIdx >= pending.length) return;
+
+    // Swap
+    [pending[idx], pending[newIdx]] = [pending[newIdx], pending[idx]];
+    await workStore.reorderPendingStories(pending);
   }
 </script>
 
@@ -288,10 +381,50 @@
 
         {#if workStore.pendingStories.length > 0}
           <div class="section">
-            <div class="section-label">Pending</div>
-            {#each workStore.pendingStories as story (story.id)}
-              <div class="story-item">
+            <div class="section-label-row">
+              <span class="section-label">Pending</span>
+              <div class="sort-controls">
+                {#if workStore.manualOrderOverride}
+                  <button
+                    class="sort-btn"
+                    title="Auto-sort by priority"
+                    onclick={() => workStore.sortByPriority()}
+                  >
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M11 5h10" /><path d="M11 9h7" /><path d="M11 13h4" /><path d="M3 17l3 3 3-3" /><path d="M6 18V4" />
+                    </svg>
+                  </button>
+                {:else}
+                  <span class="sort-indicator" title="Sorted by priority (drag to reorder manually)">
+                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M11 5h10" /><path d="M11 9h7" /><path d="M11 13h4" /><path d="M3 17l3 3 3-3" /><path d="M6 18V4" />
+                    </svg>
+                  </span>
+                {/if}
+              </div>
+            </div>
+            {#each workStore.pendingStories as story, idx (story.id)}
+              <div
+                class="story-item draggable"
+                class:drag-over-above={dragOverStoryId === story.id && dragOverPosition === 'above'}
+                class:drag-over-below={dragOverStoryId === story.id && dragOverPosition === 'below'}
+                class:dragging={draggedStoryId === story.id}
+                draggable="true"
+                role="listitem"
+                ondragstart={(e) => handleDragStart(e, story.id)}
+                ondragover={(e) => handleDragOver(e, story.id)}
+                ondragleave={handleDragLeave}
+                ondrop={(e) => handleDrop(e, story.id)}
+                ondragend={handleDragEnd}
+              >
                 <div class="story-header">
+                  <span class="drag-handle" title="Drag to reorder">
+                    <svg width="8" height="12" viewBox="0 0 8 12" fill="currentColor">
+                      <circle cx="2" cy="2" r="1" /><circle cx="6" cy="2" r="1" />
+                      <circle cx="2" cy="6" r="1" /><circle cx="6" cy="6" r="1" />
+                      <circle cx="2" cy="10" r="1" /><circle cx="6" cy="10" r="1" />
+                    </svg>
+                  </span>
                   <button
                     class="story-status {statusClass(story.status)}"
                     onclick={() => workStore.toggleStoryStatus(story.id, story.status, null)}
@@ -317,13 +450,31 @@
                   {#if priorityLabel(story.priority)}
                     <span class="priority-badge">{priorityLabel(story.priority)}</span>
                   {/if}
-                  <button
-                    class="delete-btn"
-                    title="Delete"
-                    onclick={() => workStore.deleteStandaloneStory(story.id)}
-                  >
-                    ×
-                  </button>
+                  <div class="story-actions">
+                    <button
+                      class="move-btn"
+                      title="Move up"
+                      disabled={idx === 0}
+                      onclick={() => moveStory(story.id, 'up')}
+                    >
+                      ↑
+                    </button>
+                    <button
+                      class="move-btn"
+                      title="Move down"
+                      disabled={idx === workStore.pendingStories.length - 1}
+                      onclick={() => moveStory(story.id, 'down')}
+                    >
+                      ↓
+                    </button>
+                    <button
+                      class="delete-btn"
+                      title="Delete"
+                      onclick={() => workStore.deleteStandaloneStory(story.id)}
+                    >
+                      ×
+                    </button>
+                  </div>
                 </div>
               </div>
             {/each}
@@ -565,12 +716,50 @@
     padding: 6px 4px 4px;
   }
 
+  /* Section label row with sort controls */
+  .section-label-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding-right: 4px;
+  }
+
+  .sort-controls {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+
+  .sort-btn {
+    background: none;
+    border: none;
+    color: var(--text-tertiary);
+    cursor: pointer;
+    padding: 2px 4px;
+    border-radius: var(--radius-sm);
+    display: flex;
+    align-items: center;
+    transition: all var(--transition);
+  }
+  .sort-btn:hover {
+    color: var(--accent-primary);
+    background: var(--bg-hover);
+  }
+
+  .sort-indicator {
+    color: var(--accent-primary);
+    display: flex;
+    align-items: center;
+    padding: 2px 4px;
+    opacity: 0.6;
+  }
+
   .story-item {
     padding: 6px 8px;
     border-radius: var(--radius-sm);
     margin-bottom: 2px;
     background: var(--bg-tertiary);
-    transition: background var(--transition);
+    transition: background var(--transition), border-color 0.15s ease, box-shadow 0.15s ease;
   }
   .story-item:hover {
     background: var(--bg-hover);
@@ -578,6 +767,44 @@
   .story-item.active {
     background: var(--bg-active);
     border-left: 2px solid var(--accent-primary);
+  }
+
+  /* Drag-and-drop styles */
+  .story-item.draggable {
+    cursor: grab;
+    position: relative;
+  }
+  .story-item.draggable:active {
+    cursor: grabbing;
+  }
+  .story-item.dragging {
+    opacity: 0.4;
+  }
+  .story-item.drag-over-above {
+    border-top: 2px solid var(--accent-primary);
+    margin-top: -2px;
+  }
+  .story-item.drag-over-below {
+    border-bottom: 2px solid var(--accent-primary);
+    margin-bottom: 0;
+  }
+
+  .drag-handle {
+    flex-shrink: 0;
+    color: var(--text-tertiary);
+    opacity: 0;
+    transition: opacity var(--transition);
+    cursor: grab;
+    display: flex;
+    align-items: center;
+    padding: 0 2px;
+  }
+  .story-item.draggable:hover .drag-handle {
+    opacity: 0.6;
+  }
+  .drag-handle:hover {
+    opacity: 1 !important;
+    color: var(--text-secondary);
   }
 
   .story-header {
@@ -636,6 +863,35 @@
     font-size: var(--fs-xxs);
     color: var(--accent-warning, #e6a817);
     font-weight: bold;
+  }
+
+  .story-actions {
+    display: flex;
+    align-items: center;
+    gap: 0;
+    opacity: 0;
+    transition: opacity var(--transition);
+    flex-shrink: 0;
+  }
+  .story-item:hover .story-actions {
+    opacity: 1;
+  }
+
+  .move-btn {
+    font-size: var(--fs-xs);
+    padding: 0 3px;
+    color: var(--text-tertiary);
+    background: none;
+    border: none;
+    cursor: pointer;
+    line-height: 1;
+  }
+  .move-btn:hover:not(:disabled) {
+    color: var(--accent-primary);
+  }
+  .move-btn:disabled {
+    opacity: 0.3;
+    cursor: default;
   }
 
   .estimate-btn,

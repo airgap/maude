@@ -150,6 +150,14 @@ app.post('/stories', async (c) => {
   const id = nanoid(12);
   const now = Date.now();
 
+  // Get max sort_order for standalone stories in this workspace
+  const maxRow = db
+    .query(
+      'SELECT MAX(sort_order) as max_order FROM prd_stories WHERE prd_id IS NULL AND workspace_path = ?',
+    )
+    .get(body.workspacePath) as any;
+  const sortOrder = (maxRow?.max_order ?? -1) + 1;
+
   const criteria = (body.acceptanceCriteria || []).map((desc: string) => ({
     id: nanoid(6),
     description: desc,
@@ -162,7 +170,7 @@ app.post('/stories', async (c) => {
       priority, depends_on, dependency_reasons, status,
       attempts, max_attempts, learnings, sort_order, created_at, updated_at
     )
-    VALUES (?, NULL, ?, ?, ?, ?, ?, ?, '{}', 'pending', 0, 3, '[]', 0, ?, ?)`,
+    VALUES (?, NULL, ?, ?, ?, ?, ?, ?, '{}', 'pending', 0, 3, '[]', ?, ?, ?)`,
   ).run(
     id,
     body.workspacePath,
@@ -171,12 +179,36 @@ app.post('/stories', async (c) => {
     JSON.stringify(criteria),
     body.priority || 'medium',
     JSON.stringify(body.dependsOn || []),
+    sortOrder,
     now,
     now,
   );
 
   const row = db.query('SELECT * FROM prd_stories WHERE id = ?').get(id) as any;
   return c.json({ ok: true, data: storyFromRow(row) }, 201);
+});
+
+// Reorder standalone stories
+app.post('/stories/reorder', async (c) => {
+  const db = getDb();
+  const body = (await c.req.json()) as { storyIds: string[] };
+
+  if (!body.storyIds || !Array.isArray(body.storyIds) || body.storyIds.length === 0) {
+    return c.json({ ok: false, error: 'storyIds array is required' }, 400);
+  }
+
+  const now = Date.now();
+
+  // Update sort_order for each story based on position in the array
+  for (let i = 0; i < body.storyIds.length; i++) {
+    db.query('UPDATE prd_stories SET sort_order = ?, updated_at = ? WHERE id = ?').run(
+      i,
+      now,
+      body.storyIds[i],
+    );
+  }
+
+  return c.json({ ok: true });
 });
 
 // Update a standalone story

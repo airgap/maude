@@ -1034,6 +1034,11 @@ export const api = {
         method: 'POST',
         body: JSON.stringify({}),
       }),
+    reorderStories: (storyIds: string[]) =>
+      request<{ ok: boolean }>('/prds/stories/reorder', {
+        method: 'POST',
+        body: JSON.stringify({ storyIds }),
+      }),
     saveStandaloneEstimate: (
       storyId: string,
       body: { size: string; storyPoints: number; reasoning?: string },
