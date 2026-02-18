@@ -798,6 +798,21 @@
               <span class="toggle-slider"></span>
             </label>
           </div>
+          <div class="setting-group">
+            <label class="setting-label">Startup tips</label>
+            <label class="toggle">
+              <input
+                type="checkbox"
+                checked={settingsStore.showStartupTips}
+                onchange={() =>
+                  settingsStore.update({ showStartupTips: !settingsStore.showStartupTips })}
+              />
+              <span class="toggle-slider"></span>
+            </label>
+            <p class="setting-desc">
+              Show a rotating tip on each startup to help you discover features and shortcuts
+            </p>
+          </div>
 
           <div class="setting-group">
             <label class="setting-label">Streaming Animations</label>

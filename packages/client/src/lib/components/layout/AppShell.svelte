@@ -32,10 +32,13 @@
   import ProjectSetup from '../common/ProjectSetup.svelte';
   import AmbientBackground from './AmbientBackground.svelte';
   import InteractiveTutorial from '../common/InteractiveTutorial.svelte';
+  import StartupTip from '../common/StartupTip.svelte';
   import { waitForServer } from '$lib/api/client';
   import { reconnectActiveStream } from '$lib/api/sse';
   import { deviceStore } from '$lib/stores/device.svelte';
   import { tutorialStore } from '$lib/stores/tutorial.svelte';
+  import { settingsStore } from '$lib/stores/settings.svelte';
+  import { startupTipsStore } from '$lib/stores/startupTips.svelte';
   import { onMount } from 'svelte';
 
   let { children: appChildren } = $props<{ children: any }>();
@@ -70,6 +73,13 @@
       // Auto-launch tutorial for first-time users
       if (tutorialStore.isFirstTime) {
         tutorialStore.start();
+      } else if (settingsStore.showStartupTips) {
+        // Show a rotating tip for returning users (skip when tutorial is active)
+        setTimeout(() => {
+          if (!tutorialStore.active) {
+            startupTipsStore.show();
+          }
+        }, 1500);
       }
     });
   });
@@ -404,6 +414,7 @@
   <ProjectSetup />
 
   <InteractiveTutorial />
+  <StartupTip />
 
   <ToastContainer />
 </div>

@@ -54,6 +54,8 @@ interface SettingsState {
   notifyOnCompletion: boolean;
   notifyOnFailure: boolean;
   notifyOnApproval: boolean;
+  // Startup tips
+  showStartupTips: boolean;
 }
 
 const defaults: SettingsState = {
@@ -104,6 +106,7 @@ const defaults: SettingsState = {
   notifyOnCompletion: true,
   notifyOnFailure: true,
   notifyOnApproval: true,
+  showStartupTips: true,
 };
 
 function loadFromStorage(): SettingsState {
@@ -319,6 +322,9 @@ function createSettingsStore() {
     },
     get notifyOnApproval() {
       return state.notifyOnApproval;
+    },
+    get showStartupTips() {
+      return state.showStartupTips;
     },
     get all() {
       return state;
