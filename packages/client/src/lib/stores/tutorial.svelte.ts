@@ -59,9 +59,9 @@ export const TUTORIAL_STEPS: TutorialStep[] = [
       <h3>Special features</h3>
       <ul>
         <li><strong>@ Mentions</strong> — Type <code>@</code> to attach files, symbols, or threads as context</li>
-        <li><strong>Voice Input</strong> — Click the 🎤 button to speak your message</li>
-        <li><strong>Teach Mode</strong> — Click the 🎓 button for Socratic-style responses</li>
-        <li><strong>Branching</strong> — Hover any message and click ⎇ to fork the conversation</li>
+        <li><strong>Voice Input</strong> — Click the microphone button to speak your message</li>
+        <li><strong>Teach Mode</strong> — Click the graduation cap button for Socratic-style responses</li>
+        <li><strong>Branching</strong> — Hover any message and click the branch icon to fork the conversation</li>
       </ul>
     `,
     actionLabel: 'Focus Chat Input',

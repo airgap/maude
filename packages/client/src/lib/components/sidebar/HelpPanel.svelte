@@ -49,7 +49,7 @@
             <h3>1. Open or create a workspace</h3>
             <p>Use the workspace tabs in the top bar to switch between projects. Each workspace maps to a directory on disk.</p>
             <h3>2. Type a message</h3>
-            <p>The chat input supports <strong>slash commands</strong> (type <code>/</code> for a menu), <strong>voice input</strong> (🎤 button), and <strong>@ mentions</strong> for files.</p>
+            <p>The chat input supports <strong>slash commands</strong> (type <code>/</code> for a menu), <strong>voice input</strong> (microphone button), and <strong>@ mentions</strong> for files.</p>
             <h3>3. Watch Claude work</h3>
             <p>Claude's thinking steps appear in collapsible blocks. Tool calls (file reads, shell commands, searches) show live output. You can cancel any streaming response with <kbd>Esc</kbd>.</p>
             <h3>Keyboard shortcuts</h3>
@@ -94,11 +94,11 @@
           badge: 'Feature',
           badgeColor: 'accent',
           body: `
-            <p>Every message has a <strong>⎇ Branch</strong> button that creates a fork of the conversation from that point. Use branching to explore alternative approaches without losing your current thread.</p>
+            <p>Every message has a <strong>Branch</strong> button (git-fork icon) that creates a fork of the conversation from that point. Use branching to explore alternative approaches without losing your current thread.</p>
             <h3>How to use it</h3>
             <ol>
-              <li>Hover over any message — the ⎇ button appears in the top-right corner</li>
-              <li>Click ⎇ to fork — you're immediately taken to the new branch</li>
+              <li>Hover over any message — the branch icon appears in the top-right corner</li>
+              <li>Click it to fork — you're immediately taken to the new branch</li>
               <li>The original conversation is preserved; switch between branches from the <strong>Chats</strong> sidebar</li>
             </ol>
             <h3>When to branch</h3>
@@ -146,7 +146,7 @@
             <p>Switches Claude to a <strong>Socratic teaching style</strong> — instead of giving you answers, Claude asks guiding questions that help you reason through problems yourself.</p>
             <h3>Activating Teach Mode</h3>
             <ul>
-              <li>Click the <strong>🎓</strong> button in the chat input bar</li>
+              <li>Click the <strong>graduation cap</strong> button in the chat input bar</li>
               <li>The input shows a <code>TEACH</code> indicator when active</li>
               <li>Or type <code>/teach</code></li>
             </ul>
@@ -160,7 +160,7 @@
           badge: 'Feature',
           badgeColor: 'accent',
           body: `
-            <h3>Voice Input (🎤)</h3>
+            <h3>Voice Input</h3>
             <p>Click the microphone button to speak your message. While recording:</p>
             <ul>
               <li>An animated waveform appears in the button</li>
@@ -168,8 +168,8 @@
               <li>Click again to stop — the transcript fills the chat input</li>
             </ul>
             <p>Requires a browser/OS that supports the <code>SpeechRecognition</code> API (Chrome, Edge, or Tauri with system speech).</p>
-            <h3>Read-Aloud (🔊)</h3>
-            <p>Hover over any assistant message and click <strong>🔊</strong> to hear it read aloud using your system's text-to-speech. Click <strong>⏹</strong> on the same message to stop. Only one message plays at a time.</p>
+            <h3>Read-Aloud</h3>
+            <p>Hover over any assistant message and click the <strong>speaker</strong> icon to hear it read aloud using your system's text-to-speech. Click <strong>stop</strong> on the same message to stop. Only one message plays at a time.</p>
           `,
         },
         {

@@ -7,15 +7,13 @@
   let open = $state(false);
   let dropdownEl = $state<HTMLDivElement | null>(null);
 
-  const profileIcons: Record<string, string> = {
-    write: '✏️',
-    ask: '💬',
-    minimal: '🔇',
+  /** SVG path data for each profile icon */
+  const profileIconPaths: Record<string, string> = {
+    write: 'M17 3a2.83 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z',
+    ask: 'M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z',
+    minimal: 'M11 5L6 9H2v6h4l5 4V5zM23 9l-6 6M17 9l6 6',
   };
-
-  function getIcon(profileId: string) {
-    return profileIcons[profileId] ?? '⚡';
-  }
+  const defaultIconPath = 'M13 2L3 14h9l-1 8 10-12h-9l1-8z';
 
   async function selectProfile(profileId: string) {
     open = false;
@@ -64,7 +62,7 @@
     aria-haspopup="listbox"
     aria-expanded={open}
   >
-    <span class="profile-icon">{getIcon(activeProfile?.id ?? 'write')}</span>
+    <svg class="profile-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d={profileIconPaths[activeProfile?.id ?? 'write'] ?? defaultIconPath} /></svg>
     <span class="profile-name">{activeProfile?.name ?? 'Write'}</span>
     <svg
       class="chevron"
@@ -91,7 +89,7 @@
           aria-selected={profile.id === profilesStore.activeProfileId}
           onclick={() => selectProfile(profile.id)}
         >
-          <span class="option-icon">{getIcon(profile.id)}</span>
+          <svg class="option-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d={profileIconPaths[profile.id] ?? defaultIconPath} /></svg>
           <div class="option-info">
             <span class="option-name">{profile.name}</span>
             {#if profile.description}
@@ -173,8 +171,7 @@
   }
 
   .profile-icon {
-    font-size: 13px;
-    line-height: 1;
+    flex-shrink: 0;
   }
 
   .profile-name {
@@ -247,10 +244,11 @@
   }
 
   .option-icon {
-    font-size: 16px;
     flex-shrink: 0;
     width: 20px;
-    text-align: center;
+    display: flex;
+    align-items: center;
+    justify-content: center;
   }
 
   .option-info {

@@ -62,7 +62,7 @@ export const STARTUP_TIPS: StartupTip[] = [
   {
     id: 'teach-mode',
     category: 'Workflow',
-    text: 'Click the 🎓 button or type /teach to enable Teach Mode — Claude explains concepts step by step.',
+    text: 'Click the Teach Mode button (graduation cap icon) or type /teach to enable Teach Mode — Claude explains concepts step by step.',
   },
   {
     id: 'session-replay',
@@ -78,7 +78,7 @@ export const STARTUP_TIPS: StartupTip[] = [
   {
     id: 'branch-conversations',
     category: 'Feature',
-    text: 'Hover any message and click ⎇ to fork the conversation — explore alternate approaches without losing context.',
+    text: 'Hover any message and click the branch icon to fork the conversation — explore alternate approaches without losing context.',
   },
   {
     id: 'slash-commands',
@@ -123,7 +123,7 @@ export const STARTUP_TIPS: StartupTip[] = [
   {
     id: 'voice-input',
     category: 'Feature',
-    text: 'Click the 🎤 button in the chat input to dictate your message with speech-to-text.',
+    text: 'Click the microphone button in the chat input to dictate your message with speech-to-text.',
     actionLabel: 'Focus chat',
     actionId: 'focus-chat',
   },

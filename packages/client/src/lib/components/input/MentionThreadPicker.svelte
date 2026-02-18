@@ -69,7 +69,7 @@
 <!-- svelte-ignore a11y_no_static_element_interactions -->
 <div class="thread-picker" onclick={(e) => e.stopPropagation()}>
   <div class="picker-header">
-    <span class="picker-title">💬 Select Thread</span>
+    <span class="picker-title"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" /></svg> Select Thread</span>
     <button class="picker-close" onclick={onClose}>×</button>
   </div>
   <div class="search-wrap">
@@ -95,7 +95,7 @@
           onclick={() => onSelect(conv)}
           onmouseenter={() => (selectedIndex = i)}
         >
-          <span class="thread-icon">💬</span>
+          <span class="thread-icon"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" /></svg></span>
           <span class="thread-body">
             <span class="thread-title">{conv.title || 'Untitled'}</span>
             {#if snippet}
@@ -139,6 +139,9 @@
     font-size: 12px;
     font-weight: 600;
     color: var(--accent-primary);
+    display: flex;
+    align-items: center;
+    gap: 5px;
   }
 
   .picker-close {
@@ -202,8 +205,10 @@
   }
 
   .thread-icon {
-    font-size: 12px;
     flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    color: var(--text-tertiary);
     margin-top: 1px;
   }
 

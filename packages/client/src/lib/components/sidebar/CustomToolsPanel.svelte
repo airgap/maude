@@ -329,7 +329,7 @@
     </div>
   {:else if tools.length === 0 && !showNewForm}
     <div class="empty-state">
-      <div class="empty-icon">🔧</div>
+      <div class="empty-icon"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z" /></svg></div>
       <div class="empty-text">No custom tools yet</div>
       <button class="btn-primary" onclick={() => (showNewForm = true)}
         >Create your first tool</button
@@ -731,8 +731,11 @@
   }
 
   .empty-icon {
-    font-size: 28px;
     opacity: 0.5;
+    color: var(--text-tertiary);
+    display: flex;
+    align-items: center;
+    justify-content: center;
   }
 
   .empty-text {

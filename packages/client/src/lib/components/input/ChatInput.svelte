@@ -884,7 +884,7 @@
         class="btn-icon-sm"
         class:active={localTeachMode}
         onclick={() => (localTeachMode = !localTeachMode)}
-        title="Teach Me Mode — Claude guides you with questions instead of answers">🎓</button
+        title="Teach Me Mode — Claude guides you with questions instead of answers"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 10v6M2 10l10-5 10 5-10 5z" /><path d="M6 12v5c0 2 3 3 6 3s6-1 6-3v-5" /></svg></button
       >
 
       <VoiceButton onTranscript={handleVoiceTranscript} />

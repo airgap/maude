@@ -3,34 +3,34 @@
     id: 'file' | 'symbol' | 'diagnostics' | 'rule' | 'thread';
     label: string;
     description: string;
-    icon: string;
+    iconPath: string;
   }
 
   const MENTION_TYPES: MentionType[] = [
-    { id: 'file', label: '@file', description: 'Inject file content as context', icon: '📄' },
+    { id: 'file', label: '@file', description: 'Inject file content as context', iconPath: 'M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z M14 2v6h6' },
     {
       id: 'symbol',
       label: '@symbol',
       description: 'Inject symbol definition from code',
-      icon: '⚡',
+      iconPath: 'M13 2L3 14h9l-1 8 10-12h-9l1-8z',
     },
     {
       id: 'diagnostics',
       label: '@diagnostics',
       description: 'Inject all LSP errors & warnings',
-      icon: '🔴',
+      iconPath: 'M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20z M12 8v4 M12 16h.01',
     },
     {
       id: 'rule',
       label: '@rule',
       description: 'Inject an on-demand rule from Rules Library',
-      icon: '📋',
+      iconPath: 'M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2 M15 2H9a1 1 0 0 0-1 1v1a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V3a1 1 0 0 0-1-1z',
     },
     {
       id: 'thread',
       label: '@thread',
       description: 'Inject a prior conversation summary',
-      icon: '💬',
+      iconPath: 'M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z',
     },
   ];
 
@@ -90,7 +90,7 @@
         onclick={() => onSelect(type.id)}
         onmouseenter={() => (selectedIndex = i)}
       >
-        <span class="mention-icon">{type.icon}</span>
+        <span class="mention-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d={type.iconPath} /></svg></span>
         <span class="mention-label">{type.label}</span>
         <span class="mention-desc">{type.description}</span>
       </button>
@@ -130,10 +130,12 @@
   }
 
   .mention-icon {
-    font-size: 14px;
     flex-shrink: 0;
     width: 20px;
-    text-align: center;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-tertiary);
   }
 
   .mention-label {

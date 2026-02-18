@@ -65,9 +65,9 @@
     {#if status === 'loading'}
       <span class="branch-label">Branching...</span>
     {:else if status === 'success'}
-      <span class="branch-label">⎇ Forked</span>
+      <span class="branch-label"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="18" r="3" /><circle cx="6" cy="6" r="3" /><path d="M6 21V9a9 9 0 0 0 9 9" /></svg> Forked</span>
     {:else}
-      <span class="branch-icon">⎇</span>
+      <span class="branch-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="18" r="3" /><circle cx="6" cy="6" r="3" /><path d="M6 21V9a9 9 0 0 0 9 9" /></svg></span>
     {/if}
   </button>
 {/if}
@@ -129,9 +129,13 @@
 
   .branch-label {
     white-space: nowrap;
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
   }
 
   .branch-icon {
-    font-size: 14px;
+    display: flex;
+    align-items: center;
   }
 </style>
