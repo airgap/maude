@@ -88,7 +88,7 @@ const defaults: SettingsState = {
   streamingEnabled: true,
   compactMessages: false,
   autoCompaction: true,
-  showBudgetDisplay: true,
+  showBudgetDisplay: false,
   workspacePath: '.',
   effort: 'high',
   maxBudgetUsd: null,
