@@ -644,6 +644,257 @@ const SLOT_MACHINE_TOOL_NOTES: Record<ToolFamily, SlotToolNotes> = {
   },
 };
 
+// ---------------------------------------------------------------------------
+// Forest instrument partial series
+// Enchanted woodland synthesis: wind chimes, wooden flutes, owl hoots,
+// rustling leaves, dripping water, and fairy sparkles.
+// ---------------------------------------------------------------------------
+
+/**
+ * Wind Chime — thin metal tubes swaying in a forest breeze.
+ * Bright, shimmery, with closely-spaced inharmonic partials that
+ * create a beautiful beating/shimmering effect. Long ethereal sustain.
+ */
+const WIND_CHIME: Overtone[] = [
+  { ratio: 1, gain: 1.0, decay: 2.8 },
+  { ratio: 1.08, gain: 0.7, decay: 2.4 }, // close detuning = shimmer
+  { ratio: 2.37, gain: 0.35, decay: 1.5 },
+  { ratio: 3.92, gain: 0.15, decay: 0.8 },
+  { ratio: 6.1, gain: 0.06, decay: 0.3 },
+];
+
+/**
+ * Wooden Flute — warm, breathy, hollow wooden pipe.
+ * Strong odd harmonics (characteristic of open cylindrical pipes),
+ * gentle attack like breath filling the column, warm woody sustain.
+ */
+const WOODEN_FLUTE: Overtone[] = [
+  { ratio: 1, gain: 1.0, decay: 1.4 },
+  { ratio: 2.0, gain: 0.15, decay: 0.8 }, // weak even harmonic (open pipe)
+  { ratio: 3.0, gain: 0.4, decay: 0.6 },  // strong 3rd
+  { ratio: 5.0, gain: 0.12, decay: 0.3 },
+  { ratio: 7.0, gain: 0.04, decay: 0.12 },
+];
+
+/**
+ * Raindrop — a single water drop hitting a still pool.
+ * Very pure tone with a fast pluck attack and a quick
+ * resonant decay, like a tiny liquid bell.
+ */
+const RAINDROP: Overtone[] = [
+  { ratio: 1, gain: 1.0, decay: 0.4 },
+  { ratio: 2.17, gain: 0.3, decay: 0.15 }, // slightly inharmonic splash
+  { ratio: 4.56, gain: 0.1, decay: 0.06 },
+];
+
+/**
+ * Fairy Sparkle — bright crystalline ping with rapid glittering decay.
+ * Very high, thin partials that evaporate almost instantly,
+ * like pixie dust catching the light.
+ */
+const FAIRY_SPARKLE: Overtone[] = [
+  { ratio: 1, gain: 1.0, decay: 0.6 },
+  { ratio: 1.5, gain: 0.6, decay: 0.45 },  // perfect fifth shimmer
+  { ratio: 2.0, gain: 0.4, decay: 0.3 },
+  { ratio: 3.17, gain: 0.2, decay: 0.15 },
+  { ratio: 5.34, gain: 0.08, decay: 0.06 },
+];
+
+/**
+ * Owl Hoot — deep, hollow, resonant call.
+ * Very strong fundamental with minimal upper partials,
+ * slow attack mimicking the owl's breathy onset, long warm sustain.
+ */
+const OWL_HOOT: Overtone[] = [
+  { ratio: 1, gain: 1.0, decay: 2.0 },
+  { ratio: 1.5, gain: 0.12, decay: 1.2 },  // faint fifth
+  { ratio: 2.0, gain: 0.06, decay: 0.6 },
+];
+
+// Forest scale — D Dorian (natural, woodland, slightly mysterious)
+// D E F G A B C — the raised 6th gives it a bittersweet, enchanted quality
+const FOREST_NOTES = {
+  D3: 146.8,
+  E3: 164.8,
+  F3: 174.6,
+  G3: 196.0,
+  A3: 220.0,
+  B3: 246.9,
+  C4: 261.6,
+  D4: 293.7,
+  E4: 329.6,
+  F4: 349.2,
+  G4: 392.0,
+  A4: 440.0,
+  B4: 493.9,
+  C5: 523.3,
+  D5: 587.3,
+  E5: 659.3,
+  F5: 698.5,
+  G5: 784.0,
+  A5: 880.0,
+  B5: 987.8,
+  C6: 1046.5,
+  D6: 1174.7,
+  // Low owl hoot note
+  D2: 73.4,
+};
+
+// Event → forest note specs
+const FOREST_EVENT_NOTES: Record<ChirpEvent, NoteSpec | NoteSpec[]> = {
+  // Wind chime greeting — D5, gentle woodland hello
+  message_start: {
+    freq: FOREST_NOTES.D5,
+    partials: WIND_CHIME,
+    attack: 0.008,
+    release: 0.15,
+    gain: 0.28,
+  },
+
+  // Fairy sparkle — A5, tiny magical glint
+  text_start: {
+    freq: FOREST_NOTES.A5,
+    partials: FAIRY_SPARKLE,
+    attack: 0.002,
+    release: 0.08,
+    gain: 0.2,
+  },
+
+  // text_delta → playForestRustle() — sentinel
+  text_delta: {
+    freq: FOREST_NOTES.D6,
+    partials: FAIRY_SPARKLE,
+    attack: 0.001,
+    release: 0.02,
+    gain: 0.0,
+  },
+
+  // Owl contemplation — D2, deep and wise
+  thinking_start: {
+    freq: FOREST_NOTES.D2,
+    partials: OWL_HOOT,
+    attack: 0.06,
+    release: 0.6,
+    gain: 0.26,
+  },
+
+  // Raindrop — G4, clear purpose
+  tool_start: {
+    freq: FOREST_NOTES.G4,
+    partials: RAINDROP,
+    attack: 0.002,
+    release: 0.08,
+    gain: 0.22,
+  },
+
+  // Two wind chimes — A4 + D5 (woodland perfect fourth)
+  tool_result_ok: [
+    { freq: FOREST_NOTES.A4, partials: WIND_CHIME, attack: 0.004, release: 0.14, gain: 0.24 },
+    { freq: FOREST_NOTES.D5, partials: WIND_CHIME, attack: 0.004, release: 0.14, gain: 0.16 },
+  ],
+
+  // Cracked twig — B4 raindrop clunk (out of the dorian comfort zone)
+  tool_result_error: {
+    freq: FOREST_NOTES.F4,
+    partials: RAINDROP,
+    attack: 0.003,
+    release: 0.14,
+    gain: 0.26,
+  },
+
+  // Fairy ring fanfare — D5 + F5 + A5 + D6
+  tool_approval: [
+    { freq: FOREST_NOTES.D5, partials: FAIRY_SPARKLE, attack: 0.006, release: 0.6, gain: 0.26 },
+    { freq: FOREST_NOTES.F5, partials: FAIRY_SPARKLE, attack: 0.006, release: 0.6, gain: 0.2 },
+    { freq: FOREST_NOTES.A5, partials: FAIRY_SPARKLE, attack: 0.006, release: 0.6, gain: 0.14 },
+    { freq: FOREST_NOTES.D6, partials: FAIRY_SPARKLE, attack: 0.006, release: 0.6, gain: 0.08 },
+  ],
+
+  // user_question → playForestQuestion() — sentinel
+  user_question: {
+    freq: FOREST_NOTES.G4,
+    partials: WOODEN_FLUTE,
+    attack: 0.005,
+    release: 0.1,
+    gain: 0.0,
+  },
+
+  // Woodland resolution — D4 + A4 + D5 warm flute landing
+  message_stop: [
+    { freq: FOREST_NOTES.D4, partials: WOODEN_FLUTE, attack: 0.008, release: 0.4, gain: 0.26 },
+    { freq: FOREST_NOTES.A4, partials: WOODEN_FLUTE, attack: 0.008, release: 0.4, gain: 0.2 },
+    { freq: FOREST_NOTES.D5, partials: WOODEN_FLUTE, attack: 0.008, release: 0.4, gain: 0.14 },
+  ],
+
+  // Falling leaves — B4 then G3, descending wind chimes
+  error: [
+    { freq: FOREST_NOTES.B4, partials: WIND_CHIME, attack: 0.004, release: 0.2, gain: 0.28 },
+    { freq: FOREST_NOTES.G3, partials: WIND_CHIME, attack: 0.004, release: 0.2, gain: 0.2 },
+  ],
+
+  // Dusk settling — E5 → D5, gentle flute fade
+  cancelled: [
+    { freq: FOREST_NOTES.E5, partials: WOODEN_FLUTE, attack: 0.006, release: 0.3, gain: 0.2 },
+    { freq: FOREST_NOTES.D5, partials: WOODEN_FLUTE, attack: 0.006, release: 0.4, gain: 0.14 },
+  ],
+};
+
+interface ForestToolNotes {
+  start: NoteSpec | NoteSpec[];
+  ok: NoteSpec | NoteSpec[];
+}
+
+const FOREST_TOOL_NOTES: Record<ToolFamily, ForestToolNotes> = {
+  // Shell — deep raindrop, grounded like tree roots
+  shell: {
+    start: { freq: FOREST_NOTES.D3, partials: RAINDROP, attack: 0.003, release: 0.12, gain: 0.24 },
+    ok: [
+      { freq: FOREST_NOTES.D3, partials: RAINDROP, attack: 0.004, release: 0.14, gain: 0.22 },
+      { freq: FOREST_NOTES.A3, partials: RAINDROP, attack: 0.004, release: 0.14, gain: 0.14 },
+    ],
+  },
+  // Read — high fairy sparkle, scanning through leaves
+  read: {
+    start: { freq: FOREST_NOTES.A5, partials: FAIRY_SPARKLE, attack: 0.002, release: 0.1, gain: 0.18 },
+    ok: [
+      { freq: FOREST_NOTES.E5, partials: FAIRY_SPARKLE, attack: 0.003, release: 0.14, gain: 0.18 },
+      { freq: FOREST_NOTES.A5, partials: FAIRY_SPARKLE, attack: 0.003, release: 0.14, gain: 0.12 },
+    ],
+  },
+  // Write — mid wooden flute, inscribing on bark
+  write: {
+    start: { freq: FOREST_NOTES.D4, partials: WOODEN_FLUTE, attack: 0.006, release: 0.12, gain: 0.24 },
+    ok: [
+      { freq: FOREST_NOTES.G4, partials: WOODEN_FLUTE, attack: 0.006, release: 0.16, gain: 0.22 },
+      { freq: FOREST_NOTES.D5, partials: WOODEN_FLUTE, attack: 0.006, release: 0.16, gain: 0.14 },
+    ],
+  },
+  // Search — wind chime sweep, breeze through branches
+  search: {
+    start: { freq: FOREST_NOTES.D5, partials: WIND_CHIME, attack: 0.012, release: 0.22, gain: 0.2 },
+    ok: [
+      { freq: FOREST_NOTES.G4, partials: WIND_CHIME, attack: 0.005, release: 0.18, gain: 0.2 },
+      { freq: FOREST_NOTES.D5, partials: WIND_CHIME, attack: 0.005, release: 0.18, gain: 0.12 },
+    ],
+  },
+  // Agent — owl hoot, wise creature awakening
+  agent: {
+    start: { freq: FOREST_NOTES.D3, partials: OWL_HOOT, attack: 0.02, release: 0.55, gain: 0.26 },
+    ok: [
+      { freq: FOREST_NOTES.A3, partials: OWL_HOOT, attack: 0.015, release: 0.45, gain: 0.24 },
+      { freq: FOREST_NOTES.D4, partials: OWL_HOOT, attack: 0.015, release: 0.45, gain: 0.16 },
+    ],
+  },
+  // Default — raindrop D4
+  default: {
+    start: { freq: FOREST_NOTES.D4, partials: RAINDROP, attack: 0.002, release: 0.1, gain: 0.2 },
+    ok: [
+      { freq: FOREST_NOTES.D4, partials: RAINDROP, attack: 0.003, release: 0.14, gain: 0.22 },
+      { freq: FOREST_NOTES.A4, partials: RAINDROP, attack: 0.003, release: 0.14, gain: 0.14 },
+    ],
+  },
+};
+
 // C major scale + extensions — bright, upbeat, no pentatonic flats
 const WHIMSY_NOTES = {
   C4: 261.6,
@@ -832,7 +1083,7 @@ const WHIMSY_TOOL_NOTES: Record<ToolFamily, WhimsyToolNotes> = {
 // Used when soundStyle === 'classic'
 // ---------------------------------------------------------------------------
 
-export type SoundStyle = 'classic' | 'melodic' | 'whimsy' | 'slot-machine';
+export type SoundStyle = 'classic' | 'melodic' | 'whimsy' | 'slot-machine' | 'forest';
 
 interface ClassicConfig {
   freq: number;
@@ -1497,6 +1748,91 @@ export class ChirpEngine {
     coinPing(0.17, SLOT_NOTES.A5, SLOT_NOTES.C6, 0.25, 0.3); // bends up — "?"
   }
 
+  /**
+   * Forest rustle — replaces text_delta in forest mode.
+   * Soft filtered noise shaped like wind through leaves,
+   * with a gentle high-frequency shimmer and a low rustle undertone.
+   * Much gentler and more organic than the tech brush stroke.
+   */
+  private playForestRustle(): void {
+    const ctx = this.ensureContext();
+    const master = this.masterGain!;
+    const now = ctx.currentTime;
+    const buf = this.makeNoiseBuffer(ctx);
+    const dur = 0.045;
+
+    // Leafy rustle: broad bandpass around 1.8 kHz, very soft
+    const src = ctx.createBufferSource();
+    src.buffer = buf;
+
+    const bp = ctx.createBiquadFilter();
+    bp.type = 'bandpass';
+    bp.frequency.value = 1800;
+    bp.Q.value = 1.2; // wide band = natural sounding
+
+    const env = ctx.createGain();
+    env.gain.setValueAtTime(0, now);
+    env.gain.linearRampToValueAtTime(0.16, now + 0.008); // soft onset
+    env.gain.setTargetAtTime(0.0001, now + 0.008, 0.022);
+
+    src.connect(bp);
+    bp.connect(env);
+    env.connect(master);
+    src.start(now);
+    src.stop(now + dur + 0.01);
+
+    // Add a tiny fairy sparkle overtone for magic
+    const sparkle = ctx.createOscillator();
+    const sparkleEnv = ctx.createGain();
+    sparkle.type = 'sine';
+    sparkle.frequency.setValueAtTime(FOREST_NOTES.D6, now);
+    sparkleEnv.gain.setValueAtTime(0, now);
+    sparkleEnv.gain.linearRampToValueAtTime(0.04, now + 0.004);
+    sparkleEnv.gain.setTargetAtTime(0.0001, now + 0.004, 0.015);
+    sparkle.connect(sparkleEnv);
+    sparkleEnv.connect(master);
+    sparkle.start(now);
+    sparkle.stop(now + dur + 0.01);
+  }
+
+  /**
+   * Forest question — "hoo-hoo-hoo?" in wooden flute.
+   * Three ascending flute tones with the last bending upward,
+   * like a woodland creature calling a question through the trees.
+   */
+  private playForestQuestion(): void {
+    const ctx = this.ensureContext();
+    const master = this.masterGain!;
+    const now = ctx.currentTime;
+
+    const fluteNote = (startT: number, freqA: number, freqB: number, dur: number, gain: number) => {
+      for (const ot of WOODEN_FLUTE) {
+        const osc = ctx.createOscillator();
+        const env = ctx.createGain();
+        const peakGain = gain * ot.gain;
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(freqA * ot.ratio, now + startT);
+        if (freqB !== freqA && ot.ratio === 1) {
+          osc.frequency.linearRampToValueAtTime(freqB * ot.ratio, now + startT + dur);
+        }
+        env.gain.setValueAtTime(0, now + startT);
+        env.gain.linearRampToValueAtTime(peakGain, now + startT + 0.008); // breathy onset
+        env.gain.setTargetAtTime(0.0001, now + startT + 0.008, ot.decay * 0.4);
+        env.gain.setValueAtTime(0.0001, now + startT + dur);
+        env.gain.linearRampToValueAtTime(0, now + startT + dur + 0.06);
+        osc.connect(env);
+        env.connect(master);
+        osc.start(now + startT);
+        osc.stop(now + startT + dur + 0.1);
+      }
+    };
+
+    //             start  fA                    fB                    dur   gain
+    fluteNote(0.0,   FOREST_NOTES.G4, FOREST_NOTES.G4, 0.09, 0.22);
+    fluteNote(0.11,  FOREST_NOTES.A4, FOREST_NOTES.A4, 0.09, 0.24);
+    fluteNote(0.22,  FOREST_NOTES.B4, FOREST_NOTES.D5, 0.3,  0.3); // bends up — the "?"
+  }
+
   toolStart(name: string) {
     const key: ChirpEvent = 'tool_start';
     const cooldown = EVENT_COOLDOWNS[key];
@@ -1512,6 +1848,8 @@ export class ChirpEngine {
         this.playSpec(WHIMSY_TOOL_NOTES[toolFamily(name)].start);
       } else if (this.style === 'slot-machine') {
         this.playSpec(SLOT_MACHINE_TOOL_NOTES[toolFamily(name)].start);
+      } else if (this.style === 'forest') {
+        this.playSpec(FOREST_TOOL_NOTES[toolFamily(name)].start);
       } else {
         this.playSpec(TOOL_NOTES[toolFamily(name)].start);
       }
@@ -1535,6 +1873,8 @@ export class ChirpEngine {
         this.playSpec(WHIMSY_TOOL_NOTES[toolFamily(name)].ok);
       } else if (this.style === 'slot-machine') {
         this.playSpec(SLOT_MACHINE_TOOL_NOTES[toolFamily(name)].ok);
+      } else if (this.style === 'forest') {
+        this.playSpec(FOREST_TOOL_NOTES[toolFamily(name)].ok);
       } else {
         this.playSpec(TOOL_NOTES[toolFamily(name)].ok);
       }
@@ -1591,6 +1931,21 @@ export class ChirpEngine {
           return;
         }
         const spec = SLOT_MACHINE_EVENT_NOTES[event];
+        if (!spec) return;
+        this.playSpec(spec);
+        return;
+      }
+
+      if (this.style === 'forest') {
+        if (event === 'text_delta') {
+          this.playForestRustle();
+          return;
+        }
+        if (event === 'user_question') {
+          this.playForestQuestion();
+          return;
+        }
+        const spec = FOREST_EVENT_NOTES[event];
         if (!spec) return;
         this.playSpec(spec);
         return;

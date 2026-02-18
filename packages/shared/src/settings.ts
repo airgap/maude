@@ -55,7 +55,7 @@ export interface Settings {
   // Audio & notifications
   soundEnabled: boolean;
   soundVolume: number;
-  soundStyle: 'classic' | 'melodic' | 'whimsy' | 'slot-machine';
+  soundStyle: 'classic' | 'melodic' | 'whimsy' | 'slot-machine' | 'forest';
   notifyOnCompletion: boolean;
   notifyOnFailure: boolean;
   notifyOnApproval: boolean;
