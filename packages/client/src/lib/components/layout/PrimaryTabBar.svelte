@@ -4,6 +4,8 @@
     type PrimaryPane,
     type PrimaryTab,
   } from '$lib/stores/primaryPane.svelte';
+  import { editorStore } from '$lib/stores/editor.svelte';
+  import { streamStore } from '$lib/stores/stream.svelte';
   import ContextMenu from '$lib/components/ui/ContextMenu.svelte';
   import type { ContextMenuItem } from '$lib/components/ui/ContextMenu.svelte';
   import Tooltip from '$lib/components/ui/Tooltip.svelte';
@@ -264,6 +266,24 @@
   </div>
 
   <div class="tab-bar-actions">
+    <Tooltip
+      content={editorStore.followAlong ? 'Following edits (click to stop)' : 'Follow along with edits'}
+      placement="bottom"
+      delay={400}
+    >
+      <button
+        class="action-btn follow-btn"
+        class:active={editorStore.followAlong}
+        class:streaming={editorStore.followAlong && streamStore.isStreaming}
+        aria-label="Toggle follow along"
+        onclick={() => editorStore.toggleFollowAlong()}
+      >
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+          <circle cx="12" cy="12" r="3" />
+        </svg>
+      </button>
+    </Tooltip>
     {#if !isOnlyPane}
       <Tooltip content="Close pane" placement="bottom" delay={700}>
         <button class="action-btn" aria-label="Close pane" onclick={handleSplitClose}>
@@ -493,5 +513,22 @@
   .action-btn svg {
     width: 14px;
     height: 14px;
+  }
+
+  .follow-btn.active {
+    color: var(--accent-primary);
+  }
+
+  .follow-btn.active:hover {
+    background: color-mix(in srgb, var(--accent-primary) 12%, var(--bg-hover));
+  }
+
+  @keyframes follow-pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+  }
+
+  .follow-btn.streaming {
+    animation: follow-pulse 2s ease-in-out infinite;
   }
 </style>

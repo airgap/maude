@@ -23,7 +23,7 @@ export interface EditorTab {
 
 export type LayoutMode = 'chat-only' | 'editor-only' | 'split-horizontal';
 
-function detectLanguage(fileName: string): string {
+export function detectLanguage(fileName: string): string {
   const ext = fileName.split('.').pop()?.toLowerCase() ?? '';
   const map: Record<string, string> = {
     ts: 'typescript',

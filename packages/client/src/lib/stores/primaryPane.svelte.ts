@@ -1,4 +1,5 @@
 import { uuid } from '$lib/utils/uuid';
+import { api } from '$lib/api/client';
 
 export type PrimaryTabKind = 'chat' | 'diff' | 'file';
 
@@ -257,6 +258,36 @@ function createPrimaryPaneStore() {
       pane.activeTabId = tab.id;
       activePaneId = pane.id;
       persist();
+    },
+
+    /**
+     * Refresh the content of any open file tabs matching the given path.
+     * Called when the agent modifies a file to keep the PrimaryPane tab in sync.
+     */
+    async refreshFileTab(filePath: string) {
+      let found = false;
+      for (const pane of panes) {
+        for (const tab of pane.tabs) {
+          if (tab.kind === 'file' && tab.filePath === filePath) {
+            found = true;
+          }
+        }
+      }
+      if (!found) return;
+      try {
+        const res = await api.files.read(filePath);
+        const newContent = res.data.content;
+        for (const pane of panes) {
+          for (const tab of pane.tabs) {
+            if (tab.kind === 'file' && tab.filePath === filePath) {
+              tab.fileContent = newContent;
+            }
+          }
+        }
+        persist();
+      } catch {
+        // File may have been deleted
+      }
     },
 
     // ── Split ──

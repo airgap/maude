@@ -1,6 +1,8 @@
 import type { StreamEvent, MessageContent } from '@e/shared';
 import { isMcpFileWriteTool, extractEditLineHint } from '@e/shared';
-import { editorStore } from './editor.svelte';
+import { editorStore, detectLanguage } from './editor.svelte';
+import { primaryPaneStore } from './primaryPane.svelte';
+import { api } from '$lib/api/client';
 import { artifactsStore } from './artifacts.svelte';
 import { agentNotesStore } from './agent-notes.svelte';
 
@@ -362,10 +364,19 @@ function createStreamStore() {
                     line: editLine,
                   });
                 }
-                // Open + activate the file (splits if needed)
-                editorStore.openFile(event.filePath);
+                // Open the file as a tab in the primary pane (standard tab split)
+                const filePath = event.filePath;
+                const fileName = filePath.split('/').pop() ?? filePath;
+                const language = detectLanguage(fileName);
+                api.files.read(filePath).then((res) => {
+                  primaryPaneStore.openFileTab(filePath, res.data.content, language);
+                }).catch(() => {
+                  // File may not be readable — skip
+                });
               }
+              // Refresh both editor-pane tabs and primary-pane file tabs
               editorStore.refreshFile(event.filePath);
+              primaryPaneStore.refreshFileTab(event.filePath);
             }
           }
 

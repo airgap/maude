@@ -1,6 +1,8 @@
 import type { StreamEvent, MessageContent } from '@e/shared';
 import { extractEditLineHint } from '@e/shared';
-import { editorStore } from './editor.svelte';
+import { editorStore, detectLanguage } from './editor.svelte';
+import { primaryPaneStore } from './primaryPane.svelte';
+import { api } from '$lib/api/client';
 import { changesStore } from './changes.svelte';
 
 export type StreamStatus =
@@ -285,10 +287,20 @@ function createStreamStore() {
                     line: editLine,
                   });
                 }
-                editorStore.openFile(event.filePath);
+                // Open the file as a tab in the primary pane (standard tab split)
+                const filePath = event.filePath;
+                const fileName = filePath.split('/').pop() ?? filePath;
+                const language = detectLanguage(fileName);
+                api.files.read(filePath).then((res) => {
+                  primaryPaneStore.openFileTab(filePath, res.data.content, language);
+                }).catch(() => {
+                  // File may not be readable — skip
+                });
               }
 
+              // Refresh both editor-pane tabs and primary-pane file tabs
               editorStore.refreshFile(event.filePath);
+              primaryPaneStore.refreshFileTab(event.filePath);
 
               let reasoning = '';
               for (let i = state.contentBlocks.length - 1; i >= 0; i--) {
