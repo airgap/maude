@@ -10,6 +10,7 @@
   import { executeSlashCommand, type SlashCommandContext } from '$lib/commands/slash-commands';
   import { uiStore, onFocusChatInput } from '$lib/stores/ui.svelte';
   import { workStore } from '$lib/stores/work.svelte';
+  import { draftsStore } from '$lib/stores/drafts.svelte';
   import { onMount } from 'svelte';
   import SlashCommandMenu from './SlashCommandMenu.svelte';
   import MentionMenu from './MentionMenu.svelte';
@@ -207,6 +208,45 @@
       // Small delay to let Svelte finish any pending state updates (e.g. clearing active conversation)
       requestAnimationFrame(() => textarea?.focus());
     });
+
+    // Restore any saved draft for the initial conversation on mount
+    const savedDraft = draftsStore.get(conversationStore.activeId);
+    if (savedDraft) {
+      inputText = savedDraft;
+      // Defer resize so the textarea DOM node is ready
+      requestAnimationFrame(() => resizeTextarea());
+    }
+
+    // Save the current draft before page unload (refresh / close)
+    function handleBeforeUnload() {
+      draftsStore.save(conversationStore.activeId, inputText);
+    }
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  });
+
+  // ── Draft persistence ──
+  // Track which conversation we last restored a draft for, to avoid loops
+  let lastDraftConvId = $state<string | null | undefined>(undefined);
+
+  // Restore draft when switching conversations/tabs
+  $effect(() => {
+    const convId = conversationStore.activeId;
+    // Only restore when the conversation actually changes (not on every render)
+    if (convId === lastDraftConvId) return;
+
+    // Save the outgoing conversation's draft before switching
+    if (lastDraftConvId !== undefined) {
+      draftsStore.save(lastDraftConvId, inputText);
+    }
+
+    lastDraftConvId = convId;
+
+    // Restore draft for the incoming conversation
+    const saved = draftsStore.get(convId);
+    inputText = saved;
+    // Defer resize so Svelte applies the binding first
+    requestAnimationFrame(() => resizeTextarea());
   });
 
   function toggleContextFile(tabId: string) {
@@ -602,6 +642,7 @@
     resizeTextarea();
     contextFiles = new Set();
     mentions = [];
+    draftsStore.clear(conversationStore.activeId);
 
     const attachmentsToSend = imageAttachments.length > 0 ? imageAttachments : undefined;
     pendingAttachments = [];
@@ -774,6 +815,8 @@
 
   function handleInput() {
     resizeTextarea();
+    // Persist draft as user types
+    draftsStore.save(conversationStore.activeId, inputText);
     // Slash command filtering
     if (inputText.startsWith('/')) {
       showSlashMenu = true;
@@ -817,6 +860,7 @@
   function handleVoiceTranscript(text: string) {
     inputText = inputText ? inputText + ' ' + text : text;
     resizeTextarea();
+    draftsStore.save(conversationStore.activeId, inputText);
   }
 
   function selectSlashCommand(command: string) {
