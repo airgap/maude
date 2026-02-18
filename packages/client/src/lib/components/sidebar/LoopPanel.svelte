@@ -4,10 +4,11 @@
   import { streamStore } from '$lib/stores/stream.svelte';
   import { settingsStore } from '$lib/stores/settings.svelte';
   import { uiStore } from '$lib/stores/ui.svelte';
+  import { workStore } from '$lib/stores/work.svelte';
   import { api } from '$lib/api/client';
   import { sendAndStream } from '$lib/api/sse';
   import { onMount } from 'svelte';
-  import type { PlanMode } from '@e/shared';
+  import type { PlanMode, LoopConfig } from '@e/shared';
   import DependencyView from '$lib/components/planning/DependencyView.svelte';
 
   let workspacePath = $derived(settingsStore.workspacePath || '');
@@ -148,6 +149,124 @@
 
   function openLoopConfig() {
     uiStore.openModal('loop-config');
+  }
+
+  // --- Hold-to-start-with-defaults logic ---
+  const HOLD_DURATION = 800; // ms to hold for quick-start
+  let holdTimer: ReturnType<typeof setTimeout> | null = null;
+  let holdStartTime = $state(0);
+  let holdProgress = $state(0);
+  let isHolding = $state(false);
+  let holdCompleted = $state(false);
+  let holdAnimFrame: number | null = null;
+
+  function getDefaultConfig(): LoopConfig {
+    const isStandaloneLoop = !loopStore.selectedPrdId;
+    const storyCount = isStandaloneLoop
+      ? workStore.standaloneStories.filter((s) => s.status === 'pending' || s.status === 'in_progress').length
+      : (loopStore.selectedPrd?.stories?.filter(
+          (s: any) => s.status === 'pending' || s.status === 'in_progress',
+        ).length ?? 0);
+    const maxAttempts = 3;
+    return {
+      maxIterations: Math.max(10, storyCount * maxAttempts),
+      maxAttemptsPerStory: maxAttempts,
+      model: settingsStore.model,
+      effort: settingsStore.effort || 'high',
+      autoCommit: true,
+      autoSnapshot: true,
+      pauseOnFailure: false,
+      qualityChecks: [{
+        id: 'default-tc',
+        type: 'typecheck',
+        name: 'Typecheck',
+        command: 'bun run check',
+        timeout: 60000,
+        required: true,
+        enabled: true,
+      }],
+    };
+  }
+
+  function animateHold() {
+    if (!isHolding) return;
+    const elapsed = Date.now() - holdStartTime;
+    holdProgress = Math.min(elapsed / HOLD_DURATION, 1);
+    if (holdProgress >= 1) {
+      holdCompleted = true;
+      isHolding = false;
+      startLoopWithDefaults();
+      return;
+    }
+    holdAnimFrame = requestAnimationFrame(animateHold);
+  }
+
+  function onHoldStart(e: PointerEvent) {
+    if (!loopStore.selectedPrdId) return;
+    // Only trigger on primary button (left click)
+    if (e.button !== 0) return;
+    holdCompleted = false;
+    isHolding = true;
+    holdStartTime = Date.now();
+    holdProgress = 0;
+    holdAnimFrame = requestAnimationFrame(animateHold);
+    // Set a timer for haptic-like complete
+    holdTimer = setTimeout(() => {
+      // animateHold will handle the completion
+    }, HOLD_DURATION + 50);
+  }
+
+  function onHoldEnd() {
+    if (holdAnimFrame) {
+      cancelAnimationFrame(holdAnimFrame);
+      holdAnimFrame = null;
+    }
+    if (holdTimer) {
+      clearTimeout(holdTimer);
+      holdTimer = null;
+    }
+    if (isHolding && !holdCompleted) {
+      // Released before hold completed → normal click → open config
+      isHolding = false;
+      holdProgress = 0;
+      openLoopConfig();
+    }
+    // Reset after a short delay to allow the completion animation to flash
+    if (holdCompleted) {
+      setTimeout(() => {
+        holdProgress = 0;
+        holdCompleted = false;
+      }, 400);
+    } else {
+      isHolding = false;
+      holdProgress = 0;
+    }
+  }
+
+  async function startLoopWithDefaults() {
+    const prdId = loopStore.selectedPrdId;
+    const workspacePath = settingsStore.workspacePath;
+    if (!workspacePath) return;
+
+    const config = getDefaultConfig();
+
+    try {
+      if (!prdId) {
+        const standaloneCount = workStore.standaloneStories.filter(
+          (s) => s.status === 'pending' || s.status === 'in_progress'
+        ).length;
+        loopStore.setStandaloneStoryCount(standaloneCount);
+      }
+
+      const result = await loopStore.startLoop(prdId ?? null, workspacePath, config);
+      if (result.ok) {
+        uiStore.toast('Loop started with defaults', 'success');
+      } else {
+        uiStore.toast(result.error || 'Failed to start loop', 'error');
+      }
+    } catch (err) {
+      uiStore.toast(`Failed to start loop: ${err}`, 'error');
+    }
   }
 
   function actionLabel(action: string): string {
@@ -777,13 +896,37 @@
         >
       </div>
     {:else}
-      <button
-        class="btn-sm btn-primary full-width"
-        disabled={!loopStore.selectedPrdId}
-        onclick={openLoopConfig}
-      >
-        <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor" stroke="none"><polygon points="5 3 19 12 5 21 5 3" /></svg> Start Loop
-      </button>
+      <!-- svelte-ignore a11y_no_static_element_interactions -->
+      <div class="hold-btn-wrap">
+        <button
+          class="btn-sm btn-primary full-width hold-btn"
+          class:holding={isHolding}
+          class:hold-complete={holdCompleted}
+          disabled={!loopStore.selectedPrdId}
+          onpointerdown={onHoldStart}
+          onpointerup={onHoldEnd}
+          onpointerleave={onHoldEnd}
+          onpointercancel={onHoldEnd}
+        >
+          <span class="hold-fill" style:width="{holdProgress * 100}%"></span>
+          <span class="hold-label">
+            {#if holdCompleted}
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12" /></svg> Starting...
+            {:else if isHolding}
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor" stroke="none"><polygon points="5 3 19 12 5 21 5 3" /></svg> Hold for Quick Start
+            {:else}
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor" stroke="none"><polygon points="5 3 19 12 5 21 5 3" /></svg> Start Loop
+            {/if}
+          </span>
+        </button>
+        <span class="hold-hint">
+          {#if !loopStore.selectedPrdId}
+            Select a PRD first
+          {:else}
+            Click to configure · Hold to quick-start
+          {/if}
+        </span>
+      </div>
     {/if}
   </div>
 
@@ -1308,6 +1451,74 @@
     color: var(--text-tertiary);
     font-weight: 600;
     letter-spacing: 0.3px;
+  }
+
+  /* --- Hold-to-start button --- */
+  .hold-btn-wrap {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    width: 100%;
+  }
+
+  .hold-btn {
+    position: relative;
+    overflow: hidden;
+    user-select: none;
+    touch-action: none;
+    transition: transform 0.1s ease, box-shadow 0.15s ease;
+  }
+
+  .hold-btn:active:not(:disabled) {
+    transform: scale(0.98);
+  }
+
+  .hold-fill {
+    position: absolute;
+    inset: 0;
+    width: 0%;
+    background: rgba(255, 255, 255, 0.2);
+    border-radius: inherit;
+    transition: width 0.05s linear;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .hold-btn.holding .hold-fill {
+    background: rgba(255, 255, 255, 0.25);
+  }
+
+  .hold-btn.hold-complete .hold-fill {
+    width: 100% !important;
+    background: rgba(255, 255, 255, 0.35);
+    transition: background 0.2s ease;
+  }
+
+  .hold-btn.hold-complete {
+    animation: hold-pulse 0.3s ease;
+  }
+
+  .hold-label {
+    position: relative;
+    z-index: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    pointer-events: none;
+  }
+
+  .hold-hint {
+    font-size: var(--fs-xxs);
+    color: var(--text-tertiary);
+    text-align: center;
+    line-height: 1;
+  }
+
+  @keyframes hold-pulse {
+    0% { transform: scale(1); box-shadow: 0 0 0 0 var(--accent-primary); }
+    50% { transform: scale(1.02); box-shadow: 0 0 12px 2px var(--accent-primary); }
+    100% { transform: scale(1); box-shadow: 0 0 0 0 transparent; }
   }
 
   @keyframes pulse {

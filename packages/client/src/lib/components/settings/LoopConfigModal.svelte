@@ -7,6 +7,33 @@
   import type { QualityCheckConfig, LoopConfig } from '@e/shared';
   import { onMount } from 'svelte';
 
+  const LOOP_CONFIG_KEY = 'e-loop-config';
+
+  interface SavedLoopConfig {
+    maxIterations: number;
+    maxAttemptsPerStory: number;
+    model: string;
+    effort: string;
+    autoCommit: boolean;
+    autoSnapshot: boolean;
+    pauseOnFailure: boolean;
+    qualityChecks: QualityCheckConfig[];
+  }
+
+  function loadSavedConfig(): SavedLoopConfig | null {
+    try {
+      const raw = localStorage.getItem(LOOP_CONFIG_KEY);
+      if (raw) return JSON.parse(raw);
+    } catch { /* localStorage unavailable */ }
+    return null;
+  }
+
+  function saveConfig(config: SavedLoopConfig) {
+    try {
+      localStorage.setItem(LOOP_CONFIG_KEY, JSON.stringify(config));
+    } catch { /* localStorage unavailable */ }
+  }
+
   // Standalone mode: no PRD selected
   let isStandalone = $derived(!loopStore.selectedPrdId);
   let standaloneStoryCount = $derived(
@@ -23,14 +50,17 @@
         ).length ?? 0),
   );
 
-  let maxAttemptsPerStory = $state(3);
+  // Load saved config or use defaults
+  const saved = loadSavedConfig();
+
+  let maxAttemptsPerStory = $state(saved?.maxAttemptsPerStory ?? 3);
   // Default maxIterations: storyCount * maxAttemptsPerStory, minimum 10
-  let maxIterations = $state(50);
-  let model = $state(settingsStore.model);
-  let effort = $state(settingsStore.effort || 'high');
-  let autoCommit = $state(true);
-  let autoSnapshot = $state(true);
-  let pauseOnFailure = $state(false);
+  let maxIterations = $state(saved?.maxIterations ?? 50);
+  let model = $state(saved?.model ?? settingsStore.model);
+  let effort = $state(saved?.effort ?? settingsStore.effort ?? 'high');
+  let autoCommit = $state(saved?.autoCommit ?? true);
+  let autoSnapshot = $state(saved?.autoSnapshot ?? true);
+  let pauseOnFailure = $state(saved?.pauseOnFailure ?? false);
 
   let checks = $state<QualityCheckConfig[]>([]);
   let showAddCheck = $state(false);
@@ -40,29 +70,35 @@
   let newCheckRequired = $state(true);
 
   onMount(() => {
-    // Compute a smart default for maxIterations based on story count
-    const count = storyCount;
-    if (count > 0) {
-      maxIterations = Math.max(10, count * maxAttemptsPerStory);
+    // Only compute smart maxIterations if no saved config
+    if (!saved) {
+      const count = storyCount;
+      if (count > 0) {
+        maxIterations = Math.max(10, count * maxAttemptsPerStory);
+      }
     }
 
-    // Pre-populate with PRD quality checks or defaults
-    const prd = loopStore.selectedPrd;
-    if (prd && prd.qualityChecks?.length > 0) {
-      checks = prd.qualityChecks.map((c) => ({ ...c, enabled: true }));
+    // Pre-populate quality checks: saved config > PRD checks > defaults
+    if (saved?.qualityChecks?.length) {
+      checks = saved.qualityChecks;
     } else {
-      // Provide sensible defaults based on common project setups
-      checks = [
-        {
-          id: uuid().slice(0, 8),
-          type: 'typecheck',
-          name: 'Typecheck',
-          command: 'bun run check',
-          timeout: 60000,
-          required: true,
-          enabled: true,
-        },
-      ];
+      const prd = loopStore.selectedPrd;
+      if (prd && prd.qualityChecks?.length > 0) {
+        checks = prd.qualityChecks.map((c) => ({ ...c, enabled: true }));
+      } else {
+        // Provide sensible defaults based on common project setups
+        checks = [
+          {
+            id: uuid().slice(0, 8),
+            type: 'typecheck',
+            name: 'Typecheck',
+            command: 'bun run check',
+            timeout: 60000,
+            required: true,
+            enabled: true,
+          },
+        ];
+      }
     }
   });
 
@@ -127,6 +163,18 @@
       pauseOnFailure,
       qualityChecks: checks,
     };
+
+    // Persist settings for next time
+    saveConfig({
+      maxIterations,
+      maxAttemptsPerStory,
+      model,
+      effort,
+      autoCommit,
+      autoSnapshot,
+      pauseOnFailure,
+      qualityChecks: checks,
+    });
 
     try {
       // Set standalone story count for progress tracking before starting
