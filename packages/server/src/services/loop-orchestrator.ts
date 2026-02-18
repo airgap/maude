@@ -12,6 +12,8 @@ import type {
   UserStory,
   StreamLoopEvent,
   StoryPriority,
+  AgentNote,
+  StreamAgentNoteCreated,
 } from '@e/shared';
 
 // Priority ordering for story selection
@@ -532,6 +534,9 @@ class LoopRunner {
           // Record learnings from success
           this.recordLearning(story, 'Completed successfully', qualityResults);
 
+          // Create agent note with report for the user
+          this.createAgentNote(story, conversationId, 'completed', agentResult, qualityResults);
+
           // External status writeback hook
           const completedStory = this.getStory(story.id);
           if (completedStory?.externalRef) {
@@ -550,6 +555,9 @@ class LoopRunner {
 
           // Record learning
           this.recordLearning(story, failReason, qualityResults);
+
+          // Create agent note with failure report for the user
+          this.createAgentNote(story, conversationId, 'failed', agentResult, qualityResults, failReason);
 
           // Check if retries exhausted
           const updatedStory = this.getStory(story.id);
@@ -950,6 +958,123 @@ ${criteria}
       storyTitle: story.title,
       learning,
     });
+  }
+
+  // --- Agent Notes ---
+
+  /**
+   * Create an agent note when a story completes or fails.
+   * This lets users review agent reports/results without digging through conversations.
+   */
+  private createAgentNote(
+    story: UserStory,
+    conversationId: string,
+    outcome: 'completed' | 'failed',
+    agentOutput: string,
+    qualityResults: QualityCheckResult[],
+    failReason?: string,
+  ): void {
+    try {
+      const db = getDb();
+      const id = nanoid(12);
+      const now = Date.now();
+
+      const isSuccess = outcome === 'completed';
+      const category = isSuccess ? 'report' : 'status';
+      const statusEmoji = isSuccess ? '✅' : '❌';
+      const title = `${statusEmoji} ${story.title}`;
+
+      // Build the note content as markdown
+      const sections: string[] = [];
+
+      sections.push(`# ${isSuccess ? 'Completed' : 'Failed'}: ${story.title}\n`);
+
+      if (story.description) {
+        sections.push(`## Story Description\n${story.description}\n`);
+      }
+
+      sections.push(`## Outcome\n**Status:** ${isSuccess ? 'Completed successfully' : 'Failed'}  `);
+      sections.push(`**Attempts:** ${story.attempts + 1}/${story.maxAttempts}  `);
+      sections.push(`**Iteration:** Loop \`${this.loopId}\`\n`);
+
+      if (failReason) {
+        sections.push(`## Failure Reason\n${failReason}\n`);
+      }
+
+      if (qualityResults.length > 0) {
+        sections.push(`## Quality Check Results`);
+        for (const qr of qualityResults) {
+          const icon = qr.passed ? '✅' : '❌';
+          sections.push(`- ${icon} **${qr.checkName}** (${qr.checkType}): ${qr.passed ? 'Passed' : 'Failed'} — ${qr.duration}ms`);
+          if (!qr.passed && qr.output) {
+            // Include first 500 chars of failure output
+            const truncated = qr.output.slice(0, 500);
+            sections.push(`  \`\`\`\n  ${truncated}${qr.output.length > 500 ? '\n  ...(truncated)' : ''}\n  \`\`\``);
+          }
+        }
+        sections.push('');
+      }
+
+      // Include a summary from the agent output (first 2000 chars)
+      if (agentOutput && agentOutput.trim().length > 0) {
+        const trimmedOutput = agentOutput.trim().slice(0, 2000);
+        sections.push(`## Agent Output Summary\n\`\`\`\n${trimmedOutput}${agentOutput.length > 2000 ? '\n...(truncated)' : ''}\n\`\`\`\n`);
+      }
+
+      const content = sections.join('\n');
+
+      const metadata = {
+        loopId: this.loopId,
+        storyId: story.id,
+        conversationId,
+        outcome,
+        attempts: story.attempts + 1,
+        maxAttempts: story.maxAttempts,
+        qualityPassed: qualityResults.filter((qr) => qr.passed).length,
+        qualityFailed: qualityResults.filter((qr) => !qr.passed).length,
+      };
+
+      db.query(
+        `INSERT INTO agent_notes (id, workspace_path, conversation_id, story_id, title, content, category, status, metadata, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, 'unread', ?, ?, ?)`,
+      ).run(
+        id,
+        this.workspacePath,
+        conversationId,
+        story.id,
+        title,
+        content,
+        category,
+        JSON.stringify(metadata),
+        now,
+        now,
+      );
+
+      // Emit stream event so UI updates in real time
+      const note: AgentNote = {
+        id,
+        workspacePath: this.workspacePath,
+        conversationId,
+        storyId: story.id,
+        title,
+        content,
+        category,
+        status: 'unread',
+        metadata,
+        createdAt: now,
+        updatedAt: now,
+      };
+
+      const evt: StreamAgentNoteCreated = {
+        type: 'agent_note_created',
+        note,
+      };
+      this.events.emit('loop_event', evt);
+
+      console.log(`[loop:${this.loopId}] Created agent note "${title}" (${id})`);
+    } catch (err) {
+      console.error(`[loop:${this.loopId}] Failed to create agent note:`, err);
+    }
   }
 
   // --- Git operations ---

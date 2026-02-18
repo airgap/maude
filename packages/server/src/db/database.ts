@@ -247,6 +247,24 @@ export function initDatabase(): void {
 
     CREATE INDEX IF NOT EXISTS idx_artifacts_conversation ON artifacts(conversation_id, created_at DESC);
     CREATE INDEX IF NOT EXISTS idx_artifacts_pinned ON artifacts(conversation_id, pinned);
+
+    CREATE TABLE IF NOT EXISTS agent_notes (
+      id TEXT PRIMARY KEY,
+      workspace_path TEXT NOT NULL,
+      conversation_id TEXT,
+      story_id TEXT,
+      title TEXT NOT NULL,
+      content TEXT NOT NULL,
+      category TEXT NOT NULL DEFAULT 'general',
+      status TEXT NOT NULL DEFAULT 'unread',
+      metadata TEXT NOT NULL DEFAULT '{}',
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_agent_notes_workspace ON agent_notes(workspace_path, created_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_agent_notes_status ON agent_notes(workspace_path, status);
+    CREATE INDEX IF NOT EXISTS idx_agent_notes_story ON agent_notes(story_id);
   `);
 
   // Migrate: add new conversation columns (safe ALTER TABLE — no-ops if already exist)

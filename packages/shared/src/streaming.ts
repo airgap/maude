@@ -1,6 +1,7 @@
 import type { Task } from './tasks.js';
 import type { UserStory, StreamLoopEvent } from './prd.js';
 import type { Artifact } from './artifacts.js';
+import type { AgentNote } from './agent-notes.js';
 
 // SSE event types matching Claude's stream-json format
 export type StreamEvent =
@@ -23,7 +24,8 @@ export type StreamEvent =
   | StreamLoopEvent
   | StreamContextWarning
   | StreamCompactBoundary
-  | StreamArtifactCreated;
+  | StreamArtifactCreated
+  | StreamAgentNoteCreated;
 
 export interface StreamMessageStart {
   type: 'message_start';
@@ -197,4 +199,13 @@ export interface StreamCompactBoundary {
 export interface StreamArtifactCreated {
   type: 'artifact_created';
   artifact: Artifact;
+}
+
+/**
+ * Emitted when an agent creates a note/report for the user.
+ * The Agent Notes panel listens for this to update in real time.
+ */
+export interface StreamAgentNoteCreated {
+  type: 'agent_note_created';
+  note: AgentNote;
 }

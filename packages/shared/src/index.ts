@@ -29,6 +29,7 @@ export type {
   StreamAgentEvent,
   StreamVerificationResult,
   StreamArtifactCreated,
+  StreamAgentNoteCreated,
 } from './streaming.js';
 
 export type {
@@ -198,3 +199,11 @@ export type {
   MatrixStoryPosition,
   EffortValueMatrix,
 } from './prd.js';
+
+export type {
+  AgentNoteStatus,
+  AgentNoteCategory,
+  AgentNote,
+  AgentNoteCreateInput,
+  AgentNoteUpdateInput,
+} from './agent-notes.js';

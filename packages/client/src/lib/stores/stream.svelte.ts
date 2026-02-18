@@ -2,6 +2,7 @@ import type { StreamEvent, MessageContent } from '@e/shared';
 import { isMcpFileWriteTool } from '@e/shared';
 import { editorStore } from './editor.svelte';
 import { artifactsStore } from './artifacts.svelte';
+import { agentNotesStore } from './agent-notes.svelte';
 
 // Context key for Svelte 5 context API - ensures proper reactivity tracking
 export const STREAM_CONTEXT_KEY = Symbol('streamStore');
@@ -392,6 +393,13 @@ function createStreamStore() {
           // Forward to the artifacts store so the sidebar updates in real time
           if (event.artifact) {
             artifactsStore.addFromStream(event.artifact);
+          }
+          break;
+
+        case 'agent_note_created':
+          // Forward to the agent notes store so the sidebar updates in real time
+          if (event.note) {
+            agentNotesStore.addFromStream(event.note);
           }
           break;
       }

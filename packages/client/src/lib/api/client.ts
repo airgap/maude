@@ -1527,4 +1527,38 @@ export const api = {
         body: JSON.stringify({ pinned }),
       }),
   },
+
+  // --- Agent Notes ---
+  agentNotes: {
+    list: (workspacePath: string, opts?: { status?: string; category?: string }) => {
+      const params = new URLSearchParams({ workspacePath });
+      if (opts?.status) params.set('status', opts.status);
+      if (opts?.category) params.set('category', opts.category);
+      return request<{ ok: boolean; data: import('@e/shared').AgentNote[] }>(
+        `/agent-notes?${params}`,
+      );
+    },
+    get: (id: string) =>
+      request<{ ok: boolean; data: import('@e/shared').AgentNote }>(`/agent-notes/${id}`),
+    create: (body: import('@e/shared').AgentNoteCreateInput) =>
+      request<{ ok: boolean; data: import('@e/shared').AgentNote }>('/agent-notes', {
+        method: 'POST',
+        body: JSON.stringify(body),
+      }),
+    update: (id: string, body: import('@e/shared').AgentNoteUpdateInput) =>
+      request<{ ok: boolean; data: import('@e/shared').AgentNote }>(`/agent-notes/${id}`, {
+        method: 'PATCH',
+        body: JSON.stringify(body),
+      }),
+    delete: (id: string) => request<{ ok: boolean }>(`/agent-notes/${id}`, { method: 'DELETE' }),
+    markRead: (workspacePath: string) =>
+      request<{ ok: boolean; data: { updated: number } }>('/agent-notes/mark-read', {
+        method: 'PATCH',
+        body: JSON.stringify({ workspacePath }),
+      }),
+    unreadCount: (workspacePath: string) =>
+      request<{ ok: boolean; data: { count: number } }>(
+        `/agent-notes/unread-count?workspacePath=${encodeURIComponent(workspacePath)}`,
+      ),
+  },
 };

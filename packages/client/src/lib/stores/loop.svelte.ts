@@ -631,9 +631,14 @@ function createLoopStore() {
               if (!json || json === '{"type":"ping"}') continue;
 
               try {
-                const event = JSON.parse(json) as StreamLoopEvent;
+                const event = JSON.parse(json);
                 if (event.type === 'loop_event') {
-                  this.handleLoopEvent(event);
+                  this.handleLoopEvent(event as StreamLoopEvent);
+                } else if (event.type === 'agent_note_created') {
+                  // Forward agent notes to the agent notes store
+                  import('../stores/agent-notes.svelte').then(({ agentNotesStore }) => {
+                    agentNotesStore.addFromStream(event.note);
+                  });
                 }
               } catch {
                 /* non-JSON line */

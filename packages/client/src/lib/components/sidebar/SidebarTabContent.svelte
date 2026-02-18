@@ -17,6 +17,7 @@
   import HelpPanel from './HelpPanel.svelte';
   import GitPanel from './GitPanel.svelte';
   import ArtifactsPanel from './ArtifactsPanel.svelte';
+  import AgentNotesPanel from './AgentNotesPanel.svelte';
   import ManagerPanel from './ManagerPanel.svelte';
 
   let { tabId }: { tabId: SidebarTab } = $props();
@@ -56,6 +57,8 @@
   <GitPanel />
 {:else if tabId === 'artifacts'}
   <ArtifactsPanel />
+{:else if tabId === 'notes'}
+  <AgentNotesPanel />
 {:else if tabId === 'manager'}
   <ManagerPanel />
 {/if}

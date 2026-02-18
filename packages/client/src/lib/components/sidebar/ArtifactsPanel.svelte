@@ -4,7 +4,7 @@
   import { conversationStore } from '$lib/stores/conversation.svelte';
   import type { Artifact } from '@e/shared';
 
-  let filter = $state<'all' | 'plan' | 'diff' | 'screenshot' | 'walkthrough' | 'pinned'>('all');
+  let filter = $state<'all' | 'plan' | 'diff' | 'screenshot' | 'walkthrough' | 'report' | 'pinned'>('all');
 
   let conversationId = $derived(conversationStore.activeId);
 
@@ -29,6 +29,7 @@
     diff: 'M17 3a2.83 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z',
     screenshot: 'M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z M12 17a4 4 0 1 0 0-8 4 4 0 0 0 0 8z',
     walkthrough: 'M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5',
+    report: 'M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z M14 2v6h6 M16 13H8 M16 17H8 M10 9H8',
   };
   const defaultIconPath = 'M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z M14 2v6h6';
   const pinIconPath = 'M12 17l-5 3 1.5-5.6L4 10.5l5.8-.5L12 5l2.2 5 5.8.5-4.5 3.9L17 20z';
@@ -38,6 +39,7 @@
     diff: 'Diff',
     screenshot: 'Screenshot',
     walkthrough: 'Walkthrough',
+    report: 'Report',
   };
 
   let expandedId = $state<string | null>(null);
@@ -73,7 +75,7 @@
 
   <!-- Filter tabs -->
   <div class="filter-tabs">
-    {#each ['all', 'pinned', 'plan', 'diff', 'walkthrough', 'screenshot'] as f}
+    {#each ['all', 'pinned', 'plan', 'diff', 'walkthrough', 'screenshot', 'report'] as f}
       <button
         class="filter-tab"
         class:active={filter === f}
