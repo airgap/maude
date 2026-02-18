@@ -7,6 +7,29 @@ import { api } from './client';
 import { uuid } from '$lib/utils/uuid';
 
 /**
+ * Generation counter to prevent duplicate processing from HMR or concurrent streams.
+ * Each sendAndStream/reconnect call increments this. If a reader loop detects that
+ * the generation has changed (because a new stream started or HMR triggered), it
+ * stops processing to avoid duplicate messages.
+ */
+let streamGeneration = 0;
+
+/**
+ * Abort any currently active stream. Called before starting a new stream or
+ * during HMR cleanup to ensure only one reader loop is active at a time.
+ */
+export function abortActiveStream(): void {
+  streamGeneration++;
+  if (streamStore.abortController) {
+    try {
+      streamStore.abortController.abort();
+    } catch {
+      // Already aborted
+    }
+  }
+}
+
+/**
  * Connect to SSE stream for a conversation.
  * Uses fetch() instead of EventSource to support POST with body.
  *
@@ -19,7 +42,11 @@ export async function sendAndStream(
   content: string,
   attachments?: Attachment[],
 ): Promise<void> {
-  // console.log('[sse] Starting stream for conversation:', conversationId);
+  // Abort any existing stream to prevent duplicate readers
+  abortActiveStream();
+
+  const myGeneration = streamGeneration;
+  // console.log('[sse] Starting stream for conversation:', conversationId, 'gen:', myGeneration);
   const abortController = new AbortController();
   streamStore.setAbortController(abortController);
   streamStore.startStream(conversationId);
@@ -125,8 +152,17 @@ export async function sendAndStream(
 
     const decoder = new TextDecoder();
     let buffer = '';
+    // Track seen event signatures for deduplication (safety net for HMR/reconnect races)
+    const seenEvents = new Set<string>();
 
     while (true) {
+      // Check if a newer stream has superseded this one (e.g. HMR triggered reconnect)
+      if (myGeneration !== streamGeneration) {
+        console.log('[sse] Stream superseded by newer generation, stopping reader');
+        reader.cancel().catch(() => {});
+        return; // Exit without cleaning up — the new stream owns state now
+      }
+
       // console.log('[sse] Reading chunk...');
       const { done, value } = await reader.read();
       if (done) break;
@@ -139,6 +175,15 @@ export async function sendAndStream(
         if (!line.startsWith('data: ')) continue;
         const data = line.slice(6).trim();
         if (!data) continue;
+
+        // Skip duplicate events (can happen during HMR race conditions)
+        // Use the raw JSON string as a fingerprint for content_block_start and tool events
+        const eventKey = deduplicationKey(data);
+        if (eventKey && seenEvents.has(eventKey)) {
+          console.log('[sse] Skipping duplicate event:', data.slice(0, 80));
+          continue;
+        }
+        if (eventKey) seenEvents.add(eventKey);
 
         try {
           const event: StreamEvent = JSON.parse(data);
@@ -153,6 +198,9 @@ export async function sendAndStream(
         }
       }
     }
+
+    // If superseded while processing the final batch, bail out
+    if (myGeneration !== streamGeneration) return;
 
     // Final sync from stream store
     if (streamStore.contentBlocks.length > 0) {
@@ -202,6 +250,9 @@ export async function sendAndStream(
       api.conversations.summarize(conversationId).catch(() => {});
     }
   } catch (err) {
+    // If superseded by a newer stream, don't touch state
+    if (myGeneration !== streamGeneration) return;
+
     if ((err as Error).name === 'AbortError') {
       streamStore.handleEvent({ type: 'message_stop' } as any);
     } else {
@@ -209,6 +260,19 @@ export async function sendAndStream(
         type: 'error',
         error: { type: 'network_error', message: (err as Error).message },
       });
+
+      // Auto-reconnect: if the stream died unexpectedly (not user-cancelled),
+      // try to reconnect after a short delay. The server buffers all events,
+      // so reconnection will replay any missed data.
+      if (streamStore.sessionId) {
+        console.log('[sse] Stream died unexpectedly, attempting auto-reconnect in 2s...');
+        setTimeout(() => {
+          // Only reconnect if no newer stream has started
+          if (myGeneration === streamGeneration) {
+            reconnectActiveStream().catch(() => {});
+          }
+        }, 2000);
+      }
     }
   }
 }
@@ -219,6 +283,10 @@ export async function sendAndStream(
  * Returns the conversation ID of the reconnected session, or null.
  */
 export async function reconnectActiveStream(): Promise<string | null> {
+  // Abort any existing stream reader to prevent duplicate processing
+  abortActiveStream();
+  const myGeneration = streamGeneration;
+
   // Signal reconnection intent synchronously BEFORE any awaits so concurrent
   // code (e.g. ConversationList auto-restore) knows not to call
   // streamStore.reset() and wipe out state we're about to rebuild.
@@ -247,6 +315,12 @@ export async function reconnectActiveStream(): Promise<string | null> {
 
     const target = active || justCompleted;
     if (!target) {
+      streamStore.setReconnecting(false);
+      return null;
+    }
+
+    // Check if superseded before continuing
+    if (myGeneration !== streamGeneration) {
       streamStore.setReconnecting(false);
       return null;
     }
@@ -292,8 +366,17 @@ export async function reconnectActiveStream(): Promise<string | null> {
     const reader = response.body.getReader();
     const decoder = new TextDecoder();
     let buffer = '';
+    const seenEvents = new Set<string>();
 
     while (true) {
+      // Check if a newer stream has superseded this reconnection
+      if (myGeneration !== streamGeneration) {
+        console.log('[sse] Reconnect superseded by newer generation, stopping');
+        reader.cancel().catch(() => {});
+        streamStore.setReconnecting(false);
+        return target.conversationId;
+      }
+
       const { done, value } = await reader.read();
       if (done) break;
 
@@ -306,6 +389,11 @@ export async function reconnectActiveStream(): Promise<string | null> {
         const data = line.slice(6).trim();
         if (!data) continue;
 
+        // Skip duplicate events
+        const eventKey = deduplicationKey(data);
+        if (eventKey && seenEvents.has(eventKey)) continue;
+        if (eventKey) seenEvents.add(eventKey);
+
         try {
           const event: StreamEvent = JSON.parse(data);
           streamStore.handleEvent(event);
@@ -316,6 +404,12 @@ export async function reconnectActiveStream(): Promise<string | null> {
           // Non-JSON line
         }
       }
+    }
+
+    // If superseded, bail
+    if (myGeneration !== streamGeneration) {
+      streamStore.setReconnecting(false);
+      return target.conversationId;
     }
 
     // Final sync
@@ -359,4 +453,57 @@ export async function cancelStream(conversationId: string): Promise<void> {
       // Best effort
     }
   }
+}
+
+/**
+ * Generate a deduplication key for SSE events that should not be duplicated.
+ * Returns null for events that are inherently idempotent or should always be processed.
+ *
+ * We only deduplicate events that would cause visible duplication:
+ * - content_block_start: duplicate would create an extra content block
+ * - tool_approval_request / user_question_request: duplicate would show two dialogs
+ * - tool_result: duplicate would add two results
+ *
+ * We do NOT deduplicate:
+ * - content_block_delta: these are append-only and must all be processed
+ * - message_start/stop: these are state transitions
+ * - ping: harmless
+ */
+function deduplicationKey(rawData: string): string | null {
+  try {
+    // Quick check for event types that need deduplication
+    if (rawData.includes('"content_block_start"')) {
+      const evt = JSON.parse(rawData);
+      // Use index + block type + id (for tool_use) as key
+      const block = evt.content_block || {};
+      return `cbs:${evt.index}:${block.type}:${block.id || ''}:${block.name || ''}`;
+    }
+    if (rawData.includes('"tool_approval_request"')) {
+      const evt = JSON.parse(rawData);
+      return `tar:${evt.toolCallId}`;
+    }
+    if (rawData.includes('"user_question_request"')) {
+      const evt = JSON.parse(rawData);
+      return `uqr:${evt.toolCallId}`;
+    }
+    if (rawData.includes('"tool_result"')) {
+      const evt = JSON.parse(rawData);
+      return `tr:${evt.toolCallId}`;
+    }
+  } catch {
+    // Parse failed — don't deduplicate
+  }
+  return null;
+}
+
+/**
+ * HMR cleanup: When Vite performs Hot Module Replacement, abort any active
+ * stream reader to prevent orphaned loops from processing events into stale state.
+ * The new module will re-establish the connection via reconnectActiveStream().
+ */
+if (import.meta.hot) {
+  import.meta.hot.dispose(() => {
+    console.log('[sse:hmr] Module disposing — aborting active stream');
+    abortActiveStream();
+  });
 }
