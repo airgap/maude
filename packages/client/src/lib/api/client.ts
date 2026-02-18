@@ -140,15 +140,27 @@ export const api = {
       content: string,
       sessionId?: string | null,
       signal?: AbortSignal,
+      attachments?: import('@e/shared').Attachment[],
     ) => {
       const headers: Record<string, string> = { 'Content-Type': 'application/json' };
       const token = getAuthToken();
       if (token) headers['Authorization'] = `Bearer ${token}`;
       if (sessionId) headers['X-Session-Id'] = sessionId;
+
+      // Build images array for provider compatibility
+      const images =
+        attachments
+          ?.filter((a) => a.type === 'image' && a.content && a.mimeType)
+          .map((a) => ({ data: a.content!, mediaType: a.mimeType! })) || [];
+
       return fetch(`${getBaseUrl()}/stream/${conversationId}`, {
         method: 'POST',
         headers,
-        body: JSON.stringify({ content }),
+        body: JSON.stringify({
+          content,
+          ...(images.length > 0 ? { images } : {}),
+          ...(attachments?.length ? { attachments } : {}),
+        }),
         signal,
       });
     },

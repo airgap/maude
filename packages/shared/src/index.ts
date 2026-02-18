@@ -4,6 +4,8 @@ export type {
   ToolUseContent,
   ToolResultContent,
   ThinkingContent,
+  ImageContent,
+  NudgeContent,
   MessageContent,
   Message,
   ToolApprovalState,

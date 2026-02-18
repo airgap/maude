@@ -1,4 +1,4 @@
-import type { StreamEvent, Conversation } from '@e/shared';
+import type { StreamEvent, Conversation, Attachment, ImageContent } from '@e/shared';
 import { streamStore } from '$lib/stores/stream.svelte';
 import { conversationStore } from '$lib/stores/conversation.svelte';
 import { workspaceStore } from '$lib/stores/workspace.svelte';
@@ -14,7 +14,11 @@ import { uuid } from '$lib/utils/uuid';
  * at stream start and routes ALL updates through it, regardless of whether
  * the user switches to a different conversation during streaming.
  */
-export async function sendAndStream(conversationId: string, content: string): Promise<void> {
+export async function sendAndStream(
+  conversationId: string,
+  content: string,
+  attachments?: Attachment[],
+): Promise<void> {
   // console.log('[sse] Starting stream for conversation:', conversationId);
   const abortController = new AbortController();
   streamStore.setAbortController(abortController);
@@ -42,11 +46,28 @@ export async function sendAndStream(conversationId: string, content: string): Pr
       .catch(() => {});
   }
 
+  // Build user message content blocks (text + optional images)
+  const userContentBlocks: Array<any> = [{ type: 'text', text: content }];
+  if (attachments?.length) {
+    for (const att of attachments) {
+      if (att.type === 'image' && att.content && att.mimeType) {
+        userContentBlocks.push({
+          type: 'image',
+          source: {
+            type: 'base64',
+            media_type: att.mimeType,
+            data: att.content,
+          },
+        } satisfies ImageContent);
+      }
+    }
+  }
+
   // Add user message to the target conversation
   conversationStore.addMessageTo(targetConversation, {
     id: uuid(),
     role: 'user',
-    content: [{ type: 'text', text: content }],
+    content: userContentBlocks,
     timestamp: Date.now(),
   });
 
@@ -56,6 +77,7 @@ export async function sendAndStream(conversationId: string, content: string): Pr
       content,
       streamStore.sessionId,
       abortController.signal,
+      attachments,
     );
     // console.log('[sse] Got response:', response.status, response.ok);
 

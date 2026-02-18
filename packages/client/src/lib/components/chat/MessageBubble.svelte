@@ -266,6 +266,13 @@
     return entries;
   });
 
+  // Image blocks in user messages (for displaying attached images)
+  let userImageBlocks = $derived(
+    message.role === 'user'
+      ? (message.content as any[]).filter((b: any) => b.type === 'image')
+      : [],
+  );
+
   // Artifacts emitted by this message (looked up from artifacts store by message ID)
   let messageArtifacts = $derived(
     artifactsStore.artifacts.filter((a) => a.messageId === message.id),
@@ -499,6 +506,23 @@
                 {/if}
               {:else if entry.block.type === 'thinking' && settingsStore.showThinkingBlocks}
                 <ThinkingBlock content={entry.block.thinking} />
+              {:else if entry.block.type === 'image'}
+                {@const imgBlock = entry.block as import('@e/shared').ImageContent}
+                <div class="message-image">
+                  {#if imgBlock.source.type === 'base64' && imgBlock.source.data}
+                    <img
+                      src="data:{imgBlock.source.media_type};base64,{imgBlock.source.data}"
+                      alt="Attached image"
+                      loading="lazy"
+                    />
+                  {:else if imgBlock.source.type === 'url' && imgBlock.source.url}
+                    <img
+                      src={imgBlock.source.url}
+                      alt="Attached image"
+                      loading="lazy"
+                    />
+                  {/if}
+                </div>
               {:else if entry.block.type === 'tool_use'}
                 {#if settingsStore.showToolDetails}
                   {@const toolBlock = entry.block as import('@e/shared').ToolUseContent}
@@ -539,8 +563,31 @@
     <div class="message-body">
       {#if editing}
         {@render editUI()}
-      {:else if renderedHtml}
-        <ProseBlock html={renderedHtml} />
+      {:else}
+        {#if userImageBlocks.length > 0}
+          <div class="user-images">
+            {#each userImageBlocks as imgBlock}
+              <div class="message-image">
+                {#if imgBlock.source?.type === 'base64' && imgBlock.source.data}
+                  <img
+                    src="data:{imgBlock.source.media_type};base64,{imgBlock.source.data}"
+                    alt="Attached image"
+                    loading="lazy"
+                  />
+                {:else if imgBlock.source?.type === 'url' && imgBlock.source.url}
+                  <img
+                    src={imgBlock.source.url}
+                    alt="Attached image"
+                    loading="lazy"
+                  />
+                {/if}
+              </div>
+            {/each}
+          </div>
+        {/if}
+        {#if renderedHtml}
+          <ProseBlock html={renderedHtml} />
+        {/if}
       {/if}
     </div>
   </div>
@@ -896,5 +943,33 @@
     color: var(--text-tertiary);
     flex-shrink: 0;
     margin-left: 4px;
+  }
+
+  /* ── Image attachments ── */
+  .message-image {
+    margin: 4px 0;
+  }
+  .message-image img {
+    max-width: 100%;
+    max-height: 400px;
+    object-fit: contain;
+    border-radius: var(--radius);
+    border: 1px solid var(--border-secondary);
+    background: var(--bg-secondary);
+    cursor: pointer;
+    transition: border-color var(--transition);
+  }
+  .message-image img:hover {
+    border-color: var(--accent-primary);
+  }
+
+  .user-images {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 4px;
+  }
+  .user-images .message-image img {
+    max-height: 200px;
   }
 </style>

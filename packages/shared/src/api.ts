@@ -24,9 +24,12 @@ export interface SendMessageRequest {
 export interface Attachment {
   type: 'file' | 'image';
   path?: string;
+  /** base64-encoded file content (for images) or plain text (for text files) */
   content?: string;
   mimeType?: string;
   name: string;
+  /** File size in bytes (for display purposes) */
+  size?: number;
 }
 
 // --- Tool Approval ---

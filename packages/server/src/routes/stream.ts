@@ -225,6 +225,22 @@ app.post('/:conversationId', async (c) => {
   const conv = db.query('SELECT * FROM conversations WHERE id = ?').get(conversationId) as any;
   if (!conv) return c.json({ ok: false, error: 'Conversation not found' }, 404);
 
+  // Build user message content blocks (text + optional images from attachments)
+  const userContentBlocks: any[] = [{ type: 'text', text: content }];
+  const attachments = body.attachments || [];
+  for (const att of attachments) {
+    if (att.type === 'image' && att.content && att.mimeType) {
+      userContentBlocks.push({
+        type: 'image',
+        source: {
+          type: 'base64',
+          media_type: att.mimeType,
+          data: att.content,
+        },
+      });
+    }
+  }
+
   // Save user message to DB
   const userMsgId = nanoid();
   db.query(
@@ -232,7 +248,7 @@ app.post('/:conversationId', async (c) => {
     INSERT INTO messages (id, conversation_id, role, content, timestamp)
     VALUES (?, ?, 'user', ?, ?)
   `,
-  ).run(userMsgId, conversationId, JSON.stringify([{ type: 'text', text: content }]), Date.now());
+  ).run(userMsgId, conversationId, JSON.stringify(userContentBlocks), Date.now());
 
   // Get active rules context once for all provider branches
   const activeRulesCtx = await getActiveRulesContext(conv.workspace_path);
@@ -426,6 +442,14 @@ app.post('/:conversationId', async (c) => {
     // inject the summary into the message so the fresh CLI session has full context.
     // Clear the summary afterwards — it's a one-shot injection.
     let messageContent = content;
+
+    // For Claude CLI path, note any image attachments since the CLI doesn't support multimodal
+    const imageAttachments = (body.attachments || []).filter((a: any) => a.type === 'image');
+    if (imageAttachments.length > 0) {
+      const imageNames = imageAttachments.map((a: any) => a.name).join(', ');
+      messageContent = `[${imageAttachments.length} image(s) attached: ${imageNames} — images are saved in the conversation but cannot be processed via the CLI. Use a vision-capable model like OpenAI GPT-4o, Gemini, or Bedrock Claude for image analysis.]\n\n${messageContent}`;
+    }
+
     if (!conv.cli_session_id && conv.compact_summary) {
       const summaryFrame =
         `This session is being continued from a previous conversation that ran out of context. ` +

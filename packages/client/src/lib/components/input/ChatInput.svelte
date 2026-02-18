@@ -24,6 +24,7 @@
     type DetectedTask,
     type DetectionResult,
   } from '$lib/utils/task-detector';
+  import type { Attachment } from '@e/shared';
 
   // ── @-mention types ──
   type MentionKind = 'file' | 'symbol' | 'diagnostics' | 'rule' | 'thread';
@@ -56,6 +57,143 @@
   let diffLoading = $state(false);
   let taskSuggestion = $state<DetectionResult | null>(null);
   let pendingMessage = $state('');
+
+  // ── Attachment state ──
+  let pendingAttachments = $state<Attachment[]>([]);
+  let fileInput: HTMLInputElement;
+  let isDragOver = $state(false);
+
+  const ALLOWED_IMAGE_TYPES = ['image/png', 'image/jpeg', 'image/gif', 'image/webp', 'image/svg+xml'];
+  const ALLOWED_MISC_EXTENSIONS = [
+    '.txt', '.md', '.json', '.csv', '.xml', '.yaml', '.yml', '.toml',
+    '.js', '.ts', '.jsx', '.tsx', '.py', '.rb', '.rs', '.go', '.java',
+    '.c', '.cpp', '.h', '.hpp', '.cs', '.swift', '.kt', '.sh', '.bash',
+    '.css', '.scss', '.html', '.sql', '.graphql', '.proto', '.env',
+    '.log', '.conf', '.cfg', '.ini', '.diff', '.patch',
+  ];
+  const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
+
+  function isImageFile(file: File): boolean {
+    return ALLOWED_IMAGE_TYPES.includes(file.type);
+  }
+
+  function isTextFile(file: File): boolean {
+    if (file.type.startsWith('text/')) return true;
+    const ext = '.' + file.name.split('.').pop()?.toLowerCase();
+    return ALLOWED_MISC_EXTENSIONS.includes(ext);
+  }
+
+  function readFileAsBase64(file: File): Promise<string> {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => {
+        const result = reader.result as string;
+        // Strip the data URL prefix (data:image/png;base64,)
+        const base64 = result.split(',')[1] || result;
+        resolve(base64);
+      };
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+  }
+
+  function readFileAsText(file: File): Promise<string> {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result as string);
+      reader.onerror = reject;
+      reader.readAsText(file);
+    });
+  }
+
+  async function processFiles(files: FileList | File[]) {
+    const newAttachments: Attachment[] = [];
+    for (const file of Array.from(files)) {
+      if (file.size > MAX_FILE_SIZE) {
+        uiStore.toast(`File "${file.name}" is too large (max 10MB)`, 'error');
+        continue;
+      }
+      if (isImageFile(file)) {
+        const base64 = await readFileAsBase64(file);
+        newAttachments.push({
+          type: 'image',
+          name: file.name,
+          mimeType: file.type,
+          content: base64,
+          size: file.size,
+        });
+      } else if (isTextFile(file)) {
+        const text = await readFileAsText(file);
+        newAttachments.push({
+          type: 'file',
+          name: file.name,
+          mimeType: file.type || 'text/plain',
+          content: text,
+          size: file.size,
+        });
+      } else {
+        uiStore.toast(`Unsupported file type: ${file.name}`, 'error');
+      }
+    }
+    if (newAttachments.length > 0) {
+      pendingAttachments = [...pendingAttachments, ...newAttachments];
+    }
+  }
+
+  function removeAttachment(index: number) {
+    pendingAttachments = pendingAttachments.filter((_, i) => i !== index);
+  }
+
+  function handleFileInputChange(e: Event) {
+    const input = e.target as HTMLInputElement;
+    if (input.files?.length) {
+      processFiles(input.files);
+      input.value = ''; // reset so the same file can be re-selected
+    }
+  }
+
+  function handleDragOver(e: DragEvent) {
+    e.preventDefault();
+    e.stopPropagation();
+    isDragOver = true;
+  }
+
+  function handleDragLeave(e: DragEvent) {
+    e.preventDefault();
+    e.stopPropagation();
+    isDragOver = false;
+  }
+
+  function handleDrop(e: DragEvent) {
+    e.preventDefault();
+    e.stopPropagation();
+    isDragOver = false;
+    if (e.dataTransfer?.files?.length) {
+      processFiles(e.dataTransfer.files);
+    }
+  }
+
+  function handlePaste(e: ClipboardEvent) {
+    const items = e.clipboardData?.items;
+    if (!items) return;
+    const files: File[] = [];
+    for (const item of Array.from(items)) {
+      if (item.kind === 'file') {
+        const file = item.getAsFile();
+        if (file) files.push(file);
+      }
+    }
+    if (files.length > 0) {
+      e.preventDefault(); // prevent pasting image as text
+      processFiles(files);
+    }
+  }
+
+  function formatFileSize(bytes: number): string {
+    if (bytes < 1024) return bytes + ' B';
+    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+    return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+  }
 
   // ── @-mention state ──
   let showMentionMenu = $state(false);
@@ -352,7 +490,7 @@
     // Block sending if this conversation has an active stream
     const isStreamingHere =
       streamStore.isStreaming && streamStore.conversationId === conversationStore.activeId;
-    if (!text || isStreamingHere) return;
+    if ((!text && pendingAttachments.length === 0) || isStreamingHere) return;
 
     // Intercept `cd` as directory navigation
     if (text === 'cd' || text.startsWith('cd ')) {
@@ -433,11 +571,28 @@
     const contextPrefix = buildContextPrefix();
     const diffContext = diffPreview ? diffPreview.contextBlock + '\n\n' : '';
     diffPreview = null;
+
+    // Build text file context as @-mention style context prefix
+    let fileAttachmentContext = '';
+    const imageAttachments = pendingAttachments.filter((a) => a.type === 'image');
+    const textAttachments = pendingAttachments.filter((a) => a.type === 'file');
+    for (const att of textAttachments) {
+      fileAttachmentContext += `<attached-file name="${att.name}">\n${att.content}\n</attached-file>\n\n`;
+    }
+
     inputText = '';
     resizeTextarea();
     contextFiles = new Set();
     mentions = [];
-    await sendAndStream(conversationStore.activeId!, diffContext + contextPrefix + text);
+
+    const attachmentsToSend = imageAttachments.length > 0 ? imageAttachments : undefined;
+    pendingAttachments = [];
+
+    await sendAndStream(
+      conversationStore.activeId!,
+      diffContext + contextPrefix + fileAttachmentContext + text,
+      attachmentsToSend,
+    );
   }
 
   // ── Task split suggestion handlers ──
@@ -667,7 +822,24 @@
   }}
 />
 
-<div class="chat-input-container">
+<!-- Hidden file input for upload button -->
+<input
+  bind:this={fileInput}
+  type="file"
+  multiple
+  accept="image/png,image/jpeg,image/gif,image/webp,image/svg+xml,.txt,.md,.json,.csv,.xml,.yaml,.yml,.toml,.js,.ts,.jsx,.tsx,.py,.rb,.rs,.go,.java,.c,.cpp,.h,.hpp,.cs,.swift,.kt,.sh,.bash,.css,.scss,.html,.sql,.graphql,.proto,.env,.log,.conf,.cfg,.ini,.diff,.patch"
+  style="display: none"
+  onchange={handleFileInputChange}
+/>
+
+<!-- svelte-ignore a11y_no_static_element_interactions -->
+<div
+  class="chat-input-container"
+  class:drag-over={isDragOver}
+  ondragover={handleDragOver}
+  ondragleave={handleDragLeave}
+  ondrop={handleDrop}
+>
   {#if showSlashMenu}
     <SlashCommandMenu
       query={slashQuery}
@@ -848,6 +1020,48 @@
     </div>
   {/if}
 
+  {#if pendingAttachments.length > 0}
+    <div class="attachment-previews">
+      {#each pendingAttachments as att, i}
+        <div class="attachment-preview" class:image={att.type === 'image'} class:file={att.type === 'file'}>
+          {#if att.type === 'image' && att.content}
+            <img
+              src="data:{att.mimeType};base64,{att.content}"
+              alt={att.name}
+              class="attachment-thumb"
+            />
+          {:else}
+            <div class="attachment-file-icon">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+            </div>
+          {/if}
+          <div class="attachment-info">
+            <span class="attachment-name" title={att.name}>{att.name}</span>
+            {#if att.size}
+              <span class="attachment-size">{formatFileSize(att.size)}</span>
+            {/if}
+          </div>
+          <button
+            class="attachment-remove"
+            onclick={() => removeAttachment(i)}
+            title="Remove attachment"
+          >
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
+          </button>
+        </div>
+      {/each}
+    </div>
+  {/if}
+
+  {#if isDragOver}
+    <div class="drag-overlay">
+      <div class="drag-overlay-content">
+        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="17 8 12 3 7 8" /><line x1="12" y1="3" x2="12" y2="15" /></svg>
+        <span>Drop files to attach</span>
+      </div>
+    </div>
+  {/if}
+
   <!-- svelte-ignore a11y_click_events_have_key_events -->
   <!-- svelte-ignore a11y_no_static_element_interactions -->
   <div
@@ -865,9 +1079,10 @@
       bind:value={inputText}
       onkeydown={handleKeydown}
       oninput={handleInput}
+      onpaste={handlePaste}
       placeholder={conversationStore.active?.planMode || localPlanMode
         ? 'Describe what you want to plan...'
-        : 'Message Claude...'}
+        : 'Message E...'}
       rows="1"
       disabled={streamStore.status === 'tool_pending'}
     ></textarea>
@@ -882,9 +1097,14 @@
       {/if}
       <button
         class="btn-icon-sm"
+        onclick={() => fileInput?.click()}
+        title="Attach files (images, code, text)"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48" /></svg></button
+      >
+      <button
+        class="btn-icon-sm"
         class:active={localTeachMode}
         onclick={() => (localTeachMode = !localTeachMode)}
-        title="Teach Me Mode — Claude guides you with questions instead of answers"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 10v6M2 10l10-5 10 5-10 5z" /><path d="M6 12v5c0 2 3 3 6 3s6-1 6-3v-5" /></svg></button
+        title="Teach Me Mode — E guides you with questions instead of answers"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 10v6M2 10l10-5 10 5-10 5z" /><path d="M6 12v5c0 2 3 3 6 3s6-1 6-3v-5" /></svg></button
       >
 
       <VoiceButton onTranscript={handleVoiceTranscript} />
@@ -910,7 +1130,7 @@
         <button
           class="btn-action send"
           onclick={send}
-          disabled={!inputText.trim()}
+          disabled={!inputText.trim() && pendingAttachments.length === 0}
           title={settingsStore.sendWithEnter ? 'Send (Enter)' : 'Send (Ctrl+Enter)'}
         >
           <svg
@@ -1396,5 +1616,140 @@
   }
   .mention-badge-remove:hover {
     color: var(--accent-error);
+  }
+
+  /* ── Attachment previews ── */
+  .attachment-previews {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 8px;
+    padding: 0 4px;
+  }
+
+  .attachment-preview {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-secondary);
+    border-radius: var(--radius);
+    padding: 6px 28px 6px 6px;
+    max-width: 220px;
+    overflow: hidden;
+    transition: border-color var(--transition);
+  }
+  .attachment-preview:hover {
+    border-color: var(--accent-primary);
+  }
+
+  .attachment-preview.image {
+    flex-direction: column;
+    padding: 4px 4px 6px;
+    max-width: 140px;
+    align-items: stretch;
+  }
+
+  .attachment-thumb {
+    width: 100%;
+    max-height: 100px;
+    object-fit: cover;
+    border-radius: var(--radius-sm);
+    background: var(--bg-secondary);
+  }
+
+  .attachment-file-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    flex-shrink: 0;
+    background: var(--bg-hover);
+    border-radius: var(--radius-sm);
+    color: var(--text-tertiary);
+  }
+
+  .attachment-info {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    overflow: hidden;
+    min-width: 0;
+  }
+
+  .attachment-name {
+    font-size: var(--fs-xs);
+    font-weight: 500;
+    color: var(--text-primary);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .attachment-size {
+    font-size: var(--fs-xxs);
+    color: var(--text-tertiary);
+  }
+
+  .attachment-remove {
+    position: absolute;
+    top: 4px;
+    right: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: var(--bg-elevated);
+    color: var(--text-tertiary);
+    border: 1px solid var(--border-secondary);
+    cursor: pointer;
+    opacity: 0;
+    transition: all var(--transition);
+  }
+  .attachment-preview:hover .attachment-remove {
+    opacity: 1;
+  }
+  .attachment-remove:hover {
+    color: var(--accent-error);
+    border-color: var(--accent-error);
+    background: var(--bg-hover);
+  }
+
+  /* ── Drag overlay ── */
+  .chat-input-container {
+    position: relative;
+  }
+
+  .chat-input-container.drag-over {
+    outline: 2px dashed var(--accent-primary);
+    outline-offset: -2px;
+    border-radius: var(--radius);
+  }
+
+  .drag-overlay {
+    position: absolute;
+    inset: 0;
+    background: color-mix(in srgb, var(--bg-primary) 85%, transparent);
+    border-radius: var(--radius);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 20;
+    pointer-events: none;
+  }
+
+  .drag-overlay-content {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    color: var(--accent-primary);
+    font-size: var(--fs-sm);
+    font-weight: 600;
+    letter-spacing: 0.5px;
   }
 </style>
