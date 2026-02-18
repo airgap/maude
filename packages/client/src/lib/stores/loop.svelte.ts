@@ -726,6 +726,10 @@ function createLoopStore() {
               log = activeLoop!.iterationLog || [];
             }
           } catch { /* use cached data */ }
+          // Restore standalone story count for progress tracking
+          if (activeLoop && !activeLoop.prdId) {
+            this.restoreStandaloneStoryCount();
+          }
           // Connect to events if still running
           if (activeLoop && activeLoop.status === 'running') {
             this.connectEvents(activeLoop.id);
@@ -736,6 +740,9 @@ function createLoopStore() {
           if (pausedRes.ok && pausedRes.data.length > 0) {
             activeLoop = pausedRes.data[0];
             log = activeLoop!.iterationLog || [];
+            if (!activeLoop!.prdId) {
+              this.restoreStandaloneStoryCount();
+            }
           } else {
             // Check for recently-failed loops that might have been "running" before
             const failedRes = await api.loops.list('failed');
@@ -752,6 +759,14 @@ function createLoopStore() {
       } catch {
         /* server may not be ready */
       }
+    },
+
+    /** Restore standalone story count from workStore for progress tracking. */
+    restoreStandaloneStoryCount() {
+      import('../stores/work.svelte').then(({ workStore }) => {
+        // Total = all standalone stories (any status), since completed ones count toward progress
+        standaloneStoryCount = workStore.standaloneStories.length;
+      });
     },
 
     setStandaloneStoryCount(count: number) {

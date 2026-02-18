@@ -251,6 +251,9 @@ class LoopRunner {
   async run(): Promise<void> {
     const db = getDb();
     let iteration = 0;
+    const mode = this.prdId ? `PRD:${this.prdId}` : 'standalone';
+
+    console.log(`[loop:${this.loopId}] Starting ${mode} loop (maxIter=${this.config.maxIterations})`);
 
     while (iteration < this.config.maxIterations && !this.cancelled) {
       // Check pause gate
@@ -262,6 +265,7 @@ class LoopRunner {
       if (!story) {
         // Check if all done or all failed
         const stories = this.getAllStories();
+        console.log(`[loop:${this.loopId}] No eligible story. ${stories.length} total stories: ${stories.map((s) => `${s.title}[${s.status}:${s.attempts}/${s.maxAttempts}]`).join(', ')}`);
         const allCompleted = stories.every(
           (s) => s.status === 'completed' || s.status === 'skipped',
         );
@@ -283,6 +287,7 @@ class LoopRunner {
       }
 
       iteration++;
+      console.log(`[loop:${this.loopId}] Iteration ${iteration}: "${story.title}" (attempt ${story.attempts + 1}/${story.maxAttempts})`);
 
       try {
       // === Begin iteration try block ===
@@ -574,6 +579,7 @@ class LoopRunner {
         });
 
         // Reset story to pending if it was in_progress (so it can be retried)
+        let willRetry = false;
         try {
           const crashedStory = this.getStory(story.id);
           if (crashedStory?.status === 'in_progress') {
@@ -581,6 +587,7 @@ class LoopRunner {
               this.updateStory(story.id, { status: 'failed' });
             } else {
               this.updateStory(story.id, { status: 'pending' });
+              willRetry = true;
             }
           }
         } catch { /* best effort */ }
@@ -590,6 +597,7 @@ class LoopRunner {
           storyTitle: story.title,
           iteration,
           message: `Iteration crashed: ${String(iterErr).slice(0, 200)}`,
+          willRetry,
         });
       }
 
@@ -598,6 +606,7 @@ class LoopRunner {
     }
 
     if (this.cancelled) {
+      console.log(`[loop:${this.loopId}] Cancelled after ${iteration} iterations`);
       this.updateLoopDb({ status: 'cancelled', completed_at: Date.now() });
       this.events.emit('loop_done', this.loopId);
       return;
@@ -605,6 +614,7 @@ class LoopRunner {
 
     // Max iterations reached — check final state
     const finalStories = this.getAllStories();
+    console.log(`[loop:${this.loopId}] Loop ended after ${iteration} iterations. Stories: ${finalStories.map((s) => `${s.title}[${s.status}]`).join(', ')}`);
     const allDone = finalStories.every((s) => s.status === 'completed' || s.status === 'skipped');
 
     if (allDone) {

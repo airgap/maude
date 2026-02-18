@@ -29,10 +29,10 @@
     loopStore.loadActiveLoop();
   });
 
-  // Auto-scroll log
+  // Auto-scroll log to top (newest entries are first)
   $effect(() => {
     if (logEl && loopStore.log.length) {
-      logEl.scrollTop = logEl.scrollHeight;
+      logEl.scrollTop = 0;
     }
   });
 
@@ -795,7 +795,7 @@
         <span class="log-count">{loopStore.log.length}</span>
       </div>
       <div class="log-list" bind:this={logEl}>
-        {#each loopStore.log as entry}
+        {#each [...loopStore.log].reverse() as entry}
           <div class="log-entry">
             <span class="log-time">{formatTime(entry.timestamp)}</span>
             <span class="log-action" style:color={actionColor(entry.action)}>
