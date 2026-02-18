@@ -31,9 +31,11 @@
   import QuickOpen from '../editor/QuickOpen.svelte';
   import ProjectSetup from '../common/ProjectSetup.svelte';
   import AmbientBackground from './AmbientBackground.svelte';
+  import InteractiveTutorial from '../common/InteractiveTutorial.svelte';
   import { waitForServer } from '$lib/api/client';
   import { reconnectActiveStream } from '$lib/api/sse';
   import { deviceStore } from '$lib/stores/device.svelte';
+  import { tutorialStore } from '$lib/stores/tutorial.svelte';
   import { onMount } from 'svelte';
 
   let { children: appChildren } = $props<{ children: any }>();
@@ -63,6 +65,11 @@
         await reconnectActiveStream();
       } catch {
         // Non-critical — user can manually reload
+      }
+
+      // Auto-launch tutorial for first-time users
+      if (tutorialStore.isFirstTime) {
+        tutorialStore.start();
       }
     });
   });
@@ -395,6 +402,8 @@
 
   <QuickOpen />
   <ProjectSetup />
+
+  <InteractiveTutorial />
 
   <ToastContainer />
 </div>

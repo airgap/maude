@@ -1,5 +1,6 @@
 <script lang="ts">
   import { uiStore } from '$lib/stores/ui.svelte';
+  import { tutorialStore } from '$lib/stores/tutorial.svelte';
 
   type Section = {
     id: string;
@@ -785,6 +786,19 @@
 
   <!-- Footer -->
   <div class="help-footer">
+    <button class="footer-btn tutorial-btn" onclick={() => tutorialStore.reset()}>
+      <svg
+        width="12"
+        height="12"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+      >
+        <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" />
+      </svg>
+      Tutorial
+    </button>
     <button class="footer-btn" onclick={() => uiStore.openModal('keybindings')}>
       <svg
         width="12"
@@ -797,7 +811,7 @@
         <rect x="2" y="6" width="20" height="12" rx="2" />
         <path d="M6 10h.01M10 10h.01M14 10h.01M18 10h.01M8 14h8" />
       </svg>
-      Keybindings
+      Keys
     </button>
     <button class="footer-btn" onclick={() => uiStore.openModal('settings')}>
       <svg
@@ -1220,6 +1234,17 @@
     color: var(--accent-primary);
     border-color: var(--border-primary);
     background: var(--bg-hover);
+  }
+
+  .tutorial-btn {
+    color: var(--accent-primary);
+    border-color: color-mix(in srgb, var(--accent-primary) 30%, transparent);
+    background: color-mix(in srgb, var(--accent-primary) 8%, transparent);
+  }
+  .tutorial-btn:hover {
+    background: color-mix(in srgb, var(--accent-primary) 18%, transparent);
+    border-color: var(--accent-primary);
+    box-shadow: var(--shadow-glow-sm);
   }
 
   .version-label {
