@@ -14,7 +14,12 @@ import {
 import type { PermissionMode } from '@e/shared';
 import { getSandboxConfig } from '../middleware/sandbox';
 import { verifyFile } from './code-verifier';
-import { shouldRequireApproval, loadPermissionRules, loadTerminalCommandPolicy, extractToolInputForMatching } from './permission-rules';
+import {
+  shouldRequireApproval,
+  loadPermissionRules,
+  loadTerminalCommandPolicy,
+  extractToolInputForMatching,
+} from './permission-rules';
 import {
   getContextLimit,
   getAutoCompactThreshold,
@@ -393,8 +398,7 @@ function extractAndStoreArtifacts(
   const sseEvents: string[] = [];
   const db = getDb();
 
-  const artifactRegex =
-    /<artifact\s+type="([^"]+)"\s+title="([^"]+)">([\s\S]*?)<\/artifact>/gi;
+  const artifactRegex = /<artifact\s+type="([^"]+)"\s+title="([^"]+)">([\s\S]*?)<\/artifact>/gi;
 
   for (const block of content) {
     if (block.type !== 'text' || !block.text) continue;
@@ -865,7 +869,10 @@ class ClaudeProcessManager {
                     }
 
                     // Load per-tool permission rules and terminal policy
-                    const permRules = loadPermissionRules(session.conversationId, session.workspacePath);
+                    const permRules = loadPermissionRules(
+                      session.conversationId,
+                      session.workspacePath,
+                    );
                     const termPolicy = loadTerminalCommandPolicy();
 
                     for (const block of cliEvent.message.content) {
@@ -1048,7 +1055,11 @@ class ClaudeProcessManager {
                                   .all(session.conversationId) as any[];
                                 const allMessages = rawRows.map((r: any) => {
                                   let parsed: any[];
-                                  try { parsed = JSON.parse(r.content); } catch { parsed = []; }
+                                  try {
+                                    parsed = JSON.parse(r.content);
+                                  } catch {
+                                    parsed = [];
+                                  }
                                   // Normalize nudge blocks so they don't confuse downstream APIs
                                   const content = Array.isArray(parsed)
                                     ? parsed.map((block: any) =>
@@ -1070,7 +1081,9 @@ class ClaudeProcessManager {
                                 });
 
                                 if (!history.compacted) {
-                                  console.log(`[claude:${session.id}] Compaction not needed after re-check`);
+                                  console.log(
+                                    `[claude:${session.id}] Compaction not needed after re-check`,
+                                  );
                                   return;
                                 }
 
@@ -1081,11 +1094,8 @@ class ClaudeProcessManager {
                                 const keptMessages = allMessages.slice(splitIdx);
 
                                 // Generate LLM summary (falls back to rule-based on failure)
-                                const { summaryText, summaryMessage, usedLLM } = await summarizeWithLLM(
-                                  finalDropped,
-                                  keptMessages,
-                                  model,
-                                );
+                                const { summaryText, summaryMessage, usedLLM } =
+                                  await summarizeWithLLM(finalDropped, keptMessages, model);
 
                                 // Build final compacted message array: [summary, ...kept]
                                 const compactedMessages = [summaryMessage, ...keptMessages];
@@ -1125,9 +1135,10 @@ class ClaudeProcessManager {
                           }
 
                           // Emit context_warning for the warning banner
-                          const usagePct = contextLimit > 0
-                            ? Math.round((inputTokens / contextLimit) * 1000) / 10
-                            : 0;
+                          const usagePct =
+                            contextLimit > 0
+                              ? Math.round((inputTokens / contextLimit) * 1000) / 10
+                              : 0;
                           const contextWarningEvent = JSON.stringify({
                             type: 'context_warning',
                             inputTokens,

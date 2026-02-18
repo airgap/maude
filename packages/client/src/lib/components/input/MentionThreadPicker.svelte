@@ -3,10 +3,7 @@
   import type { ConversationSummary } from '@e/shared';
   import { onMount } from 'svelte';
 
-  let {
-    onSelect,
-    onClose,
-  } = $props<{
+  let { onSelect, onClose } = $props<{
     onSelect: (conv: ConversationSummary) => void;
     onClose: () => void;
   }>();
@@ -19,9 +16,7 @@
     searchInput?.focus();
   });
 
-  let threads = $derived(
-    conversationStore.list.filter((c) => c.id !== conversationStore.activeId),
-  );
+  let threads = $derived(conversationStore.list.filter((c) => c.id !== conversationStore.activeId));
 
   let filtered = $derived(
     searchQuery.trim()

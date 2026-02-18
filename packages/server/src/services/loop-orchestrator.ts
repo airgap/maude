@@ -29,6 +29,7 @@ const PRIORITY_ORDER: Record<StoryPriority, number> = {
 class LoopOrchestrator {
   private runners = new Map<string, LoopRunner>();
   readonly events = new EventEmitter();
+  private zombieCheckInterval: ReturnType<typeof setInterval> | null = null;
 
   constructor() {
     // Clean up finished runners
@@ -37,14 +38,24 @@ class LoopOrchestrator {
     });
 
     // On startup, fix any DB state stuck from a previous server crash
+    this.recoverZombieLoops();
+
+    // Periodically check for zombie loops (runner died without updating DB)
+    this.zombieCheckInterval = setInterval(() => this.recoverZombieLoops(), 30_000);
+  }
+
+  /** Find loops marked running/paused in DB that have no in-memory runner and mark them failed. */
+  private recoverZombieLoops(): void {
     try {
       const db = getDb();
       const now = Date.now();
 
-      // 1. Recover zombie loops (running or paused with no in-memory runner)
-      const zombieLoops = db
+      const activeLoops = db
         .query("SELECT id FROM loops WHERE status IN ('running', 'paused')")
         .all() as any[];
+
+      const zombieLoops = activeLoops.filter((z) => !this.runners.has(z.id));
+
       for (const z of zombieLoops) {
         db.query('UPDATE loops SET status = ?, completed_at = ? WHERE id = ?').run(
           'failed',
@@ -52,14 +63,20 @@ class LoopOrchestrator {
           z.id,
         );
         console.log(`[loop] Recovered zombie loop ${z.id} → failed`);
+        // Notify any connected SSE clients so UI updates immediately
+        this.emitEvent(z.id, 'completed', {
+          message: 'Loop runner lost (process may have crashed). Please start a new loop.',
+        });
+        this.events.emit('loop_done', z.id);
       }
 
-      // 2. Reset any stories stuck as 'in_progress' back to 'pending' so they
-      //    can be retried when a new loop starts. Without this, the story stays
-      //    in_progress forever after a server crash mid-execution.
+      // Reset any stories stuck as 'in_progress' back to 'pending' so they
+      // can be retried when a new loop starts.
       if (zombieLoops.length > 0) {
         const reset = db
-          .query("UPDATE prd_stories SET status = 'pending', updated_at = ? WHERE status = 'in_progress'")
+          .query(
+            "UPDATE prd_stories SET status = 'pending', updated_at = ? WHERE status = 'in_progress'",
+          )
           .run(now);
         if (reset.changes > 0) {
           console.log(`[loop] Reset ${reset.changes} in_progress stories → pending`);
@@ -157,7 +174,8 @@ class LoopOrchestrator {
       if (row.status === 'paused') {
         this.updateStatus(loopId, 'failed');
         this.emitEvent(loopId, 'completed', {
-          message: 'Loop runner not available (server may have restarted). Please start a new loop.',
+          message:
+            'Loop runner not available (server may have restarted). Please start a new loop.',
         });
         return;
       }
@@ -190,11 +208,22 @@ class LoopOrchestrator {
     const db = getDb();
     const row = db.query('SELECT * FROM loops WHERE id = ?').get(loopId) as any;
     if (!row) return null;
+    // Detect zombie on read: DB says active but no runner exists
+    if ((row.status === 'running' || row.status === 'paused') && !this.runners.has(loopId)) {
+      this.recoverZombieLoops();
+      // Re-read after recovery
+      const fresh = db.query('SELECT * FROM loops WHERE id = ?').get(loopId) as any;
+      return fresh ? loopFromRow(fresh) : null;
+    }
     return loopFromRow(row);
   }
 
   listLoops(status?: string): LoopState[] {
     const db = getDb();
+    // Eagerly recover zombies before listing so callers always see accurate state
+    if (!status || status === 'running' || status === 'paused') {
+      this.recoverZombieLoops();
+    }
     let rows: any[];
     if (status) {
       rows = db.query('SELECT * FROM loops WHERE status = ? ORDER BY started_at DESC').all(status);
@@ -253,7 +282,9 @@ class LoopRunner {
     let iteration = 0;
     const mode = this.prdId ? `PRD:${this.prdId}` : 'standalone';
 
-    console.log(`[loop:${this.loopId}] Starting ${mode} loop (maxIter=${this.config.maxIterations})`);
+    console.log(
+      `[loop:${this.loopId}] Starting ${mode} loop (maxIter=${this.config.maxIterations})`,
+    );
 
     while (iteration < this.config.maxIterations && !this.cancelled) {
       // Check pause gate
@@ -265,7 +296,9 @@ class LoopRunner {
       if (!story) {
         // Check if all done or all failed
         const stories = this.getAllStories();
-        console.log(`[loop:${this.loopId}] No eligible story. ${stories.length} total stories: ${stories.map((s) => `${s.title}[${s.status}:${s.attempts}/${s.maxAttempts}]`).join(', ')}`);
+        console.log(
+          `[loop:${this.loopId}] No eligible story. ${stories.length} total stories: ${stories.map((s) => `${s.title}[${s.status}:${s.attempts}/${s.maxAttempts}]`).join(', ')}`,
+        );
         const allCompleted = stories.every(
           (s) => s.status === 'completed' || s.status === 'skipped',
         );
@@ -287,284 +320,291 @@ class LoopRunner {
       }
 
       iteration++;
-      console.log(`[loop:${this.loopId}] Iteration ${iteration}: "${story.title}" (attempt ${story.attempts + 1}/${story.maxAttempts})`);
-
-      try {
-      // === Begin iteration try block ===
-      this.updateLoopDb({
-        current_iteration: iteration,
-        current_story_id: story.id,
-        total_iterations: iteration,
-      });
-
-      this.emitEvent('iteration_start', {
-        storyId: story.id,
-        storyTitle: story.title,
-        iteration,
-      });
-
-      this.addLogEntry({
-        iteration,
-        storyId: story.id,
-        storyTitle: story.title,
-        action: 'started',
-        detail: `Starting story: ${story.title} (attempt ${story.attempts + 1}/${story.maxAttempts})`,
-        timestamp: Date.now(),
-      });
-
-      // Mark story as in_progress
-      this.updateStory(story.id, { status: 'in_progress', attempts: story.attempts + 1 });
-
-      // Pre-generate assistant message ID for snapshot linkage
-      const assistantMsgId = nanoid();
-
-      // Create git snapshot if configured, linked to the upcoming assistant message
-      if (this.config.autoSnapshot) {
-        try {
-          await this.createGitSnapshot(story.id, assistantMsgId);
-        } catch (err) {
-          console.error(`[loop:${this.loopId}] Git snapshot failed:`, err);
-        }
-      }
-
-      // Create an E conversation for this story
-      const conversationId = nanoid();
-      const now = Date.now();
-      db.query(
-        `INSERT INTO conversations (id, title, model, system_prompt, workspace_path, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?)`,
-      ).run(
-        conversationId,
-        `[Loop] ${story.title}`,
-        this.config.model,
-        this.config.systemPromptOverride || null,
-        this.workspacePath,
-        now,
-        now,
+      console.log(
+        `[loop:${this.loopId}] Iteration ${iteration}: "${story.title}" (attempt ${story.attempts + 1}/${story.maxAttempts})`,
       );
 
-      this.updateStory(story.id, { conversationId });
-
-      // Emit story_started AFTER conversation creation so the client can navigate to it
-      this.emitEvent('story_started', {
-        storyId: story.id,
-        storyTitle: story.title,
-        iteration,
-        conversationId,
-      });
-
-      // NOTE: Task creation side-effect removed — the story itself is now the
-      // canonical work item. Previously created a `tasks` table entry here.
-
-      // Build the prompt
-      const prompt = this.buildStoryPrompt(story);
-
-      // Add user message to conversation
-      db.query(
-        `INSERT INTO messages (id, conversation_id, role, content, timestamp)
-         VALUES (?, ?, 'user', ?, ?)`,
-      ).run(nanoid(), conversationId, JSON.stringify([{ type: 'text', text: prompt }]), now);
-
-      // Spawn Claude session
-      let agentResult = '';
-      let agentError: string | null = null;
-      const AGENT_TIMEOUT_MS = 10 * 60 * 1000; // 10 minutes per story
       try {
-        const sessionId = await claudeManager.createSession(conversationId, {
-          model: this.config.model,
-          workspacePath: this.workspacePath,
-          effort: this.config.effort,
-          systemPrompt: this.buildSystemPrompt(),
+        // === Begin iteration try block ===
+        this.updateLoopDb({
+          current_iteration: iteration,
+          current_story_id: story.id,
+          total_iterations: iteration,
         });
 
-        this.updateStory(story.id, { agentId: sessionId });
-        this.updateLoopDb({ current_agent_id: sessionId });
+        this.emitEvent('iteration_start', {
+          storyId: story.id,
+          storyTitle: story.title,
+          iteration,
+        });
 
-        // Read the stream to completion with timeout
-        const stream = await claudeManager.sendMessage(sessionId, prompt);
-        const reader = stream.getReader();
+        this.addLogEntry({
+          iteration,
+          storyId: story.id,
+          storyTitle: story.title,
+          action: 'started',
+          detail: `Starting story: ${story.title} (attempt ${story.attempts + 1}/${story.maxAttempts})`,
+          timestamp: Date.now(),
+        });
 
-        const timeoutPromise = new Promise<{ done: true; value: undefined }>((resolve) =>
-          setTimeout(() => resolve({ done: true, value: undefined }), AGENT_TIMEOUT_MS),
-        );
-        let timedOut = false;
+        // Mark story as in_progress
+        this.updateStory(story.id, { status: 'in_progress', attempts: story.attempts + 1 });
 
-        while (true) {
-          const result = await Promise.race([reader.read(), timeoutPromise]);
-          if (result.done) {
-            if (!result.value && agentResult.length === 0) {
-              // Timeout likely hit before any data
-              timedOut = true;
-            }
-            break;
+        // Pre-generate assistant message ID for snapshot linkage
+        const assistantMsgId = nanoid();
+
+        // Create git snapshot if configured, linked to the upcoming assistant message
+        if (this.config.autoSnapshot) {
+          try {
+            await this.createGitSnapshot(story.id, assistantMsgId);
+          } catch (err) {
+            console.error(`[loop:${this.loopId}] Git snapshot failed:`, err);
           }
-          agentResult += new TextDecoder().decode(result.value);
-          // Reset timeout awareness — we got data
         }
 
-        if (timedOut) {
-          agentError = `Agent timed out after ${AGENT_TIMEOUT_MS / 1000}s with no output`;
-          console.error(`[loop:${this.loopId}] Agent timeout for story ${story.id}`);
-          try { reader.cancel(); } catch { /* best effort */ }
+        // Create an E conversation for this story
+        const conversationId = nanoid();
+        const now = Date.now();
+        db.query(
+          `INSERT INTO conversations (id, title, model, system_prompt, workspace_path, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        ).run(
+          conversationId,
+          `[Loop] ${story.title}`,
+          this.config.model,
+          this.config.systemPromptOverride || null,
+          this.workspacePath,
+          now,
+          now,
+        );
+
+        this.updateStory(story.id, { conversationId });
+
+        // Emit story_started AFTER conversation creation so the client can navigate to it
+        this.emitEvent('story_started', {
+          storyId: story.id,
+          storyTitle: story.title,
+          iteration,
+          conversationId,
+        });
+
+        // NOTE: Task creation side-effect removed — the story itself is now the
+        // canonical work item. Previously created a `tasks` table entry here.
+
+        // Build the prompt
+        const prompt = this.buildStoryPrompt(story);
+
+        // Add user message to conversation
+        db.query(
+          `INSERT INTO messages (id, conversation_id, role, content, timestamp)
+         VALUES (?, ?, 'user', ?, ?)`,
+        ).run(nanoid(), conversationId, JSON.stringify([{ type: 'text', text: prompt }]), now);
+
+        // Spawn Claude session
+        let agentResult = '';
+        let agentError: string | null = null;
+        const AGENT_TIMEOUT_MS = 10 * 60 * 1000; // 10 minutes per story
+        try {
+          const sessionId = await claudeManager.createSession(conversationId, {
+            model: this.config.model,
+            workspacePath: this.workspacePath,
+            effort: this.config.effort,
+            systemPrompt: this.buildSystemPrompt(),
+          });
+
+          this.updateStory(story.id, { agentId: sessionId });
+          this.updateLoopDb({ current_agent_id: sessionId });
+
+          // Read the stream to completion with timeout
+          const stream = await claudeManager.sendMessage(sessionId, prompt);
+          const reader = stream.getReader();
+
+          const timeoutPromise = new Promise<{ done: true; value: undefined }>((resolve) =>
+            setTimeout(() => resolve({ done: true, value: undefined }), AGENT_TIMEOUT_MS),
+          );
+          let timedOut = false;
+
+          while (true) {
+            const result = await Promise.race([reader.read(), timeoutPromise]);
+            if (result.done) {
+              if (!result.value && agentResult.length === 0) {
+                // Timeout likely hit before any data
+                timedOut = true;
+              }
+              break;
+            }
+            agentResult += new TextDecoder().decode(result.value);
+            // Reset timeout awareness — we got data
+          }
+
+          if (timedOut) {
+            agentError = `Agent timed out after ${AGENT_TIMEOUT_MS / 1000}s with no output`;
+            console.error(`[loop:${this.loopId}] Agent timeout for story ${story.id}`);
+            try {
+              reader.cancel();
+            } catch {
+              /* best effort */
+            }
+          }
+        } catch (err) {
+          agentError = String(err);
+          console.error(`[loop:${this.loopId}] Agent error for story ${story.id}:`, err);
         }
-      } catch (err) {
-        agentError = String(err);
-        console.error(`[loop:${this.loopId}] Agent error for story ${story.id}:`, err);
-      }
 
-      if (this.cancelled) break;
+        if (this.cancelled) break;
 
-      // Run quality checks
-      let qualityResults: QualityCheckResult[] = [];
-      const checksToRun = this.config.qualityChecks.length > 0 ? this.config.qualityChecks : [];
+        // Run quality checks
+        let qualityResults: QualityCheckResult[] = [];
+        const checksToRun = this.config.qualityChecks.length > 0 ? this.config.qualityChecks : [];
 
-      if (checksToRun.length > 0) {
-        qualityResults = await runAllQualityChecks(checksToRun, this.workspacePath);
+        if (checksToRun.length > 0) {
+          qualityResults = await runAllQualityChecks(checksToRun, this.workspacePath);
 
-        for (const qr of qualityResults) {
-          this.emitEvent('quality_check', {
+          for (const qr of qualityResults) {
+            this.emitEvent('quality_check', {
+              storyId: story.id,
+              storyTitle: story.title,
+              qualityResult: qr,
+            });
+            this.addLogEntry({
+              iteration,
+              storyId: story.id,
+              storyTitle: story.title,
+              action: 'quality_check',
+              detail: `${qr.checkName}: ${qr.passed ? 'PASSED' : 'FAILED'} (${qr.duration}ms)`,
+              timestamp: Date.now(),
+              qualityResults: [qr],
+            });
+          }
+        }
+
+        // Determine success
+        const requiredChecksFailed = qualityResults.some((qr) => {
+          const checkConfig = checksToRun.find((c) => c.id === qr.checkId);
+          return checkConfig?.required && !qr.passed;
+        });
+        const hasAgentError = !!agentError;
+        const passed = !hasAgentError && !requiredChecksFailed;
+
+        if (passed) {
+          // Story succeeded!
+          this.updateStory(story.id, { status: 'completed' });
+
+          // Increment completed counter
+          const loop = db.query('SELECT * FROM loops WHERE id = ?').get(this.loopId) as any;
+          this.updateLoopDb({ total_stories_completed: (loop?.total_stories_completed || 0) + 1 });
+
+          // Git commit if configured
+          if (this.config.autoCommit) {
+            try {
+              const sha = await this.gitCommit(story);
+              if (sha) {
+                this.updateStory(story.id, { commitSha: sha });
+                this.addLogEntry({
+                  iteration,
+                  storyId: story.id,
+                  storyTitle: story.title,
+                  action: 'committed',
+                  detail: `Committed: ${sha.slice(0, 8)}`,
+                  timestamp: Date.now(),
+                });
+              }
+            } catch (err) {
+              console.error(`[loop:${this.loopId}] Git commit failed:`, err);
+            }
+          }
+
+          this.emitEvent('story_completed', {
             storyId: story.id,
             storyTitle: story.title,
-            qualityResult: qr,
+            iteration,
+            conversationId,
           });
           this.addLogEntry({
             iteration,
             storyId: story.id,
             storyTitle: story.title,
-            action: 'quality_check',
-            detail: `${qr.checkName}: ${qr.passed ? 'PASSED' : 'FAILED'} (${qr.duration}ms)`,
+            action: 'passed',
+            detail: 'Story completed successfully',
             timestamp: Date.now(),
-            qualityResults: [qr],
           });
-        }
-      }
 
-      // Determine success
-      const requiredChecksFailed = qualityResults.some((qr) => {
-        const checkConfig = checksToRun.find((c) => c.id === qr.checkId);
-        return checkConfig?.required && !qr.passed;
-      });
-      const hasAgentError = !!agentError;
-      const passed = !hasAgentError && !requiredChecksFailed;
+          // Record learnings from success
+          this.recordLearning(story, 'Completed successfully', qualityResults);
 
-      if (passed) {
-        // Story succeeded!
-        this.updateStory(story.id, { status: 'completed' });
-
-        // Increment completed counter
-        const loop = db.query('SELECT * FROM loops WHERE id = ?').get(this.loopId) as any;
-        this.updateLoopDb({ total_stories_completed: (loop?.total_stories_completed || 0) + 1 });
-
-        // Git commit if configured
-        if (this.config.autoCommit) {
-          try {
-            const sha = await this.gitCommit(story);
-            if (sha) {
-              this.updateStory(story.id, { commitSha: sha });
-              this.addLogEntry({
-                iteration,
-                storyId: story.id,
-                storyTitle: story.title,
-                action: 'committed',
-                detail: `Committed: ${sha.slice(0, 8)}`,
-                timestamp: Date.now(),
-              });
-            }
-          } catch (err) {
-            console.error(`[loop:${this.loopId}] Git commit failed:`, err);
-          }
-        }
-
-        this.emitEvent('story_completed', {
-          storyId: story.id,
-          storyTitle: story.title,
-          iteration,
-          conversationId,
-        });
-        this.addLogEntry({
-          iteration,
-          storyId: story.id,
-          storyTitle: story.title,
-          action: 'passed',
-          detail: 'Story completed successfully',
-          timestamp: Date.now(),
-        });
-
-        // Record learnings from success
-        this.recordLearning(story, 'Completed successfully', qualityResults);
-
-        // External status writeback hook
-        const completedStory = this.getStory(story.id);
-        if (completedStory?.externalRef) {
-          this.pushExternalStatus(completedStory, 'completed').catch((err) => {
-            console.error(`[loop:${this.loopId}] External status push failed:`, err);
-          });
-        }
-      } else {
-        // Story failed
-        const failReason = hasAgentError
-          ? `Agent error: ${agentError}`
-          : `Quality checks failed: ${qualityResults
-              .filter((qr) => !qr.passed)
-              .map((qr) => qr.checkName)
-              .join(', ')}`;
-
-        // Record learning
-        this.recordLearning(story, failReason, qualityResults);
-
-        // Check if retries exhausted
-        const updatedStory = this.getStory(story.id);
-        const retriesExhausted = updatedStory && updatedStory.attempts >= updatedStory.maxAttempts;
-
-        if (retriesExhausted) {
-          this.updateStory(story.id, { status: 'failed' });
-
-          const loop = db.query('SELECT * FROM loops WHERE id = ?').get(this.loopId) as any;
-          this.updateLoopDb({ total_stories_failed: (loop?.total_stories_failed || 0) + 1 });
-
-          // External status writeback hook for failures
-          const failedStory = this.getStory(story.id);
-          if (failedStory?.externalRef) {
-            this.pushExternalStatus(failedStory, 'failed').catch((err) => {
+          // External status writeback hook
+          const completedStory = this.getStory(story.id);
+          if (completedStory?.externalRef) {
+            this.pushExternalStatus(completedStory, 'completed').catch((err) => {
               console.error(`[loop:${this.loopId}] External status push failed:`, err);
             });
           }
         } else {
-          // Reset to pending for retry
-          this.updateStory(story.id, { status: 'pending' });
+          // Story failed
+          const failReason = hasAgentError
+            ? `Agent error: ${agentError}`
+            : `Quality checks failed: ${qualityResults
+                .filter((qr) => !qr.passed)
+                .map((qr) => qr.checkName)
+                .join(', ')}`;
+
+          // Record learning
+          this.recordLearning(story, failReason, qualityResults);
+
+          // Check if retries exhausted
+          const updatedStory = this.getStory(story.id);
+          const retriesExhausted =
+            updatedStory && updatedStory.attempts >= updatedStory.maxAttempts;
+
+          if (retriesExhausted) {
+            this.updateStory(story.id, { status: 'failed' });
+
+            const loop = db.query('SELECT * FROM loops WHERE id = ?').get(this.loopId) as any;
+            this.updateLoopDb({ total_stories_failed: (loop?.total_stories_failed || 0) + 1 });
+
+            // External status writeback hook for failures
+            const failedStory = this.getStory(story.id);
+            if (failedStory?.externalRef) {
+              this.pushExternalStatus(failedStory, 'failed').catch((err) => {
+                console.error(`[loop:${this.loopId}] External status push failed:`, err);
+              });
+            }
+          } else {
+            // Reset to pending for retry
+            this.updateStory(story.id, { status: 'pending' });
+          }
+
+          this.emitEvent('story_failed', {
+            storyId: story.id,
+            storyTitle: story.title,
+            iteration,
+            conversationId,
+            message: failReason,
+            willRetry: !retriesExhausted,
+          });
+          this.addLogEntry({
+            iteration,
+            storyId: story.id,
+            storyTitle: story.title,
+            action: 'failed',
+            detail: failReason,
+            timestamp: Date.now(),
+            qualityResults,
+          });
+
+          // Pause on failure if configured
+          if (this.config.pauseOnFailure) {
+            this.pause();
+            this.updateLoopDb({ status: 'paused', paused_at: Date.now() });
+            this.emitEvent('paused', { message: `Paused: story "${story.title}" failed` });
+            await this.checkPauseGate();
+            if (this.cancelled) break;
+            this.updateLoopDb({ status: 'running' });
+          }
         }
 
-        this.emitEvent('story_failed', {
-          storyId: story.id,
-          storyTitle: story.title,
-          iteration,
-          conversationId,
-          message: failReason,
-          willRetry: !retriesExhausted,
-        });
-        this.addLogEntry({
-          iteration,
-          storyId: story.id,
-          storyTitle: story.title,
-          action: 'failed',
-          detail: failReason,
-          timestamp: Date.now(),
-          qualityResults,
-        });
-
-        // Pause on failure if configured
-        if (this.config.pauseOnFailure) {
-          this.pause();
-          this.updateLoopDb({ status: 'paused', paused_at: Date.now() });
-          this.emitEvent('paused', { message: `Paused: story "${story.title}" failed` });
-          await this.checkPauseGate();
-          if (this.cancelled) break;
-          this.updateLoopDb({ status: 'running' });
-        }
-      }
-
-      this.emitEvent('iteration_end', { storyId: story.id, storyTitle: story.title, iteration });
-      // === End iteration try block ===
+        this.emitEvent('iteration_end', { storyId: story.id, storyTitle: story.title, iteration });
+        // === End iteration try block ===
       } catch (iterErr) {
         // Don't let a single iteration crash kill the entire loop.
         // Log the error, mark the story as failed if it was in_progress, and continue.
@@ -590,7 +630,9 @@ class LoopRunner {
               willRetry = true;
             }
           }
-        } catch { /* best effort */ }
+        } catch {
+          /* best effort */
+        }
 
         this.emitEvent('story_failed', {
           storyId: story.id,
@@ -614,7 +656,9 @@ class LoopRunner {
 
     // Max iterations reached — check final state
     const finalStories = this.getAllStories();
-    console.log(`[loop:${this.loopId}] Loop ended after ${iteration} iterations. Stories: ${finalStories.map((s) => `${s.title}[${s.status}]`).join(', ')}`);
+    console.log(
+      `[loop:${this.loopId}] Loop ended after ${iteration} iterations. Stories: ${finalStories.map((s) => `${s.title}[${s.status}]`).join(', ')}`,
+    );
     const allDone = finalStories.every((s) => s.status === 'completed' || s.status === 'skipped');
 
     if (allDone) {

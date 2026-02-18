@@ -4,7 +4,15 @@
   import { api } from '$lib/api/client';
   import { onMount } from 'svelte';
   import { desktopNotifications } from '$lib/notifications/desktop-notifications';
-  import type { ThemeId, CliProvider, PermissionRule, PermissionRulePreset, TerminalCommandPolicy, AgentProfile, AgentProfileCreateInput } from '@e/shared';
+  import type {
+    ThemeId,
+    CliProvider,
+    PermissionRule,
+    PermissionRulePreset,
+    TerminalCommandPolicy,
+    AgentProfile,
+    AgentProfileCreateInput,
+  } from '@e/shared';
   import { PERMISSION_PRESETS } from '@e/shared';
   import { profilesStore } from '$lib/stores/profiles.svelte';
   import { MONO_FONTS, SANS_FONTS, findFont } from '$lib/config/fonts';
@@ -16,7 +24,16 @@
   ];
 
   // Check if the profiles tab was requested via localStorage flag
-  function getInitialTab(): 'general' | 'appearance' | 'audio' | 'editor' | 'permissions' | 'security' | 'mcp' | 'keybindings' | 'profiles' {
+  function getInitialTab():
+    | 'general'
+    | 'appearance'
+    | 'audio'
+    | 'editor'
+    | 'permissions'
+    | 'security'
+    | 'mcp'
+    | 'keybindings'
+    | 'profiles' {
     if (typeof localStorage !== 'undefined') {
       const tab = localStorage.getItem('e-settings-tab');
       if (tab) {
@@ -28,7 +45,15 @@
   }
 
   let activeTab = $state<
-    'general' | 'appearance' | 'audio' | 'editor' | 'permissions' | 'security' | 'mcp' | 'keybindings' | 'profiles'
+    | 'general'
+    | 'appearance'
+    | 'audio'
+    | 'editor'
+    | 'permissions'
+    | 'security'
+    | 'mcp'
+    | 'keybindings'
+    | 'profiles'
   >(getInitialTab());
 
   // --- BYOK state ---
@@ -314,7 +339,18 @@
   let newRulePattern = $state('');
   let editingRuleId = $state<string | null>(null);
 
-  const builtinToolNames = ['Read', 'Write', 'Edit', 'Glob', 'Grep', 'Bash', 'WebFetch', 'WebSearch', 'NotebookEdit', '*'];
+  const builtinToolNames = [
+    'Read',
+    'Write',
+    'Edit',
+    'Glob',
+    'Grep',
+    'Bash',
+    'WebFetch',
+    'WebSearch',
+    'NotebookEdit',
+    '*',
+  ];
 
   async function loadPermissionRules() {
     permRulesLoading = true;
@@ -746,7 +782,9 @@
               />
               <span class="toggle-slider"></span>
             </label>
-            <p class="setting-desc">Automatically compact conversation history when context window exceeds 95%</p>
+            <p class="setting-desc">
+              Automatically compact conversation history when context window exceeds 95%
+            </p>
           </div>
           <div class="setting-group">
             <label class="setting-label">Show budget in status bar</label>
@@ -845,7 +883,9 @@
                 value={settingsStore.soundVolume}
                 disabled={!settingsStore.soundEnabled}
                 oninput={(e) =>
-                  settingsStore.update({ soundVolume: Number((e.target as HTMLInputElement).value) })}
+                  settingsStore.update({
+                    soundVolume: Number((e.target as HTMLInputElement).value),
+                  })}
               />
               <span class="volume-icon">🔊</span>
             </div>
@@ -854,17 +894,15 @@
           <div class="setting-group" class:muted={!settingsStore.soundEnabled}>
             <label class="setting-label">Sound style</label>
             <div class="sound-style-row">
-              {#each [
-                { value: 'melodic', label: 'Melodic', desc: 'Warm additive synthesis — marimba, vibraphone, bells' },
-                { value: 'classic', label: 'Classic', desc: 'Original oscillator chirps — the vintage E sound' },
-                { value: 'whimsy', label: 'Whimsy 🍬', desc: 'Music box, toy piano, kalimba & rubber-duck squeaks' },
-                { value: 'slot-machine', label: 'Slot Machine 🎰', desc: 'Casino coins, reel clicks, lever pulls & jackpot bells' },
-              ] as opt}
+              {#each [{ value: 'melodic', label: 'Melodic', desc: 'Warm additive synthesis — marimba, vibraphone, bells' }, { value: 'classic', label: 'Classic', desc: 'Original oscillator chirps — the vintage E sound' }, { value: 'whimsy', label: 'Whimsy 🍬', desc: 'Music box, toy piano, kalimba & rubber-duck squeaks' }, { value: 'slot-machine', label: 'Slot Machine 🎰', desc: 'Casino coins, reel clicks, lever pulls & jackpot bells' }] as opt}
                 <button
                   class="sound-style-btn"
                   class:active={settingsStore.soundStyle === opt.value}
                   disabled={!settingsStore.soundEnabled}
-                  onclick={() => settingsStore.update({ soundStyle: opt.value as 'classic' | 'melodic' | 'whimsy' | 'slot-machine' })}
+                  onclick={() =>
+                    settingsStore.update({
+                      soundStyle: opt.value as 'classic' | 'melodic' | 'whimsy' | 'slot-machine',
+                    })}
                 >
                   <span class="sound-style-name">{opt.label}</span>
                   <span class="sound-style-desc">{opt.desc}</span>
@@ -883,14 +921,17 @@
                 {:else if desktopNotifications.permission === 'denied'}
                   <span class="notify-status denied">Blocked — enable in browser settings</span>
                 {:else}
-                  <button class="btn-secondary notify-request-btn" onclick={async () => {
-                    const result = await desktopNotifications.requestPermission();
-                    if (result === 'granted') {
-                      uiStore.toast('Desktop notifications enabled', 'success');
-                    } else if (result === 'denied') {
-                      uiStore.toast('Notifications blocked by browser', 'error');
-                    }
-                  }}>Enable notifications</button>
+                  <button
+                    class="btn-secondary notify-request-btn"
+                    onclick={async () => {
+                      const result = await desktopNotifications.requestPermission();
+                      if (result === 'granted') {
+                        uiStore.toast('Desktop notifications enabled', 'success');
+                      } else if (result === 'denied') {
+                        uiStore.toast('Notifications blocked by browser', 'error');
+                      }
+                    }}>Enable notifications</button
+                  >
                 {/if}
               {:else}
                 <span class="notify-status denied">Not supported in this browser</span>
@@ -904,7 +945,9 @@
                     type="checkbox"
                     checked={settingsStore.notifyOnCompletion}
                     onchange={() =>
-                      settingsStore.update({ notifyOnCompletion: !settingsStore.notifyOnCompletion })}
+                      settingsStore.update({
+                        notifyOnCompletion: !settingsStore.notifyOnCompletion,
+                      })}
                   />
                   <span class="toggle-slider"></span>
                 </label>
@@ -939,20 +982,7 @@
           <div class="setting-group" class:muted={!settingsStore.soundEnabled}>
             <label class="setting-label">Event sounds</label>
             <div class="chirp-legend">
-              {#each [
-                { event: 'Response start',   desc: 'Ascending tone when Claude begins responding' },
-                { event: 'Text block',        desc: 'Soft click as a new text block opens' },
-                { event: 'Streaming text',    desc: 'Gentle trickle while text flows (throttled)' },
-                { event: 'Thinking',          desc: 'Low hum when extended thinking begins' },
-                { event: 'Tool call',         desc: 'Mechanical blip on each tool invocation' },
-                { event: 'Tool success',      desc: 'Bright major-third chord on completion' },
-                { event: 'Tool error',        desc: 'Descending sawtooth on tool failure' },
-                { event: 'Approval needed',   desc: 'Sustained chime awaiting your approval' },
-                { event: 'Question asked',    desc: 'Three-note rising arpeggio with upward lilt — the classic "huh?" contour' },
-                { event: 'Response done',     desc: 'Resolved interval when the response completes' },
-                { event: 'Error',             desc: 'Warning buzz on stream error' },
-                { event: 'Cancelled',         desc: 'Soft fade when you stop the response' },
-              ] as row}
+              {#each [{ event: 'Response start', desc: 'Ascending tone when Claude begins responding' }, { event: 'Text block', desc: 'Soft click as a new text block opens' }, { event: 'Streaming text', desc: 'Gentle trickle while text flows (throttled)' }, { event: 'Thinking', desc: 'Low hum when extended thinking begins' }, { event: 'Tool call', desc: 'Mechanical blip on each tool invocation' }, { event: 'Tool success', desc: 'Bright major-third chord on completion' }, { event: 'Tool error', desc: 'Descending sawtooth on tool failure' }, { event: 'Approval needed', desc: 'Sustained chime awaiting your approval' }, { event: 'Question asked', desc: 'Three-note rising arpeggio with upward lilt — the classic "huh?" contour' }, { event: 'Response done', desc: 'Resolved interval when the response completes' }, { event: 'Error', desc: 'Warning buzz on stream error' }, { event: 'Cancelled', desc: 'Soft fade when you stop the response' }] as row}
                 <div class="chirp-row">
                   <span class="chirp-event">{row.event}</span>
                   <span class="chirp-desc">{row.desc}</span>
@@ -1040,20 +1070,20 @@
           <div class="setting-group">
             <label class="setting-label">Permission rules</label>
             <p class="setting-desc">
-              Fine-grained allow/deny/ask rules per tool. Rules override the general permission mode.
+              Fine-grained allow/deny/ask rules per tool. Rules override the general permission
+              mode.
             </p>
 
             <!-- Scope selector -->
             <div class="perm-scope-row">
-              {#each [
-                { id: 'global', label: 'Global' },
-                { id: 'project', label: 'Project' },
-                { id: 'session', label: 'Session' },
-              ] as s}
+              {#each [{ id: 'global', label: 'Global' }, { id: 'project', label: 'Project' }, { id: 'session', label: 'Session' }] as s}
                 <button
                   class="perm-scope-btn"
                   class:active={permRulesScope === s.id}
-                  onclick={() => { permRulesScope = s.id as any; loadPermissionRules(); }}
+                  onclick={() => {
+                    permRulesScope = s.id as any;
+                    loadPermissionRules();
+                  }}
                 >
                   {s.label}
                 </button>
@@ -1092,7 +1122,9 @@
                 class="perm-pattern-input"
                 placeholder="Pattern (optional, e.g. rm -rf *)"
                 bind:value={newRulePattern}
-                onkeydown={(e) => { if (e.key === 'Enter') addPermissionRule(); }}
+                onkeydown={(e) => {
+                  if (e.key === 'Enter') addPermissionRule();
+                }}
               />
               <button
                 class="btn-secondary perm-add-btn"
@@ -1107,12 +1139,19 @@
             {#if permRulesLoading}
               <div class="perm-rules-loading">Loading...</div>
             {:else if permRules.length === 0}
-              <div class="perm-rules-empty">No rules configured for this scope. Add rules above or apply a preset.</div>
+              <div class="perm-rules-empty">
+                No rules configured for this scope. Add rules above or apply a preset.
+              </div>
             {:else}
               <div class="perm-rules-list">
                 {#each permRules as rule (rule.id)}
                   <div class="perm-rule-row">
-                    <span class="perm-rule-type" class:allow={rule.type === 'allow'} class:deny={rule.type === 'deny'} class:ask={rule.type === 'ask'}>
+                    <span
+                      class="perm-rule-type"
+                      class:allow={rule.type === 'allow'}
+                      class:deny={rule.type === 'deny'}
+                      class:ask={rule.type === 'ask'}
+                    >
                       {rule.type}
                     </span>
                     <span class="perm-rule-tool">{rule.tool}</span>
@@ -1120,7 +1159,10 @@
                       <span class="perm-rule-pattern">{rule.pattern}</span>
                     {/if}
                     <span class="perm-rule-scope-badge">{rule.scope}</span>
-                    <button class="btn-danger-sm perm-rule-delete" onclick={() => deleteRule(rule.id)}>x</button>
+                    <button
+                      class="btn-danger-sm perm-rule-delete"
+                      onclick={() => deleteRule(rule.id)}>x</button
+                    >
                   </div>
                 {/each}
               </div>
@@ -1269,7 +1311,12 @@
           <div class="profiles-section">
             <div class="profiles-header">
               <div>
-                <p class="setting-desc">Agent profiles bundle permission mode, allowed/disallowed tools, and an optional system prompt override. Select a profile from the top bar or via <kbd>Ctrl+Shift+,</kbd>.</p>
+                <p class="setting-desc">
+                  Agent profiles bundle permission mode, allowed/disallowed tools, and an optional
+                  system prompt override. Select a profile from the top bar or via <kbd
+                    >Ctrl+Shift+,</kbd
+                  >.
+                </p>
               </div>
               <button class="btn-secondary" onclick={openNewProfileForm}>+ New Profile</button>
             </div>
@@ -1288,19 +1335,35 @@
                       <div class="profile-card-desc">{profile.description}</div>
                     {/if}
                     <div class="profile-card-meta">
-                      <span class="meta-chip mode-{profile.permissionMode}">{profile.permissionMode}</span>
+                      <span class="meta-chip mode-{profile.permissionMode}"
+                        >{profile.permissionMode}</span
+                      >
                       {#if profile.allowedTools.length > 0}
-                        <span class="meta-chip allow-chip">allow: {profile.allowedTools.slice(0,3).join(', ')}{profile.allowedTools.length > 3 ? ' +' + (profile.allowedTools.length - 3) : ''}</span>
+                        <span class="meta-chip allow-chip"
+                          >allow: {profile.allowedTools.slice(0, 3).join(', ')}{profile.allowedTools
+                            .length > 3
+                            ? ' +' + (profile.allowedTools.length - 3)
+                            : ''}</span
+                        >
                       {/if}
                       {#if profile.disallowedTools.length > 0}
-                        <span class="meta-chip deny-chip">deny: {profile.disallowedTools.slice(0,3).join(', ')}{profile.disallowedTools.length > 3 ? ' +' + (profile.disallowedTools.length - 3) : ''}</span>
+                        <span class="meta-chip deny-chip"
+                          >deny: {profile.disallowedTools.slice(0, 3).join(', ')}{profile
+                            .disallowedTools.length > 3
+                            ? ' +' + (profile.disallowedTools.length - 3)
+                            : ''}</span
+                        >
                       {/if}
                     </div>
                   </div>
                   <div class="profile-card-actions">
                     {#if !profile.isBuiltIn}
-                      <button class="btn-secondary" onclick={() => openEditProfileForm(profile)}>Edit</button>
-                      <button class="btn-danger-sm" onclick={() => deleteProfile(profile.id)}>Delete</button>
+                      <button class="btn-secondary" onclick={() => openEditProfileForm(profile)}
+                        >Edit</button
+                      >
+                      <button class="btn-danger-sm" onclick={() => deleteProfile(profile.id)}
+                        >Delete</button
+                      >
                     {/if}
                   </div>
                 </div>
@@ -1313,7 +1376,14 @@
                   <div class="profile-form-header">
                     <h3>{editingProfile ? 'Edit Profile' : 'New Profile'}</h3>
                     <button class="close-btn" onclick={closeProfileForm}>
-                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <svg
+                        width="16"
+                        height="16"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                      >
                         <path d="M18 6L6 18M6 6l12 12" />
                       </svg>
                     </button>
@@ -1327,7 +1397,11 @@
 
                     <div class="setting-group">
                       <label class="setting-label">Description</label>
-                      <input type="text" bind:value={profileFormDescription} placeholder="Short description (optional)" />
+                      <input
+                        type="text"
+                        bind:value={profileFormDescription}
+                        placeholder="Short description (optional)"
+                      />
                     </div>
 
                     <div class="setting-group">
@@ -1353,7 +1427,9 @@
                         bind:value={profileFormAllowedTools}
                         placeholder="Read, Glob, Grep (comma-separated, * for all)"
                       />
-                      <p class="setting-desc">Tools that are always allowed. Use * to allow all tools.</p>
+                      <p class="setting-desc">
+                        Tools that are always allowed. Use * to allow all tools.
+                      </p>
                     </div>
 
                     <div class="setting-group">
@@ -1363,7 +1439,9 @@
                         bind:value={profileFormDisallowedTools}
                         placeholder="Write, Edit, Bash (comma-separated, * for all)"
                       />
-                      <p class="setting-desc">Tools that are always blocked. Use * to block all tools.</p>
+                      <p class="setting-desc">
+                        Tools that are always blocked. Use * to block all tools.
+                      </p>
                     </div>
 
                     <div class="setting-group">
@@ -1382,7 +1460,11 @@
                         onclick={saveProfile}
                         disabled={profileFormSaving || !profileFormName.trim()}
                       >
-                        {profileFormSaving ? 'Saving...' : editingProfile ? 'Update Profile' : 'Create Profile'}
+                        {profileFormSaving
+                          ? 'Saving...'
+                          : editingProfile
+                            ? 'Update Profile'
+                            : 'Create Profile'}
                       </button>
                     </div>
                   </div>
@@ -2096,7 +2178,9 @@
     border-radius: var(--radius-sm);
     cursor: pointer;
     text-align: left;
-    transition: border-color 0.15s, background 0.15s;
+    transition:
+      border-color 0.15s,
+      background 0.15s;
   }
   .sound-style-btn:hover:not(:disabled) {
     border-color: var(--accent-primary);

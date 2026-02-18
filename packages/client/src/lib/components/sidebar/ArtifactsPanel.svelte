@@ -115,7 +115,14 @@
               <span class="artifact-type-badge">{typeLabels[artifact.type] ?? artifact.type}</span>
               <span class="artifact-name">{artifact.title}</span>
               <span class="artifact-chevron" class:rotated={expandedId === artifact.id}>
-                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <svg
+                  width="10"
+                  height="10"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                >
                   <polyline points="6 9 12 15 18 9"></polyline>
                 </svg>
               </span>
@@ -127,7 +134,14 @@
                 onclick={() => togglePin(artifact)}
                 title={artifact.pinned ? 'Unpin' : 'Pin for quick reference'}
               >
-                <svg width="11" height="11" viewBox="0 0 24 24" fill={artifact.pinned ? 'currentColor' : 'none'} stroke="currentColor" stroke-width="2">
+                <svg
+                  width="11"
+                  height="11"
+                  viewBox="0 0 24 24"
+                  fill={artifact.pinned ? 'currentColor' : 'none'}
+                  stroke="currentColor"
+                  stroke-width="2"
+                >
                   <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path>
                   <circle cx="12" cy="10" r="3"></circle>
                 </svg>
@@ -137,7 +151,14 @@
                 onclick={() => deleteArtifact(artifact)}
                 title="Delete artifact"
               >
-                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <svg
+                  width="11"
+                  height="11"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                >
                   <path d="M18 6L6 18M6 6l12 12"></path>
                 </svg>
               </button>

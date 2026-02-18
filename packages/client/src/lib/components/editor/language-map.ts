@@ -19,6 +19,12 @@ const languageLoaders: Record<string, LanguageLoader> = {
     const { html } = await import('@codemirror/lang-html');
     return html();
   },
+  svelte: async () => {
+    // No dedicated CM6 Svelte package — use HTML with JS/TS script block support.
+    // This gives syntax highlighting for the template, <script>, and <style> sections.
+    const { html } = await import('@codemirror/lang-html');
+    return html({ matchClosingTags: true, autoCloseTags: true });
+  },
   css: async () => {
     const { css } = await import('@codemirror/lang-css');
     return css();

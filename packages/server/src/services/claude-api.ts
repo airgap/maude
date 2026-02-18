@@ -87,9 +87,7 @@ class ClaudeApiClient {
       // Normalize nudge content blocks → text for Anthropic API compatibility
       const content = Array.isArray(parsed)
         ? parsed.map((block: any) =>
-            block.type === 'nudge'
-              ? { type: 'text', text: `[User nudge]: ${block.text}` }
-              : block,
+            block.type === 'nudge' ? { type: 'text', text: `[User nudge]: ${block.text}` } : block,
           )
         : parsed;
       return { role: row.role as 'user' | 'assistant', content };

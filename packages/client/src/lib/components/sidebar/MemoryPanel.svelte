@@ -123,7 +123,11 @@
       showCreateRule = false;
       // Reload rules and open the new one for editing
       await loadRules();
-      const created = ruleFiles.find((r) => r.name === (newRuleName.endsWith('.md') ? newRuleName : `${newRuleName}.md`) || r.name.includes(newRuleName));
+      const created = ruleFiles.find(
+        (r) =>
+          r.name === (newRuleName.endsWith('.md') ? newRuleName : `${newRuleName}.md`) ||
+          r.name.includes(newRuleName),
+      );
       if (created) {
         startEditRule(created);
       }
@@ -195,11 +199,13 @@
       if (skillFiles.length > 0) {
         registerSkillCommands(skillFiles);
         // Also populate installedSkills for the registry tab
-        installedSkills = skillFiles.map((f) => {
-          // Extract skill name from path: .claude/skills/{name}/SKILL.md
-          const parts = f.path.split('/');
-          return parts[parts.length - 2] || '';
-        }).filter(Boolean);
+        installedSkills = skillFiles
+          .map((f) => {
+            // Extract skill name from path: .claude/skills/{name}/SKILL.md
+            const parts = f.path.split('/');
+            return parts[parts.length - 2] || '';
+          })
+          .filter(Boolean);
       }
     } catch {}
     if (settingsStore.workspacePath) {
@@ -292,7 +298,10 @@
       <button
         class="view-tab"
         class:active={viewMode === 'rules'}
-        onclick={() => { viewMode = 'rules'; loadRules(); }}
+        onclick={() => {
+          viewMode = 'rules';
+          loadRules();
+        }}
       >
         Rules
         {#if ruleFiles.length > 0}
@@ -312,7 +321,10 @@
       <button
         class="view-tab"
         class:active={viewMode === 'skills'}
-        onclick={() => { viewMode = 'skills'; loadRegistry(); }}
+        onclick={() => {
+          viewMode = 'skills';
+          loadRegistry();
+        }}
       >
         Skills
         {#if installedSkills.length > 0}
@@ -456,7 +468,11 @@
       {:else}
         <div class="rules-toolbar">
           <span class="rules-label">Active rules are injected into every prompt</span>
-          <button class="add-btn" onclick={() => (showCreateRule = !showCreateRule)} title="Create rule">+</button>
+          <button
+            class="add-btn"
+            onclick={() => (showCreateRule = !showCreateRule)}
+            title="Create rule">+</button
+          >
         </div>
 
         {#if showCreateRule}
@@ -465,7 +481,9 @@
               bind:value={newRuleName}
               placeholder="Rule name (e.g. code-style)"
               class="form-input"
-              onkeydown={(e) => { if (e.key === 'Enter') createRule(); }}
+              onkeydown={(e) => {
+                if (e.key === 'Enter') createRule();
+              }}
             />
             <button class="save-btn" onclick={createRule} disabled={!newRuleName || creatingRule}>
               {creatingRule ? 'Creating...' : 'Create Rule'}
@@ -476,9 +494,7 @@
         {#if rulesLoading}
           <div class="empty">Loading rules...</div>
         {:else if ruleFiles.length === 0}
-          <div class="empty">
-            No rules found. Create a rule or add .md files to .claude/rules/
-          </div>
+          <div class="empty">No rules found. Create a rule or add .md files to .claude/rules/</div>
         {:else}
           <div class="rules-list">
             {#each ruleFiles as rule (rule.path)}
@@ -494,7 +510,9 @@
                       class:active={rule.mode === 'active'}
                       class:on-demand={rule.mode === 'on-demand'}
                       onclick={() => toggleRuleMode(rule)}
-                      title={rule.mode === 'active' ? 'Active: always injected into prompts' : 'On-demand: use @rule to inject'}
+                      title={rule.mode === 'active'
+                        ? 'Active: always injected into prompts'
+                        : 'On-demand: use @rule to inject'}
                     >
                       {rule.mode === 'active' ? 'Active' : 'On-demand'}
                     </button>

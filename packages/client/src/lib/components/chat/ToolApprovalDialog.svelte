@@ -74,7 +74,12 @@
     </svg>
     <span class="approval-title">Tool requires approval</span>
     {#if matchingRule}
-      <span class="rule-indicator" title="Matched rule: {matchingRule.type} {matchingRule.tool}{matchingRule.pattern ? ' ' + matchingRule.pattern : ''}">
+      <span
+        class="rule-indicator"
+        title="Matched rule: {matchingRule.type} {matchingRule.tool}{matchingRule.pattern
+          ? ' ' + matchingRule.pattern
+          : ''}"
+      >
         rule
       </span>
     {/if}

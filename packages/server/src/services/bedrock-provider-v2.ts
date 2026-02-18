@@ -15,7 +15,15 @@ import {
   BedrockRuntimeClient,
   InvokeModelWithResponseStreamCommand,
 } from '@aws-sdk/client-bedrock-runtime';
-import { getToolDefinitions, getAllToolsWithMcp, requiresApproval, shouldRequireApproval, loadPermissionRules, loadTerminalCommandPolicy, extractToolInputForMatching } from './tool-schemas';
+import {
+  getToolDefinitions,
+  getAllToolsWithMcp,
+  requiresApproval,
+  shouldRequireApproval,
+  loadPermissionRules,
+  loadTerminalCommandPolicy,
+  extractToolInputForMatching,
+} from './tool-schemas';
 import { executeTool } from './tool-executor';
 import { loadConversationHistory, getRecommendedOptions } from './chat-compaction';
 import type { PermissionMode, PermissionRule, TerminalCommandPolicy } from '@e/shared';
@@ -360,7 +368,10 @@ export function createBedrockStreamV2(opts: BedrockStreamOptions): ReadableStrea
               }
 
               // Check if approval needed (either rule says 'ask' or legacy check)
-              if (decision === 'ask' || (decision === 'default' && requiresApproval(content.name))) {
+              if (
+                decision === 'ask' ||
+                (decision === 'default' && requiresApproval(content.name))
+              ) {
                 controller.enqueue(
                   encoder.encode(
                     `data: ${JSON.stringify({

@@ -288,7 +288,12 @@ export function requiresApproval(toolName: string): boolean {
  * Enhanced approval check that evaluates per-tool permission rules.
  * Returns 'allow' | 'deny' | 'ask' based on rules + permission mode + terminal policy.
  */
-export { shouldRequireApproval, loadPermissionRules, loadTerminalCommandPolicy, extractToolInputForMatching } from './permission-rules';
+export {
+  shouldRequireApproval,
+  loadPermissionRules,
+  loadTerminalCommandPolicy,
+  extractToolInputForMatching,
+} from './permission-rules';
 
 /**
  * Get tools filtered by allowed/disallowed lists

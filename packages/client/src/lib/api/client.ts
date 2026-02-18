@@ -1416,8 +1416,7 @@ export const api = {
 
   // --- Agent Profiles ---
   profiles: {
-    list: () =>
-      request<{ ok: boolean; data: import('@e/shared').AgentProfile[] }>('/profiles'),
+    list: () => request<{ ok: boolean; data: import('@e/shared').AgentProfile[] }>('/profiles'),
     get: (id: string) =>
       request<{ ok: boolean; data: import('@e/shared').AgentProfile }>(`/profiles/${id}`),
     create: (body: import('@e/shared').AgentProfileCreateInput) =>
@@ -1430,8 +1429,7 @@ export const api = {
         method: 'PATCH',
         body: JSON.stringify(body),
       }),
-    delete: (id: string) =>
-      request<{ ok: boolean }>(`/profiles/${id}`, { method: 'DELETE' }),
+    delete: (id: string) => request<{ ok: boolean }>(`/profiles/${id}`, { method: 'DELETE' }),
   },
 
   // --- Daily Digest ---
@@ -1522,8 +1520,7 @@ export const api = {
         method: 'PATCH',
         body: JSON.stringify(body),
       }),
-    delete: (id: string) =>
-      request<{ ok: boolean }>(`/artifacts/${id}`, { method: 'DELETE' }),
+    delete: (id: string) => request<{ ok: boolean }>(`/artifacts/${id}`, { method: 'DELETE' }),
     pin: (id: string, pinned: boolean) =>
       request<{ ok: boolean; data: import('@e/shared').Artifact }>(`/artifacts/${id}`, {
         method: 'PATCH',

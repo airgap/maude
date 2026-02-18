@@ -65,8 +65,7 @@ describe('listOllamaModels', () => {
   });
 
   test('returns empty array when response has no models field', async () => {
-    globalThis.fetch = (async () =>
-      new Response(JSON.stringify({}), { status: 200 })) as any;
+    globalThis.fetch = (async () => new Response(JSON.stringify({}), { status: 200 })) as any;
 
     const models = await listOllamaModels();
     expect(models).toEqual([]);
@@ -144,7 +143,12 @@ describe('createOllamaStream', () => {
     const chunks = [
       JSON.stringify({ message: { content: 'Hello' }, done: false }),
       JSON.stringify({ message: { content: ' world' }, done: false }),
-      JSON.stringify({ message: { content: '' }, done: true, prompt_eval_count: 10, eval_count: 5 }),
+      JSON.stringify({
+        message: { content: '' },
+        done: true,
+        prompt_eval_count: 10,
+        eval_count: 5,
+      }),
     ];
     const body = chunks.join('\n') + '\n';
 

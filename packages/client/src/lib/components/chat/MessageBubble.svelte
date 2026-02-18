@@ -7,6 +7,7 @@
   import AgentGroupStatic from './AgentGroupStatic.svelte';
   import MessageAnimation from './MessageAnimation.svelte';
   import { renderMarkdown } from '$lib/utils/markdown';
+  import ProseBlock from './ProseBlock.svelte';
   import ConversationBranchButton from './ConversationBranchButton.svelte';
   import { ttsStore } from '$lib/stores/tts.svelte';
   import { uiStore } from '$lib/stores/ui.svelte';
@@ -14,6 +15,9 @@
   import ReplayModal from './ReplayModal.svelte';
   import ArtifactCard from './ArtifactCard.svelte';
   import { artifactsStore } from '$lib/stores/artifacts.svelte';
+  import ContextMenu from '$lib/components/ui/ContextMenu.svelte';
+  import type { ContextMenuItem } from '$lib/components/ui/ContextMenu.svelte';
+  import Tooltip from '$lib/components/ui/Tooltip.svelte';
 
   let { message, conversationId, onEdit, onDelete, onFork } = $props<{
     message: Message;
@@ -43,9 +47,7 @@
   );
 
   /** The nudge text content */
-  let nudgeText = $derived(
-    isNudge ? ((message.content as any[])[0]?.text as string) ?? '' : '',
-  );
+  let nudgeText = $derived(isNudge ? (((message.content as any[])[0]?.text as string) ?? '') : '');
 
   function startEdit() {
     editText = getTextContent();
@@ -96,7 +98,7 @@
   // ── Replay state ──
   let showReplay = $state(false);
 
-  // ── Context menu state ──
+  // ── Context menu ──
   let showContextMenu = $state(false);
   let contextMenuX = $state(0);
   let contextMenuY = $state(0);
@@ -108,24 +110,66 @@
     showContextMenu = true;
   }
 
-  function closeContextMenu() {
-    showContextMenu = false;
+  const isMac = typeof navigator !== 'undefined' && navigator.platform.includes('Mac');
+
+  function copyMessageText() {
+    const text = getTextContent();
+    if (text) navigator.clipboard.writeText(text);
   }
 
-  function contextEdit() {
-    closeContextMenu();
-    startEdit();
+  function copyMessageHtml() {
+    const text = getTextContent();
+    if (!text) return;
+    // Copy as markdown
+    navigator.clipboard.writeText(text);
+    uiStore.toast('Copied as markdown', 'success');
   }
 
-  function contextFork() {
-    closeContextMenu();
-    onFork?.(message.id);
-  }
-
-  function contextDelete() {
-    closeContextMenu();
-    onDelete?.(message.id);
-  }
+  let contextMenuItems = $derived<ContextMenuItem[]>([
+    {
+      label: 'Copy Message',
+      shortcut: isMac ? '⌘C' : 'Ctrl+C',
+      icon: `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>`,
+      action: copyMessageText,
+    },
+    {
+      label: 'Copy as Markdown',
+      icon: `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>`,
+      action: copyMessageHtml,
+    },
+    { kind: 'separator' },
+    {
+      label: 'Edit',
+      shortcut: 'E',
+      icon: `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>`,
+      action: startEdit,
+    },
+    {
+      label: 'Fork from here',
+      shortcut: 'F',
+      icon: `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="6" y1="3" x2="6" y2="15"/><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M18 9a9 9 0 0 1-9 9"/></svg>`,
+      action: () => onFork?.(message.id),
+    },
+    ...(message.role === 'assistant'
+      ? [
+          {
+            label: restoringSnapshot ? 'Restoring…' : 'Restore Snapshot',
+            shortcut: 'R',
+            disabled: restoringSnapshot,
+            icon: `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>`,
+            action: handleRestore,
+          } as ContextMenuItem,
+        ]
+      : []),
+    { kind: 'separator' },
+    {
+      label: 'Delete',
+      shortcut: isMac ? '⌫' : 'Del',
+      danger: true,
+      icon: `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg>`,
+      action: () => onDelete?.(message.id),
+    },
+  ]);
 
   // ── Markdown rendering ──
   let renderedHtml = $state('');
@@ -228,17 +272,16 @@
   );
 </script>
 
-<!-- Close context menu on any click outside -->
+<!-- Shared context menu (keyboard-navigable, smart-positioned) -->
 {#if showContextMenu}
-  <!-- svelte-ignore a11y_no_static_element_interactions -->
-  <div
-    class="context-backdrop"
-    onclick={closeContextMenu}
-    oncontextmenu={(e) => {
-      e.preventDefault();
-      closeContextMenu();
+  <ContextMenu
+    items={contextMenuItems}
+    x={contextMenuX}
+    y={contextMenuY}
+    onClose={() => {
+      showContextMenu = false;
     }}
-  ></div>
+  />
 {/if}
 
 {#snippet messageHeader()}
@@ -252,45 +295,27 @@
     </span>
     {#if !editing}
       <div class="message-actions">
-        <button class="action-btn" title="Edit" onclick={() => startEdit()}>
-          <svg
-            width="12"
-            height="12"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-          >
-            <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7" /><path
-              d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"
-            />
-          </svg>
-        </button>
-        <button class="action-btn" title="Fork from here" onclick={() => onFork?.(message.id)}>
-          <svg
-            width="12"
-            height="12"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-          >
-            <line x1="6" y1="3" x2="6" y2="15" /><circle cx="18" cy="6" r="3" /><circle
-              cx="6"
-              cy="18"
-              r="3"
-            /><path d="M18 9a9 9 0 0 1-9 9" />
-          </svg>
-        </button>
-        {#if conversationId}
-          <ConversationBranchButton {conversationId} messageId={message.id} role={message.role} />
-        {/if}
-        {#if message.role === 'assistant'}
+        <Tooltip content="Edit message" shortcut="E" placement="bottom">
+          <button class="action-btn" aria-label="Edit" onclick={() => startEdit()}>
+            <svg
+              width="12"
+              height="12"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+            >
+              <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7" /><path
+                d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"
+              />
+            </svg>
+          </button>
+        </Tooltip>
+        <Tooltip content="Fork from here" shortcut="F" placement="bottom">
           <button
-            class="action-btn action-restore"
-            title={restoringSnapshot ? 'Restoring...' : 'Restore to before this message'}
-            onclick={handleRestore}
-            disabled={restoringSnapshot}
+            class="action-btn"
+            aria-label="Fork from here"
+            onclick={() => onFork?.(message.id)}
           >
             <svg
               width="12"
@@ -300,46 +325,89 @@
               stroke="currentColor"
               stroke-width="2"
             >
-              <polyline points="1 4 1 10 7 10"></polyline>
-              <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"></path>
+              <line x1="6" y1="3" x2="6" y2="15" /><circle cx="18" cy="6" r="3" /><circle
+                cx="6"
+                cy="18"
+                r="3"
+              /><path d="M18 9a9 9 0 0 1-9 9" />
             </svg>
           </button>
-          <button
-            class="btn-icon"
-            class:active={ttsStore.currentId === message.id}
-            onclick={() => {
-              const text = message.content
-                .filter((b: any) => b.type === 'text')
-                .map((b: any) => b.text)
-                .join(' ');
-              ttsStore.toggle(text, message.id);
-            }}
-            title={ttsStore.currentId === message.id ? 'Stop reading' : 'Read aloud'}
+        </Tooltip>
+        {#if conversationId}
+          <ConversationBranchButton {conversationId} messageId={message.id} role={message.role} />
+        {/if}
+        {#if message.role === 'assistant'}
+          <Tooltip
+            content={restoringSnapshot ? 'Restoring…' : 'Restore snapshot'}
+            shortcut="R"
+            placement="bottom"
           >
-            {ttsStore.currentId === message.id ? '⏹' : '🔊'}
-          </button>
-          {#if conversationId}
-            <button class="btn-icon" onclick={() => (showReplay = true)} title="Replay session"
-              >▶</button
+            <button
+              class="action-btn action-restore"
+              aria-label={restoringSnapshot ? 'Restoring...' : 'Restore snapshot'}
+              onclick={handleRestore}
+              disabled={restoringSnapshot}
             >
+              <svg
+                width="12"
+                height="12"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+              >
+                <polyline points="1 4 1 10 7 10"></polyline>
+                <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"></path>
+              </svg>
+            </button>
+          </Tooltip>
+          <Tooltip
+            content={ttsStore.currentId === message.id ? 'Stop reading' : 'Read aloud'}
+            placement="bottom"
+          >
+            <button
+              class="btn-icon"
+              class:active={ttsStore.currentId === message.id}
+              aria-label={ttsStore.currentId === message.id ? 'Stop reading' : 'Read aloud'}
+              onclick={() => {
+                const text = message.content
+                  .filter((b: any) => b.type === 'text')
+                  .map((b: any) => b.text)
+                  .join(' ');
+                ttsStore.toggle(text, message.id);
+              }}
+            >
+              {ttsStore.currentId === message.id ? '⏹' : '🔊'}
+            </button>
+          </Tooltip>
+          {#if conversationId}
+            <Tooltip content="Replay session" placement="bottom">
+              <button
+                class="btn-icon"
+                aria-label="Replay session"
+                onclick={() => (showReplay = true)}>▶</button
+              >
+            </Tooltip>
           {/if}
         {/if}
-        <button
-          class="action-btn action-delete"
-          title="Delete"
-          onclick={() => onDelete?.(message.id)}
-        >
-          <svg
-            width="12"
-            height="12"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
+        <Tooltip content="Delete message" placement="bottom">
+          <button
+            class="action-btn action-delete"
+            aria-label="Delete message"
+            onclick={() => onDelete?.(message.id)}
           >
-            <path d="M18 6L6 18M6 6l12 12" />
-          </svg>
-        </button>
+            <svg
+              width="12"
+              height="12"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+            >
+              <path d="M18 6L6 18M6 6l12 12" />
+            </svg>
+          </button>
+        </Tooltip>
       </div>
     {/if}
   </div>
@@ -374,72 +442,29 @@
   </div>
 {/snippet}
 
-{#snippet contextMenu()}
-  {#if showContextMenu}
-    <div class="context-menu" style="left: {contextMenuX}px; top: {contextMenuY}px;">
-      <button class="context-item" onclick={contextEdit}>
-        <svg
-          width="12"
-          height="12"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="2"
-        >
-          <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7" /><path
-            d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"
-          />
-        </svg>
-        Edit
-      </button>
-      <button class="context-item" onclick={contextFork}>
-        <svg
-          width="12"
-          height="12"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="2"
-        >
-          <line x1="6" y1="3" x2="6" y2="15" /><circle cx="18" cy="6" r="3" /><circle
-            cx="6"
-            cy="18"
-            r="3"
-          /><path d="M18 9a9 9 0 0 1-9 9" />
-        </svg>
-        Fork from here
-      </button>
-      <div class="context-divider"></div>
-      <button class="context-item context-item-danger" onclick={contextDelete}>
-        <svg
-          width="12"
-          height="12"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="2"
-        >
-          <path
-            d="M3 6h18M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"
-          />
-        </svg>
-        Delete
-      </button>
-    </div>
-  {/if}
-{/snippet}
-
 {#if isNudge}
   <!-- Nudge messages rendered distinctly inline -->
   <div class="nudge-bubble">
     <span class="nudge-icon">
-      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <svg
+        width="11"
+        height="11"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+      >
         <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
       </svg>
     </span>
     <span class="nudge-label-tag">Nudge</span>
     <span class="nudge-text">{nudgeText}</span>
-    <span class="nudge-time">{new Date(message.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+    <span class="nudge-time"
+      >{new Date(message.timestamp).toLocaleTimeString([], {
+        hour: '2-digit',
+        minute: '2-digit',
+      })}</span
+    >
   </div>
 {:else if message.role === 'assistant'}
   <MessageAnimation>
@@ -470,7 +495,7 @@
               {:else if entry.block.type === 'text' && !entry.block.parentToolUseId}
                 {@const html = renderedTextBlocks.get(entry.index)}
                 {#if html}
-                  <div class="prose">{@html html}</div>
+                  <ProseBlock {html} />
                 {/if}
               {:else if entry.block.type === 'thinking' && settingsStore.showThinkingBlocks}
                 <ThinkingBlock content={entry.block.thinking} />
@@ -515,13 +540,11 @@
       {#if editing}
         {@render editUI()}
       {:else if renderedHtml}
-        <div class="prose">{@html renderedHtml}</div>
+        <ProseBlock html={renderedHtml} />
       {/if}
     </div>
   </div>
 {/if}
-
-{@render contextMenu()}
 
 {#if showReplay && conversationId}
   <ReplayModal {conversationId} onClose={() => (showReplay = false)} />
@@ -811,143 +834,12 @@
     cursor: not-allowed;
   }
 
-  /* ── Context menu ── */
-
-  .context-backdrop {
-    position: fixed;
-    inset: 0;
-    z-index: 999;
-  }
-
-  .context-menu {
-    position: fixed;
-    z-index: 1000;
-    min-width: 160px;
-    background: var(--bg-elevated);
-    border: 1px solid var(--border-primary);
-    border-radius: var(--radius);
-    padding: 4px;
-    box-shadow: var(--shadow-lg, 0 8px 24px rgba(0, 0, 0, 0.3));
-    animation: fadeIn 0.1s linear;
-  }
-
-  .context-item {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    width: 100%;
-    padding: 6px 10px;
-    font-size: 12px;
-    font-weight: 500;
-    color: var(--text-secondary);
-    background: transparent;
-    border: none;
-    border-radius: var(--radius-sm);
-    cursor: pointer;
-    transition: all var(--transition);
-    text-align: left;
-  }
-  .context-item:hover {
-    background: var(--bg-hover);
-    color: var(--text-primary);
-  }
-  .context-item-danger:hover {
-    color: var(--accent-error);
-  }
-
-  .context-divider {
-    height: 1px;
-    background: var(--border-secondary);
-    margin: 4px 6px;
-  }
-
   /* ── Body & prose ── */
 
   .message-body {
     display: flex;
     flex-direction: column;
     gap: 12px;
-  }
-
-  .prose {
-    line-height: 1.7;
-    color: var(--text-primary);
-    font-family: var(--font-family-sans);
-    font-size: var(--font-size-sans);
-    font-weight: 500;
-  }
-
-  .prose :global(p) {
-    margin-bottom: 10px;
-  }
-  .prose :global(p:last-child) {
-    margin-bottom: 0;
-  }
-  .prose :global(ul),
-  .prose :global(ol) {
-    padding-left: 20px;
-    margin-bottom: 10px;
-  }
-  .prose :global(li) {
-    margin-bottom: 4px;
-  }
-  .prose :global(h1),
-  .prose :global(h2),
-  .prose :global(h3) {
-    margin: 20px 0 10px;
-    font-family: var(--font-family-sans);
-    color: var(--accent-primary);
-    letter-spacing: var(--ht-label-spacing);
-    text-transform: var(--ht-label-transform);
-  }
-  .prose :global(h1) {
-    font-size: 1.4em;
-    font-weight: var(--ht-prose-heading-weight);
-  }
-  .prose :global(h2) {
-    font-size: 1.2em;
-    font-weight: var(--ht-prose-heading-weight);
-  }
-  .prose :global(h3) {
-    font-size: 1.05em;
-    font-weight: var(--ht-prose-heading-weight);
-  }
-  .prose :global(blockquote) {
-    border-left: 2px solid var(--accent-primary);
-    padding-left: 14px;
-    color: var(--text-secondary);
-    margin: 10px 0;
-    font-style: normal;
-  }
-  .prose :global(table) {
-    border-collapse: collapse;
-    width: 100%;
-    margin: 10px 0;
-  }
-  .prose :global(th),
-  .prose :global(td) {
-    border: 1px solid var(--border-primary);
-    padding: 8px 14px;
-    text-align: left;
-  }
-  .prose :global(th) {
-    background: var(--bg-tertiary);
-    font-weight: 700;
-    text-transform: var(--ht-label-transform);
-    letter-spacing: var(--ht-label-spacing);
-    font-size: 12px;
-  }
-  .prose :global(hr) {
-    border: none;
-    border-top: 1px solid var(--border-primary);
-    margin: 20px 0;
-  }
-  .prose :global(strong) {
-    font-weight: 700;
-    color: var(--accent-primary);
-  }
-  .prose :global(em) {
-    color: var(--text-secondary);
   }
 
   /* ── Artifact cards in message body ── */

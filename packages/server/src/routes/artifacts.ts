@@ -60,7 +60,10 @@ app.post('/', async (c) => {
   const { conversationId, messageId, type, title, content, metadata } = body;
 
   if (!conversationId || !type || !title || content === undefined) {
-    return c.json({ ok: false, error: 'conversationId, type, title, and content are required' }, 400);
+    return c.json(
+      { ok: false, error: 'conversationId, type, title, and content are required' },
+      400,
+    );
   }
 
   const db = getDb();

@@ -90,8 +90,8 @@ const MAX_OUTPUT_TOKENS: Record<string, number> = {
 };
 
 // Mirrors Claude Code's compaction constants exactly
-const OUTPUT_TOKEN_CAP = 20000;   // QE1 — cap on the output-token reserve
-const SAFETY_BUFFER    = 13000;   // iSA — subtracted from effective window
+const OUTPUT_TOKEN_CAP = 20000; // QE1 — cap on the output-token reserve
+const SAFETY_BUFFER = 13000; // iSA — subtracted from effective window
 
 /**
  * Provider context window limits (in tokens) — kept for backwards compatibility
@@ -167,7 +167,9 @@ function getAnthropicAuth(): { token: string; type: 'api-key' | 'oauth' } | null
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (apiKey) return { token: apiKey, type: 'api-key' };
   try {
-    const creds = JSON.parse(readFileSync(join(homedir(), '.claude', '.credentials.json'), 'utf-8'));
+    const creds = JSON.parse(
+      readFileSync(join(homedir(), '.claude', '.credentials.json'), 'utf-8'),
+    );
     const oauthToken = creds?.claudeAiOauth?.accessToken;
     if (oauthToken) return { token: oauthToken, type: 'oauth' };
   } catch {
@@ -211,7 +213,11 @@ export async function summarizeWithLLM(
   if (!auth || droppedMessages.length === 0) {
     // Fall back to rule-based
     const summary = buildRuleBasedSummary(droppedMessages);
-    return { summaryText: summary, summaryMessage: buildSummaryMessage(summary, false), usedLLM: false };
+    return {
+      summaryText: summary,
+      summaryMessage: buildSummaryMessage(summary, false),
+      usedLLM: false,
+    };
   }
 
   try {
@@ -221,9 +227,7 @@ export async function summarizeWithLLM(
       role: m.role as 'user' | 'assistant',
       content: Array.isArray(m.content)
         ? m.content.map((block: any) =>
-            block.type === 'nudge'
-              ? { type: 'text', text: `[User nudge]: ${block.text}` }
-              : block,
+            block.type === 'nudge' ? { type: 'text', text: `[User nudge]: ${block.text}` } : block,
           )
         : [{ type: 'text', text: String(m.content) }],
     }));
@@ -260,7 +264,7 @@ export async function summarizeWithLLM(
       throw new Error(`API ${response.status}: ${await response.text().catch(() => '')}`);
     }
 
-    const result = await response.json() as any;
+    const result = (await response.json()) as any;
     let summaryText: string = result?.content?.[0]?.text || '';
 
     // Extract content from <summary>...</summary> tags if present
@@ -276,7 +280,11 @@ export async function summarizeWithLLM(
   } catch (err) {
     console.error('[compaction] LLM summarization failed, falling back to rule-based:', err);
     const summary = buildRuleBasedSummary(droppedMessages);
-    return { summaryText: summary, summaryMessage: buildSummaryMessage(summary, false), usedLLM: false };
+    return {
+      summaryText: summary,
+      summaryMessage: buildSummaryMessage(summary, false),
+      usedLLM: false,
+    };
   }
 }
 

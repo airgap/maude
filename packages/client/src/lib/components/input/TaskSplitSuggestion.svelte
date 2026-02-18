@@ -49,11 +49,7 @@
     <span class="task-badge">TASKS</span>
     <span class="task-count">Detected {tasks.length} tasks</span>
     <div class="task-actions">
-      <button
-        class="btn-create"
-        disabled={selectedCount === 0}
-        onclick={() => onConfirm(tasks)}
-      >
+      <button class="btn-create" disabled={selectedCount === 0} onclick={() => onConfirm(tasks)}>
         Create Stories
       </button>
       <button
@@ -69,11 +65,7 @@
   <div class="task-list">
     {#each tasks as task, i}
       <label class="task-item" class:deselected={!task.selected}>
-        <input
-          type="checkbox"
-          checked={task.selected}
-          onchange={() => onToggleTask(i)}
-        />
+        <input type="checkbox" checked={task.selected} onchange={() => onToggleTask(i)} />
         {#if editingIndex === i}
           <input
             class="task-edit-input"

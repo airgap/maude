@@ -37,7 +37,9 @@ export async function sendAndStream(conversationId: string, content: string): Pr
   // Auto-snapshot before agent runs (fire-and-forget), linked to the upcoming assistant message
   const wsPath = targetConversation.workspacePath;
   if (wsPath) {
-    api.git.snapshot(wsPath, conversationId, 'pre-agent', assistantMsgIdForSnapshot).catch(() => {});
+    api.git
+      .snapshot(wsPath, conversationId, 'pre-agent', assistantMsgIdForSnapshot)
+      .catch(() => {});
   }
 
   // Add user message to the target conversation

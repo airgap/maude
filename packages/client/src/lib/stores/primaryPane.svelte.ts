@@ -122,7 +122,9 @@ function createPrimaryPaneStore() {
       const pane = panes.find((p) => p.id === targetId);
       if (!pane) return;
 
-      const existing = pane.tabs.find((t) => t.kind !== 'diff' && t.kind !== 'file' && t.conversationId === conversationId);
+      const existing = pane.tabs.find(
+        (t) => t.kind !== 'diff' && t.kind !== 'file' && t.conversationId === conversationId,
+      );
       if (existing) {
         pane.activeTabId = existing.id;
       } else {
@@ -162,7 +164,12 @@ function createPrimaryPaneStore() {
 
       if (pane.tabs.length === 1) {
         // Keep at least one tab — replace with a blank chat tab
-        const blank: PrimaryTab = { id: uuid(), conversationId: null, title: 'New chat', kind: 'chat' };
+        const blank: PrimaryTab = {
+          id: uuid(),
+          conversationId: null,
+          title: 'New chat',
+          kind: 'chat',
+        };
         pane.tabs.splice(0, 1, blank);
         pane.activeTabId = blank.id;
       } else {

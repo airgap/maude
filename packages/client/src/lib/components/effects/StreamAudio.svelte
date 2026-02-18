@@ -182,7 +182,6 @@
       toolNames.clear();
     }
   });
-
 </script>
 
 <!-- No visual output; purely reactive audio side-effects -->

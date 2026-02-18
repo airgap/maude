@@ -56,7 +56,10 @@
       const latestLog = loopStore.log[loopStore.log.length - 1];
       if (latestLog) {
         // 'passed' or 'committed' actions indicate a story completed successfully
-        if (settingsStore.notifyOnCompletion && (latestLog.action === 'passed' || latestLog.action === 'committed')) {
+        if (
+          settingsStore.notifyOnCompletion &&
+          (latestLog.action === 'passed' || latestLog.action === 'committed')
+        ) {
           desktopNotifications.storyCompleted(latestLog.storyTitle || 'Story', {
             storyId: latestLog.storyId,
             loopId: loop.id,
@@ -77,14 +80,10 @@
       const newEntries = entries.slice(prevLogLength);
       for (const entry of newEntries) {
         if (entry.action === 'failed' && settingsStore.notifyOnFailure) {
-          desktopNotifications.storyFailed(
-            entry.storyTitle || 'Story',
-            entry.detail || undefined,
-            {
-              storyId: entry.storyId,
-              loopId: loopStore.activeLoop?.id,
-            },
-          );
+          desktopNotifications.storyFailed(entry.storyTitle || 'Story', entry.detail || undefined, {
+            storyId: entry.storyId,
+            loopId: loopStore.activeLoop?.id,
+          });
         }
       }
       prevLogLength = entries.length;

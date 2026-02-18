@@ -5393,9 +5393,7 @@ describe('PRD Routes', () => {
         storyPoints: 5,
         confidence: 'high',
         confidenceScore: 85,
-        factors: [
-          { factor: 'OAuth complexity', impact: 'increases', weight: 'moderate' },
-        ],
+        factors: [{ factor: 'OAuth complexity', impact: 'increases', weight: 'moderate' }],
         reasoning: 'OAuth integration is moderately complex',
       };
 

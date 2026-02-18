@@ -10,7 +10,12 @@
  * Permission is requested gracefully on first use — never on page load.
  */
 
-export type NotifyEvent = 'story_completed' | 'story_failed' | 'approval_needed' | 'loop_completed' | 'loop_failed';
+export type NotifyEvent =
+  | 'story_completed'
+  | 'story_failed'
+  | 'approval_needed'
+  | 'loop_completed'
+  | 'loop_failed';
 
 export interface NotifyOptions {
   title: string;
@@ -160,7 +165,9 @@ class DesktopNotificationService {
   approvalNeeded(toolName?: string, data?: NotifyOptions['data']) {
     return this.notify({
       title: 'Approval needed',
-      body: toolName ? `Tool "${toolName}" is waiting for your approval` : 'A tool is waiting for your approval',
+      body: toolName
+        ? `Tool "${toolName}" is waiting for your approval`
+        : 'A tool is waiting for your approval',
       event: 'approval_needed',
       data,
     });

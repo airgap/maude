@@ -1,4 +1,11 @@
-import type { ThemeId, CliProvider, Keybinding, PermissionMode, TerminalCommandPolicy, PermissionRule } from '@e/shared';
+import type {
+  ThemeId,
+  CliProvider,
+  Keybinding,
+  PermissionMode,
+  TerminalCommandPolicy,
+  PermissionRule,
+} from '@e/shared';
 import { convertVsCodeSnippets, type ConvertedSnippet } from '$lib/utils/vscode-snippet-converter';
 import { convertVsCodeTheme, type ConvertedTheme } from '$lib/utils/vscode-theme-converter';
 import { findHypertheme, getDefaultHypertheme } from '$lib/config/hyperthemes';
@@ -126,7 +133,12 @@ function createSettingsStore() {
   let state = $state<SettingsState>(loadFromStorage());
 
   // Settings the server needs to know about (used for CLI process spawning)
-  const SERVER_SYNCED_KEYS: (keyof SettingsState)[] = ['cliProvider', 'autoCompaction', 'permissionMode', 'terminalCommandPolicy'];
+  const SERVER_SYNCED_KEYS: (keyof SettingsState)[] = [
+    'cliProvider',
+    'autoCompaction',
+    'permissionMode',
+    'terminalCommandPolicy',
+  ];
 
   function persist() {
     if (typeof window === 'undefined') return;

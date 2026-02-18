@@ -164,7 +164,13 @@ describe('Project Memory Routes', () => {
 
   describe('GET /context — format for system prompt', () => {
     test('returns formatted context', async () => {
-      insertMemory({ id: 'mem-1', workspace_path: '/test', category: 'convention', key: 'indent', content: 'Use 2 spaces' });
+      insertMemory({
+        id: 'mem-1',
+        workspace_path: '/test',
+        category: 'convention',
+        key: 'indent',
+        content: 'Use 2 spaces',
+      });
 
       const res = await app.request('/context?workspacePath=/test');
       const json = await res.json();
@@ -200,8 +206,20 @@ describe('Project Memory Routes', () => {
     });
 
     test('groups memories by category with labels', async () => {
-      insertMemory({ id: 'mem-1', workspace_path: '/test', category: 'convention', key: 'indent', content: 'Use 2 spaces' });
-      insertMemory({ id: 'mem-2', workspace_path: '/test', category: 'decision', key: 'db', content: 'Use SQLite' });
+      insertMemory({
+        id: 'mem-1',
+        workspace_path: '/test',
+        category: 'convention',
+        key: 'indent',
+        content: 'Use 2 spaces',
+      });
+      insertMemory({
+        id: 'mem-2',
+        workspace_path: '/test',
+        category: 'decision',
+        key: 'db',
+        content: 'Use SQLite',
+      });
 
       const res = await app.request('/context?workspacePath=/test');
       const json = await res.json();
@@ -295,7 +313,9 @@ describe('Project Memory Routes', () => {
       expect(res.status).toBe(201);
       const json = await res.json();
 
-      const row = testDb.query('SELECT * FROM workspace_memories WHERE id = ?').get(json.data.id) as any;
+      const row = testDb
+        .query('SELECT * FROM workspace_memories WHERE id = ?')
+        .get(json.data.id) as any;
       expect(row.category).toBe('convention');
       expect(row.source).toBe('manual');
       expect(row.confidence).toBe(1.0);
@@ -317,7 +337,9 @@ describe('Project Memory Routes', () => {
       expect(res.status).toBe(201);
       const json = await res.json();
 
-      const row = testDb.query('SELECT * FROM workspace_memories WHERE id = ?').get(json.data.id) as any;
+      const row = testDb
+        .query('SELECT * FROM workspace_memories WHERE id = ?')
+        .get(json.data.id) as any;
       expect(row.category).toBe('decision');
       expect(row.source).toBe('auto');
       expect(row.confidence).toBe(0.7);
@@ -332,7 +354,9 @@ describe('Project Memory Routes', () => {
         headers: { 'Content-Type': 'application/json' },
       });
 
-      const row = testDb.query('SELECT confidence FROM workspace_memories WHERE id = ?').get('mem-1') as any;
+      const row = testDb
+        .query('SELECT confidence FROM workspace_memories WHERE id = ?')
+        .get('mem-1') as any;
       expect(row.confidence).toBeLessThanOrEqual(1.0);
     });
   });
@@ -355,8 +379,18 @@ describe('Project Memory Routes', () => {
     });
 
     test('searches by key', async () => {
-      insertMemory({ id: 'mem-1', workspace_path: '/test', key: 'indent-style', content: 'Use 2 spaces' });
-      insertMemory({ id: 'mem-2', workspace_path: '/test', key: 'db-choice', content: 'Use SQLite' });
+      insertMemory({
+        id: 'mem-1',
+        workspace_path: '/test',
+        key: 'indent-style',
+        content: 'Use 2 spaces',
+      });
+      insertMemory({
+        id: 'mem-2',
+        workspace_path: '/test',
+        key: 'db-choice',
+        content: 'Use SQLite',
+      });
 
       const res = await app.request('/search/query?workspacePath=/test&q=indent');
       const json = await res.json();
@@ -366,8 +400,18 @@ describe('Project Memory Routes', () => {
     });
 
     test('searches by content', async () => {
-      insertMemory({ id: 'mem-1', workspace_path: '/test', key: 'style', content: 'Use 2 spaces for indentation' });
-      insertMemory({ id: 'mem-2', workspace_path: '/test', key: 'db', content: 'Use SQLite database' });
+      insertMemory({
+        id: 'mem-1',
+        workspace_path: '/test',
+        key: 'style',
+        content: 'Use 2 spaces for indentation',
+      });
+      insertMemory({
+        id: 'mem-2',
+        workspace_path: '/test',
+        key: 'db',
+        content: 'Use SQLite database',
+      });
 
       const res = await app.request('/search/query?workspacePath=/test&q=SQLite');
       const json = await res.json();
@@ -376,7 +420,12 @@ describe('Project Memory Routes', () => {
     });
 
     test('returns empty array when no matches', async () => {
-      insertMemory({ id: 'mem-1', workspace_path: '/test', key: 'indent', content: 'Use 2 spaces' });
+      insertMemory({
+        id: 'mem-1',
+        workspace_path: '/test',
+        key: 'indent',
+        content: 'Use 2 spaces',
+      });
 
       const res = await app.request('/search/query?workspacePath=/test&q=nonexistent');
       const json = await res.json();
@@ -384,8 +433,18 @@ describe('Project Memory Routes', () => {
     });
 
     test('only searches within the given workspace', async () => {
-      insertMemory({ id: 'mem-1', workspace_path: '/project-a', key: 'indent', content: 'Use tabs' });
-      insertMemory({ id: 'mem-2', workspace_path: '/project-b', key: 'indent', content: 'Use spaces' });
+      insertMemory({
+        id: 'mem-1',
+        workspace_path: '/project-a',
+        key: 'indent',
+        content: 'Use tabs',
+      });
+      insertMemory({
+        id: 'mem-2',
+        workspace_path: '/project-b',
+        key: 'indent',
+        content: 'Use spaces',
+      });
 
       const res = await app.request('/search/query?workspacePath=/project-a&q=indent');
       const json = await res.json();
@@ -407,7 +466,13 @@ describe('Project Memory Routes', () => {
     });
 
     test('returns a single memory', async () => {
-      insertMemory({ id: 'mem-1', workspace_path: '/test', category: 'convention', key: 'indent', content: 'Use 2 spaces' });
+      insertMemory({
+        id: 'mem-1',
+        workspace_path: '/test',
+        category: 'convention',
+        key: 'indent',
+        content: 'Use 2 spaces',
+      });
 
       const res = await app.request('/mem-1');
       expect(res.status).toBe(200);
@@ -461,7 +526,9 @@ describe('Project Memory Routes', () => {
       const json = await res.json();
       expect(json.ok).toBe(true);
 
-      const row = testDb.query('SELECT content FROM workspace_memories WHERE id = ?').get('mem-1') as any;
+      const row = testDb
+        .query('SELECT content FROM workspace_memories WHERE id = ?')
+        .get('mem-1') as any;
       expect(row.content).toBe('New content');
     });
 
@@ -474,7 +541,9 @@ describe('Project Memory Routes', () => {
         headers: { 'Content-Type': 'application/json' },
       });
 
-      const row = testDb.query('SELECT category FROM workspace_memories WHERE id = ?').get('mem-1') as any;
+      const row = testDb
+        .query('SELECT category FROM workspace_memories WHERE id = ?')
+        .get('mem-1') as any;
       expect(row.category).toBe('decision');
     });
 
@@ -487,7 +556,9 @@ describe('Project Memory Routes', () => {
         headers: { 'Content-Type': 'application/json' },
       });
 
-      const row = testDb.query('SELECT key FROM workspace_memories WHERE id = ?').get('mem-1') as any;
+      const row = testDb
+        .query('SELECT key FROM workspace_memories WHERE id = ?')
+        .get('mem-1') as any;
       expect(row.key).toBe('new-key');
     });
 
@@ -500,7 +571,9 @@ describe('Project Memory Routes', () => {
         headers: { 'Content-Type': 'application/json' },
       });
 
-      const row = testDb.query('SELECT confidence FROM workspace_memories WHERE id = ?').get('mem-1') as any;
+      const row = testDb
+        .query('SELECT confidence FROM workspace_memories WHERE id = ?')
+        .get('mem-1') as any;
       expect(row.confidence).toBe(0.9);
     });
 
@@ -513,7 +586,9 @@ describe('Project Memory Routes', () => {
         headers: { 'Content-Type': 'application/json' },
       });
 
-      const row = testDb.query('SELECT updated_at FROM workspace_memories WHERE id = ?').get('mem-1') as any;
+      const row = testDb
+        .query('SELECT updated_at FROM workspace_memories WHERE id = ?')
+        .get('mem-1') as any;
       expect(row.updated_at).toBeGreaterThan(1000);
     });
   });
@@ -569,9 +644,7 @@ describe('Project Memory Routes', () => {
         method: 'POST',
         body: JSON.stringify({
           workspacePath: '/test',
-          messages: [
-            { role: 'user', content: 'We always use single quotes in our codebase' },
-          ],
+          messages: [{ role: 'user', content: 'We always use single quotes in our codebase' }],
         }),
         headers: { 'Content-Type': 'application/json' },
       });
@@ -614,9 +687,7 @@ describe('Project Memory Routes', () => {
         method: 'POST',
         body: JSON.stringify({
           workspacePath: '/test',
-          messages: [
-            { role: 'user', content: 'We prefer use single quotes for strings' },
-          ],
+          messages: [{ role: 'user', content: 'We prefer use single quotes for strings' }],
         }),
         headers: { 'Content-Type': 'application/json' },
       });
@@ -624,7 +695,9 @@ describe('Project Memory Routes', () => {
       expect(json.ok).toBe(true);
 
       // The existing memory should have its times_seen incremented
-      const row = testDb.query('SELECT times_seen, confidence FROM workspace_memories WHERE id = ?').get('mem-1') as any;
+      const row = testDb
+        .query('SELECT times_seen, confidence FROM workspace_memories WHERE id = ?')
+        .get('mem-1') as any;
       // It may or may not match the exact key, but the extract endpoint completes without error
       expect(row).toBeDefined();
     });
@@ -635,7 +708,10 @@ describe('Project Memory Routes', () => {
         body: JSON.stringify({
           workspacePath: '/test',
           messages: [
-            { role: 'assistant', content: 'We decided to migrate to PostgreSQL for better scalability' },
+            {
+              role: 'assistant',
+              content: 'We decided to migrate to PostgreSQL for better scalability',
+            },
           ],
         }),
         headers: { 'Content-Type': 'application/json' },

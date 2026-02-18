@@ -16,18 +16,18 @@
  */
 
 export type ChirpEvent =
-  | 'message_start'       // New response begins
-  | 'text_start'          // Text block starts
-  | 'text_delta'          // Text streaming (throttled)
-  | 'thinking_start'      // Thinking block
-  | 'tool_start'          // Tool invocation
-  | 'tool_result_ok'      // Tool success
-  | 'tool_result_error'   // Tool error
-  | 'tool_approval'       // Awaiting user approval
-  | 'user_question'       // User question prompt
-  | 'message_stop'        // Response complete
-  | 'error'               // Stream error
-  | 'cancelled';          // User cancelled
+  | 'message_start' // New response begins
+  | 'text_start' // Text block starts
+  | 'text_delta' // Text streaming (throttled)
+  | 'thinking_start' // Thinking block
+  | 'tool_start' // Tool invocation
+  | 'tool_result_ok' // Tool success
+  | 'tool_result_error' // Tool error
+  | 'tool_approval' // Awaiting user approval
+  | 'user_question' // User question prompt
+  | 'message_stop' // Response complete
+  | 'error' // Stream error
+  | 'cancelled'; // User cancelled
 
 // ---------------------------------------------------------------------------
 // Additive synthesis primitives
@@ -76,10 +76,10 @@ interface NoteSpec {
  * upper partials.
  */
 const MARIMBA: Overtone[] = [
-  { ratio: 1,    gain: 1.00, decay: 0.80 },
-  { ratio: 4,    gain: 0.35, decay: 0.18 },
-  { ratio: 10,   gain: 0.12, decay: 0.06 },
-  { ratio: 18,   gain: 0.05, decay: 0.03 },
+  { ratio: 1, gain: 1.0, decay: 0.8 },
+  { ratio: 4, gain: 0.35, decay: 0.18 },
+  { ratio: 10, gain: 0.12, decay: 0.06 },
+  { ratio: 18, gain: 0.05, decay: 0.03 },
 ];
 
 /**
@@ -89,10 +89,10 @@ const MARIMBA: Overtone[] = [
  * for brevity but the spectral shape is right.
  */
 const VIBRAPHONE: Overtone[] = [
-  { ratio: 1,    gain: 1.00, decay: 1.20 },
-  { ratio: 3.03, gain: 0.40, decay: 0.60 },  // slightly inharmonic — real vibes
-  { ratio: 5.95, gain: 0.18, decay: 0.30 },
-  { ratio: 8.60, gain: 0.08, decay: 0.14 },
+  { ratio: 1, gain: 1.0, decay: 1.2 },
+  { ratio: 3.03, gain: 0.4, decay: 0.6 }, // slightly inharmonic — real vibes
+  { ratio: 5.95, gain: 0.18, decay: 0.3 },
+  { ratio: 8.6, gain: 0.08, decay: 0.14 },
   { ratio: 12.3, gain: 0.04, decay: 0.07 },
 ];
 
@@ -101,9 +101,9 @@ const VIBRAPHONE: Overtone[] = [
  * very soft octave partial, very slow attack, long ring.
  */
 const BOWL: Overtone[] = [
-  { ratio: 1,    gain: 1.00, decay: 3.50 },
-  { ratio: 2.76, gain: 0.20, decay: 2.00 },  // inharmonic second partial
-  { ratio: 5.40, gain: 0.06, decay: 0.80 },
+  { ratio: 1, gain: 1.0, decay: 3.5 },
+  { ratio: 2.76, gain: 0.2, decay: 2.0 }, // inharmonic second partial
+  { ratio: 5.4, gain: 0.06, decay: 0.8 },
 ];
 
 /**
@@ -112,12 +112,12 @@ const BOWL: Overtone[] = [
  * with a cluster of inharmonic frequencies.
  */
 const PLATE: Overtone[] = [
-  { ratio: 1,    gain: 0.80, decay: 0.25 },
-  { ratio: 1.51, gain: 0.70, decay: 0.18 },
-  { ratio: 2.20, gain: 0.55, decay: 0.12 },
-  { ratio: 3.17, gain: 0.40, decay: 0.09 },
-  { ratio: 4.80, gain: 0.25, decay: 0.06 },
-  { ratio: 6.90, gain: 0.15, decay: 0.04 },
+  { ratio: 1, gain: 0.8, decay: 0.25 },
+  { ratio: 1.51, gain: 0.7, decay: 0.18 },
+  { ratio: 2.2, gain: 0.55, decay: 0.12 },
+  { ratio: 3.17, gain: 0.4, decay: 0.09 },
+  { ratio: 4.8, gain: 0.25, decay: 0.06 },
+  { ratio: 6.9, gain: 0.15, decay: 0.04 },
 ];
 
 /**
@@ -125,10 +125,10 @@ const PLATE: Overtone[] = [
  * Used for attention / approval chimes.
  */
 const BELL: Overtone[] = [
-  { ratio: 1,    gain: 1.00, decay: 2.50 },
-  { ratio: 2.76, gain: 0.60, decay: 1.80 },
-  { ratio: 5.40, gain: 0.25, decay: 1.00 },
-  { ratio: 8.93, gain: 0.12, decay: 0.50 },
+  { ratio: 1, gain: 1.0, decay: 2.5 },
+  { ratio: 2.76, gain: 0.6, decay: 1.8 },
+  { ratio: 5.4, gain: 0.25, decay: 1.0 },
+  { ratio: 8.93, gain: 0.12, decay: 0.5 },
   { ratio: 13.3, gain: 0.05, decay: 0.25 },
 ];
 
@@ -144,9 +144,18 @@ const BELL: Overtone[] = [
 //   start events → lower notes, completion → higher resolution, error → dissonant
 
 const NOTES = {
-  C4: 261.6, D4: 293.7, E4: 329.6, G4: 392.0, A4: 440.0,
-  C5: 523.3, D5: 587.3, E5: 659.3, G5: 784.0, A5: 880.0,
-  C6: 1046.5, E6: 1318.5,
+  C4: 261.6,
+  D4: 293.7,
+  E4: 329.6,
+  G4: 392.0,
+  A4: 440.0,
+  C5: 523.3,
+  D5: 587.3,
+  E5: 659.3,
+  G5: 784.0,
+  A5: 880.0,
+  C6: 1046.5,
+  E6: 1318.5,
   // Error note — B♭4, outside pentatonic, intentionally tense
   Bb4: 466.2,
   // Thinking — low G3
@@ -160,32 +169,47 @@ const NOTES = {
 const EVENT_NOTES: Record<ChirpEvent, NoteSpec | NoteSpec[]> = {
   // A single marimba strike on G4 — light, readying
   message_start: {
-    freq: NOTES.G4, partials: MARIMBA,
-    attack: 0.004, release: 0.08, gain: 0.32,
+    freq: NOTES.G4,
+    partials: MARIMBA,
+    attack: 0.004,
+    release: 0.08,
+    gain: 0.32,
   },
 
   // Soft vibraphone tap — E5, barely there
   text_start: {
-    freq: NOTES.E5, partials: VIBRAPHONE,
-    attack: 0.003, release: 0.06, gain: 0.18,
+    freq: NOTES.E5,
+    partials: VIBRAPHONE,
+    attack: 0.003,
+    release: 0.06,
+    gain: 0.18,
   },
 
   // text_delta handled by playBrush() — gain:0 sentinel so Record is complete
   text_delta: {
-    freq: NOTES.A5, partials: VIBRAPHONE,
-    attack: 0.002, release: 0.03, gain: 0.0,
+    freq: NOTES.A5,
+    partials: VIBRAPHONE,
+    attack: 0.002,
+    release: 0.03,
+    gain: 0.0,
   },
 
   // Singing bowl on G3 — low, contemplative
   thinking_start: {
-    freq: NOTES.G3, partials: BOWL,
-    attack: 0.06, release: 0.5, gain: 0.26,
+    freq: NOTES.G3,
+    partials: BOWL,
+    attack: 0.06,
+    release: 0.5,
+    gain: 0.26,
   },
 
   // tool events handled per-family in TOOL_NOTES — placeholder unused
   tool_start: {
-    freq: NOTES.D4, partials: VIBRAPHONE,
-    attack: 0.004, release: 0.07, gain: 0.20,
+    freq: NOTES.D4,
+    partials: VIBRAPHONE,
+    attack: 0.004,
+    release: 0.07,
+    gain: 0.2,
   },
 
   // Vibraphone major third — D5 + A5
@@ -196,40 +220,46 @@ const EVENT_NOTES: Record<ChirpEvent, NoteSpec | NoteSpec[]> = {
 
   // Plate strike on Bb4 — dissonant clang
   tool_result_error: {
-    freq: NOTES.Bb4, partials: PLATE,
-    attack: 0.003, release: 0.12, gain: 0.28,
+    freq: NOTES.Bb4,
+    partials: PLATE,
+    attack: 0.003,
+    release: 0.12,
+    gain: 0.28,
   },
 
   // Bell chord — C5 + E5 + G5 (major triad), sustained
   tool_approval: [
-    { freq: NOTES.C5, partials: BELL, attack: 0.008, release: 0.5,  gain: 0.28 },
-    { freq: NOTES.E5, partials: BELL, attack: 0.008, release: 0.5,  gain: 0.20 },
-    { freq: NOTES.G5, partials: BELL, attack: 0.008, release: 0.5,  gain: 0.14 },
+    { freq: NOTES.C5, partials: BELL, attack: 0.008, release: 0.5, gain: 0.28 },
+    { freq: NOTES.E5, partials: BELL, attack: 0.008, release: 0.5, gain: 0.2 },
+    { freq: NOTES.G5, partials: BELL, attack: 0.008, release: 0.5, gain: 0.14 },
   ],
 
   // user_question handled by playUserQuestion()
   user_question: {
-    freq: NOTES.E4, partials: MARIMBA,
-    attack: 0.005, release: 0.12, gain: 0.0,  // gain=0 sentinel — uses special handler
+    freq: NOTES.E4,
+    partials: MARIMBA,
+    attack: 0.005,
+    release: 0.12,
+    gain: 0.0, // gain=0 sentinel — uses special handler
   },
 
   // Marimba resolution — C5 + E5 + G5, warm landing
   message_stop: [
     { freq: NOTES.C5, partials: MARIMBA, attack: 0.006, release: 0.35, gain: 0.28 },
-    { freq: NOTES.E5, partials: MARIMBA, attack: 0.006, release: 0.35, gain: 0.20 },
+    { freq: NOTES.E5, partials: MARIMBA, attack: 0.006, release: 0.35, gain: 0.2 },
     { freq: NOTES.G5, partials: MARIMBA, attack: 0.006, release: 0.35, gain: 0.14 },
   ],
 
   // Descending plate hits — Bb4 then G3
   error: [
-    { freq: NOTES.Bb4, partials: PLATE, attack: 0.003, release: 0.18, gain: 0.30 },
-    { freq: NOTES.G3,  partials: PLATE, attack: 0.003, release: 0.18, gain: 0.20 },
+    { freq: NOTES.Bb4, partials: PLATE, attack: 0.003, release: 0.18, gain: 0.3 },
+    { freq: NOTES.G3, partials: PLATE, attack: 0.003, release: 0.18, gain: 0.2 },
   ],
 
   // Soft marimba descent — A4 → G4, gentle fade
   cancelled: [
-    { freq: NOTES.A4, partials: MARIMBA, attack: 0.006, release: 0.30, gain: 0.20 },
-    { freq: NOTES.G4, partials: MARIMBA, attack: 0.006, release: 0.40, gain: 0.14 },
+    { freq: NOTES.A4, partials: MARIMBA, attack: 0.006, release: 0.3, gain: 0.2 },
+    { freq: NOTES.G4, partials: MARIMBA, attack: 0.006, release: 0.4, gain: 0.14 },
   ],
 };
 
@@ -243,9 +273,16 @@ function toolFamily(name: string): ToolFamily {
   const n = name.toLowerCase();
   if (n === 'bash') return 'shell';
   if (n === 'read' || n === 'glob' || n === 'grep') return 'read';
-  if (n === 'write' || n === 'edit' || n === 'notebookedit' ||
-      n === 'str_replace_editor' || n === 'write_file' ||
-      n === 'edit_file' || n === 'create_file') return 'write';
+  if (
+    n === 'write' ||
+    n === 'edit' ||
+    n === 'notebookedit' ||
+    n === 'str_replace_editor' ||
+    n === 'write_file' ||
+    n === 'edit_file' ||
+    n === 'create_file'
+  )
+    return 'write';
   if (n === 'websearch' || n === 'webfetch') return 'search';
   if (n === 'task' || n.startsWith('mcp__')) return 'agent';
   return 'default';
@@ -253,14 +290,14 @@ function toolFamily(name: string): ToolFamily {
 
 interface ToolNotes {
   start: NoteSpec | NoteSpec[];
-  ok:    NoteSpec | NoteSpec[];
+  ok: NoteSpec | NoteSpec[];
 }
 
 const TOOL_NOTES: Record<ToolFamily, ToolNotes> = {
   // Shell — low marimba, grounded, decisive
   shell: {
-    start: { freq: NOTES.C4, partials: MARIMBA, attack: 0.004, release: 0.10, gain: 0.24 },
-    ok:    [
+    start: { freq: NOTES.C4, partials: MARIMBA, attack: 0.004, release: 0.1, gain: 0.24 },
+    ok: [
       { freq: NOTES.C4, partials: MARIMBA, attack: 0.004, release: 0.12, gain: 0.22 },
       { freq: NOTES.G4, partials: MARIMBA, attack: 0.004, release: 0.12, gain: 0.14 },
     ],
@@ -268,39 +305,39 @@ const TOOL_NOTES: Record<ToolFamily, ToolNotes> = {
   // Read — high vibraphone, light and airy
   read: {
     start: { freq: NOTES.A5, partials: VIBRAPHONE, attack: 0.003, release: 0.08, gain: 0.18 },
-    ok:    [
+    ok: [
       { freq: NOTES.E5, partials: VIBRAPHONE, attack: 0.004, release: 0.12, gain: 0.18 },
       { freq: NOTES.A5, partials: VIBRAPHONE, attack: 0.004, release: 0.12, gain: 0.12 },
     ],
   },
   // Write — mid marimba, weighted, solid
   write: {
-    start: { freq: NOTES.D4, partials: MARIMBA, attack: 0.005, release: 0.10, gain: 0.24 },
-    ok:    [
+    start: { freq: NOTES.D4, partials: MARIMBA, attack: 0.005, release: 0.1, gain: 0.24 },
+    ok: [
       { freq: NOTES.G4, partials: MARIMBA, attack: 0.005, release: 0.14, gain: 0.22 },
       { freq: NOTES.D5, partials: MARIMBA, attack: 0.005, release: 0.14, gain: 0.14 },
     ],
   },
   // Search — bowl sweep: low attack, singing
   search: {
-    start: { freq: NOTES.D5, partials: BOWL, attack: 0.02, release: 0.20, gain: 0.20 },
-    ok:    [
-      { freq: NOTES.G4, partials: VIBRAPHONE, attack: 0.005, release: 0.16, gain: 0.20 },
+    start: { freq: NOTES.D5, partials: BOWL, attack: 0.02, release: 0.2, gain: 0.2 },
+    ok: [
+      { freq: NOTES.G4, partials: VIBRAPHONE, attack: 0.005, release: 0.16, gain: 0.2 },
       { freq: NOTES.D5, partials: VIBRAPHONE, attack: 0.005, release: 0.16, gain: 0.12 },
     ],
   },
   // Agent — deep bell, resonant spawn
   agent: {
-    start: { freq: NOTES.C4, partials: BELL, attack: 0.015, release: 0.50, gain: 0.26 },
-    ok:    [
-      { freq: NOTES.G4, partials: BELL, attack: 0.010, release: 0.40, gain: 0.24 },
-      { freq: NOTES.C5, partials: BELL, attack: 0.010, release: 0.40, gain: 0.16 },
+    start: { freq: NOTES.C4, partials: BELL, attack: 0.015, release: 0.5, gain: 0.26 },
+    ok: [
+      { freq: NOTES.G4, partials: BELL, attack: 0.01, release: 0.4, gain: 0.24 },
+      { freq: NOTES.C5, partials: BELL, attack: 0.01, release: 0.4, gain: 0.16 },
     ],
   },
   // Default — vibraphone D4
   default: {
-    start: { freq: NOTES.D4, partials: VIBRAPHONE, attack: 0.004, release: 0.08, gain: 0.20 },
-    ok:    [
+    start: { freq: NOTES.D4, partials: VIBRAPHONE, attack: 0.004, release: 0.08, gain: 0.2 },
+    ok: [
       { freq: NOTES.D4, partials: VIBRAPHONE, attack: 0.004, release: 0.12, gain: 0.22 },
       { freq: NOTES.A4, partials: VIBRAPHONE, attack: 0.004, release: 0.12, gain: 0.14 },
     ],
@@ -318,9 +355,9 @@ const TOOL_NOTES: Record<ToolFamily, ToolNotes> = {
  * long glassy decay. Ethereal, delicate, perfectly clockwork.
  */
 const MUSIC_BOX: Overtone[] = [
-  { ratio: 1,    gain: 1.00, decay: 2.20 },
-  { ratio: 2.03, gain: 0.28, decay: 0.90 },  // slightly inharmonic 2nd
-  { ratio: 4.12, gain: 0.10, decay: 0.35 },
+  { ratio: 1, gain: 1.0, decay: 2.2 },
+  { ratio: 2.03, gain: 0.28, decay: 0.9 }, // slightly inharmonic 2nd
+  { ratio: 4.12, gain: 0.1, decay: 0.35 },
   { ratio: 6.84, gain: 0.04, decay: 0.14 },
 ];
 
@@ -329,11 +366,11 @@ const MUSIC_BOX: Overtone[] = [
  * Bright, brittle, slightly hollow. Higher partials decay almost instantly.
  */
 const TOY_PIANO: Overtone[] = [
-  { ratio: 1,    gain: 1.00, decay: 0.55 },
-  { ratio: 2.0,  gain: 0.50, decay: 0.20 },
-  { ratio: 3.1,  gain: 0.28, decay: 0.09 },
-  { ratio: 5.0,  gain: 0.12, decay: 0.04 },
-  { ratio: 7.5,  gain: 0.06, decay: 0.02 },
+  { ratio: 1, gain: 1.0, decay: 0.55 },
+  { ratio: 2.0, gain: 0.5, decay: 0.2 },
+  { ratio: 3.1, gain: 0.28, decay: 0.09 },
+  { ratio: 5.0, gain: 0.12, decay: 0.04 },
+  { ratio: 7.5, gain: 0.06, decay: 0.02 },
 ];
 
 /**
@@ -341,9 +378,9 @@ const TOY_PIANO: Overtone[] = [
  * The tine rings bright, decays into a deep warm resonance.
  */
 const KALIMBA: Overtone[] = [
-  { ratio: 1,    gain: 1.00, decay: 1.80 },
-  { ratio: 2.0,  gain: 0.55, decay: 0.65 },
-  { ratio: 3.05, gain: 0.20, decay: 0.22 },
+  { ratio: 1, gain: 1.0, decay: 1.8 },
+  { ratio: 2.0, gain: 0.55, decay: 0.65 },
+  { ratio: 3.05, gain: 0.2, decay: 0.22 },
   { ratio: 4.92, gain: 0.08, decay: 0.08 },
 ];
 
@@ -352,9 +389,9 @@ const KALIMBA: Overtone[] = [
  * Lots of click on attack, harmonics die fast leaving just the warm tone.
  */
 const TOY_XYLOPHONE: Overtone[] = [
-  { ratio: 1,    gain: 1.00, decay: 0.50 },
-  { ratio: 3.0,  gain: 0.45, decay: 0.10 },
-  { ratio: 7.0,  gain: 0.18, decay: 0.04 },
+  { ratio: 1, gain: 1.0, decay: 0.5 },
+  { ratio: 3.0, gain: 0.45, decay: 0.1 },
+  { ratio: 7.0, gain: 0.18, decay: 0.04 },
   { ratio: 12.0, gain: 0.06, decay: 0.02 },
 ];
 
@@ -369,9 +406,9 @@ const TOY_XYLOPHONE: Overtone[] = [
  * The inharmonic upper partials give it that distinctive "clink" sound.
  */
 const COIN: Overtone[] = [
-  { ratio: 1,    gain: 1.00, decay: 0.35 },
-  { ratio: 2.73, gain: 0.55, decay: 0.12 },  // inharmonic metallic ring
-  { ratio: 5.18, gain: 0.30, decay: 0.06 },
+  { ratio: 1, gain: 1.0, decay: 0.35 },
+  { ratio: 2.73, gain: 0.55, decay: 0.12 }, // inharmonic metallic ring
+  { ratio: 5.18, gain: 0.3, decay: 0.06 },
   { ratio: 8.45, gain: 0.15, decay: 0.03 },
   { ratio: 13.1, gain: 0.08, decay: 0.015 },
 ];
@@ -382,10 +419,10 @@ const COIN: Overtone[] = [
  * satisfying mechanical "chunk" when a reel lands.
  */
 const REEL: Overtone[] = [
-  { ratio: 1,    gain: 0.80, decay: 0.08 },
-  { ratio: 2.35, gain: 0.60, decay: 0.04 },
-  { ratio: 4.10, gain: 0.40, decay: 0.025 },
-  { ratio: 6.80, gain: 0.25, decay: 0.015 },
+  { ratio: 1, gain: 0.8, decay: 0.08 },
+  { ratio: 2.35, gain: 0.6, decay: 0.04 },
+  { ratio: 4.1, gain: 0.4, decay: 0.025 },
+  { ratio: 6.8, gain: 0.25, decay: 0.015 },
   { ratio: 11.2, gain: 0.12, decay: 0.008 },
 ];
 
@@ -395,10 +432,10 @@ const REEL: Overtone[] = [
  * after being pulled and released.
  */
 const LEVER: Overtone[] = [
-  { ratio: 1,    gain: 1.00, decay: 0.60 },
-  { ratio: 1.47, gain: 0.45, decay: 0.40 },  // close interval = beating wobble
-  { ratio: 3.22, gain: 0.20, decay: 0.15 },
-  { ratio: 5.87, gain: 0.10, decay: 0.06 },
+  { ratio: 1, gain: 1.0, decay: 0.6 },
+  { ratio: 1.47, gain: 0.45, decay: 0.4 }, // close interval = beating wobble
+  { ratio: 3.22, gain: 0.2, decay: 0.15 },
+  { ratio: 5.87, gain: 0.1, decay: 0.06 },
 ];
 
 /**
@@ -407,12 +444,12 @@ const LEVER: Overtone[] = [
  * of a big win. Brighter and more aggressive than the tubular bell.
  */
 const JACKPOT_BELL: Overtone[] = [
-  { ratio: 1,    gain: 1.00, decay: 3.00 },
-  { ratio: 2.00, gain: 0.70, decay: 2.20 },
-  { ratio: 3.56, gain: 0.45, decay: 1.40 },
-  { ratio: 5.12, gain: 0.25, decay: 0.80 },
-  { ratio: 7.80, gain: 0.12, decay: 0.40 },
-  { ratio: 11.5, gain: 0.06, decay: 0.20 },
+  { ratio: 1, gain: 1.0, decay: 3.0 },
+  { ratio: 2.0, gain: 0.7, decay: 2.2 },
+  { ratio: 3.56, gain: 0.45, decay: 1.4 },
+  { ratio: 5.12, gain: 0.25, decay: 0.8 },
+  { ratio: 7.8, gain: 0.12, decay: 0.4 },
+  { ratio: 11.5, gain: 0.06, decay: 0.2 },
 ];
 
 /**
@@ -421,21 +458,33 @@ const JACKPOT_BELL: Overtone[] = [
  * cascading quality — like coins tumbling into a tray.
  */
 const CASCADE: Overtone[] = [
-  { ratio: 1,    gain: 1.00, decay: 0.50 },
-  { ratio: 1.12, gain: 0.80, decay: 0.45 },  // close detuning = shimmer
-  { ratio: 2.87, gain: 0.40, decay: 0.25 },
-  { ratio: 4.53, gain: 0.20, decay: 0.12 },
-  { ratio: 7.20, gain: 0.10, decay: 0.06 },
+  { ratio: 1, gain: 1.0, decay: 0.5 },
+  { ratio: 1.12, gain: 0.8, decay: 0.45 }, // close detuning = shimmer
+  { ratio: 2.87, gain: 0.4, decay: 0.25 },
+  { ratio: 4.53, gain: 0.2, decay: 0.12 },
+  { ratio: 7.2, gain: 0.1, decay: 0.06 },
 ];
 
 // Slot machine scale — mixolydian (major with flat 7th) for that Vegas swagger
 // The b7 gives it a bluesy, confident, "lucky" quality
 const SLOT_NOTES = {
-  C4: 261.6,  D4: 293.7,  E4: 329.6,  F4: 349.2,
-  G4: 392.0,  A4: 440.0,  Bb4: 466.2,
-  C5: 523.3,  D5: 587.3,  E5: 659.3,  F5: 698.5,
-  G5: 784.0,  A5: 880.0,  Bb5: 932.3,
-  C6: 1046.5, E6: 1318.5, G6: 1568.0,
+  C4: 261.6,
+  D4: 293.7,
+  E4: 329.6,
+  F4: 349.2,
+  G4: 392.0,
+  A4: 440.0,
+  Bb4: 466.2,
+  C5: 523.3,
+  D5: 587.3,
+  E5: 659.3,
+  F5: 698.5,
+  G5: 784.0,
+  A5: 880.0,
+  Bb5: 932.3,
+  C6: 1046.5,
+  E6: 1318.5,
+  G6: 1568.0,
   // Low lever pull note
   G3: 196.0,
 };
@@ -444,32 +493,47 @@ const SLOT_NOTES = {
 const SLOT_MACHINE_EVENT_NOTES: Record<ChirpEvent, NoteSpec | NoteSpec[]> = {
   // Lever pull — G3, metallic spring sound, "here we go"
   message_start: {
-    freq: SLOT_NOTES.G3, partials: LEVER,
-    attack: 0.003, release: 0.15, gain: 0.30,
+    freq: SLOT_NOTES.G3,
+    partials: LEVER,
+    attack: 0.003,
+    release: 0.15,
+    gain: 0.3,
   },
 
   // Single coin insert — E5, bright metallic clink
   text_start: {
-    freq: SLOT_NOTES.E5, partials: COIN,
-    attack: 0.001, release: 0.06, gain: 0.20,
+    freq: SLOT_NOTES.E5,
+    partials: COIN,
+    attack: 0.001,
+    release: 0.06,
+    gain: 0.2,
   },
 
   // text_delta → playSlotSpin() — sentinel
   text_delta: {
-    freq: SLOT_NOTES.C6, partials: REEL,
-    attack: 0.001, release: 0.02, gain: 0.0,
+    freq: SLOT_NOTES.C6,
+    partials: REEL,
+    attack: 0.001,
+    release: 0.02,
+    gain: 0.0,
   },
 
   // Reel spinning — low lever wobble, anticipation
   thinking_start: {
-    freq: SLOT_NOTES.C4, partials: LEVER,
-    attack: 0.04, release: 0.5, gain: 0.26,
+    freq: SLOT_NOTES.C4,
+    partials: LEVER,
+    attack: 0.04,
+    release: 0.5,
+    gain: 0.26,
   },
 
   // Reel stop click — D5
   tool_start: {
-    freq: SLOT_NOTES.D5, partials: REEL,
-    attack: 0.001, release: 0.06, gain: 0.24,
+    freq: SLOT_NOTES.D5,
+    partials: REEL,
+    attack: 0.001,
+    release: 0.06,
+    gain: 0.24,
   },
 
   // Two coins landing — E5 + A5 (small win)
@@ -480,54 +544,60 @@ const SLOT_MACHINE_EVENT_NOTES: Record<ChirpEvent, NoteSpec | NoteSpec[]> = {
 
   // Buzzer — Bb4 reel clank, the "no match" sound
   tool_result_error: {
-    freq: SLOT_NOTES.Bb4, partials: REEL,
-    attack: 0.002, release: 0.10, gain: 0.28,
+    freq: SLOT_NOTES.Bb4,
+    partials: REEL,
+    attack: 0.002,
+    release: 0.1,
+    gain: 0.28,
   },
 
   // Jackpot bells — C5 + E5 + G5 + C6, full celebration
   tool_approval: [
-    { freq: SLOT_NOTES.C5, partials: JACKPOT_BELL, attack: 0.006, release: 0.6,  gain: 0.28 },
-    { freq: SLOT_NOTES.E5, partials: JACKPOT_BELL, attack: 0.006, release: 0.6,  gain: 0.22 },
-    { freq: SLOT_NOTES.G5, partials: JACKPOT_BELL, attack: 0.006, release: 0.6,  gain: 0.16 },
-    { freq: SLOT_NOTES.C6, partials: JACKPOT_BELL, attack: 0.006, release: 0.6,  gain: 0.10 },
+    { freq: SLOT_NOTES.C5, partials: JACKPOT_BELL, attack: 0.006, release: 0.6, gain: 0.28 },
+    { freq: SLOT_NOTES.E5, partials: JACKPOT_BELL, attack: 0.006, release: 0.6, gain: 0.22 },
+    { freq: SLOT_NOTES.G5, partials: JACKPOT_BELL, attack: 0.006, release: 0.6, gain: 0.16 },
+    { freq: SLOT_NOTES.C6, partials: JACKPOT_BELL, attack: 0.006, release: 0.6, gain: 0.1 },
   ],
 
   // user_question → playSlotQuestion() — sentinel
   user_question: {
-    freq: SLOT_NOTES.E4, partials: COIN,
-    attack: 0.002, release: 0.10, gain: 0.0,
+    freq: SLOT_NOTES.E4,
+    partials: COIN,
+    attack: 0.002,
+    release: 0.1,
+    gain: 0.0,
   },
 
   // Payout cascade — C5 + E5 + G5, coins tumbling into tray
   message_stop: [
-    { freq: SLOT_NOTES.C5, partials: CASCADE, attack: 0.004, release: 0.40, gain: 0.28 },
-    { freq: SLOT_NOTES.E5, partials: CASCADE, attack: 0.004, release: 0.40, gain: 0.22 },
-    { freq: SLOT_NOTES.G5, partials: CASCADE, attack: 0.004, release: 0.40, gain: 0.16 },
+    { freq: SLOT_NOTES.C5, partials: CASCADE, attack: 0.004, release: 0.4, gain: 0.28 },
+    { freq: SLOT_NOTES.E5, partials: CASCADE, attack: 0.004, release: 0.4, gain: 0.22 },
+    { freq: SLOT_NOTES.G5, partials: CASCADE, attack: 0.004, release: 0.4, gain: 0.16 },
   ],
 
   // Tilt alarm — Bb4 then G3, descending buzzer
   error: [
-    { freq: SLOT_NOTES.Bb4, partials: REEL, attack: 0.003, release: 0.20, gain: 0.30 },
-    { freq: SLOT_NOTES.G3,  partials: REEL, attack: 0.003, release: 0.20, gain: 0.22 },
+    { freq: SLOT_NOTES.Bb4, partials: REEL, attack: 0.003, release: 0.2, gain: 0.3 },
+    { freq: SLOT_NOTES.G3, partials: REEL, attack: 0.003, release: 0.2, gain: 0.22 },
   ],
 
   // Cash out — A5 → G5, gentle descending coins
   cancelled: [
-    { freq: SLOT_NOTES.A5, partials: COIN, attack: 0.004, release: 0.30, gain: 0.20 },
-    { freq: SLOT_NOTES.G5, partials: COIN, attack: 0.004, release: 0.40, gain: 0.14 },
+    { freq: SLOT_NOTES.A5, partials: COIN, attack: 0.004, release: 0.3, gain: 0.2 },
+    { freq: SLOT_NOTES.G5, partials: COIN, attack: 0.004, release: 0.4, gain: 0.14 },
   ],
 };
 
 interface SlotToolNotes {
   start: NoteSpec | NoteSpec[];
-  ok:    NoteSpec | NoteSpec[];
+  ok: NoteSpec | NoteSpec[];
 }
 
 const SLOT_MACHINE_TOOL_NOTES: Record<ToolFamily, SlotToolNotes> = {
   // Shell — low lever pull, decisive
   shell: {
     start: { freq: SLOT_NOTES.C4, partials: LEVER, attack: 0.003, release: 0.12, gain: 0.24 },
-    ok:    [
+    ok: [
       { freq: SLOT_NOTES.C4, partials: COIN, attack: 0.003, release: 0.14, gain: 0.22 },
       { freq: SLOT_NOTES.G4, partials: COIN, attack: 0.003, release: 0.14, gain: 0.14 },
     ],
@@ -535,39 +605,39 @@ const SLOT_MACHINE_TOOL_NOTES: Record<ToolFamily, SlotToolNotes> = {
   // Read — high coin sparkle, scanning reels
   read: {
     start: { freq: SLOT_NOTES.A5, partials: COIN, attack: 0.001, release: 0.08, gain: 0.18 },
-    ok:    [
+    ok: [
       { freq: SLOT_NOTES.E5, partials: COIN, attack: 0.002, release: 0.12, gain: 0.18 },
       { freq: SLOT_NOTES.A5, partials: COIN, attack: 0.002, release: 0.12, gain: 0.12 },
     ],
   },
   // Write — mid reel lock, satisfying click
   write: {
-    start: { freq: SLOT_NOTES.D5, partials: REEL, attack: 0.001, release: 0.10, gain: 0.24 },
-    ok:    [
+    start: { freq: SLOT_NOTES.D5, partials: REEL, attack: 0.001, release: 0.1, gain: 0.24 },
+    ok: [
       { freq: SLOT_NOTES.G5, partials: COIN, attack: 0.002, release: 0.14, gain: 0.22 },
       { freq: SLOT_NOTES.D5, partials: COIN, attack: 0.002, release: 0.14, gain: 0.14 },
     ],
   },
   // Search — lever wobble sweep
   search: {
-    start: { freq: SLOT_NOTES.D5, partials: LEVER, attack: 0.012, release: 0.20, gain: 0.20 },
-    ok:    [
-      { freq: SLOT_NOTES.G5, partials: CASCADE, attack: 0.004, release: 0.16, gain: 0.20 },
+    start: { freq: SLOT_NOTES.D5, partials: LEVER, attack: 0.012, release: 0.2, gain: 0.2 },
+    ok: [
+      { freq: SLOT_NOTES.G5, partials: CASCADE, attack: 0.004, release: 0.16, gain: 0.2 },
       { freq: SLOT_NOTES.Bb5, partials: CASCADE, attack: 0.004, release: 0.16, gain: 0.12 },
     ],
   },
   // Agent — jackpot bell, big spawn energy
   agent: {
-    start: { freq: SLOT_NOTES.C5, partials: JACKPOT_BELL, attack: 0.010, release: 0.50, gain: 0.26 },
-    ok:    [
-      { freq: SLOT_NOTES.G5, partials: JACKPOT_BELL, attack: 0.008, release: 0.40, gain: 0.24 },
-      { freq: SLOT_NOTES.C6, partials: JACKPOT_BELL, attack: 0.008, release: 0.40, gain: 0.16 },
+    start: { freq: SLOT_NOTES.C5, partials: JACKPOT_BELL, attack: 0.01, release: 0.5, gain: 0.26 },
+    ok: [
+      { freq: SLOT_NOTES.G5, partials: JACKPOT_BELL, attack: 0.008, release: 0.4, gain: 0.24 },
+      { freq: SLOT_NOTES.C6, partials: JACKPOT_BELL, attack: 0.008, release: 0.4, gain: 0.16 },
     ],
   },
   // Default — reel click D5
   default: {
-    start: { freq: SLOT_NOTES.D5, partials: REEL, attack: 0.001, release: 0.08, gain: 0.20 },
-    ok:    [
+    start: { freq: SLOT_NOTES.D5, partials: REEL, attack: 0.001, release: 0.08, gain: 0.2 },
+    ok: [
       { freq: SLOT_NOTES.D5, partials: COIN, attack: 0.002, release: 0.12, gain: 0.22 },
       { freq: SLOT_NOTES.A5, partials: COIN, attack: 0.002, release: 0.12, gain: 0.14 },
     ],
@@ -576,11 +646,22 @@ const SLOT_MACHINE_TOOL_NOTES: Record<ToolFamily, SlotToolNotes> = {
 
 // C major scale + extensions — bright, upbeat, no pentatonic flats
 const WHIMSY_NOTES = {
-  C4: 261.6,  D4: 293.7,  E4: 329.6,  F4: 349.2,
-  G4: 392.0,  A4: 440.0,  B4: 493.9,
-  C5: 523.3,  D5: 587.3,  E5: 659.3,  F5: 698.5,
-  G5: 784.0,  A5: 880.0,  B5: 987.8,
-  C6: 1046.5, E6: 1318.5,
+  C4: 261.6,
+  D4: 293.7,
+  E4: 329.6,
+  F4: 349.2,
+  G4: 392.0,
+  A4: 440.0,
+  B4: 493.9,
+  C5: 523.3,
+  D5: 587.3,
+  E5: 659.3,
+  F5: 698.5,
+  G5: 784.0,
+  A5: 880.0,
+  B5: 987.8,
+  C6: 1046.5,
+  E6: 1318.5,
   // Squeeze-toy squeak frequency (used for brush-replacement)
   F6: 1396.9,
 };
@@ -589,32 +670,47 @@ const WHIMSY_NOTES = {
 const WHIMSY_EVENT_NOTES: Record<ChirpEvent, NoteSpec | NoteSpec[]> = {
   // Toy piano ding — E5, cheerful readying
   message_start: {
-    freq: WHIMSY_NOTES.E5, partials: TOY_PIANO,
-    attack: 0.002, release: 0.10, gain: 0.30,
+    freq: WHIMSY_NOTES.E5,
+    partials: TOY_PIANO,
+    attack: 0.002,
+    release: 0.1,
+    gain: 0.3,
   },
 
   // Music box tinkle — G5, light and airy
   text_start: {
-    freq: WHIMSY_NOTES.G5, partials: MUSIC_BOX,
-    attack: 0.001, release: 0.08, gain: 0.20,
+    freq: WHIMSY_NOTES.G5,
+    partials: MUSIC_BOX,
+    attack: 0.001,
+    release: 0.08,
+    gain: 0.2,
   },
 
   // text_delta → playWhimsySqueak() — sentinel
   text_delta: {
-    freq: WHIMSY_NOTES.C6, partials: MUSIC_BOX,
-    attack: 0.001, release: 0.02, gain: 0.0,
+    freq: WHIMSY_NOTES.C6,
+    partials: MUSIC_BOX,
+    attack: 0.001,
+    release: 0.02,
+    gain: 0.0,
   },
 
   // Kalimba dream — C4, slow and contemplative
   thinking_start: {
-    freq: WHIMSY_NOTES.C4, partials: KALIMBA,
-    attack: 0.04, release: 0.6, gain: 0.28,
+    freq: WHIMSY_NOTES.C4,
+    partials: KALIMBA,
+    attack: 0.04,
+    release: 0.6,
+    gain: 0.28,
   },
 
   // Toy xylophone tick — D5
   tool_start: {
-    freq: WHIMSY_NOTES.D5, partials: TOY_XYLOPHONE,
-    attack: 0.002, release: 0.08, gain: 0.22,
+    freq: WHIMSY_NOTES.D5,
+    partials: TOY_XYLOPHONE,
+    attack: 0.002,
+    release: 0.08,
+    gain: 0.22,
   },
 
   // Two music box notes — E5 + B5
@@ -625,62 +721,68 @@ const WHIMSY_EVENT_NOTES: Record<ChirpEvent, NoteSpec | NoteSpec[]> = {
 
   // Toy xylophone clunk — Bb-ish (F#5-ish, slightly sour on purpose — still cute)
   tool_result_error: {
-    freq: WHIMSY_NOTES.F5, partials: TOY_XYLOPHONE,
-    attack: 0.003, release: 0.14, gain: 0.26,
+    freq: WHIMSY_NOTES.F5,
+    partials: TOY_XYLOPHONE,
+    attack: 0.003,
+    release: 0.14,
+    gain: 0.26,
   },
 
   // Magic music box triad — C5 + E5 + G5 + C6, sparkly fanfare
   tool_approval: [
-    { freq: WHIMSY_NOTES.C5, partials: MUSIC_BOX, attack: 0.004, release: 0.6,  gain: 0.26 },
-    { freq: WHIMSY_NOTES.E5, partials: MUSIC_BOX, attack: 0.004, release: 0.6,  gain: 0.20 },
-    { freq: WHIMSY_NOTES.G5, partials: MUSIC_BOX, attack: 0.004, release: 0.6,  gain: 0.14 },
-    { freq: WHIMSY_NOTES.C6, partials: MUSIC_BOX, attack: 0.004, release: 0.6,  gain: 0.08 },
+    { freq: WHIMSY_NOTES.C5, partials: MUSIC_BOX, attack: 0.004, release: 0.6, gain: 0.26 },
+    { freq: WHIMSY_NOTES.E5, partials: MUSIC_BOX, attack: 0.004, release: 0.6, gain: 0.2 },
+    { freq: WHIMSY_NOTES.G5, partials: MUSIC_BOX, attack: 0.004, release: 0.6, gain: 0.14 },
+    { freq: WHIMSY_NOTES.C6, partials: MUSIC_BOX, attack: 0.004, release: 0.6, gain: 0.08 },
   ],
 
   // user_question → playWhimsyQuestion() — sentinel
   user_question: {
-    freq: WHIMSY_NOTES.E4, partials: TOY_PIANO,
-    attack: 0.002, release: 0.10, gain: 0.0,
+    freq: WHIMSY_NOTES.E4,
+    partials: TOY_PIANO,
+    attack: 0.002,
+    release: 0.1,
+    gain: 0.0,
   },
 
   // Kalimba landing — C5 + E5 + G5, warm resolution
   message_stop: [
-    { freq: WHIMSY_NOTES.C5, partials: KALIMBA, attack: 0.004, release: 0.40, gain: 0.28 },
-    { freq: WHIMSY_NOTES.E5, partials: KALIMBA, attack: 0.004, release: 0.40, gain: 0.20 },
-    { freq: WHIMSY_NOTES.G5, partials: KALIMBA, attack: 0.004, release: 0.40, gain: 0.14 },
+    { freq: WHIMSY_NOTES.C5, partials: KALIMBA, attack: 0.004, release: 0.4, gain: 0.28 },
+    { freq: WHIMSY_NOTES.E5, partials: KALIMBA, attack: 0.004, release: 0.4, gain: 0.2 },
+    { freq: WHIMSY_NOTES.G5, partials: KALIMBA, attack: 0.004, release: 0.4, gain: 0.14 },
   ],
 
   // Sad toy xylophone tumble — B4 then G4, descending
   error: [
-    { freq: WHIMSY_NOTES.B4, partials: TOY_XYLOPHONE, attack: 0.003, release: 0.20, gain: 0.28 },
-    { freq: WHIMSY_NOTES.G4, partials: TOY_XYLOPHONE, attack: 0.003, release: 0.20, gain: 0.20 },
+    { freq: WHIMSY_NOTES.B4, partials: TOY_XYLOPHONE, attack: 0.003, release: 0.2, gain: 0.28 },
+    { freq: WHIMSY_NOTES.G4, partials: TOY_XYLOPHONE, attack: 0.003, release: 0.2, gain: 0.2 },
   ],
 
   // Toy piano wilt — A5 → G5, gentle fade
   cancelled: [
-    { freq: WHIMSY_NOTES.A5, partials: TOY_PIANO, attack: 0.004, release: 0.28, gain: 0.20 },
+    { freq: WHIMSY_NOTES.A5, partials: TOY_PIANO, attack: 0.004, release: 0.28, gain: 0.2 },
     { freq: WHIMSY_NOTES.G5, partials: TOY_PIANO, attack: 0.004, release: 0.38, gain: 0.14 },
   ],
 };
 
 interface WhimsyToolNotes {
   start: NoteSpec | NoteSpec[];
-  ok:    NoteSpec | NoteSpec[];
+  ok: NoteSpec | NoteSpec[];
 }
 
 const WHIMSY_TOOL_NOTES: Record<ToolFamily, WhimsyToolNotes> = {
   // Shell — low kalimba thunk, purposeful
   shell: {
     start: { freq: WHIMSY_NOTES.C4, partials: KALIMBA, attack: 0.003, release: 0.12, gain: 0.24 },
-    ok:    [
+    ok: [
       { freq: WHIMSY_NOTES.C4, partials: KALIMBA, attack: 0.003, release: 0.14, gain: 0.22 },
       { freq: WHIMSY_NOTES.G4, partials: KALIMBA, attack: 0.003, release: 0.14, gain: 0.14 },
     ],
   },
   // Read — high music box sparkle
   read: {
-    start: { freq: WHIMSY_NOTES.A5, partials: MUSIC_BOX, attack: 0.001, release: 0.10, gain: 0.18 },
-    ok:    [
+    start: { freq: WHIMSY_NOTES.A5, partials: MUSIC_BOX, attack: 0.001, release: 0.1, gain: 0.18 },
+    ok: [
       { freq: WHIMSY_NOTES.E5, partials: MUSIC_BOX, attack: 0.002, release: 0.14, gain: 0.18 },
       { freq: WHIMSY_NOTES.A5, partials: MUSIC_BOX, attack: 0.002, release: 0.14, gain: 0.12 },
     ],
@@ -688,31 +790,37 @@ const WHIMSY_TOOL_NOTES: Record<ToolFamily, WhimsyToolNotes> = {
   // Write — mid toy piano bonk, satisfying
   write: {
     start: { freq: WHIMSY_NOTES.D5, partials: TOY_PIANO, attack: 0.002, release: 0.12, gain: 0.24 },
-    ok:    [
+    ok: [
       { freq: WHIMSY_NOTES.G5, partials: TOY_PIANO, attack: 0.002, release: 0.16, gain: 0.22 },
       { freq: WHIMSY_NOTES.D5, partials: TOY_PIANO, attack: 0.002, release: 0.16, gain: 0.14 },
     ],
   },
   // Search — kalimba shimmer sweep
   search: {
-    start: { freq: WHIMSY_NOTES.D5, partials: KALIMBA, attack: 0.015, release: 0.22, gain: 0.20 },
-    ok:    [
-      { freq: WHIMSY_NOTES.G5, partials: MUSIC_BOX, attack: 0.004, release: 0.18, gain: 0.20 },
+    start: { freq: WHIMSY_NOTES.D5, partials: KALIMBA, attack: 0.015, release: 0.22, gain: 0.2 },
+    ok: [
+      { freq: WHIMSY_NOTES.G5, partials: MUSIC_BOX, attack: 0.004, release: 0.18, gain: 0.2 },
       { freq: WHIMSY_NOTES.B5, partials: MUSIC_BOX, attack: 0.004, release: 0.18, gain: 0.12 },
     ],
   },
   // Agent — music box chord, magical spawn
   agent: {
-    start: { freq: WHIMSY_NOTES.C5, partials: MUSIC_BOX, attack: 0.010, release: 0.55, gain: 0.26 },
-    ok:    [
+    start: { freq: WHIMSY_NOTES.C5, partials: MUSIC_BOX, attack: 0.01, release: 0.55, gain: 0.26 },
+    ok: [
       { freq: WHIMSY_NOTES.G5, partials: MUSIC_BOX, attack: 0.008, release: 0.45, gain: 0.24 },
       { freq: WHIMSY_NOTES.C6, partials: MUSIC_BOX, attack: 0.008, release: 0.45, gain: 0.16 },
     ],
   },
   // Default — toy xylophone D5
   default: {
-    start: { freq: WHIMSY_NOTES.D5, partials: TOY_XYLOPHONE, attack: 0.002, release: 0.10, gain: 0.20 },
-    ok:    [
+    start: {
+      freq: WHIMSY_NOTES.D5,
+      partials: TOY_XYLOPHONE,
+      attack: 0.002,
+      release: 0.1,
+      gain: 0.2,
+    },
+    ok: [
       { freq: WHIMSY_NOTES.D5, partials: TOY_XYLOPHONE, attack: 0.002, release: 0.14, gain: 0.22 },
       { freq: WHIMSY_NOTES.A5, partials: TOY_XYLOPHONE, attack: 0.002, release: 0.14, gain: 0.14 },
     ],
@@ -740,46 +848,294 @@ interface ClassicConfig {
 }
 
 const CLASSIC_CHIRPS: Record<ChirpEvent, ClassicConfig> = {
-  message_start:    { freq: 880, freq2: 1320, type: 'sine',     attack: 0.008, decay: 0.1,  sustain: 0.0,  release: 0.18, gain: 0.28, gain2: 0.16 },
-  text_start:       { freq: 1400,             type: 'sine',     attack: 0.004, decay: 0.05, sustain: 0.0,  release: 0.08, gain: 0.22 },
-  text_delta:       { freq: 2200,             type: 'sine',     attack: 0.002, decay: 0.018,sustain: 0.0,  release: 0.025,gain: 0.14, filter: 3000 },
-  thinking_start:   { freq: 200,  freq2: 300, type: 'sine',     attack: 0.025, decay: 0.2,  sustain: 0.0,  release: 0.3,  gain: 0.22, gain2: 0.12, filter: 550 },
-  tool_start:       { freq: 660,              type: 'square',   attack: 0.004, decay: 0.035,sustain: 0.0,  release: 0.06, gain: 0.16, filter: 1100 },
-  tool_result_ok:   { freq: 880,  freq2: 1108,type: 'sine',     attack: 0.008, decay: 0.12, sustain: 0.0,  release: 0.22, gain: 0.26, gain2: 0.14 },
-  tool_result_error:{ freq: 240,  freq2: 180, type: 'sawtooth', attack: 0.01,  decay: 0.14, sustain: 0.0,  release: 0.22, gain: 0.22, gain2: 0.13, filter: 750 },
-  tool_approval:    { freq: 1047, freq2: 1319,type: 'sine',     attack: 0.01,  decay: 0.18, sustain: 0.12, release: 0.3,  gain: 0.30, gain2: 0.16 },
-  user_question:    { freq: 440,              type: 'sine',     attack: 0.01,  decay: 0.1,  sustain: 0.0,  release: 0.15, gain: 0.0 },  // handled by playClassicUserQuestion
-  message_stop:     { freq: 523,  freq2: 659, type: 'sine',     attack: 0.01,  decay: 0.25, sustain: 0.0,  release: 0.4,  gain: 0.28, gain2: 0.15 },
-  error:            { freq: 150,  freq2: 112, type: 'sawtooth', attack: 0.01,  decay: 0.2,  sustain: 0.06, release: 0.32, gain: 0.30, gain2: 0.18, filter: 550 },
-  cancelled:        { freq: 440,              type: 'sine',     attack: 0.01,  decay: 0.35, sustain: 0.0,  release: 0.45, gain: 0.18, filter: 900 },
+  message_start: {
+    freq: 880,
+    freq2: 1320,
+    type: 'sine',
+    attack: 0.008,
+    decay: 0.1,
+    sustain: 0.0,
+    release: 0.18,
+    gain: 0.28,
+    gain2: 0.16,
+  },
+  text_start: {
+    freq: 1400,
+    type: 'sine',
+    attack: 0.004,
+    decay: 0.05,
+    sustain: 0.0,
+    release: 0.08,
+    gain: 0.22,
+  },
+  text_delta: {
+    freq: 2200,
+    type: 'sine',
+    attack: 0.002,
+    decay: 0.018,
+    sustain: 0.0,
+    release: 0.025,
+    gain: 0.14,
+    filter: 3000,
+  },
+  thinking_start: {
+    freq: 200,
+    freq2: 300,
+    type: 'sine',
+    attack: 0.025,
+    decay: 0.2,
+    sustain: 0.0,
+    release: 0.3,
+    gain: 0.22,
+    gain2: 0.12,
+    filter: 550,
+  },
+  tool_start: {
+    freq: 660,
+    type: 'square',
+    attack: 0.004,
+    decay: 0.035,
+    sustain: 0.0,
+    release: 0.06,
+    gain: 0.16,
+    filter: 1100,
+  },
+  tool_result_ok: {
+    freq: 880,
+    freq2: 1108,
+    type: 'sine',
+    attack: 0.008,
+    decay: 0.12,
+    sustain: 0.0,
+    release: 0.22,
+    gain: 0.26,
+    gain2: 0.14,
+  },
+  tool_result_error: {
+    freq: 240,
+    freq2: 180,
+    type: 'sawtooth',
+    attack: 0.01,
+    decay: 0.14,
+    sustain: 0.0,
+    release: 0.22,
+    gain: 0.22,
+    gain2: 0.13,
+    filter: 750,
+  },
+  tool_approval: {
+    freq: 1047,
+    freq2: 1319,
+    type: 'sine',
+    attack: 0.01,
+    decay: 0.18,
+    sustain: 0.12,
+    release: 0.3,
+    gain: 0.3,
+    gain2: 0.16,
+  },
+  user_question: {
+    freq: 440,
+    type: 'sine',
+    attack: 0.01,
+    decay: 0.1,
+    sustain: 0.0,
+    release: 0.15,
+    gain: 0.0,
+  }, // handled by playClassicUserQuestion
+  message_stop: {
+    freq: 523,
+    freq2: 659,
+    type: 'sine',
+    attack: 0.01,
+    decay: 0.25,
+    sustain: 0.0,
+    release: 0.4,
+    gain: 0.28,
+    gain2: 0.15,
+  },
+  error: {
+    freq: 150,
+    freq2: 112,
+    type: 'sawtooth',
+    attack: 0.01,
+    decay: 0.2,
+    sustain: 0.06,
+    release: 0.32,
+    gain: 0.3,
+    gain2: 0.18,
+    filter: 550,
+  },
+  cancelled: {
+    freq: 440,
+    type: 'sine',
+    attack: 0.01,
+    decay: 0.35,
+    sustain: 0.0,
+    release: 0.45,
+    gain: 0.18,
+    filter: 900,
+  },
 };
 
 type ClassicToolFamily = 'shell' | 'read' | 'write' | 'search' | 'agent' | 'default';
 
-const CLASSIC_TOOL_CHIRPS: Record<ClassicToolFamily, { start: ClassicConfig; ok: ClassicConfig }> = {
-  shell:   { start: { freq: 110,          type: 'square',   attack: 0.003, decay: 0.04, sustain: 0.0, release: 0.07, gain: 0.20, filter: 600 },
-             ok:    { freq: 140, freq2: 220,type: 'square',  attack: 0.003, decay: 0.06, sustain: 0.0, release: 0.10, gain: 0.18, gain2: 0.10, filter: 700 } },
-  read:    { start: { freq: 1800,          type: 'sine',     attack: 0.004, decay: 0.04, sustain: 0.0, release: 0.06, gain: 0.18 },
-             ok:    { freq: 1600, freq2: 2000,type: 'sine',  attack: 0.006, decay: 0.08, sustain: 0.0, release: 0.12, gain: 0.20, gain2: 0.10 } },
-  write:   { start: { freq: 440,           type: 'triangle', attack: 0.005, decay: 0.05, sustain: 0.0, release: 0.09, gain: 0.22, filter: 1400 },
-             ok:    { freq: 392, freq2: 523,type: 'triangle',attack: 0.005, decay: 0.12, sustain: 0.0, release: 0.18, gain: 0.24, gain2: 0.14, filter: 1600 } },
-  search:  { start: { freq: 600, freq2: 1200,type: 'sine',  attack: 0.01,  decay: 0.12, sustain: 0.0, release: 0.15, gain: 0.18, filter: 1800 },
-             ok:    { freq: 1400, freq2: 900,type: 'sine',   attack: 0.008, decay: 0.14, sustain: 0.0, release: 0.18, gain: 0.22, gain2: 0.10 } },
-  agent:   { start: { freq: 80,  freq2: 120,type: 'sine',   attack: 0.03,  decay: 0.25, sustain: 0.0, release: 0.35, gain: 0.24, gain2: 0.14, filter: 400 },
-             ok:    { freq: 220,  freq2: 330,type: 'sine',   attack: 0.015, decay: 0.2,  sustain: 0.0, release: 0.3,  gain: 0.24, gain2: 0.13, filter: 500 } },
-  default: { start: { freq: 660,           type: 'square',  attack: 0.004, decay: 0.035,sustain: 0.0, release: 0.06, gain: 0.16, filter: 1100 },
-             ok:    { freq: 880, freq2: 1108,type: 'sine',   attack: 0.008, decay: 0.12, sustain: 0.0, release: 0.22, gain: 0.26, gain2: 0.14 } },
-};
+const CLASSIC_TOOL_CHIRPS: Record<ClassicToolFamily, { start: ClassicConfig; ok: ClassicConfig }> =
+  {
+    shell: {
+      start: {
+        freq: 110,
+        type: 'square',
+        attack: 0.003,
+        decay: 0.04,
+        sustain: 0.0,
+        release: 0.07,
+        gain: 0.2,
+        filter: 600,
+      },
+      ok: {
+        freq: 140,
+        freq2: 220,
+        type: 'square',
+        attack: 0.003,
+        decay: 0.06,
+        sustain: 0.0,
+        release: 0.1,
+        gain: 0.18,
+        gain2: 0.1,
+        filter: 700,
+      },
+    },
+    read: {
+      start: {
+        freq: 1800,
+        type: 'sine',
+        attack: 0.004,
+        decay: 0.04,
+        sustain: 0.0,
+        release: 0.06,
+        gain: 0.18,
+      },
+      ok: {
+        freq: 1600,
+        freq2: 2000,
+        type: 'sine',
+        attack: 0.006,
+        decay: 0.08,
+        sustain: 0.0,
+        release: 0.12,
+        gain: 0.2,
+        gain2: 0.1,
+      },
+    },
+    write: {
+      start: {
+        freq: 440,
+        type: 'triangle',
+        attack: 0.005,
+        decay: 0.05,
+        sustain: 0.0,
+        release: 0.09,
+        gain: 0.22,
+        filter: 1400,
+      },
+      ok: {
+        freq: 392,
+        freq2: 523,
+        type: 'triangle',
+        attack: 0.005,
+        decay: 0.12,
+        sustain: 0.0,
+        release: 0.18,
+        gain: 0.24,
+        gain2: 0.14,
+        filter: 1600,
+      },
+    },
+    search: {
+      start: {
+        freq: 600,
+        freq2: 1200,
+        type: 'sine',
+        attack: 0.01,
+        decay: 0.12,
+        sustain: 0.0,
+        release: 0.15,
+        gain: 0.18,
+        filter: 1800,
+      },
+      ok: {
+        freq: 1400,
+        freq2: 900,
+        type: 'sine',
+        attack: 0.008,
+        decay: 0.14,
+        sustain: 0.0,
+        release: 0.18,
+        gain: 0.22,
+        gain2: 0.1,
+      },
+    },
+    agent: {
+      start: {
+        freq: 80,
+        freq2: 120,
+        type: 'sine',
+        attack: 0.03,
+        decay: 0.25,
+        sustain: 0.0,
+        release: 0.35,
+        gain: 0.24,
+        gain2: 0.14,
+        filter: 400,
+      },
+      ok: {
+        freq: 220,
+        freq2: 330,
+        type: 'sine',
+        attack: 0.015,
+        decay: 0.2,
+        sustain: 0.0,
+        release: 0.3,
+        gain: 0.24,
+        gain2: 0.13,
+        filter: 500,
+      },
+    },
+    default: {
+      start: {
+        freq: 660,
+        type: 'square',
+        attack: 0.004,
+        decay: 0.035,
+        sustain: 0.0,
+        release: 0.06,
+        gain: 0.16,
+        filter: 1100,
+      },
+      ok: {
+        freq: 880,
+        freq2: 1108,
+        type: 'sine',
+        attack: 0.008,
+        decay: 0.12,
+        sustain: 0.0,
+        release: 0.22,
+        gain: 0.26,
+        gain2: 0.14,
+      },
+    },
+  };
 
 // ---------------------------------------------------------------------------
 // Cooldowns
 // ---------------------------------------------------------------------------
 
 const EVENT_COOLDOWNS: Partial<Record<ChirpEvent, number>> = {
-  text_delta:     160,
-  tool_start:     120,
+  text_delta: 160,
+  tool_start: 120,
   tool_result_ok: 200,
-  text_start:     100,
+  text_start: 100,
 };
 
 // ---------------------------------------------------------------------------
@@ -800,20 +1156,20 @@ export class ChirpEngine {
 
     this.compressor = ctx.createDynamicsCompressor();
     this.compressor.threshold.value = -16;
-    this.compressor.knee.value       =   8;
-    this.compressor.ratio.value      =   3;
-    this.compressor.attack.value     = 0.005;
-    this.compressor.release.value    = 0.20;
+    this.compressor.knee.value = 8;
+    this.compressor.ratio.value = 3;
+    this.compressor.attack.value = 0.005;
+    this.compressor.release.value = 0.2;
 
     // Gentle high shelf to add air, slight low-cut to avoid muddiness
     const hiShelf = ctx.createBiquadFilter();
     hiShelf.type = 'highshelf';
     hiShelf.frequency.value = 6000;
-    hiShelf.gain.value = 2.5;  // +2.5 dB above 6 kHz — adds sparkle
+    hiShelf.gain.value = 2.5; // +2.5 dB above 6 kHz — adds sparkle
 
     const loShelf = ctx.createBiquadFilter();
     loShelf.type = 'highpass';
-    loShelf.frequency.value = 60;   // remove sub-bass rumble
+    loShelf.frequency.value = 60; // remove sub-bass rumble
 
     this.masterGain = ctx.createGain();
     this.masterGain.gain.value = this.volume;
@@ -854,7 +1210,8 @@ export class ChirpEngine {
     const t = ctx.currentTime + startOffset;
 
     for (const ot of spec.partials) {
-      const freq = spec.freq * ot.ratio + (spec.detune ? spec.freq * ot.ratio * (spec.detune / 1200) : 0);
+      const freq =
+        spec.freq * ot.ratio + (spec.detune ? spec.freq * ot.ratio * (spec.detune / 1200) : 0);
       const peakGain = spec.gain * ot.gain;
 
       const osc = ctx.createOscillator();
@@ -927,7 +1284,7 @@ export class ChirpEngine {
 
     const env = ctx.createGain();
     env.gain.setValueAtTime(0, now);
-    env.gain.linearRampToValueAtTime(0.22, now + 0.005);  // gentle onset
+    env.gain.linearRampToValueAtTime(0.22, now + 0.005); // gentle onset
     env.gain.setTargetAtTime(0.0001, now + 0.005, 0.018);
 
     src.connect(bp);
@@ -946,7 +1303,13 @@ export class ChirpEngine {
     const master = this.masterGain!;
     const now = ctx.currentTime;
 
-    const marimbaTone = (startT: number, freqA: number, freqB: number, dur: number, gain: number) => {
+    const marimbaTone = (
+      startT: number,
+      freqA: number,
+      freqB: number,
+      dur: number,
+      gain: number,
+    ) => {
       for (const ot of MARIMBA) {
         const osc = ctx.createOscillator();
         const env = ctx.createGain();
@@ -973,9 +1336,9 @@ export class ChirpEngine {
     };
 
     //             start  fA           fB           dur   gain
-    marimbaTone(0.00,  NOTES.E4,    NOTES.E4,    0.08, 0.24);
-    marimbaTone(0.10,  NOTES.G4,    NOTES.G4,    0.08, 0.26);
-    marimbaTone(0.21,  NOTES.A4,    NOTES.D5,    0.32, 0.32);  // bends up — the "?"
+    marimbaTone(0.0, NOTES.E4, NOTES.E4, 0.08, 0.24);
+    marimbaTone(0.1, NOTES.G4, NOTES.G4, 0.08, 0.26);
+    marimbaTone(0.21, NOTES.A4, NOTES.D5, 0.32, 0.32); // bends up — the "?"
   }
 
   /**
@@ -1045,9 +1408,9 @@ export class ChirpEngine {
     };
 
     //          start  fA                     fB                     dur   gain
-    toyNote(0.00,  WHIMSY_NOTES.E5,       WHIMSY_NOTES.E5,       0.07, 0.24);
-    toyNote(0.09,  WHIMSY_NOTES.G5,       WHIMSY_NOTES.G5,       0.07, 0.26);
-    toyNote(0.19,  WHIMSY_NOTES.A5,       WHIMSY_NOTES.C6,       0.28, 0.30);  // bends up!
+    toyNote(0.0, WHIMSY_NOTES.E5, WHIMSY_NOTES.E5, 0.07, 0.24);
+    toyNote(0.09, WHIMSY_NOTES.G5, WHIMSY_NOTES.G5, 0.07, 0.26);
+    toyNote(0.19, WHIMSY_NOTES.A5, WHIMSY_NOTES.C6, 0.28, 0.3); // bends up!
   }
 
   /**
@@ -1069,12 +1432,12 @@ export class ChirpEngine {
     const bp = ctx.createBiquadFilter();
     bp.type = 'bandpass';
     bp.frequency.value = 3500;
-    bp.Q.value = 6.0;  // narrow = more tonal, mechanical
+    bp.Q.value = 6.0; // narrow = more tonal, mechanical
 
     const env = ctx.createGain();
     env.gain.setValueAtTime(0, now);
-    env.gain.linearRampToValueAtTime(0.30, now + 0.002);  // sharp attack
-    env.gain.setTargetAtTime(0.0001, now + 0.002, 0.010);
+    env.gain.linearRampToValueAtTime(0.3, now + 0.002); // sharp attack
+    env.gain.setTargetAtTime(0.0001, now + 0.002, 0.01);
 
     src.connect(bp);
     bp.connect(env);
@@ -1129,9 +1492,9 @@ export class ChirpEngine {
     };
 
     //              start  fA                fB                dur   gain
-    coinPing(0.00,  SLOT_NOTES.E5,   SLOT_NOTES.E5,   0.06, 0.24);
-    coinPing(0.08,  SLOT_NOTES.G5,   SLOT_NOTES.G5,   0.06, 0.26);
-    coinPing(0.17,  SLOT_NOTES.A5,   SLOT_NOTES.C6,   0.25, 0.30);  // bends up — "?"
+    coinPing(0.0, SLOT_NOTES.E5, SLOT_NOTES.E5, 0.06, 0.24);
+    coinPing(0.08, SLOT_NOTES.G5, SLOT_NOTES.G5, 0.06, 0.26);
+    coinPing(0.17, SLOT_NOTES.A5, SLOT_NOTES.C6, 0.25, 0.3); // bends up — "?"
   }
 
   toolStart(name: string) {
@@ -1190,16 +1553,28 @@ export class ChirpEngine {
 
     try {
       if (this.style === 'classic') {
-        if (event === 'text_delta') { this.playClassicScribble(); return; }
-        if (event === 'user_question') { this.playClassicUserQuestion(); return; }
+        if (event === 'text_delta') {
+          this.playClassicScribble();
+          return;
+        }
+        if (event === 'user_question') {
+          this.playClassicUserQuestion();
+          return;
+        }
         const cfg = CLASSIC_CHIRPS[event];
         if (cfg) this.playClassicConfig(cfg);
         return;
       }
 
       if (this.style === 'whimsy') {
-        if (event === 'text_delta') { this.playWhimsySqueak(); return; }
-        if (event === 'user_question') { this.playWhimsyQuestion(); return; }
+        if (event === 'text_delta') {
+          this.playWhimsySqueak();
+          return;
+        }
+        if (event === 'user_question') {
+          this.playWhimsyQuestion();
+          return;
+        }
         const spec = WHIMSY_EVENT_NOTES[event];
         if (!spec) return;
         this.playSpec(spec);
@@ -1207,8 +1582,14 @@ export class ChirpEngine {
       }
 
       if (this.style === 'slot-machine') {
-        if (event === 'text_delta') { this.playSlotSpin(); return; }
-        if (event === 'user_question') { this.playSlotQuestion(); return; }
+        if (event === 'text_delta') {
+          this.playSlotSpin();
+          return;
+        }
+        if (event === 'user_question') {
+          this.playSlotQuestion();
+          return;
+        }
         const spec = SLOT_MACHINE_EVENT_NOTES[event];
         if (!spec) return;
         this.playSpec(spec);
@@ -1301,8 +1682,11 @@ export class ChirpEngine {
       env.gain.setValueAtTime(0, now);
       env.gain.linearRampToValueAtTime(gain, now + 0.003);
       env.gain.exponentialRampToValueAtTime(0.0001, now + dur);
-      src.connect(bp); bp.connect(env); env.connect(master);
-      src.start(now); src.stop(now + dur + 0.005);
+      src.connect(bp);
+      bp.connect(env);
+      env.connect(master);
+      src.start(now);
+      src.stop(now + dur + 0.005);
     };
     burst(4200, 2.5, 0.55);
     burst(8500, 4.0, 0.25);
@@ -1312,23 +1696,32 @@ export class ChirpEngine {
     const ctx = this.ensureContext();
     const master = this.masterGain!;
     const now = ctx.currentTime;
-    const note = (startT: number, freqStart: number, freqEnd: number, dur: number, gain: number) => {
+    const note = (
+      startT: number,
+      freqStart: number,
+      freqEnd: number,
+      dur: number,
+      gain: number,
+    ) => {
       const osc = ctx.createOscillator();
       const env = ctx.createGain();
       osc.type = 'sine';
       osc.frequency.setValueAtTime(freqStart, now + startT);
       osc.frequency.linearRampToValueAtTime(freqEnd, now + startT + dur);
-      const att = 0.008, rel = dur * 0.45;
+      const att = 0.008,
+        rel = dur * 0.45;
       env.gain.setValueAtTime(0, now + startT);
       env.gain.linearRampToValueAtTime(gain, now + startT + att);
       env.gain.linearRampToValueAtTime(gain * 0.6, now + startT + dur - rel);
       env.gain.linearRampToValueAtTime(0, now + startT + dur + 0.04);
-      osc.connect(env); env.connect(master);
-      osc.start(now + startT); osc.stop(now + startT + dur + 0.08);
+      osc.connect(env);
+      env.connect(master);
+      osc.start(now + startT);
+      osc.stop(now + startT + dur + 0.08);
     };
-    note(0.00, 329, 329, 0.07, 0.22);
+    note(0.0, 329, 329, 0.07, 0.22);
     note(0.09, 392, 392, 0.07, 0.24);
-    note(0.19, 494, 587, 0.28, 0.30);
+    note(0.19, 494, 587, 0.28, 0.3);
   }
 
   // ── Public API ─────────────────────────────────────────────────────────────

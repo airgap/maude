@@ -187,10 +187,7 @@ export function createOpenAIStreamV2(opts: OpenAIStreamOptions): ReadableStream 
           let buffer = '';
 
           // Accumulate streamed tool call fragments
-          const toolCallAccum: Record<
-            number,
-            { id: string; name: string; arguments: string }
-          > = {};
+          const toolCallAccum: Record<number, { id: string; name: string; arguments: string }> = {};
           let finishReason: string | null = null;
 
           while (true) {
@@ -243,7 +240,8 @@ export function createOpenAIStreamV2(opts: OpenAIStreamOptions): ReadableStream 
                     }
                     if (tc.id) toolCallAccum[idx].id = tc.id;
                     if (tc.function?.name) toolCallAccum[idx].name += tc.function.name;
-                    if (tc.function?.arguments) toolCallAccum[idx].arguments += tc.function.arguments;
+                    if (tc.function?.arguments)
+                      toolCallAccum[idx].arguments += tc.function.arguments;
                   }
                 }
               } catch {

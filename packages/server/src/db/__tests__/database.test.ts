@@ -127,18 +127,30 @@ if (useRealInit) {
       `ALTER TABLE prds ADD COLUMN external_ref TEXT`,
     ];
     for (const sql of alterColumns) {
-      try { testDb.exec(sql); } catch { /* already exists */ }
+      try {
+        testDb.exec(sql);
+      } catch {
+        /* already exists */
+      }
     }
     // Rename index to match real initDatabase naming
     try {
       testDb.exec('DROP INDEX IF EXISTS idx_messages_conv');
-      testDb.exec('CREATE INDEX IF NOT EXISTS idx_messages_conversation ON messages(conversation_id, timestamp)');
-    } catch { /* ignore */ }
+      testDb.exec(
+        'CREATE INDEX IF NOT EXISTS idx_messages_conversation ON messages(conversation_id, timestamp)',
+      );
+    } catch {
+      /* ignore */
+    }
     try {
       testDb.exec('DROP INDEX IF EXISTS idx_tasks_conv');
       testDb.exec('CREATE INDEX IF NOT EXISTS idx_tasks_conversation ON tasks(conversation_id)');
-    } catch { /* ignore */ }
-  } catch { /* ignore — tables may already exist */ }
+    } catch {
+      /* ignore */
+    }
+  } catch {
+    /* ignore — tables may already exist */
+  }
 }
 
 // Re-register mock with the final testDb
@@ -283,10 +295,24 @@ describe('initDatabase() — column schemas', () => {
   test('conversations has all expected columns including migration columns', () => {
     const cols = getColumnNames(testDb, 'conversations');
     const expected = [
-      'id', 'title', 'model', 'system_prompt', 'workspace_path',
-      'plan_mode', 'plan_file', 'total_tokens', 'created_at', 'updated_at',
-      'permission_mode', 'effort', 'max_budget_usd', 'max_turns',
-      'allowed_tools', 'disallowed_tools', 'cli_session_id', 'workspace_id',
+      'id',
+      'title',
+      'model',
+      'system_prompt',
+      'workspace_path',
+      'plan_mode',
+      'plan_file',
+      'total_tokens',
+      'created_at',
+      'updated_at',
+      'permission_mode',
+      'effort',
+      'max_budget_usd',
+      'max_turns',
+      'allowed_tools',
+      'disallowed_tools',
+      'cli_session_id',
+      'workspace_id',
       'user_id',
     ];
     for (const col of expected) {
@@ -552,9 +578,11 @@ describe('initDatabase() — idempotency', () => {
 describe('initDatabase() — data operations', () => {
   test('can insert and query a conversation', () => {
     const now = Date.now();
-    testDb.query(
-      `INSERT INTO conversations (id, title, model, created_at, updated_at) VALUES (?, ?, ?, ?, ?)`,
-    ).run('test-conv-1', 'Test', 'claude-sonnet-4-5-20250929', now, now);
+    testDb
+      .query(
+        `INSERT INTO conversations (id, title, model, created_at, updated_at) VALUES (?, ?, ?, ?, ?)`,
+      )
+      .run('test-conv-1', 'Test', 'claude-sonnet-4-5-20250929', now, now);
 
     const row = testDb.query('SELECT * FROM conversations WHERE id = ?').get('test-conv-1') as any;
     expect(row).toBeDefined();
@@ -563,11 +591,13 @@ describe('initDatabase() — data operations', () => {
 
   test('conversation has correct default values', () => {
     const now = Date.now();
-    testDb.query(
-      `INSERT INTO conversations (id, created_at, updated_at) VALUES (?, ?, ?)`,
-    ).run('test-conv-defaults', now, now);
+    testDb
+      .query(`INSERT INTO conversations (id, created_at, updated_at) VALUES (?, ?, ?)`)
+      .run('test-conv-defaults', now, now);
 
-    const row = testDb.query('SELECT * FROM conversations WHERE id = ?').get('test-conv-defaults') as any;
+    const row = testDb
+      .query('SELECT * FROM conversations WHERE id = ?')
+      .get('test-conv-defaults') as any;
     expect(row.title).toBe('New Conversation');
     expect(row.plan_mode).toBe(0);
     expect(row.total_tokens).toBe(0);
@@ -575,62 +605,84 @@ describe('initDatabase() — data operations', () => {
 
   test('can insert and query messages with foreign key', () => {
     const now = Date.now();
-    testDb.query(
-      `INSERT INTO conversations (id, title, model, created_at, updated_at) VALUES (?, ?, ?, ?, ?)`,
-    ).run('test-conv-fk', 'FK Test', 'model', now, now);
+    testDb
+      .query(
+        `INSERT INTO conversations (id, title, model, created_at, updated_at) VALUES (?, ?, ?, ?, ?)`,
+      )
+      .run('test-conv-fk', 'FK Test', 'model', now, now);
 
-    testDb.query(
-      `INSERT INTO messages (id, conversation_id, role, content, timestamp) VALUES (?, ?, ?, ?, ?)`,
-    ).run('test-msg-1', 'test-conv-fk', 'user', 'Hello', now);
+    testDb
+      .query(
+        `INSERT INTO messages (id, conversation_id, role, content, timestamp) VALUES (?, ?, ?, ?, ?)`,
+      )
+      .run('test-msg-1', 'test-conv-fk', 'user', 'Hello', now);
 
-    const msgs = testDb.query('SELECT * FROM messages WHERE conversation_id = ?').all('test-conv-fk') as any[];
+    const msgs = testDb
+      .query('SELECT * FROM messages WHERE conversation_id = ?')
+      .all('test-conv-fk') as any[];
     expect(msgs).toHaveLength(1);
     expect(msgs[0].content).toBe('Hello');
   });
 
   test('foreign key constraint blocks orphan messages', () => {
     expect(() =>
-      testDb.query(
-        `INSERT INTO messages (id, conversation_id, role, content, timestamp) VALUES (?, ?, ?, ?, ?)`,
-      ).run('orphan-msg', 'nonexistent', 'user', 'Hello', Date.now()),
+      testDb
+        .query(
+          `INSERT INTO messages (id, conversation_id, role, content, timestamp) VALUES (?, ?, ?, ?, ?)`,
+        )
+        .run('orphan-msg', 'nonexistent', 'user', 'Hello', Date.now()),
     ).toThrow();
   });
 
   test('CASCADE delete removes messages when conversation is deleted', () => {
     const now = Date.now();
-    testDb.query(
-      `INSERT INTO conversations (id, title, model, created_at, updated_at) VALUES (?, ?, ?, ?, ?)`,
-    ).run('test-conv-del', 'Del Test', 'model', now, now);
-    testDb.query(
-      `INSERT INTO messages (id, conversation_id, role, content, timestamp) VALUES (?, ?, ?, ?, ?)`,
-    ).run('del-msg-1', 'test-conv-del', 'user', 'Hello', now);
+    testDb
+      .query(
+        `INSERT INTO conversations (id, title, model, created_at, updated_at) VALUES (?, ?, ?, ?, ?)`,
+      )
+      .run('test-conv-del', 'Del Test', 'model', now, now);
+    testDb
+      .query(
+        `INSERT INTO messages (id, conversation_id, role, content, timestamp) VALUES (?, ?, ?, ?, ?)`,
+      )
+      .run('del-msg-1', 'test-conv-del', 'user', 'Hello', now);
 
     testDb.query('DELETE FROM conversations WHERE id = ?').run('test-conv-del');
 
-    const msgs = testDb.query('SELECT * FROM messages WHERE conversation_id = ?').all('test-conv-del') as any[];
+    const msgs = testDb
+      .query('SELECT * FROM messages WHERE conversation_id = ?')
+      .all('test-conv-del') as any[];
     expect(msgs).toHaveLength(0);
   });
 
   test('can insert and query settings', () => {
-    testDb.query("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)").run('test-key', 'test-value');
+    testDb
+      .query('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)')
+      .run('test-key', 'test-value');
 
-    const row = testDb.query("SELECT value FROM settings WHERE key = ?").get('test-key') as any;
+    const row = testDb.query('SELECT value FROM settings WHERE key = ?').get('test-key') as any;
     expect(row.value).toBe('test-value');
   });
 
   test('settings key is unique (INSERT OR REPLACE)', () => {
-    testDb.query("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)").run('dup-key', 'first');
-    testDb.query("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)").run('dup-key', 'second');
+    testDb
+      .query('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)')
+      .run('dup-key', 'first');
+    testDb
+      .query('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)')
+      .run('dup-key', 'second');
 
-    const row = testDb.query("SELECT value FROM settings WHERE key = ?").get('dup-key') as any;
+    const row = testDb.query('SELECT value FROM settings WHERE key = ?').get('dup-key') as any;
     expect(row.value).toBe('second');
   });
 
   test('can insert and query workspaces', () => {
     const now = Date.now();
-    testDb.query(
-      `INSERT INTO workspaces (id, name, path, last_opened, created_at) VALUES (?, ?, ?, ?, ?)`,
-    ).run('ws-1', 'My Project', '/home/user/project', now, now);
+    testDb
+      .query(
+        `INSERT INTO workspaces (id, name, path, last_opened, created_at) VALUES (?, ?, ?, ?, ?)`,
+      )
+      .run('ws-1', 'My Project', '/home/user/project', now, now);
 
     const row = testDb.query('SELECT * FROM workspaces WHERE id = ?').get('ws-1') as any;
     expect(row.name).toBe('My Project');
@@ -639,22 +691,28 @@ describe('initDatabase() — data operations', () => {
 
   test('workspaces path is unique', () => {
     const now = Date.now();
-    testDb.query(
-      `INSERT INTO workspaces (id, name, path, last_opened, created_at) VALUES (?, ?, ?, ?, ?)`,
-    ).run('ws-dup-1', 'First', '/unique/path', now, now);
+    testDb
+      .query(
+        `INSERT INTO workspaces (id, name, path, last_opened, created_at) VALUES (?, ?, ?, ?, ?)`,
+      )
+      .run('ws-dup-1', 'First', '/unique/path', now, now);
 
     expect(() =>
-      testDb.query(
-        `INSERT INTO workspaces (id, name, path, last_opened, created_at) VALUES (?, ?, ?, ?, ?)`,
-      ).run('ws-dup-2', 'Second', '/unique/path', now, now),
+      testDb
+        .query(
+          `INSERT INTO workspaces (id, name, path, last_opened, created_at) VALUES (?, ?, ?, ?, ?)`,
+        )
+        .run('ws-dup-2', 'Second', '/unique/path', now, now),
     ).toThrow();
   });
 
   test('mcp_servers table accepts inserts', () => {
-    testDb.query(
-      `INSERT INTO mcp_servers (name, transport, command, args, env, scope, status)
+    testDb
+      .query(
+        `INSERT INTO mcp_servers (name, transport, command, args, env, scope, status)
        VALUES (?, ?, ?, ?, ?, ?, ?)`,
-    ).run('test-server', 'stdio', 'node', '["server.js"]', '{}', 'local', 'disconnected');
+      )
+      .run('test-server', 'stdio', 'node', '["server.js"]', '{}', 'local', 'disconnected');
 
     const row = testDb.query('SELECT * FROM mcp_servers WHERE name = ?').get('test-server') as any;
     expect(row.transport).toBe('stdio');
@@ -662,51 +720,59 @@ describe('initDatabase() — data operations', () => {
   });
 
   test('mcp_servers name is unique (primary key)', () => {
-    testDb.query(
-      `INSERT INTO mcp_servers (name, transport) VALUES (?, ?)`,
-    ).run('unique-server', 'stdio');
+    testDb
+      .query(`INSERT INTO mcp_servers (name, transport) VALUES (?, ?)`)
+      .run('unique-server', 'stdio');
 
     expect(() =>
-      testDb.query(
-        `INSERT INTO mcp_servers (name, transport) VALUES (?, ?)`,
-      ).run('unique-server', 'sse'),
+      testDb
+        .query(`INSERT INTO mcp_servers (name, transport) VALUES (?, ?)`)
+        .run('unique-server', 'sse'),
     ).toThrow();
   });
 
   test('CASCADE delete removes stories when prd is deleted', () => {
     const now = Date.now();
-    testDb.query(
-      `INSERT INTO prds (id, workspace_path, name, created_at, updated_at) VALUES (?, ?, ?, ?, ?)`,
-    ).run('test-prd-cascade', '/proj', 'Test PRD', now, now);
-    testDb.query(
-      `INSERT INTO prd_stories (id, prd_id, title, created_at, updated_at) VALUES (?, ?, ?, ?, ?)`,
-    ).run('test-story-cascade', 'test-prd-cascade', 'Story 1', now, now);
+    testDb
+      .query(
+        `INSERT INTO prds (id, workspace_path, name, created_at, updated_at) VALUES (?, ?, ?, ?, ?)`,
+      )
+      .run('test-prd-cascade', '/proj', 'Test PRD', now, now);
+    testDb
+      .query(
+        `INSERT INTO prd_stories (id, prd_id, title, created_at, updated_at) VALUES (?, ?, ?, ?, ?)`,
+      )
+      .run('test-story-cascade', 'test-prd-cascade', 'Story 1', now, now);
 
     testDb.query('DELETE FROM prds WHERE id = ?').run('test-prd-cascade');
 
-    const stories = testDb.query("SELECT * FROM prd_stories WHERE prd_id = 'test-prd-cascade'").all() as any[];
+    const stories = testDb
+      .query("SELECT * FROM prd_stories WHERE prd_id = 'test-prd-cascade'")
+      .all() as any[];
     expect(stories).toHaveLength(0);
   });
 
   test('users table enforces unique username', () => {
     const now = Date.now();
-    testDb.query(
-      `INSERT INTO users (id, username, password_hash, created_at) VALUES (?, ?, ?, ?)`,
-    ).run('user-1', 'alice', 'hash1', now);
+    testDb
+      .query(`INSERT INTO users (id, username, password_hash, created_at) VALUES (?, ?, ?, ?)`)
+      .run('user-1', 'alice', 'hash1', now);
 
     expect(() =>
-      testDb.query(
-        `INSERT INTO users (id, username, password_hash, created_at) VALUES (?, ?, ?, ?)`,
-      ).run('user-2', 'alice', 'hash2', now),
+      testDb
+        .query(`INSERT INTO users (id, username, password_hash, created_at) VALUES (?, ?, ?, ?)`)
+        .run('user-2', 'alice', 'hash2', now),
     ).toThrow();
   });
 
   test('can insert and query git_snapshots', () => {
     const now = Date.now();
-    testDb.query(
-      `INSERT INTO git_snapshots (id, workspace_path, head_sha, reason, has_changes, created_at)
+    testDb
+      .query(
+        `INSERT INTO git_snapshots (id, workspace_path, head_sha, reason, has_changes, created_at)
        VALUES (?, ?, ?, ?, ?, ?)`,
-    ).run('snap-test-1', '/project', 'abc123', 'pre-agent', 1, now);
+      )
+      .run('snap-test-1', '/project', 'abc123', 'pre-agent', 1, now);
 
     const snap = testDb.query('SELECT * FROM git_snapshots WHERE id = ?').get('snap-test-1') as any;
     expect(snap.head_sha).toBe('abc123');
@@ -716,12 +782,27 @@ describe('initDatabase() — data operations', () => {
 
   test('can insert and query workspace_memories', () => {
     const now = Date.now();
-    testDb.query(
-      `INSERT INTO workspace_memories (id, workspace_path, category, key, content, source, confidence, times_seen, created_at, updated_at)
+    testDb
+      .query(
+        `INSERT INTO workspace_memories (id, workspace_path, category, key, content, source, confidence, times_seen, created_at, updated_at)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    ).run('mem-test-1', '/project', 'convention', 'indent', 'Use 2 spaces', 'manual', 1.0, 1, now, now);
+      )
+      .run(
+        'mem-test-1',
+        '/project',
+        'convention',
+        'indent',
+        'Use 2 spaces',
+        'manual',
+        1.0,
+        1,
+        now,
+        now,
+      );
 
-    const mem = testDb.query('SELECT * FROM workspace_memories WHERE id = ?').get('mem-test-1') as any;
+    const mem = testDb
+      .query('SELECT * FROM workspace_memories WHERE id = ?')
+      .get('mem-test-1') as any;
     expect(mem.workspace_path).toBe('/project');
     expect(mem.category).toBe('convention');
     expect(mem.content).toBe('Use 2 spaces');
@@ -729,10 +810,12 @@ describe('initDatabase() — data operations', () => {
 
   test('can insert and query tasks', () => {
     const now = Date.now();
-    testDb.query(
-      `INSERT INTO tasks (id, subject, description, status, created_at, updated_at)
+    testDb
+      .query(
+        `INSERT INTO tasks (id, subject, description, status, created_at, updated_at)
        VALUES (?, ?, ?, ?, ?, ?)`,
-    ).run('task-1', 'Fix bug', 'Fix the login bug', 'pending', now, now);
+      )
+      .run('task-1', 'Fix bug', 'Fix the login bug', 'pending', now, now);
 
     const task = testDb.query('SELECT * FROM tasks WHERE id = ?').get('task-1') as any;
     expect(task.subject).toBe('Fix bug');
@@ -741,10 +824,12 @@ describe('initDatabase() — data operations', () => {
 
   test('can insert story_templates', () => {
     const now = Date.now();
-    testDb.query(
-      `INSERT INTO story_templates (id, name, category, created_at, updated_at)
+    testDb
+      .query(
+        `INSERT INTO story_templates (id, name, category, created_at, updated_at)
        VALUES (?, ?, ?, ?, ?)`,
-    ).run('tmpl-1', 'Bug Fix Template', 'bugfix', now, now);
+      )
+      .run('tmpl-1', 'Bug Fix Template', 'bugfix', now, now);
 
     const tmpl = testDb.query('SELECT * FROM story_templates WHERE id = ?').get('tmpl-1') as any;
     expect(tmpl.name).toBe('Bug Fix Template');
@@ -753,19 +838,25 @@ describe('initDatabase() — data operations', () => {
 
   test('messages ordered by conversation_id and timestamp via index', () => {
     const now = Date.now();
-    testDb.query(
-      `INSERT INTO conversations (id, model, created_at, updated_at) VALUES (?, ?, ?, ?)`,
-    ).run('conv-order-test', 'model', now, now);
+    testDb
+      .query(`INSERT INTO conversations (id, model, created_at, updated_at) VALUES (?, ?, ?, ?)`)
+      .run('conv-order-test', 'model', now, now);
 
-    testDb.query(
-      `INSERT INTO messages (id, conversation_id, role, content, timestamp) VALUES (?, ?, ?, ?, ?)`,
-    ).run('msg-order-3', 'conv-order-test', 'assistant', 'Third', now + 300);
-    testDb.query(
-      `INSERT INTO messages (id, conversation_id, role, content, timestamp) VALUES (?, ?, ?, ?, ?)`,
-    ).run('msg-order-1', 'conv-order-test', 'user', 'First', now + 100);
-    testDb.query(
-      `INSERT INTO messages (id, conversation_id, role, content, timestamp) VALUES (?, ?, ?, ?, ?)`,
-    ).run('msg-order-2', 'conv-order-test', 'assistant', 'Second', now + 200);
+    testDb
+      .query(
+        `INSERT INTO messages (id, conversation_id, role, content, timestamp) VALUES (?, ?, ?, ?, ?)`,
+      )
+      .run('msg-order-3', 'conv-order-test', 'assistant', 'Third', now + 300);
+    testDb
+      .query(
+        `INSERT INTO messages (id, conversation_id, role, content, timestamp) VALUES (?, ?, ?, ?, ?)`,
+      )
+      .run('msg-order-1', 'conv-order-test', 'user', 'First', now + 100);
+    testDb
+      .query(
+        `INSERT INTO messages (id, conversation_id, role, content, timestamp) VALUES (?, ?, ?, ?, ?)`,
+      )
+      .run('msg-order-2', 'conv-order-test', 'assistant', 'Second', now + 200);
 
     const msgs = testDb
       .query('SELECT * FROM messages WHERE conversation_id = ? ORDER BY timestamp ASC')

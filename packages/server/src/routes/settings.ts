@@ -111,9 +111,9 @@ app.patch('/permission-rules/:id', async (c) => {
   const body = await c.req.json();
 
   const db = getDb();
-  const existing = db
-    .query('SELECT data FROM permission_rules WHERE id = ?')
-    .get(ruleId) as { data: string } | null;
+  const existing = db.query('SELECT data FROM permission_rules WHERE id = ?').get(ruleId) as {
+    data: string;
+  } | null;
   if (!existing) {
     return c.json({ ok: false, error: 'Rule not found' }, 404);
   }
@@ -153,9 +153,9 @@ app.post('/permission-rules/apply-preset', async (c) => {
       workspacePath,
     );
   } else if (scope === 'session' && conversationId) {
-    db.query(
-      "DELETE FROM permission_rules WHERE scope = 'session' AND conversation_id = ?",
-    ).run(conversationId);
+    db.query("DELETE FROM permission_rules WHERE scope = 'session' AND conversation_id = ?").run(
+      conversationId,
+    );
   }
 
   // Insert new rules from preset

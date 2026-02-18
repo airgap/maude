@@ -13,10 +13,7 @@
     startCol: number;
   }
 
-  let {
-    onSelect,
-    onClose,
-  } = $props<{
+  let { onSelect, onClose } = $props<{
     onSelect: (item: SymbolItem) => void;
     onClose: () => void;
   }>();
@@ -32,7 +29,14 @@
   function flattenSymbols(syms: Symbol[], filePath: string, fileName: string): SymbolItem[] {
     const result: SymbolItem[] = [];
     for (const sym of syms) {
-      result.push({ name: sym.name, kind: sym.kind, filePath, fileName, startRow: sym.startRow, startCol: sym.startCol });
+      result.push({
+        name: sym.name,
+        kind: sym.kind,
+        filePath,
+        fileName,
+        startRow: sym.startRow,
+        startCol: sym.startCol,
+      });
       if (sym.children) {
         result.push(...flattenSymbols(sym.children, filePath, fileName));
       }
@@ -63,15 +67,24 @@
 
   function kindIcon(kind: string): string {
     switch (kind) {
-      case 'function': return 'ƒ';
-      case 'class': return 'C';
-      case 'method': return 'm';
-      case 'variable': return 'v';
-      case 'type': return 'T';
-      case 'interface': return 'I';
-      case 'import': return '↗';
-      case 'property': return 'p';
-      default: return '·';
+      case 'function':
+        return 'ƒ';
+      case 'class':
+        return 'C';
+      case 'method':
+        return 'm';
+      case 'variable':
+        return 'v';
+      case 'type':
+        return 'T';
+      case 'interface':
+        return 'I';
+      case 'import':
+        return '↗';
+      case 'property':
+        return 'p';
+      default:
+        return '·';
     }
   }
 
@@ -111,7 +124,9 @@
   <div class="picker-list">
     {#if filtered.length === 0}
       <div class="picker-empty">
-        {allSymbols.length === 0 ? 'No symbols parsed yet — open a file in the editor first' : 'No symbols match'}
+        {allSymbols.length === 0
+          ? 'No symbols parsed yet — open a file in the editor first'
+          : 'No symbols match'}
       </div>
     {:else}
       {#each filtered as sym, i}

@@ -90,7 +90,9 @@ describe('createToken / verifyToken', () => {
     const token = await createToken('user-1', 'alice', false);
     const parts = token.split('.');
     // Tamper with the payload
-    parts[1] = btoa(JSON.stringify({ sub: 'hacker', username: 'evil', isAdmin: true, iat: 0, exp: 999999999999 }))
+    parts[1] = btoa(
+      JSON.stringify({ sub: 'hacker', username: 'evil', isAdmin: true, iat: 0, exp: 999999999999 }),
+    )
       .replace(/\+/g, '-')
       .replace(/\//g, '_')
       .replace(/=+$/, '');

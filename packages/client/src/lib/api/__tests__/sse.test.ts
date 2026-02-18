@@ -291,7 +291,10 @@ describe('sendAndStream (additional paths)', () => {
     expect(mockStreamStore.handleEvent).toHaveBeenCalledWith(
       expect.objectContaining({
         type: 'error',
-        error: expect.objectContaining({ type: 'state_error', message: 'Target conversation not active' }),
+        error: expect.objectContaining({
+          type: 'state_error',
+          message: 'Target conversation not active',
+        }),
       }),
     );
     expect(mockSend).not.toHaveBeenCalled();
@@ -483,9 +486,7 @@ describe('sendAndStream (additional paths)', () => {
       id: 'conv-1',
       model: 'claude-sonnet-4-5-20250929',
       workspacePath: null,
-      messages: [
-        { role: 'user', content: [{ type: 'text', text: 'hello' }] },
-      ],
+      messages: [{ role: 'user', content: [{ type: 'text', text: 'hello' }] }],
     };
     mockSend.mockResolvedValue(createMockResponse(''));
 
@@ -500,12 +501,7 @@ describe('sendAndStream (additional paths)', () => {
     await sendAndStream('conv-1', 'Hello');
 
     // The first arg to mockSend is convId, second is content, third is sessionId, fourth is signal
-    expect(mockSend).toHaveBeenCalledWith(
-      'conv-1',
-      'Hello',
-      'session-1',
-      expect.any(AbortSignal),
-    );
+    expect(mockSend).toHaveBeenCalledWith('conv-1', 'Hello', 'session-1', expect.any(AbortSignal));
   });
 
   test('includes model in assistant message', async () => {
@@ -532,8 +528,12 @@ describe('sendAndStream (additional paths)', () => {
   test('handles multiple SSE events with buffering across chunks', async () => {
     // Simulate a stream that delivers data in two chunks, with a partial event at the boundary
     const encoder = new TextEncoder();
-    const chunk1 = encoder.encode('data: {"type":"message_start","message":{"id":"m1"}}\n\ndata: {"typ');
-    const chunk2 = encoder.encode('e":"content_block_delta","delta":{"text":"hi"}}\n\ndata: {"type":"message_stop"}\n\n');
+    const chunk1 = encoder.encode(
+      'data: {"type":"message_start","message":{"id":"m1"}}\n\ndata: {"typ',
+    );
+    const chunk2 = encoder.encode(
+      'e":"content_block_delta","delta":{"text":"hi"}}\n\ndata: {"type":"message_stop"}\n\n',
+    );
 
     let chunkIndex = 0;
     const stream = new ReadableStream({
@@ -620,7 +620,9 @@ describe('reconnectActiveStream', () => {
     const encoder = new TextEncoder();
     const stream = new ReadableStream({
       start(controller) {
-        controller.enqueue(encoder.encode('data: {"type":"message_start","message":{"id":"m1"}}\n\n'));
+        controller.enqueue(
+          encoder.encode('data: {"type":"message_start","message":{"id":"m1"}}\n\n'),
+        );
         controller.close();
       },
     });
@@ -785,7 +787,9 @@ describe('reconnectActiveStream', () => {
     const encoder = new TextEncoder();
     const stream = new ReadableStream({
       start(controller) {
-        controller.enqueue(encoder.encode('data: {"type":"content_block_delta","delta":{"text":"hi"}}\n\n'));
+        controller.enqueue(
+          encoder.encode('data: {"type":"content_block_delta","delta":{"text":"hi"}}\n\n'),
+        );
         controller.close();
       },
     });

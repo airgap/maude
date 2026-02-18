@@ -17,7 +17,7 @@
 
   // Active tab for pane[0] — used to switch rendering mode
   let primaryActiveTab = $derived(
-    pane ? pane.tabs.find((t) => t.id === pane.activeTabId) ?? pane.tabs[0] ?? null : null,
+    pane ? (pane.tabs.find((t) => t.id === pane.activeTabId) ?? pane.tabs[0] ?? null) : null,
   );
 
   // ── Tab → conversation sync ──
@@ -64,7 +64,9 @@
     const active = conversationStore.active;
     if (!active) {
       // Only look at chat tabs (not diff/file tabs) for blank tab matching
-      const blankTab = pane?.tabs.find((t) => t.kind !== 'diff' && t.kind !== 'file' && t.conversationId === null);
+      const blankTab = pane?.tabs.find(
+        (t) => t.kind !== 'diff' && t.kind !== 'file' && t.conversationId === null,
+      );
       if (blankTab && pane && pane.activeTabId !== blankTab.id) {
         primaryPaneStore.setActiveTab(pane.id, blankTab.id);
         lastAppliedTabId = blankTab.id;
@@ -78,6 +80,10 @@
     if (!tabExists) {
       primaryPaneStore.openConversation(active.id, active.title ?? 'Conversation', pane?.id);
     } else {
+      // Don't override when the user has actively selected a file/diff tab
+      const currentTab = pane?.tabs.find((t) => t.id === pane.activeTabId);
+      if (currentTab?.kind === 'file' || currentTab?.kind === 'diff') return;
+
       const tab = pane?.tabs.find((t) => t.conversationId === active.id);
       if (tab && pane && pane.activeTabId !== tab.id) {
         primaryPaneStore.setActiveTab(pane.id, tab.id);
@@ -151,11 +157,7 @@
 </script>
 
 <!-- svelte-ignore a11y_no_static_element_interactions -->
-<div
-  class="primary-pane"
-  class:resizing={draggingDivider !== null}
-  bind:this={containerEl}
->
+<div class="primary-pane" class:resizing={draggingDivider !== null} bind:this={containerEl}>
   {#each primaryPaneStore.panes as p, i (p.id)}
     <!-- Divider before every pane except the first -->
     {#if i > 0}

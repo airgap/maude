@@ -10,9 +10,7 @@
 
   // On mobile (touch + no hardware keyboard), always show chat-only.
   // The user can still access the editor via the sidebar file tree.
-  const effectiveLayout = $derived(
-    deviceStore.isMobileUI ? 'chat-only' : editorStore.layoutMode
-  );
+  const effectiveLayout = $derived(deviceStore.isMobileUI ? 'chat-only' : editorStore.layoutMode);
 </script>
 
 {#if effectiveLayout === 'chat-only'}

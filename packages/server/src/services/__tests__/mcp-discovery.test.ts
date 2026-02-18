@@ -400,9 +400,7 @@ describe('discoverMcpConfigs', () => {
     });
 
     const results = discoverMcpConfigs();
-    const vscode = results.find(
-      (r) => r.source === 'VS Code' && r.configPath === mcpPath,
-    );
+    const vscode = results.find((r) => r.source === 'VS Code' && r.configPath === mcpPath);
     expect(vscode).toBeDefined();
     expect(vscode!.servers[0].name).toBe('ws-server');
   });

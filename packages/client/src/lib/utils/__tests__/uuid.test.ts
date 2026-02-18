@@ -19,7 +19,9 @@ describe('uuid', () => {
 
   test('uses crypto.randomUUID when available', () => {
     const mockUUID = '12345678-1234-4123-8123-123456789abc';
-    const spy = vi.spyOn(crypto, 'randomUUID').mockReturnValue(mockUUID as `${string}-${string}-${string}-${string}-${string}`);
+    const spy = vi
+      .spyOn(crypto, 'randomUUID')
+      .mockReturnValue(mockUUID as `${string}-${string}-${string}-${string}-${string}`);
     const result = uuid();
     expect(result).toBe(mockUUID);
     spy.mockRestore();

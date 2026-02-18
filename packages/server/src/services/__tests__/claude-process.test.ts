@@ -373,9 +373,11 @@ describe('ClaudeProcessManager', () => {
 
   test('sendMessage sets session status to running before spawning', async () => {
     // Insert a conversation so DB operations don't fail
-    testDb.query(
-      "INSERT OR IGNORE INTO conversations (id, title, model, created_at, updated_at) VALUES ('conv-status-1', 'Test', 'claude-sonnet-4-5-20250929', ?, ?)",
-    ).run(Date.now(), Date.now());
+    testDb
+      .query(
+        "INSERT OR IGNORE INTO conversations (id, title, model, created_at, updated_at) VALUES ('conv-status-1', 'Test', 'claude-sonnet-4-5-20250929', ?, ?)",
+      )
+      .run(Date.now(), Date.now());
 
     const sessionId = await claudeManager.createSession('conv-status-1');
     const stream = await claudeManager.sendMessage(sessionId, 'hello');
@@ -510,7 +512,12 @@ describe('translateCliEvent edge cases', () => {
         content: [
           { type: 'thinking', thinking: 'Let me think about this...' },
           { type: 'text', text: 'I have an answer' },
-          { type: 'tool_use', id: 'tool-2', name: 'Write', input: { path: '/tmp/test.txt', content: 'hello' } },
+          {
+            type: 'tool_use',
+            id: 'tool-2',
+            name: 'Write',
+            input: { path: '/tmp/test.txt', content: 'hello' },
+          },
         ],
       },
     });

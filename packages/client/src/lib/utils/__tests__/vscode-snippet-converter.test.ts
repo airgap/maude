@@ -9,7 +9,7 @@ describe('convertVsCodeSnippets', () => {
 
   test('converts a simple snippet with string prefix and string body', () => {
     const input: Record<string, VsCodeSnippet> = {
-      'Print': {
+      Print: {
         prefix: 'log',
         body: 'console.log($1);$0',
         description: 'Log output',
@@ -67,7 +67,7 @@ describe('convertVsCodeSnippets', () => {
 
   test('replaces $0 with ${} for CodeMirror final cursor', () => {
     const input: Record<string, VsCodeSnippet> = {
-      'Test': {
+      Test: {
         prefix: 't',
         body: 'before $0 after',
       },
@@ -78,7 +78,7 @@ describe('convertVsCodeSnippets', () => {
 
   test('replaces multiple $0 occurrences', () => {
     const input: Record<string, VsCodeSnippet> = {
-      'Multi': {
+      Multi: {
         prefix: 'm',
         body: '$0 middle $0',
       },
@@ -89,7 +89,7 @@ describe('convertVsCodeSnippets', () => {
 
   test('strips $TM_* template variables', () => {
     const input: Record<string, VsCodeSnippet> = {
-      'TM': {
+      TM: {
         prefix: 'tm',
         body: 'file: $TM_FILENAME, dir: $TM_DIRECTORY',
       },
@@ -101,7 +101,7 @@ describe('convertVsCodeSnippets', () => {
 
   test('strips ${TM_*} template variables with defaults', () => {
     const input: Record<string, VsCodeSnippet> = {
-      'TMBrace': {
+      TMBrace: {
         prefix: 'tmb',
         body: 'name: ${TM_FILENAME:untitled}',
       },
@@ -113,7 +113,7 @@ describe('convertVsCodeSnippets', () => {
 
   test('preserves normal tab stop variables', () => {
     const input: Record<string, VsCodeSnippet> = {
-      'Tabs': {
+      Tabs: {
         prefix: 'tabs',
         body: '${1:first} ${2:second}',
       },
@@ -144,11 +144,11 @@ describe('convertVsCodeSnippets', () => {
 
   test('handles a mix of valid and invalid entries', () => {
     const input: Record<string, VsCodeSnippet> = {
-      'Valid': {
+      Valid: {
         prefix: 'v',
         body: 'valid',
       },
-      'Invalid': {} as VsCodeSnippet,
+      Invalid: {} as VsCodeSnippet,
       'Also Valid': {
         prefix: 'av',
         body: 'also valid',
@@ -163,7 +163,7 @@ describe('convertVsCodeSnippets', () => {
 
   test('handles combined $0 and $TM_* in same body', () => {
     const input: Record<string, VsCodeSnippet> = {
-      'Combined': {
+      Combined: {
         prefix: 'c',
         body: '// $TM_FILENAME\nfunction ${1:name}() {\n\t$0\n}',
       },

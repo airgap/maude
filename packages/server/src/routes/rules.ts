@@ -139,10 +139,13 @@ app.post('/', async (c) => {
      VALUES (?, ?, ?, 'active', ?, ?)`,
   ).run(id, workspacePath, filePath, now, now);
 
-  return c.json({
-    ok: true,
-    data: { path: filePath, name: fileName },
-  }, 201);
+  return c.json(
+    {
+      ok: true,
+      data: { path: filePath, name: fileName },
+    },
+    201,
+  );
 });
 
 /**
@@ -253,9 +256,7 @@ app.get('/active', async (c) => {
   }
 
   const context =
-    activeContents.length > 0
-      ? `\n\n## Active Rules\n\n${activeContents.join('\n\n')}`
-      : '';
+    activeContents.length > 0 ? `\n\n## Active Rules\n\n${activeContents.join('\n\n')}` : '';
 
   return c.json({ ok: true, data: { context, count: activeContents.length } });
 });
@@ -270,10 +271,7 @@ app.get('/by-name/:name', async (c) => {
 
   // Search in .claude/rules/ first
   const rulesDir = join(workspacePath, '.claude', 'rules');
-  const candidates = [
-    join(rulesDir, name),
-    join(rulesDir, `${name}.md`),
-  ];
+  const candidates = [join(rulesDir, name), join(rulesDir, `${name}.md`)];
 
   // Also check compat files
   for (const p of COMPAT_FILES) {

@@ -193,7 +193,11 @@ export function createGeminiStreamV2(opts: GeminiStreamOptions): ReadableStream 
           const decoder = new TextDecoder();
           let buffer = '';
 
-          const pendingFunctionCalls: Array<{ name: string; args: Record<string, unknown>; callId: string }> = [];
+          const pendingFunctionCalls: Array<{
+            name: string;
+            args: Record<string, unknown>;
+            callId: string;
+          }> = [];
 
           while (true) {
             const { done, value } = await reader.read();
@@ -358,9 +362,7 @@ export async function listGeminiModels(): Promise<Array<{ id: string; name: stri
     const data = (await res.json()) as any;
     // Filter to models that support generateContent
     const chatModels = (data.models || [])
-      .filter((m: any) =>
-        (m.supportedGenerationMethods || []).includes('generateContent'),
-      )
+      .filter((m: any) => (m.supportedGenerationMethods || []).includes('generateContent'))
       .map((m: any) => {
         // m.name is like "models/gemini-2.0-flash"
         const id = m.name.replace('models/', '');

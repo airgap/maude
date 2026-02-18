@@ -7,10 +7,27 @@
   function detectLanguage(fileName: string): string {
     const ext = fileName.split('.').pop()?.toLowerCase() ?? '';
     const map: Record<string, string> = {
-      ts: 'typescript', tsx: 'typescript', js: 'javascript', jsx: 'javascript',
-      py: 'python', rs: 'rust', go: 'go', java: 'java', c: 'cpp', cpp: 'cpp',
-      css: 'css', html: 'html', svelte: 'html', json: 'json', md: 'markdown',
-      sql: 'sql', sh: 'shell', yaml: 'yaml', yml: 'yaml', toml: 'toml', txt: 'text',
+      ts: 'typescript',
+      tsx: 'typescript',
+      js: 'javascript',
+      jsx: 'javascript',
+      py: 'python',
+      rs: 'rust',
+      go: 'go',
+      java: 'java',
+      c: 'cpp',
+      cpp: 'cpp',
+      css: 'css',
+      html: 'html',
+      svelte: 'html',
+      json: 'json',
+      md: 'markdown',
+      sql: 'sql',
+      sh: 'shell',
+      yaml: 'yaml',
+      yml: 'yaml',
+      toml: 'toml',
+      txt: 'text',
     };
     return map[ext] || 'text';
   }
@@ -58,11 +75,7 @@
           class:rejected={group.status === 'rejected'}
         >
           <div class="group-header">
-            <button
-              class="file-path"
-              onclick={() => openFile(group.path)}
-              title="Open in editor"
-            >
+            <button class="file-path" onclick={() => openFile(group.path)} title="Open in editor">
               {group.path.split('/').pop()}
               <span class="full-path">{group.path}</span>
             </button>

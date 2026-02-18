@@ -464,9 +464,7 @@ describe('api.conversations (additional methods)', () => {
 
 describe('api.settings (additional methods)', () => {
   test('ollamaStatus calls GET /api/settings/ollama/status', async () => {
-    mockFetch.mockResolvedValue(
-      mockJsonResponse({ ok: true, data: { available: true } }),
-    );
+    mockFetch.mockResolvedValue(mockJsonResponse({ ok: true, data: { available: true } }));
     const result = await api.settings.ollamaStatus();
     expect(result.data.available).toBe(true);
     expect(mockFetch).toHaveBeenCalledWith('/api/settings/ollama/status', expect.any(Object));
@@ -474,7 +472,10 @@ describe('api.settings (additional methods)', () => {
 
   test('ollamaModels calls GET /api/settings/ollama/models', async () => {
     mockFetch.mockResolvedValue(
-      mockJsonResponse({ ok: true, data: [{ name: 'llama2', size: 3000, modified_at: '2024-01-01' }] }),
+      mockJsonResponse({
+        ok: true,
+        data: [{ name: 'llama2', size: 3000, modified_at: '2024-01-01' }],
+      }),
     );
     const result = await api.settings.ollamaModels();
     expect(result.data).toHaveLength(1);
@@ -503,9 +504,7 @@ describe('api.settings (additional methods)', () => {
   });
 
   test('getBudget calls GET /api/settings/budget', async () => {
-    mockFetch.mockResolvedValue(
-      mockJsonResponse({ ok: true, data: { budgetUsd: 50 } }),
-    );
+    mockFetch.mockResolvedValue(mockJsonResponse({ ok: true, data: { budgetUsd: 50 } }));
     const result = await api.settings.getBudget();
     expect(result.data.budgetUsd).toBe(50);
     expect(mockFetch).toHaveBeenCalledWith('/api/settings/budget', expect.any(Object));
@@ -729,7 +728,10 @@ describe('api.workspaces', () => {
 
   test('getSandbox calls GET /api/workspaces/sandbox/config with encoded path', async () => {
     mockFetch.mockResolvedValue(
-      mockJsonResponse({ ok: true, data: { enabled: true, allowedPaths: [], blockedCommands: [] } }),
+      mockJsonResponse({
+        ok: true,
+        data: { enabled: true, allowedPaths: [], blockedCommands: [] },
+      }),
     );
     await api.workspaces.getSandbox('/my/project');
     expect(mockFetch).toHaveBeenCalledWith(
@@ -804,9 +806,7 @@ describe('api.lsp', () => {
 
 describe('api.git', () => {
   test('status calls GET /api/git/status with encoded path', async () => {
-    mockFetch.mockResolvedValue(
-      mockJsonResponse({ ok: true, data: { isRepo: true, files: [] } }),
-    );
+    mockFetch.mockResolvedValue(mockJsonResponse({ ok: true, data: { isRepo: true, files: [] } }));
     await api.git.status('/my/project');
     expect(mockFetch).toHaveBeenCalledWith(
       '/api/git/status?path=%2Fmy%2Fproject',
@@ -815,9 +815,7 @@ describe('api.git', () => {
   });
 
   test('branch calls GET /api/git/branch with encoded path', async () => {
-    mockFetch.mockResolvedValue(
-      mockJsonResponse({ ok: true, data: { branch: 'main' } }),
-    );
+    mockFetch.mockResolvedValue(mockJsonResponse({ ok: true, data: { branch: 'main' } }));
     await api.git.branch('/my/project');
     expect(mockFetch).toHaveBeenCalledWith(
       '/api/git/branch?path=%2Fmy%2Fproject',
@@ -845,16 +843,11 @@ describe('api.git', () => {
   test('snapshots calls GET /api/git/snapshots with encoded path', async () => {
     mockFetch.mockResolvedValue(mockJsonResponse({ ok: true, data: [] }));
     await api.git.snapshots('/proj');
-    expect(mockFetch).toHaveBeenCalledWith(
-      '/api/git/snapshots?path=%2Fproj',
-      expect.any(Object),
-    );
+    expect(mockFetch).toHaveBeenCalledWith('/api/git/snapshots?path=%2Fproj', expect.any(Object));
   });
 
   test('restoreSnapshot calls POST /api/git/snapshot/:id/restore', async () => {
-    mockFetch.mockResolvedValue(
-      mockJsonResponse({ ok: true, data: { restored: true } }),
-    );
+    mockFetch.mockResolvedValue(mockJsonResponse({ ok: true, data: { restored: true } }));
     await api.git.restoreSnapshot('snap-1');
     expect(mockFetch).toHaveBeenCalledWith(
       '/api/git/snapshot/snap-1/restore',
@@ -938,9 +931,7 @@ describe('api.workspaceMemory', () => {
   });
 
   test('extract calls POST /api/workspace-memory/extract', async () => {
-    mockFetch.mockResolvedValue(
-      mockJsonResponse({ ok: true, data: { extracted: 3, created: 2 } }),
-    );
+    mockFetch.mockResolvedValue(mockJsonResponse({ ok: true, data: { extracted: 3, created: 2 } }));
     const messages = [{ role: 'user', content: 'hello' }];
     await api.workspaceMemory.extract('/proj', messages);
     expect(mockFetch).toHaveBeenCalledWith(
@@ -953,9 +944,7 @@ describe('api.workspaceMemory', () => {
   });
 
   test('context calls GET /api/workspace-memory/context with params', async () => {
-    mockFetch.mockResolvedValue(
-      mockJsonResponse({ ok: true, data: { context: 'ctx', count: 5 } }),
-    );
+    mockFetch.mockResolvedValue(mockJsonResponse({ ok: true, data: { context: 'ctx', count: 5 } }));
     await api.workspaceMemory.context('/proj');
     const url = mockFetch.mock.calls[0][0] as string;
     expect(url).toContain('/api/workspace-memory/context?');
@@ -1112,7 +1101,13 @@ describe('api.prds', () => {
     mockFetch.mockResolvedValue(
       mockJsonResponse({
         ok: true,
-        data: { storyId: 's1', questions: [], qualityScore: 80, qualityExplanation: '', meetsThreshold: true },
+        data: {
+          storyId: 's1',
+          questions: [],
+          qualityScore: 80,
+          qualityExplanation: '',
+          meetsThreshold: true,
+        },
       }),
     );
     await api.prds.refineStory('prd-1', 's1', [{ questionId: 'q1', answer: 'yes' }]);
@@ -1505,9 +1500,7 @@ describe('api.external', () => {
   });
 
   test('testConnection calls POST /api/external/test/:provider', async () => {
-    mockFetch.mockResolvedValue(
-      mockJsonResponse({ ok: true, data: { connected: true } }),
-    );
+    mockFetch.mockResolvedValue(mockJsonResponse({ ok: true, data: { connected: true } }));
     await api.external.testConnection('jira');
     expect(mockFetch).toHaveBeenCalledWith(
       '/api/external/test/jira',
@@ -1538,7 +1531,10 @@ describe('api.external', () => {
 
   test('importIssues calls POST /api/external/import', async () => {
     mockFetch.mockResolvedValue(
-      mockJsonResponse({ ok: true, data: { imported: 2, skipped: 0, storyIds: ['s1'], errors: [] } }),
+      mockJsonResponse({
+        ok: true,
+        data: { imported: 2, skipped: 0, storyIds: ['s1'], errors: [] },
+      }),
     );
     await api.external.importIssues({
       provider: 'jira',
@@ -1586,9 +1582,7 @@ describe('api.external', () => {
 
 describe('api.auth', () => {
   test('status calls GET /api/auth/status', async () => {
-    mockFetch.mockResolvedValue(
-      mockJsonResponse({ ok: true, data: { enabled: false } }),
-    );
+    mockFetch.mockResolvedValue(mockJsonResponse({ ok: true, data: { enabled: false } }));
     const result = await api.auth.status();
     expect(result.data.enabled).toBe(false);
     expect(mockFetch).toHaveBeenCalledWith('/api/auth/status', expect.any(Object));
@@ -1651,9 +1645,7 @@ describe('api.auth', () => {
 
 describe('api.scan', () => {
   test('scanTodos calls POST /api/scan/todos', async () => {
-    mockFetch.mockResolvedValue(
-      mockJsonResponse({ ok: true, data: { todos: [], total: 0 } }),
-    );
+    mockFetch.mockResolvedValue(mockJsonResponse({ ok: true, data: { todos: [], total: 0 } }));
     await api.scan.scanTodos('/proj');
     expect(mockFetch).toHaveBeenCalledWith(
       '/api/scan/todos',
@@ -1665,9 +1657,7 @@ describe('api.scan', () => {
   });
 
   test('scanTodos with options', async () => {
-    mockFetch.mockResolvedValue(
-      mockJsonResponse({ ok: true, data: { todos: [], total: 0 } }),
-    );
+    mockFetch.mockResolvedValue(mockJsonResponse({ ok: true, data: { todos: [], total: 0 } }));
     await api.scan.scanTodos('/proj', { extensions: ['.ts'], maxResults: 50, prdId: 'prd-1' });
     expect(mockFetch).toHaveBeenCalledWith(
       '/api/scan/todos',
@@ -1804,9 +1794,7 @@ describe('api.costs', () => {
   });
 
   test('summary with all options', async () => {
-    mockFetch.mockResolvedValue(
-      mockJsonResponse({ ok: true, data: { totalCostUsd: 0 } }),
-    );
+    mockFetch.mockResolvedValue(mockJsonResponse({ ok: true, data: { totalCostUsd: 0 } }));
     await api.costs.summary({ workspacePath: '/proj', since: 1000, until: 2000 });
     const url = mockFetch.mock.calls[0][0] as string;
     expect(url).toContain('workspacePath=%2Fproj');
@@ -1815,9 +1803,7 @@ describe('api.costs', () => {
   });
 
   test('summary with partial options', async () => {
-    mockFetch.mockResolvedValue(
-      mockJsonResponse({ ok: true, data: { totalCostUsd: 0 } }),
-    );
+    mockFetch.mockResolvedValue(mockJsonResponse({ ok: true, data: { totalCostUsd: 0 } }));
     await api.costs.summary({ workspacePath: '/proj' });
     const url = mockFetch.mock.calls[0][0] as string;
     expect(url).toContain('workspacePath=%2Fproj');
@@ -2123,8 +2109,12 @@ describe('auth token handling', () => {
     const mockLocalStorage: Record<string, string> = {};
     vi.stubGlobal('localStorage', {
       getItem: (key: string) => mockLocalStorage[key] ?? null,
-      setItem: (key: string, val: string) => { mockLocalStorage[key] = val; },
-      removeItem: (key: string) => { delete mockLocalStorage[key]; },
+      setItem: (key: string, val: string) => {
+        mockLocalStorage[key] = val;
+      },
+      removeItem: (key: string) => {
+        delete mockLocalStorage[key];
+      },
     });
 
     setAuthToken('my-test-token');

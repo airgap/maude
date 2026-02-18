@@ -133,7 +133,7 @@
   }
 
   function toggleMentionCollapse(id: string) {
-    mentions = mentions.map((m) => m.id === id ? { ...m, collapsed: !m.collapsed } : m);
+    mentions = mentions.map((m) => (m.id === id ? { ...m, collapsed: !m.collapsed } : m));
   }
 
   async function handleMentionTypeSelect(type: MentionKind) {
@@ -159,8 +159,15 @@
     for (const tab of editorStore.tabs) {
       const ext = tab.fileName.split('.').pop() || '';
       const langMap: Record<string, string> = {
-        ts: 'typescript', tsx: 'typescript', js: 'javascript', jsx: 'javascript',
-        py: 'python', rs: 'rust', go: 'go', cs: 'csharp', java: 'java',
+        ts: 'typescript',
+        tsx: 'typescript',
+        js: 'javascript',
+        jsx: 'javascript',
+        py: 'python',
+        rs: 'rust',
+        go: 'go',
+        cs: 'csharp',
+        java: 'java',
       };
       const language = langMap[ext];
       if (!language) continue;
@@ -199,7 +206,13 @@
     }
   }
 
-  function handleSymbolMentionSelect(sym: { name: string; kind: string; filePath: string; startRow: number; startCol: number }) {
+  function handleSymbolMentionSelect(sym: {
+    name: string;
+    kind: string;
+    filePath: string;
+    startRow: number;
+    startCol: number;
+  }) {
     addMention({
       kind: 'symbol',
       label: `@symbol:${sym.name}`,
@@ -215,7 +228,12 @@
     });
   }
 
-  async function handleThreadMentionSelect(conv: { id: string; title: string; messageCount: number; compactSummary?: string }) {
+  async function handleThreadMentionSelect(conv: {
+    id: string;
+    title: string;
+    messageCount: number;
+    compactSummary?: string;
+  }) {
     try {
       let summaryText: string;
 
@@ -239,7 +257,9 @@
         summaryText = [
           firstUser ? `User: ${firstUser.slice(0, 300)}` : '',
           lastAssistant ? `Assistant: ${lastAssistant.slice(0, 300)}` : '',
-        ].filter(Boolean).join('\n');
+        ]
+          .filter(Boolean)
+          .join('\n');
       }
 
       addMention({
@@ -423,8 +443,7 @@
   // ── Task split suggestion handlers ──
 
   async function handleTaskConfirm(tasks: DetectedTask[]) {
-    const workspacePath =
-      workspaceListStore.activeWorkspace?.path || settingsStore.workspacePath;
+    const workspacePath = workspaceListStore.activeWorkspace?.path || settingsStore.workspacePath;
     if (!workspacePath) return;
 
     const selected = tasks.filter((t) => t.selected);
@@ -666,25 +685,13 @@
   {/if}
 
   {#if activePicker === 'file'}
-    <MentionFilePicker
-      onSelect={handleFileMentionSelect}
-      onClose={closeMentionMenu}
-    />
+    <MentionFilePicker onSelect={handleFileMentionSelect} onClose={closeMentionMenu} />
   {:else if activePicker === 'symbol'}
-    <MentionSymbolPicker
-      onSelect={handleSymbolMentionSelect}
-      onClose={closeMentionMenu}
-    />
+    <MentionSymbolPicker onSelect={handleSymbolMentionSelect} onClose={closeMentionMenu} />
   {:else if activePicker === 'rule'}
-    <MentionRulePicker
-      onSelect={handleRuleMentionSelect}
-      onClose={closeMentionMenu}
-    />
+    <MentionRulePicker onSelect={handleRuleMentionSelect} onClose={closeMentionMenu} />
   {:else if activePicker === 'thread'}
-    <MentionThreadPicker
-      onSelect={handleThreadMentionSelect}
-      onClose={closeMentionMenu}
-    />
+    <MentionThreadPicker onSelect={handleThreadMentionSelect} onClose={closeMentionMenu} />
   {/if}
 
   {#if diffLoading}
@@ -810,14 +817,17 @@
           </button>
           {#if !mention.collapsed}
             <div class="mention-badge-preview">
-              <pre class="mention-context-text">{mention.context.slice(0, 300)}{mention.context.length > 300 ? '…' : ''}</pre>
+              <pre class="mention-context-text">{mention.context.slice(0, 300)}{mention.context
+                  .length > 300
+                  ? '…'
+                  : ''}</pre>
             </div>
           {/if}
           <button
             class="mention-badge-remove"
             onclick={() => removeMention(mention.id)}
-            title="Remove mention"
-          >×</button>
+            title="Remove mention">×</button
+          >
         </div>
       {/each}
     </div>

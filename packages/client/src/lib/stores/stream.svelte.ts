@@ -126,7 +126,12 @@ function createStreamStore() {
       return error;
     },
     get isStreaming() {
-      return status === 'streaming' || status === 'connecting' || status === 'tool_pending' || reconnecting;
+      return (
+        status === 'streaming' ||
+        status === 'connecting' ||
+        status === 'tool_pending' ||
+        reconnecting
+      );
     },
     get isReconnecting() {
       return reconnecting;
@@ -338,7 +343,11 @@ function createStreamStore() {
           // doesn't pause for client approval), so clearing pendingApprovals
           // here would dismiss the dialog before the user ever sees it.
           pendingQuestions = pendingQuestions.filter((q) => q.toolCallId !== event.toolCallId);
-          if (pendingApprovals.length === 0 && pendingQuestions.length === 0 && status === 'tool_pending') {
+          if (
+            pendingApprovals.length === 0 &&
+            pendingQuestions.length === 0 &&
+            status === 'tool_pending'
+          ) {
             status = 'streaming';
           }
           break;

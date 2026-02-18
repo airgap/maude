@@ -441,7 +441,9 @@ describe('MCP Routes', () => {
       expect(json.ok).toBe(true);
       expect(json.data.imported).toBe(1);
 
-      const row = testDb.query('SELECT * FROM mcp_servers WHERE name = ?').get('imported-server') as any;
+      const row = testDb
+        .query('SELECT * FROM mcp_servers WHERE name = ?')
+        .get('imported-server') as any;
       expect(row).toBeDefined();
       expect(row.transport).toBe('stdio');
       expect(row.command).toBe('npx');
@@ -502,7 +504,9 @@ describe('MCP Routes', () => {
       expect(json.data.imported).toBe(2);
 
       // The existing server should NOT be overwritten
-      const existing = testDb.query('SELECT command FROM mcp_servers WHERE name = ?').get('existing-server') as any;
+      const existing = testDb
+        .query('SELECT command FROM mcp_servers WHERE name = ?')
+        .get('existing-server') as any;
       expect(existing.command).toBe('npx'); // Original command, not 'different-command'
     });
 
@@ -522,7 +526,9 @@ describe('MCP Routes', () => {
         headers: { 'Content-Type': 'application/json' },
       });
 
-      const row = testDb.query('SELECT env FROM mcp_servers WHERE name = ?').get('env-server') as any;
+      const row = testDb
+        .query('SELECT env FROM mcp_servers WHERE name = ?')
+        .get('env-server') as any;
       expect(JSON.parse(row.env)).toEqual({ API_KEY: 'test-key', DEBUG: 'true' });
     });
 
@@ -530,14 +536,14 @@ describe('MCP Routes', () => {
       await app.request('/import', {
         method: 'POST',
         body: JSON.stringify({
-          servers: [
-            { name: 'minimal-import', transport: 'sse', url: 'http://remote/sse' },
-          ],
+          servers: [{ name: 'minimal-import', transport: 'sse', url: 'http://remote/sse' }],
         }),
         headers: { 'Content-Type': 'application/json' },
       });
 
-      const row = testDb.query('SELECT * FROM mcp_servers WHERE name = ?').get('minimal-import') as any;
+      const row = testDb
+        .query('SELECT * FROM mcp_servers WHERE name = ?')
+        .get('minimal-import') as any;
       expect(row.command).toBeNull();
       expect(row.args).toBeNull();
       expect(row.env).toBeNull();
@@ -548,9 +554,7 @@ describe('MCP Routes', () => {
       await app.request('/import', {
         method: 'POST',
         body: JSON.stringify({
-          servers: [
-            { name: 'listed-server', transport: 'stdio', command: 'npx' },
-          ],
+          servers: [{ name: 'listed-server', transport: 'stdio', command: 'npx' }],
         }),
         headers: { 'Content-Type': 'application/json' },
       });
@@ -564,14 +568,14 @@ describe('MCP Routes', () => {
       await app.request('/import', {
         method: 'POST',
         body: JSON.stringify({
-          servers: [
-            { name: 'default-transport', command: 'node' },
-          ],
+          servers: [{ name: 'default-transport', command: 'node' }],
         }),
         headers: { 'Content-Type': 'application/json' },
       });
 
-      const row = testDb.query('SELECT transport FROM mcp_servers WHERE name = ?').get('default-transport') as any;
+      const row = testDb
+        .query('SELECT transport FROM mcp_servers WHERE name = ?')
+        .get('default-transport') as any;
       expect(row.transport).toBe('stdio');
     });
   });

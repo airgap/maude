@@ -301,9 +301,7 @@ function parseSkillFrontmatter(content: string): { name: string; description: st
  * Register installed skills as slash commands.
  * Called when memory files are loaded so skill commands appear in the menu.
  */
-export function registerSkillCommands(
-  skillFiles: Array<{ content: string; path: string }>,
-): void {
+export function registerSkillCommands(skillFiles: Array<{ content: string; path: string }>): void {
   // Clear previous skill commands
   skillCommands.length = 0;
 

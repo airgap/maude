@@ -1,5 +1,6 @@
 import type { CompletionContext, CompletionResult, Completion } from '@codemirror/autocomplete';
 import { lspStore } from '$lib/stores/lsp.svelte';
+import { fileUriField } from './file-uri-field';
 
 /** Map LSP CompletionItemKind to CM6 completion type. */
 const KIND_MAP: Record<number, string> = {
@@ -48,8 +49,10 @@ export function lspCompletionSource(language: string) {
     const line = ctx.state.doc.lineAt(ctx.pos);
 
     try {
+      const uri = ctx.state.field(fileUriField, false) || '';
+      if (!uri) return null;
       const result = await lspStore.request(language, 'textDocument/completion', {
-        textDocument: { uri: `file://${(ctx.state as any)._lspUri || ''}` },
+        textDocument: { uri },
         position: {
           line: line.number - 1,
           character: ctx.pos - line.from,

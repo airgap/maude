@@ -251,9 +251,7 @@ describe('Git Routes — Bun.spawn mocked', () => {
     });
 
     test('parses untracked files', async () => {
-      spawnSpy = spyOn(Bun, 'spawn').mockReturnValue(
-        mockProc('?? newfile.ts\n', 0) as any,
-      );
+      spawnSpy = spyOn(Bun, 'spawn').mockReturnValue(mockProc('?? newfile.ts\n', 0) as any);
 
       const res = await app.request('/status?path=/myproject');
       const json = await res.json();
@@ -262,9 +260,7 @@ describe('Git Routes — Bun.spawn mocked', () => {
     });
 
     test('parses staged added files', async () => {
-      spawnSpy = spyOn(Bun, 'spawn').mockReturnValue(
-        mockProc('A  new.ts\n', 0) as any,
-      );
+      spawnSpy = spyOn(Bun, 'spawn').mockReturnValue(mockProc('A  new.ts\n', 0) as any);
 
       const res = await app.request('/status?path=/proj');
       const json = await res.json();
@@ -272,9 +268,7 @@ describe('Git Routes — Bun.spawn mocked', () => {
     });
 
     test('parses staged deleted files', async () => {
-      spawnSpy = spyOn(Bun, 'spawn').mockReturnValue(
-        mockProc('D  removed.ts\n', 0) as any,
-      );
+      spawnSpy = spyOn(Bun, 'spawn').mockReturnValue(mockProc('D  removed.ts\n', 0) as any);
 
       const res = await app.request('/status?path=/proj');
       const json = await res.json();
@@ -282,9 +276,7 @@ describe('Git Routes — Bun.spawn mocked', () => {
     });
 
     test('parses renamed files', async () => {
-      spawnSpy = spyOn(Bun, 'spawn').mockReturnValue(
-        mockProc('R  old.ts -> new.ts\n', 0) as any,
-      );
+      spawnSpy = spyOn(Bun, 'spawn').mockReturnValue(mockProc('R  old.ts -> new.ts\n', 0) as any);
 
       const res = await app.request('/status?path=/proj');
       const json = await res.json();
@@ -293,9 +285,7 @@ describe('Git Routes — Bun.spawn mocked', () => {
     });
 
     test('parses staged modified files (M in index)', async () => {
-      spawnSpy = spyOn(Bun, 'spawn').mockReturnValue(
-        mockProc('M  staged.ts\n', 0) as any,
-      );
+      spawnSpy = spyOn(Bun, 'spawn').mockReturnValue(mockProc('M  staged.ts\n', 0) as any);
 
       const res = await app.request('/status?path=/proj');
       const json = await res.json();
@@ -315,9 +305,7 @@ describe('Git Routes — Bun.spawn mocked', () => {
     });
 
     test('returns empty files array for clean repo', async () => {
-      spawnSpy = spyOn(Bun, 'spawn').mockReturnValue(
-        mockProc('', 0) as any,
-      );
+      spawnSpy = spyOn(Bun, 'spawn').mockReturnValue(mockProc('', 0) as any);
 
       const res = await app.request('/status?path=/clean');
       const json = await res.json();
@@ -343,9 +331,7 @@ describe('Git Routes — Bun.spawn mocked', () => {
   // ---------------------------------------------------------------
   describe('GET /branch', () => {
     test('returns the current branch name', async () => {
-      spawnSpy = spyOn(Bun, 'spawn').mockReturnValue(
-        mockProc('main\n', 0) as any,
-      );
+      spawnSpy = spyOn(Bun, 'spawn').mockReturnValue(mockProc('main\n', 0) as any);
 
       const res = await app.request('/branch?path=/proj');
       const json = await res.json();
@@ -354,9 +340,7 @@ describe('Git Routes — Bun.spawn mocked', () => {
     });
 
     test('trims whitespace from branch name', async () => {
-      spawnSpy = spyOn(Bun, 'spawn').mockReturnValue(
-        mockProc('  feature/foo  \n', 0) as any,
-      );
+      spawnSpy = spyOn(Bun, 'spawn').mockReturnValue(mockProc('  feature/foo  \n', 0) as any);
 
       const res = await app.request('/branch?path=/proj');
       const json = await res.json();
@@ -399,9 +383,7 @@ index abc..def 100644
 +import { foo } from 'bar';
  const x = 1;
 `;
-      spawnSpy = spyOn(Bun, 'spawn').mockReturnValue(
-        mockProc(diffOutput, 0) as any,
-      );
+      spawnSpy = spyOn(Bun, 'spawn').mockReturnValue(mockProc(diffOutput, 0) as any);
 
       const res = await app.request('/diff?path=/proj&file=src/app.ts');
       const json = await res.json();
@@ -410,9 +392,7 @@ index abc..def 100644
     });
 
     test('passes staged flag to git diff --cached', async () => {
-      spawnSpy = spyOn(Bun, 'spawn').mockReturnValue(
-        mockProc('staged diff output', 0) as any,
-      );
+      spawnSpy = spyOn(Bun, 'spawn').mockReturnValue(mockProc('staged diff output', 0) as any);
 
       const res = await app.request('/diff?path=/proj&file=src/app.ts&staged=true');
       const json = await res.json();
@@ -425,9 +405,7 @@ index abc..def 100644
     });
 
     test('does not pass --cached without staged=true', async () => {
-      spawnSpy = spyOn(Bun, 'spawn').mockReturnValue(
-        mockProc('unstaged diff', 0) as any,
-      );
+      spawnSpy = spyOn(Bun, 'spawn').mockReturnValue(mockProc('unstaged diff', 0) as any);
 
       const res = await app.request('/diff?path=/proj&file=src/app.ts');
       await res.json();
@@ -439,9 +417,7 @@ index abc..def 100644
     });
 
     test('returns error when git diff fails with non-zero exit', async () => {
-      spawnSpy = spyOn(Bun, 'spawn').mockReturnValue(
-        mockProc('', 1, 'fatal: bad file') as any,
-      );
+      spawnSpy = spyOn(Bun, 'spawn').mockReturnValue(mockProc('', 1, 'fatal: bad file') as any);
 
       const res = await app.request('/diff?path=/proj&file=bad.ts');
       expect(res.status).toBe(500);
@@ -451,9 +427,7 @@ index abc..def 100644
     });
 
     test('returns generic error when git diff fails with empty stderr', async () => {
-      spawnSpy = spyOn(Bun, 'spawn').mockReturnValue(
-        mockProc('', 1, '') as any,
-      );
+      spawnSpy = spyOn(Bun, 'spawn').mockReturnValue(mockProc('', 1, '') as any);
 
       const res = await app.request('/diff?path=/proj&file=bad.ts');
       expect(res.status).toBe(500);
@@ -474,9 +448,7 @@ index abc..def 100644
     });
 
     test('returns empty diff for unchanged file', async () => {
-      spawnSpy = spyOn(Bun, 'spawn').mockReturnValue(
-        mockProc('', 0) as any,
-      );
+      spawnSpy = spyOn(Bun, 'spawn').mockReturnValue(mockProc('', 0) as any);
 
       const res = await app.request('/diff?path=/proj&file=clean.ts');
       const json = await res.json();
@@ -563,9 +535,7 @@ index abc..def 100644
     });
 
     test('returns 400 when not a git repo', async () => {
-      spawnSpy = spyOn(Bun, 'spawn').mockReturnValue(
-        mockProc('false\n', 0) as any,
-      );
+      spawnSpy = spyOn(Bun, 'spawn').mockReturnValue(mockProc('false\n', 0) as any);
 
       const res = await app.request('/snapshot', {
         method: 'POST',
@@ -709,9 +679,7 @@ index abc..def 100644
         )
         .run('restore-2', '/proj', 'headabc', 'stash123', 'pre-agent', 1, Date.now());
 
-      spawnSpy = spyOn(Bun, 'spawn').mockReturnValue(
-        mockProc('', 0) as any,
-      );
+      spawnSpy = spyOn(Bun, 'spawn').mockReturnValue(mockProc('', 0) as any);
 
       const res = await app.request('/snapshot/restore-2/restore', { method: 'POST' });
       const json = await res.json();

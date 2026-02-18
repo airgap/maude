@@ -386,7 +386,7 @@ describe('extractFilePath', () => {
       extractFilePath({
         file_path: '/first.txt',
         path: '/second.txt',
-      })
+      }),
     ).toBe('/first.txt');
   });
 
@@ -395,7 +395,7 @@ describe('extractFilePath', () => {
       extractFilePath({
         path: '/second.txt',
         filePath: '/third.txt',
-      })
+      }),
     ).toBe('/second.txt');
   });
 
@@ -404,7 +404,7 @@ describe('extractFilePath', () => {
       extractFilePath({
         filePath: '/third.txt',
         source: '/fourth.txt',
-      })
+      }),
     ).toBe('/third.txt');
   });
 
@@ -413,7 +413,7 @@ describe('extractFilePath', () => {
       extractFilePath({
         source: '/fourth.txt',
         destination: '/fifth.txt',
-      })
+      }),
     ).toBe('/fourth.txt');
   });
 
@@ -442,19 +442,19 @@ describe('extractFilePath', () => {
       extractFilePath({
         file_path: 42,
         path: '/valid/path.txt',
-      })
+      }),
     ).toBe('/valid/path.txt');
   });
 
   test('handles paths with spaces', () => {
     expect(extractFilePath({ path: '/home/user/my documents/file.txt' })).toBe(
-      '/home/user/my documents/file.txt'
+      '/home/user/my documents/file.txt',
     );
   });
 
   test('handles Windows-style paths', () => {
     expect(extractFilePath({ path: 'C:\\Users\\user\\file.txt' })).toBe(
-      'C:\\Users\\user\\file.txt'
+      'C:\\Users\\user\\file.txt',
     );
   });
 
@@ -465,7 +465,7 @@ describe('extractFilePath', () => {
         flags: '--verbose',
         path: '/the/file.txt',
         output: '/dev/null',
-      })
+      }),
     ).toBe('/the/file.txt');
   });
 });

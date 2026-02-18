@@ -45,7 +45,7 @@ function detectLanguage(fileName: string): string {
     scss: 'css',
     html: 'html',
     htm: 'html',
-    svelte: 'html',
+    svelte: 'svelte',
     vue: 'html',
     json: 'json',
     md: 'markdown',

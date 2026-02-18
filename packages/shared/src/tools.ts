@@ -78,9 +78,7 @@ export const PERMISSION_PRESETS: PermissionRulePreset[] = [
     id: 'full-auto',
     name: 'Full Auto',
     description: 'All tools auto-approved — maximum speed, minimum friction',
-    rules: [
-      { type: 'allow', tool: '*' },
-    ],
+    rules: [{ type: 'allow', tool: '*' }],
   },
   {
     id: 'read-only',

@@ -123,7 +123,10 @@
                     <span class="snapshot-badge clean">clean</span>
                   {/if}
                   {#if snap.messageId}
-                    <span class="snapshot-badge message-linked" title="Linked to message {snap.messageId}">msg linked</span>
+                    <span
+                      class="snapshot-badge message-linked"
+                      title="Linked to message {snap.messageId}">msg linked</span
+                    >
                   {/if}
                 </div>
               </div>

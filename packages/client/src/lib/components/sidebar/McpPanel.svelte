@@ -356,7 +356,9 @@
       {:else}
         <div class="discovered-list">
           {#each discoveredSources as source}
-            {@const importable = source.servers.filter((s) => !installedNames.has(s.name) && !builtInNames.has(s.name))}
+            {@const importable = source.servers.filter(
+              (s) => !installedNames.has(s.name) && !builtInNames.has(s.name),
+            )}
             {#if importable.length > 0 || source.servers.some((s) => installedNames.has(s.name) || builtInNames.has(s.name))}
               <div class="import-source">
                 <div class="source-header">

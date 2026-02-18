@@ -39,7 +39,10 @@
   let tabBtnEls: HTMLButtonElement[] = $state([]);
 
   // Coordinate helper — normalise touch to {x, y}
-  function touchXY(e: TouchEvent) { const t = e.touches[0] ?? e.changedTouches[0]; return { x: t.clientX, y: t.clientY }; }
+  function touchXY(e: TouchEvent) {
+    const t = e.touches[0] ?? e.changedTouches[0];
+    return { x: t.clientX, y: t.clientY };
+  }
 
   function startTabDrag(tabId: SidebarTab, index: number, x: number, y: number) {
     const widths: number[] = [];
@@ -122,7 +125,8 @@
           const rightMid = drag.tabOffsets[rightOrigIndex] + drag.tabWidths[rightOrigIndex] / 2;
           if (draggedCenter > rightMid) {
             [newOrder[idx], newOrder[idx + 1]] = [newOrder[idx + 1], newOrder[idx]];
-            swapped = true; continue;
+            swapped = true;
+            continue;
           }
         }
       }
@@ -132,7 +136,8 @@
           const leftMid = drag.tabOffsets[leftOrigIndex] + drag.tabWidths[leftOrigIndex] / 2;
           if (draggedCenter < leftMid) {
             [newOrder[idx - 1], newOrder[idx]] = [newOrder[idx], newOrder[idx - 1]];
-            swapped = true; continue;
+            swapped = true;
+            continue;
           }
         }
       }
@@ -214,7 +219,10 @@
 
   function finishCrossDrag(x: number, y: number) {
     const result = panelDragStore.endDrag();
-    if (!result) { drag = null; return; }
+    if (!result) {
+      drag = null;
+      return;
+    }
     const { tabId, target } = result;
     if (!target) {
       sidebarLayoutStore.popOutTab(tabId, {
@@ -222,7 +230,12 @@
         y: Math.max(0, y - 14),
       });
     } else if (target.type === 'tab-bar') {
-      sidebarLayoutStore.moveTabToGroup(tabId, target.column, target.groupIndex, target.insertIndex);
+      sidebarLayoutStore.moveTabToGroup(
+        tabId,
+        target.column,
+        target.groupIndex,
+        target.insertIndex,
+      );
     } else if (target.type === 'split') {
       sidebarLayoutStore.createSplit(tabId, target.column, target.insertGroupAtIndex);
     } else if (target.type === 'column') {
@@ -494,7 +507,8 @@
     const deltaX = x - menuDrag.startX;
 
     if (!menuDrag.isDragging) {
-      if (Math.abs(deltaY) < MENU_DRAG_THRESHOLD && Math.abs(deltaX) < MENU_DRAG_THRESHOLD) return false;
+      if (Math.abs(deltaY) < MENU_DRAG_THRESHOLD && Math.abs(deltaX) < MENU_DRAG_THRESHOLD)
+        return false;
       menuDrag.isDragging = true;
     }
 
@@ -521,7 +535,8 @@
           const nextMid = menuDrag.itemOffsets[nextOrigIdx] + menuDrag.itemHeights[nextOrigIdx] / 2;
           if (y > nextMid) {
             [newOrder[idx], newOrder[idx + 1]] = [newOrder[idx + 1], newOrder[idx]];
-            swapped = true; continue;
+            swapped = true;
+            continue;
           }
         }
       }
@@ -531,7 +546,8 @@
           const prevMid = menuDrag.itemOffsets[prevOrigIdx] + menuDrag.itemHeights[prevOrigIdx] / 2;
           if (y < prevMid) {
             [newOrder[idx - 1], newOrder[idx]] = [newOrder[idx], newOrder[idx - 1]];
-            swapped = true; continue;
+            swapped = true;
+            continue;
           }
         }
       }
@@ -698,7 +714,9 @@
               onmousedown={(e) => handleMenuItemMousedown(tabId, i, e)}
               ontouchstart={(e) => handleMenuItemTouchstart(tabId, i, e)}
               style={getMenuItemDragStyle(tabId, i)}
-              title={placed && !inThisGroup ? `${tab.label} (in another panel — drag to move here)` : tab.label}
+              title={placed && !inThisGroup
+                ? `${tab.label} (in another panel — drag to move here)`
+                : tab.label}
             >
               <svg
                 class="menu-item-icon"
@@ -717,7 +735,15 @@
               {:else if placed}
                 <span class="menu-item-badge">placed</span>
               {/if}
-              <svg class="menu-drag-handle" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <svg
+                class="menu-drag-handle"
+                width="12"
+                height="12"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+              >
                 <path d="M8 6h.01M8 12h.01M8 18h.01M16 6h.01M16 12h.01M16 18h.01" />
               </svg>
             </div>

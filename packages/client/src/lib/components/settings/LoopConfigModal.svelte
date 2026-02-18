@@ -10,9 +10,8 @@
   // Standalone mode: no PRD selected
   let isStandalone = $derived(!loopStore.selectedPrdId);
   let standaloneStoryCount = $derived(
-    workStore.standaloneStories.filter(
-      (s) => s.status === 'pending' || s.status === 'in_progress',
-    ).length,
+    workStore.standaloneStories.filter((s) => s.status === 'pending' || s.status === 'in_progress')
+      .length,
   );
 
   let maxIterations = $state(50);

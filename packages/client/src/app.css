@@ -116,6 +116,8 @@
   --syn-type: #ff9a00;
   --syn-variable: #c8dce8;
   --syn-operator: #00b4ff;
+  --hover-word-bg: rgba(255, 255, 255, 0.06);
+  --hover-word-border: rgba(255, 255, 255, 0.14);
 }
 
 /* ---- LIGHT ---- */
@@ -167,6 +169,8 @@
   --syn-type: #cc5500;
   --syn-variable: #0a1e2e;
   --syn-operator: #006aaa;
+  --hover-word-bg: rgba(0, 100, 160, 0.08);
+  --hover-word-border: rgba(0, 100, 160, 0.2);
 }
 
 /* ---- DARK COLORBLIND ---- */
@@ -1339,8 +1343,8 @@
   --bg-active: rgba(220, 80, 130, 0.12);
   --bg-selection: rgba(220, 80, 130, 0.18);
   --bg-code: #f7edf3;
-  --bg-diff-add: rgba(80, 170, 110, 0.10);
-  --bg-diff-remove: rgba(220, 80, 130, 0.10);
+  --bg-diff-add: rgba(80, 170, 110, 0.1);
+  --bg-diff-remove: rgba(220, 80, 130, 0.1);
   --bg-glass: rgba(253, 246, 249, 0.92);
   --bg-message-user: rgba(220, 80, 130, 0.04);
   --bg-message-assistant: rgba(100, 160, 220, 0.05);
@@ -1389,12 +1393,12 @@
   --bg-active: rgba(255, 182, 193, 0.17);
   --bg-selection: rgba(255, 182, 193, 0.26);
   --bg-code: rgba(20, 10, 18, 0.95);
-  --bg-diff-add: rgba(120, 220, 150, 0.10);
-  --bg-diff-remove: rgba(255, 140, 160, 0.10);
+  --bg-diff-add: rgba(120, 220, 150, 0.1);
+  --bg-diff-remove: rgba(255, 140, 160, 0.1);
   --bg-glass: rgba(26, 16, 23, 0.88);
   --bg-message-user: rgba(255, 182, 193, 0.05);
   --bg-message-assistant: rgba(200, 220, 255, 0.06);
-  --border-primary: rgba(255, 182, 193, 0.20);
+  --border-primary: rgba(255, 182, 193, 0.2);
   --border-secondary: rgba(255, 182, 193, 0.08);
   --border-focus: #f9a8c0;
   --border-glow: rgba(255, 182, 193, 0.45);
@@ -1413,7 +1417,7 @@
   --accent-gradient: linear-gradient(135deg, #f9a8c0, #c8a8e8);
   --accent-gradient-vivid: linear-gradient(135deg, #f07090, #f9a8c0, #a8d8b0, #f0c890);
   --scrollbar-track: rgba(255, 182, 193, 0.04);
-  --scrollbar-thumb: rgba(255, 182, 193, 0.20);
+  --scrollbar-thumb: rgba(255, 182, 193, 0.2);
   --shadow: 0 4px 20px rgba(0, 0, 0, 0.55), 0 0 40px rgba(255, 182, 193, 0.04);
   --shadow-lg: 0 10px 36px rgba(0, 0, 0, 0.65);
   --shadow-glow: 0 0 16px rgba(255, 182, 193, 0.22), 0 0 40px rgba(255, 182, 193, 0.07);

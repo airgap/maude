@@ -10,10 +10,7 @@
     children?: TreeNode[];
   }
 
-  let {
-    onSelect,
-    onClose,
-  } = $props<{
+  let { onSelect, onClose } = $props<{
     onSelect: (path: string) => void;
     onClose: () => void;
   }>();

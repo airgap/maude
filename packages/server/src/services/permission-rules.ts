@@ -26,9 +26,7 @@ function globMatch(pattern: string, value: string): boolean {
   if (!pattern.includes('*')) return pattern === value;
 
   // Convert glob to regex: escape special chars, replace * with .*
-  const escaped = pattern
-    .replace(/[.+^${}()|[\]\\]/g, '\\$&')
-    .replace(/\*/g, '.*');
+  const escaped = pattern.replace(/[.+^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '.*');
   const regex = new RegExp(`^${escaped}$`);
   return regex.test(value);
 }
@@ -284,7 +282,8 @@ export function deletePermissionRule(ruleId: string): void {
  */
 export function ensurePermissionRulesTable(): void {
   const db = getDb();
-  db.query(`
+  db.query(
+    `
     CREATE TABLE IF NOT EXISTS permission_rules (
       id TEXT PRIMARY KEY,
       scope TEXT NOT NULL DEFAULT 'global',
@@ -293,7 +292,8 @@ export function ensurePermissionRulesTable(): void {
       data TEXT NOT NULL,
       created_at INTEGER NOT NULL DEFAULT 0
     )
-  `).run();
+  `,
+  ).run();
 }
 
 /**

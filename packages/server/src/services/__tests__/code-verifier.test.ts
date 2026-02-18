@@ -76,7 +76,10 @@ describe('Code Verifier', () => {
 
   test('passes valid JSX file', async () => {
     const filePath = join(TMP_DIR, 'component.jsx');
-    await writeTestFile(filePath, `const Heading = () => <h1>Title</h1>;\nexport default Heading;\n`);
+    await writeTestFile(
+      filePath,
+      `const Heading = () => <h1>Title</h1>;\nexport default Heading;\n`,
+    );
     const result = await verifyFile(filePath, TMP_DIR);
     expect(result.passed).toBe(true);
     expect(result.tool).toBe('bun-transpiler');

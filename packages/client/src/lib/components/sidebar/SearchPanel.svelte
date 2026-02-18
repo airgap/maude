@@ -9,11 +9,29 @@
   function detectLanguage(fileName: string): string {
     const ext = fileName.split('.').pop()?.toLowerCase() ?? '';
     const map: Record<string, string> = {
-      ts: 'typescript', tsx: 'typescript', js: 'javascript', jsx: 'javascript',
-      py: 'python', rs: 'rust', go: 'go', java: 'java', c: 'cpp', cpp: 'cpp',
-      css: 'css', scss: 'css', html: 'html', svelte: 'html', vue: 'html',
-      json: 'json', md: 'markdown', sql: 'sql', sh: 'shell', yaml: 'yaml',
-      yml: 'yaml', toml: 'toml', txt: 'text',
+      ts: 'typescript',
+      tsx: 'typescript',
+      js: 'javascript',
+      jsx: 'javascript',
+      py: 'python',
+      rs: 'rust',
+      go: 'go',
+      java: 'java',
+      c: 'cpp',
+      cpp: 'cpp',
+      css: 'css',
+      scss: 'css',
+      html: 'html',
+      svelte: 'html',
+      vue: 'html',
+      json: 'json',
+      md: 'markdown',
+      sql: 'sql',
+      sh: 'shell',
+      yaml: 'yaml',
+      yml: 'yaml',
+      toml: 'toml',
+      txt: 'text',
     };
     return map[ext] || 'text';
   }

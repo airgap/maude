@@ -1,4 +1,4 @@
-import { marked } from 'marked';
+import { marked, type Renderer } from 'marked';
 import DOMPurify from 'dompurify';
 
 // Configure marked for GFM
@@ -6,6 +6,22 @@ marked.setOptions({
   gfm: true,
   breaks: true,
 });
+
+/**
+ * Custom renderer that emits placeholder divs for code blocks.
+ * The placeholder carries base64-encoded code and the language name.
+ * ProseBlock.svelte replaces these with live CodeBlock components.
+ */
+const customRenderer: Partial<Renderer> = {
+  code({ text, lang }) {
+    const language = lang || 'text';
+    // Base64-encode so the code survives HTML attribute serialisation
+    const encoded = btoa(unescape(encodeURIComponent(text)));
+    return `<div class="code-block-wrapper" data-language="${language}" data-code="${encoded}"></div>\n`;
+  },
+};
+
+marked.use({ renderer: customRenderer });
 
 /**
  * Full markdown render with sanitization.
@@ -28,6 +44,7 @@ export async function renderMarkdown(source: string): Promise<string> {
       'rx',
       'data-language',
       'data-file-path',
+      'data-code',
     ],
   });
 }
@@ -41,9 +58,16 @@ export function renderMarkdownPartial(source: string): string {
 
   let html = escapeHtml(source);
 
-  // Fenced code blocks
+  // Fenced code blocks — emit a lightweight preview for streaming
   html = html.replace(/```(\w*)\n([\s\S]*?)```/g, (_match, lang, code) => {
-    return `<div class="code-block-wrapper" data-language="${lang || 'text'}"><pre><code>${code}</code></pre></div>`;
+    const encoded = btoa(unescape(encodeURIComponent(code)));
+    const escapedCode = code
+      .replace(/&amp;/g, '&')
+      .replace(/&lt;/g, '<')
+      .replace(/&gt;/g, '>')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;');
+    return `<div class="code-block-wrapper streaming-code-preview" data-language="${lang || 'text'}" data-code="${encoded}"><div class="streaming-code-header">${lang || 'text'}</div><pre class="streaming-code-body">${escapedCode}</pre></div>`;
   });
 
   // Inline code

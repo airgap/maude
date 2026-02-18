@@ -134,4 +134,44 @@
     position: relative;
     z-index: 2;
   }
+
+  /* Streaming code preview — lightweight, replaced by CodeBlock after stream ends */
+  .prose :global(.streaming-code-preview) {
+    border: 1px solid var(--border-primary);
+    border-radius: var(--radius);
+    overflow: hidden;
+    margin: 8px 0;
+    font-size: 13px;
+  }
+  .prose :global(.streaming-code-header) {
+    padding: 4px 10px;
+    background: var(--bg-tertiary);
+    border-bottom: 1px solid var(--border-primary);
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--accent-primary);
+    text-transform: var(--ht-label-transform);
+    letter-spacing: var(--ht-label-spacing);
+  }
+  .prose :global(.streaming-code-body) {
+    padding: 10px 14px;
+    margin: 0;
+    background: var(--bg-code, var(--bg-secondary));
+    font-family: var(--font-family);
+    font-size: 13px;
+    line-height: 1.5;
+    overflow-x: auto;
+    white-space: pre;
+  }
+
+  /* Inline code */
+  .prose :global(code) {
+    font-family: var(--font-family);
+    font-size: 0.875em;
+    background: color-mix(in srgb, var(--accent-primary) 8%, var(--bg-tertiary));
+    color: var(--accent-primary);
+    padding: 1px 5px;
+    border-radius: 4px;
+    border: 1px solid color-mix(in srgb, var(--accent-primary) 20%, transparent);
+  }
 </style>

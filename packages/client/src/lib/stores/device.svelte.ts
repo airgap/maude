@@ -72,9 +72,15 @@ function createDeviceStore() {
   }
 
   return {
-    get isTouchPrimary() { return isTouchPrimary; },
-    get hasHardwareKeyboard() { return hasHardwareKeyboard; },
-    get isMobileUI() { return isMobileUI; },
+    get isTouchPrimary() {
+      return isTouchPrimary;
+    },
+    get hasHardwareKeyboard() {
+      return hasHardwareKeyboard;
+    },
+    get isMobileUI() {
+      return isMobileUI;
+    },
     init,
   };
 }

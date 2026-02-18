@@ -232,16 +232,30 @@
     animation: barPulse 2s ease-in-out infinite;
   }
   @keyframes rainbowSlide {
-    0% { background-position: 0% 0%; }
-    100% { background-position: 200% 0%; }
+    0% {
+      background-position: 0% 0%;
+    }
+    100% {
+      background-position: 200% 0%;
+    }
   }
   @keyframes accentSlide {
-    0% { background-position: -200% 0%; }
-    100% { background-position: 200% 0%; }
+    0% {
+      background-position: -200% 0%;
+    }
+    100% {
+      background-position: 200% 0%;
+    }
   }
   @keyframes barPulse {
-    0%, 100% { opacity: 0.15; }
-    50% { opacity: 0.6; box-shadow: 0 0 8px var(--accent-primary); }
+    0%,
+    100% {
+      opacity: 0.15;
+    }
+    50% {
+      opacity: 0.6;
+      box-shadow: 0 0 8px var(--accent-primary);
+    }
   }
 
   .statusbar {

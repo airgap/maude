@@ -76,10 +76,10 @@ export const eEditorTheme = EditorView.theme(
       color: 'var(--text-tertiary)',
     },
     '.cm-tooltip': {
-      backgroundColor: 'var(--bg-elevated)',
-      border: '1px solid var(--border-primary)',
-      color: 'var(--text-primary)',
-      boxShadow: 'var(--shadow)',
+      backgroundColor: 'transparent',
+      border: 'none',
+      boxShadow: 'none',
+      padding: '0',
     },
     '.cm-tooltip .cm-tooltip-arrow:before': {
       borderTopColor: 'var(--border-primary)',
@@ -89,7 +89,131 @@ export const eEditorTheme = EditorView.theme(
       borderTopColor: 'var(--bg-elevated)',
       borderBottomColor: 'var(--bg-elevated)',
     },
+    // Hover card inside cm-tooltip
+    '.cm-tooltip .e-hover-tags': {
+      padding: '4px 12px 0',
+      fontSize: '10px',
+      fontFamily: 'var(--font-family-sans)',
+      color: 'var(--accent-primary)',
+      letterSpacing: '0.03em',
+      textTransform: 'uppercase',
+      opacity: '0.8',
+    },
+    '.cm-tooltip .e-hover-card': {
+      backgroundColor: 'var(--bg-elevated)',
+      border: '1px solid var(--border-primary)',
+      borderRadius: 'var(--radius)',
+      boxShadow: '0 4px 12px rgba(0,0,0,0.4), 0 1px 3px rgba(0,0,0,0.3)',
+      minWidth: '180px',
+      maxWidth: '520px',
+      overflow: 'hidden',
+      fontFamily: 'var(--font-family-sans)',
+      fontSize: '12.5px',
+      animation: 'hoverCardIn 0.12s cubic-bezier(0.2,0,0,1.05)',
+    },
+    '.cm-tooltip .e-hover-sig': {
+      padding: '8px 12px',
+      backgroundColor: 'var(--bg-code, var(--bg-secondary))',
+    },
+    '.cm-tooltip .e-hover-pre': {
+      margin: '0',
+      padding: '0',
+      fontFamily: 'var(--font-family)',
+      fontSize: '12.5px',
+      lineHeight: '1.55',
+      color: 'var(--text-primary)',
+      whiteSpace: 'pre-wrap',
+      wordBreak: 'break-word',
+      maxHeight: '200px',
+      overflowY: 'auto',
+    },
+    '.cm-tooltip .e-hover-sep': {
+      height: '1px',
+      backgroundColor: 'var(--border-primary)',
+    },
+    '.cm-tooltip .e-hover-docs': {
+      padding: '7px 12px',
+    },
+    '.cm-tooltip .e-hover-doc-para': {
+      margin: '0 0 4px',
+      color: 'var(--text-secondary)',
+      lineHeight: '1.55',
+      fontSize: '12px',
+    },
+    '.cm-tooltip .e-hover-doc-para:last-child': {
+      marginBottom: '0',
+    },
+    '.cm-tooltip .e-hover-inline-code': {
+      fontFamily: 'var(--font-family)',
+      fontSize: '11.5px',
+      backgroundColor: 'var(--bg-tertiary)',
+      color: 'var(--accent-primary)',
+      padding: '0 3px',
+      borderRadius: '3px',
+      border: '1px solid var(--border-secondary)',
+    },
+    // Definition peek section
+    '.cm-tooltip .e-hover-peek': {
+      backgroundColor: 'var(--bg-secondary)',
+    },
+    '.cm-tooltip .e-hover-peek-label': {
+      display: 'flex',
+      alignItems: 'center',
+      gap: '4px',
+      padding: '5px 12px 3px',
+      fontSize: '11px',
+      color: 'var(--text-tertiary)',
+      borderBottom: '1px solid var(--border-secondary)',
+    },
+    '.cm-tooltip .e-hover-peek-icon': {
+      fontSize: '10px',
+      color: 'var(--accent-primary)',
+      opacity: '0.7',
+    },
+    '.cm-tooltip .e-hover-peek-path': {
+      color: 'var(--text-secondary)',
+      fontFamily: 'var(--font-family)',
+      fontSize: '11px',
+    },
+    '.cm-tooltip .e-hover-peek-line': {
+      color: 'var(--text-tertiary)',
+      fontFamily: 'var(--font-family)',
+      fontSize: '11px',
+    },
+    '.cm-tooltip .e-hover-peek-code': {
+      padding: '6px 12px 8px',
+      maxHeight: '160px',
+      overflowY: 'auto',
+      fontSize: '12px',
+      lineHeight: '1.5',
+      color: 'var(--text-primary)',
+      margin: '0',
+    },
+    // Syntax highlight token classes used in hover card snippets (ht-* = hover token)
+    '.e-hover-pre .ht-kw': { color: 'var(--syn-keyword)' },
+    '.e-hover-pre .ht-str': { color: 'var(--syn-string)' },
+    '.e-hover-pre .ht-num': { color: 'var(--syn-number, var(--syn-string))' },
+    '.e-hover-pre .ht-cmt': { color: 'var(--syn-comment)', fontStyle: 'italic' },
+    '.e-hover-pre .ht-typ': { color: 'var(--syn-type)' },
+    '.e-hover-pre .ht-fn': { color: 'var(--syn-function)' },
+    '.e-hover-pre .ht-var': { color: 'var(--syn-variable)' },
+    '.e-hover-pre .ht-op': { color: 'var(--syn-operator)' },
+    '.e-hover-pre .ht-pun': { color: 'var(--text-secondary)' },
+    '.e-hover-pre .ht-err': { color: 'var(--accent-error)' },
     '.cm-tooltip-autocomplete': {
+      '& > ul': {
+        backgroundColor: 'var(--bg-elevated)',
+        border: '1px solid var(--border-primary)',
+        borderRadius: 'var(--radius)',
+        boxShadow: '0 4px 12px rgba(0,0,0,0.4)',
+        fontFamily: 'var(--font-family-sans)',
+        fontSize: '12.5px',
+        maxHeight: '280px',
+      },
+      '& > ul > li': {
+        padding: '3px 10px',
+        color: 'var(--text-secondary)',
+      },
       '& > ul > li[aria-selected]': {
         backgroundColor: 'var(--bg-active)',
         color: 'var(--text-primary)',
@@ -170,3 +294,19 @@ export const eHighlightStyle = HighlightStyle.define([
 ]);
 
 export const eSyntaxHighlighting = syntaxHighlighting(eHighlightStyle);
+
+// Inject global @keyframes for hover card animation (once per page)
+if (typeof document !== 'undefined') {
+  const _styleId = 'e-cm-hover-keyframes';
+  if (!document.getElementById(_styleId)) {
+    const s = document.createElement('style');
+    s.id = _styleId;
+    s.textContent = `
+      @keyframes hoverCardIn {
+        from { opacity: 0; transform: scale(0.97) translateY(3px); }
+        to   { opacity: 1; transform: scale(1) translateY(0); }
+      }
+    `;
+    document.head.appendChild(s);
+  }
+}

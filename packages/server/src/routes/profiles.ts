@@ -56,10 +56,12 @@ app.post('/', async (c) => {
   const id = nanoid();
   const now = Date.now();
 
-  db.query(`
+  db.query(
+    `
     INSERT INTO agent_profiles (id, name, description, permission_mode, allowed_tools, disallowed_tools, system_prompt, created_at, updated_at)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(
+  `,
+  ).run(
     id,
     name,
     description || null,
@@ -110,11 +112,13 @@ app.patch('/:id', async (c) => {
   const disallowedTools = body.disallowedTools ?? JSON.parse(existing.disallowed_tools || '[]');
   const systemPrompt = 'systemPrompt' in body ? body.systemPrompt : existing.system_prompt;
 
-  db.query(`
+  db.query(
+    `
     UPDATE agent_profiles
     SET name = ?, description = ?, permission_mode = ?, allowed_tools = ?, disallowed_tools = ?, system_prompt = ?, updated_at = ?
     WHERE id = ?
-  `).run(
+  `,
+  ).run(
     name,
     description || null,
     permissionMode,

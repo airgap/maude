@@ -47,11 +47,7 @@ export type { TaskStatus, Task, TaskCreateInput, TaskUpdateInput } from './tasks
 
 export type { AgentType, AgentStatus, Agent, AgentSpawnInput } from './agents.js';
 
-export type {
-  AgentProfile,
-  AgentProfileCreateInput,
-  AgentProfileUpdateInput,
-} from './profiles.js';
+export type { AgentProfile, AgentProfileCreateInput, AgentProfileUpdateInput } from './profiles.js';
 
 export { BUILT_IN_PROFILES } from './profiles.js';
 
@@ -79,7 +75,15 @@ export type { ThemeId, CliProvider, Settings, Keybinding, ServerOnlySettings } f
 
 export { DEFAULT_SETTINGS } from './settings.js';
 
-export type { MemoryFile, MemoryFileType, Skill, MemoryState, RuleMode, RuleMetadata, RuleFile } from './memory.js';
+export type {
+  MemoryFile,
+  MemoryFileType,
+  Skill,
+  MemoryState,
+  RuleMode,
+  RuleMetadata,
+  RuleFile,
+} from './memory.js';
 
 export type { Workspace, WorkspaceSettings, WorkspaceSummary } from './projects.js';
 

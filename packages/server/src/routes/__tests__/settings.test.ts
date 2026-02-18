@@ -352,7 +352,9 @@ describe('Settings Routes', () => {
       const json = await res.json();
       expect(json.ok).toBe(true);
 
-      const row = testDb.query('SELECT value FROM settings WHERE key = ?').get('anthropicApiKey') as any;
+      const row = testDb
+        .query('SELECT value FROM settings WHERE key = ?')
+        .get('anthropicApiKey') as any;
       expect(JSON.parse(row.value)).toBe('sk-ant-test123');
     });
 
@@ -363,7 +365,9 @@ describe('Settings Routes', () => {
         headers: { 'Content-Type': 'application/json' },
       });
 
-      const row = testDb.query('SELECT value FROM settings WHERE key = ?').get('openaiApiKey') as any;
+      const row = testDb
+        .query('SELECT value FROM settings WHERE key = ?')
+        .get('openaiApiKey') as any;
       expect(JSON.parse(row.value)).toBe('sk-openai-key');
     });
 
@@ -374,7 +378,9 @@ describe('Settings Routes', () => {
         headers: { 'Content-Type': 'application/json' },
       });
 
-      const row = testDb.query('SELECT value FROM settings WHERE key = ?').get('googleApiKey') as any;
+      const row = testDb
+        .query('SELECT value FROM settings WHERE key = ?')
+        .get('googleApiKey') as any;
       expect(JSON.parse(row.value)).toBe('AIza-google-test');
     });
 
@@ -398,7 +404,9 @@ describe('Settings Routes', () => {
         headers: { 'Content-Type': 'application/json' },
       });
 
-      const row = testDb.query('SELECT value FROM settings WHERE key = ?').get('anthropicApiKey') as any;
+      const row = testDb
+        .query('SELECT value FROM settings WHERE key = ?')
+        .get('anthropicApiKey') as any;
       expect(JSON.parse(row.value)).toBe('new-key');
     });
   });
@@ -470,7 +478,9 @@ describe('Settings Routes', () => {
       const json = await res.json();
       expect(json.ok).toBe(true);
 
-      const row = testDb.query("SELECT value FROM settings WHERE key = 'sessionBudgetUsd'").get() as any;
+      const row = testDb
+        .query("SELECT value FROM settings WHERE key = 'sessionBudgetUsd'")
+        .get() as any;
       expect(JSON.parse(row.value)).toBe(10.0);
     });
 
@@ -497,7 +507,9 @@ describe('Settings Routes', () => {
         headers: { 'Content-Type': 'application/json' },
       });
 
-      const row = testDb.query("SELECT value FROM settings WHERE key = 'sessionBudgetUsd'").get() as any;
+      const row = testDb
+        .query("SELECT value FROM settings WHERE key = 'sessionBudgetUsd'")
+        .get() as any;
       expect(JSON.parse(row.value)).toBe(20.0);
     });
 

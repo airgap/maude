@@ -12,10 +12,7 @@
     lastModified: number;
   }
 
-  let {
-    onSelect,
-    onClose,
-  } = $props<{
+  let { onSelect, onClose } = $props<{
     onSelect: (rule: RuleFile) => void;
     onClose: () => void;
   }>();

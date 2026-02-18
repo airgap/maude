@@ -634,25 +634,35 @@ function createLoopStore() {
           if (activeLoop && (activeLoop.status === 'running' || activeLoop.status === 'paused')) {
             if (reconnectAttempts < MAX_RECONNECT_ATTEMPTS) {
               reconnectAttempts++;
-              console.log(`[loop] SSE stream ended, reconnecting (attempt ${reconnectAttempts})...`);
+              console.log(
+                `[loop] SSE stream ended, reconnecting (attempt ${reconnectAttempts})...`,
+              );
               // Refresh loop state from server before reconnecting
               try {
                 const loopRes = await api.loops.get(loopId);
                 if (loopRes.ok) {
                   const serverLoop = loopRes.data;
-                  if (serverLoop.status === 'completed' || serverLoop.status === 'cancelled' || serverLoop.status === 'failed') {
+                  if (
+                    serverLoop.status === 'completed' ||
+                    serverLoop.status === 'cancelled' ||
+                    serverLoop.status === 'failed'
+                  ) {
                     // Server says it's done — update local state
                     activeLoop = { ...activeLoop, ...serverLoop };
                     return;
                   }
                 }
-              } catch { /* proceed with reconnect */ }
+              } catch {
+                /* proceed with reconnect */
+              }
               await new Promise((r) => setTimeout(r, RECONNECT_DELAY_MS));
               if (eventAbort && !eventAbort.signal.aborted) {
                 await connect();
               }
             } else {
-              console.warn('[loop] Max reconnect attempts reached, refreshing loop state from server');
+              console.warn(
+                '[loop] Max reconnect attempts reached, refreshing loop state from server',
+              );
               await this.loadActiveLoop();
             }
           }
@@ -660,7 +670,11 @@ function createLoopStore() {
           if ((err as Error).name !== 'AbortError') {
             console.error('[loop] Event stream error:', err);
             // Attempt reconnect on non-abort errors
-            if (activeLoop && (activeLoop.status === 'running' || activeLoop.status === 'paused') && reconnectAttempts < MAX_RECONNECT_ATTEMPTS) {
+            if (
+              activeLoop &&
+              (activeLoop.status === 'running' || activeLoop.status === 'paused') &&
+              reconnectAttempts < MAX_RECONNECT_ATTEMPTS
+            ) {
               reconnectAttempts++;
               await new Promise((r) => setTimeout(r, RECONNECT_DELAY_MS));
               if (eventAbort && !eventAbort.signal.aborted) {
@@ -725,7 +739,9 @@ function createLoopStore() {
               activeLoop = freshRes.data;
               log = activeLoop!.iterationLog || [];
             }
-          } catch { /* use cached data */ }
+          } catch {
+            /* use cached data */
+          }
           // Restore standalone story count for progress tracking
           if (activeLoop && !activeLoop.prdId) {
             this.restoreStandaloneStoryCount();

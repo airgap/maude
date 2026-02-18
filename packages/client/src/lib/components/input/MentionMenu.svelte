@@ -8,10 +8,30 @@
 
   const MENTION_TYPES: MentionType[] = [
     { id: 'file', label: '@file', description: 'Inject file content as context', icon: '📄' },
-    { id: 'symbol', label: '@symbol', description: 'Inject symbol definition from code', icon: '⚡' },
-    { id: 'diagnostics', label: '@diagnostics', description: 'Inject all LSP errors & warnings', icon: '🔴' },
-    { id: 'rule', label: '@rule', description: 'Inject an on-demand rule from Rules Library', icon: '📋' },
-    { id: 'thread', label: '@thread', description: 'Inject a prior conversation summary', icon: '💬' },
+    {
+      id: 'symbol',
+      label: '@symbol',
+      description: 'Inject symbol definition from code',
+      icon: '⚡',
+    },
+    {
+      id: 'diagnostics',
+      label: '@diagnostics',
+      description: 'Inject all LSP errors & warnings',
+      icon: '🔴',
+    },
+    {
+      id: 'rule',
+      label: '@rule',
+      description: 'Inject an on-demand rule from Rules Library',
+      icon: '📋',
+    },
+    {
+      id: 'thread',
+      label: '@thread',
+      description: 'Inject a prior conversation summary',
+      icon: '💬',
+    },
   ];
 
   let {

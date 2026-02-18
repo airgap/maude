@@ -42,10 +42,11 @@
   import { settingsStore } from '$lib/stores/settings.svelte';
   import { lspStore } from '$lib/stores/lsp.svelte';
   import { gotoDefinitionExtension } from './extensions/goto-definition';
-  import { hoverInfoExtension } from './extensions/hover-info';
   import { lspCompletionSource } from './extensions/lsp-completions';
   import { lspDiagnosticsExtension } from './extensions/lsp-diagnostics';
   import { lspHoverExtension } from './extensions/lsp-hover';
+  import { fileUriField } from './extensions/file-uri-field';
+  import { hoverHighlightExtension } from './extensions/hover-highlight';
 
   let { tab } = $props<{ tab: EditorTab }>();
 
@@ -112,9 +113,18 @@
     return { from: word?.from ?? ctx.pos, options: [...builtIn, ...custom] };
   }
 
+  function fileUri(): string {
+    const p = tab.filePath;
+    if (!p) return '';
+    // Normalise to file:///absolute/path (already absolute on Linux/Mac)
+    return p.startsWith('file://') ? p : `file://${p}`;
+  }
+
   function createExtensions(languageSupport?: any) {
     const ec = tab.editorConfig;
     const exts = [
+      // Stores the file URI so lsp-hover and lsp-completions can reference it
+      fileUriField.init(() => fileUri()),
       lineNumbers(),
       highlightActiveLineGutter(),
       highlightSpecialChars(),
@@ -173,11 +183,12 @@
           editorStore.setCursorPosition(tab.id, line.number, pos - line.from + 1);
         }
       }),
-      // Tree-sitter powered extensions (used as fallback when LSP not connected)
+      // Tree-sitter powered extensions
       gotoDefinitionExtension(tab.id, tab.language),
-      lspStore.isConnected(tab.language)
-        ? lspHoverExtension(tab.language)
-        : hoverInfoExtension(tab.id),
+      // Unified hover: LSP first, tree-sitter fallback if LSP is absent or returns nothing
+      lspHoverExtension(tab.language, tab.id),
+      // Highlight all occurrences of the word under the cursor on hover
+      hoverHighlightExtension(),
       // LSP diagnostics (only when connected)
       ...(lspStore.isConnected(tab.language) ? [lspDiagnosticsExtension(tab.language)] : []),
     ];

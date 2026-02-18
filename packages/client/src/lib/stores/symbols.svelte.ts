@@ -20,6 +20,13 @@ function createSymbolStore() {
             ready = true;
             break;
           case 'parsed': {
+            console.debug(
+              '[symbolStore] parsed',
+              msg.fileId,
+              'symbols:',
+              msg.symbols.length,
+              msg.symbols.map((s: any) => s.name).slice(0, 10),
+            );
             const newMap = new Map(symbolsByFile);
             newMap.set(msg.fileId, msg.symbols);
             symbolsByFile = newMap;

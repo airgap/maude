@@ -667,7 +667,9 @@ describe('Conversation Routes', () => {
       expect(json.ok).toBe(true);
 
       // Only msg-1 should be deleted
-      const remaining = testDb.query('SELECT id FROM messages WHERE conversation_id = ?').all('conv-1') as any[];
+      const remaining = testDb
+        .query('SELECT id FROM messages WHERE conversation_id = ?')
+        .all('conv-1') as any[];
       expect(remaining).toHaveLength(1);
       expect(remaining[0].id).toBe('msg-2');
     });
@@ -681,7 +683,9 @@ describe('Conversation Routes', () => {
       const res = await app.request('/conv-1/messages/msg-1?deletePair=true', { method: 'DELETE' });
       expect(res.status).toBe(200);
 
-      const remaining = testDb.query('SELECT id FROM messages WHERE conversation_id = ? ORDER BY timestamp ASC').all('conv-1') as any[];
+      const remaining = testDb
+        .query('SELECT id FROM messages WHERE conversation_id = ? ORDER BY timestamp ASC')
+        .all('conv-1') as any[];
       expect(remaining).toHaveLength(1);
       expect(remaining[0].id).toBe('msg-3');
     });
@@ -693,7 +697,9 @@ describe('Conversation Routes', () => {
 
       await app.request('/conv-1/messages/msg-1?deletePair=true', { method: 'DELETE' });
 
-      const remaining = testDb.query('SELECT id FROM messages WHERE conversation_id = ?').all('conv-1') as any[];
+      const remaining = testDb
+        .query('SELECT id FROM messages WHERE conversation_id = ?')
+        .all('conv-1') as any[];
       expect(remaining).toHaveLength(1);
       expect(remaining[0].id).toBe('msg-2');
     });
@@ -704,7 +710,9 @@ describe('Conversation Routes', () => {
 
       await app.request('/conv-1/messages/msg-1?deletePair=true', { method: 'DELETE' });
 
-      const remaining = testDb.query('SELECT id FROM messages WHERE conversation_id = ?').all('conv-1');
+      const remaining = testDb
+        .query('SELECT id FROM messages WHERE conversation_id = ?')
+        .all('conv-1');
       expect(remaining).toHaveLength(0);
     });
 
@@ -717,7 +725,9 @@ describe('Conversation Routes', () => {
       // deletePair on assistant message — only deletes the single message
       await app.request('/conv-1/messages/msg-2?deletePair=true', { method: 'DELETE' });
 
-      const remaining = testDb.query('SELECT id FROM messages WHERE conversation_id = ? ORDER BY timestamp ASC').all('conv-1') as any[];
+      const remaining = testDb
+        .query('SELECT id FROM messages WHERE conversation_id = ? ORDER BY timestamp ASC')
+        .all('conv-1') as any[];
       expect(remaining).toHaveLength(2);
       expect(remaining[0].id).toBe('msg-1');
       expect(remaining[1].id).toBe('msg-3');
@@ -729,7 +739,9 @@ describe('Conversation Routes', () => {
 
       await app.request('/conv-1/messages/msg-1', { method: 'DELETE' });
 
-      const row = testDb.query('SELECT cli_session_id, updated_at FROM conversations WHERE id = ?').get('conv-1') as any;
+      const row = testDb
+        .query('SELECT cli_session_id, updated_at FROM conversations WHERE id = ?')
+        .get('conv-1') as any;
       expect(row.cli_session_id).toBeNull();
       expect(row.updated_at).toBeGreaterThan(1000);
     });
@@ -781,7 +793,9 @@ describe('Conversation Routes', () => {
       const json = await res.json();
       expect(json.ok).toBe(true);
 
-      const remaining = testDb.query('SELECT id FROM messages WHERE conversation_id = ? ORDER BY timestamp ASC').all('conv-1') as any[];
+      const remaining = testDb
+        .query('SELECT id FROM messages WHERE conversation_id = ? ORDER BY timestamp ASC')
+        .all('conv-1') as any[];
       expect(remaining).toHaveLength(1);
       expect(remaining[0].id).toBe('msg-1');
     });
@@ -797,7 +811,9 @@ describe('Conversation Routes', () => {
         headers: { 'Content-Type': 'application/json' },
       });
 
-      const remaining = testDb.query('SELECT id FROM messages WHERE conversation_id = ?').all('conv-1') as any[];
+      const remaining = testDb
+        .query('SELECT id FROM messages WHERE conversation_id = ?')
+        .all('conv-1') as any[];
       expect(remaining).toHaveLength(1);
       expect(remaining[0].id).toBe('msg-1');
     });
@@ -812,7 +828,9 @@ describe('Conversation Routes', () => {
         headers: { 'Content-Type': 'application/json' },
       });
 
-      const row = testDb.query('SELECT cli_session_id, updated_at FROM conversations WHERE id = ?').get('conv-1') as any;
+      const row = testDb
+        .query('SELECT cli_session_id, updated_at FROM conversations WHERE id = ?')
+        .get('conv-1') as any;
       expect(row.cli_session_id).toBeNull();
       expect(row.updated_at).toBeGreaterThan(1000);
     });
@@ -829,7 +847,9 @@ describe('Conversation Routes', () => {
         headers: { 'Content-Type': 'application/json' },
       });
 
-      const remaining = testDb.query('SELECT * FROM messages WHERE conversation_id = ?').all('conv-1');
+      const remaining = testDb
+        .query('SELECT * FROM messages WHERE conversation_id = ?')
+        .all('conv-1');
       expect(remaining).toHaveLength(0);
     });
   });
@@ -877,7 +897,9 @@ describe('Conversation Routes', () => {
       expect(json.ok).toBe(true);
       expect(json.data.id).toBeDefined();
 
-      const newConv = testDb.query('SELECT * FROM conversations WHERE id = ?').get(json.data.id) as any;
+      const newConv = testDb
+        .query('SELECT * FROM conversations WHERE id = ?')
+        .get(json.data.id) as any;
       expect(newConv.title).toBe('My Chat (fork)');
       expect(newConv.model).toBe('claude-opus-4-6');
     });
@@ -895,7 +917,9 @@ describe('Conversation Routes', () => {
       });
       const json = await res.json();
 
-      const messages = testDb.query('SELECT * FROM messages WHERE conversation_id = ? ORDER BY timestamp ASC').all(json.data.id) as any[];
+      const messages = testDb
+        .query('SELECT * FROM messages WHERE conversation_id = ? ORDER BY timestamp ASC')
+        .all(json.data.id) as any[];
       expect(messages).toHaveLength(2);
       expect(messages[0].role).toBe('user');
       expect(messages[1].role).toBe('assistant');
@@ -912,7 +936,9 @@ describe('Conversation Routes', () => {
       });
       const json = await res.json();
 
-      const messages = testDb.query('SELECT id FROM messages WHERE conversation_id = ?').all(json.data.id) as any[];
+      const messages = testDb
+        .query('SELECT id FROM messages WHERE conversation_id = ?')
+        .all(json.data.id) as any[];
       expect(messages).toHaveLength(1);
       expect(messages[0].id).not.toBe('msg-1');
     });
@@ -939,7 +965,9 @@ describe('Conversation Routes', () => {
       });
       const json = await res.json();
 
-      const newConv = testDb.query('SELECT * FROM conversations WHERE id = ?').get(json.data.id) as any;
+      const newConv = testDb
+        .query('SELECT * FROM conversations WHERE id = ?')
+        .get(json.data.id) as any;
       expect(newConv.model).toBe('claude-opus-4-6');
       expect(newConv.system_prompt).toBe('Be helpful');
       expect(newConv.workspace_path).toBe('/my/project');
@@ -963,7 +991,9 @@ describe('Conversation Routes', () => {
       });
 
       // Original still has both messages
-      const origMessages = testDb.query('SELECT * FROM messages WHERE conversation_id = ?').all('conv-1');
+      const origMessages = testDb
+        .query('SELECT * FROM messages WHERE conversation_id = ?')
+        .all('conv-1');
       expect(origMessages).toHaveLength(2);
     });
 
@@ -978,7 +1008,9 @@ describe('Conversation Routes', () => {
       });
       const json = await res.json();
 
-      const newConv = testDb.query('SELECT cli_session_id FROM conversations WHERE id = ?').get(json.data.id) as any;
+      const newConv = testDb
+        .query('SELECT cli_session_id FROM conversations WHERE id = ?')
+        .get(json.data.id) as any;
       expect(newConv.cli_session_id).toBeNull();
     });
   });

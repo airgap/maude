@@ -134,7 +134,8 @@
     return `${Math.floor(diff / 86_400_000)}d ago`;
   }
 
-  function workspaceName(path: string): string {
+  function workspaceName(path: string | null | undefined): string {
+    if (!path) return 'Unknown';
     const ws = workspaceListStore.workspaces.find((w) => w.path === path);
     if (ws) return ws.name;
     return path.split('/').pop() ?? path;
@@ -317,7 +318,9 @@
         <div class="section-header">
           <span class="section-title">
             Completed Today
-            <span class="badge success">{data.completedStories.filter((s) => s.status === 'completed').length}</span>
+            <span class="badge success"
+              >{data.completedStories.filter((s) => s.status === 'completed').length}</span
+            >
           </span>
         </div>
         <div class="item-list">
@@ -489,8 +492,13 @@
   }
 
   @keyframes pulse-dot {
-    0%, 100% { opacity: 1; }
-    50% { opacity: 0.4; }
+    0%,
+    100% {
+      opacity: 1;
+    }
+    50% {
+      opacity: 0.4;
+    }
   }
   .spin-dot {
     animation: pulse-dot 1.5s ease-in-out infinite;

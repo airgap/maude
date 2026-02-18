@@ -29,7 +29,7 @@ function createArtifactsStore() {
 
     /** Load all artifacts for a conversation */
     async load(conversationId: string) {
-      if (loading) return;
+      if (loading || currentConversationId === conversationId) return;
       currentConversationId = conversationId;
       loading = true;
       try {
