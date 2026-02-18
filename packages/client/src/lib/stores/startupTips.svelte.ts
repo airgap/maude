@@ -26,14 +26,14 @@ export const STARTUP_TIPS: StartupTip[] = [
   {
     id: 'at-mentions',
     category: 'Feature',
-    text: 'Type @ in the chat input to attach files, symbols, or threads as context for Claude.',
+    text: 'Type @ in the chat input to attach files, symbols, or threads as context for E.',
     actionLabel: 'Focus chat',
     actionId: 'focus-chat',
   },
   {
     id: 'plan-mode',
     category: 'Workflow',
-    text: 'Double-tap Shift+Tab to toggle Plan Mode — Claude will outline its approach before acting.',
+    text: 'Double-tap Shift+Tab to toggle Plan Mode — E will outline its approach before acting.',
     shortcut: 'Shift+Tab ×2',
   },
   {
@@ -55,19 +55,19 @@ export const STARTUP_TIPS: StartupTip[] = [
   {
     id: 'memory-panel',
     category: 'Feature',
-    text: 'Use the Memory panel to teach Claude about your project\'s conventions. It remembers across conversations.',
+    text: 'Use the Memory panel to teach E about your project\'s conventions. It remembers across conversations.',
     actionLabel: 'Open Memory',
     actionId: 'open-memory-panel',
   },
   {
     id: 'teach-mode',
     category: 'Workflow',
-    text: 'Click the Teach Mode button (graduation cap icon) or type /teach to enable Teach Mode — Claude explains concepts step by step.',
+    text: 'Click the Teach Mode button (graduation cap icon) or type /teach to enable Teach Mode — E explains concepts step by step.',
   },
   {
     id: 'session-replay',
     category: 'Feature',
-    text: 'Type /replay to open Session Replay and review exactly how Claude solved a problem.',
+    text: 'Type /replay to open Session Replay and review exactly how E solved a problem.',
   },
   {
     id: 'agent-profiles',
@@ -104,7 +104,7 @@ export const STARTUP_TIPS: StartupTip[] = [
   {
     id: 'terminal',
     category: 'Feature',
-    text: 'Press Ctrl+` to toggle the integrated terminal. Claude can run commands here when given permission.',
+    text: 'Press Ctrl+` to toggle the integrated terminal. E can run commands here when given permission.',
     shortcut: 'Ctrl+`',
   },
   {
@@ -130,7 +130,7 @@ export const STARTUP_TIPS: StartupTip[] = [
   {
     id: 'loop-mode',
     category: 'Workflow',
-    text: 'Create a PRD with user stories, then click Start Loop — Claude implements stories autonomously.',
+    text: 'Create a PRD with user stories, then click Start Loop — E implements stories autonomously.',
     actionLabel: 'Open Work panel',
     actionId: 'open-work-panel',
   },

@@ -32,11 +32,11 @@ export const TUTORIAL_STEPS: TutorialStep[] = [
     icon: 'M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5',
     description: 'Your AI-powered IDE assistant',
     body: `
-      <p><strong>E</strong> is a desktop AI assistant powered by Claude — a full IDE-grade environment where you chat with Claude while working on real codebases.</p>
+      <p><strong>E</strong> is a desktop AI assistant — a full IDE-grade environment where you chat with AI while working on real codebases.</p>
       <h3>The three zones</h3>
       <ul>
         <li><strong>Left Sidebar</strong> — Panels for conversations, files, work items, memory, agents, tools, and more</li>
-        <li><strong>Center Chat</strong> — Real-time streaming conversation with Claude</li>
+        <li><strong>Center Chat</strong> — Real-time streaming conversation with E</li>
         <li><strong>Right Editor</strong> — Monaco code editor with LSP, diff view, and integrated terminal</li>
       </ul>
       <p>Let's walk through the key features. Click <strong>Next</strong> to continue.</p>
@@ -46,9 +46,9 @@ export const TUTORIAL_STEPS: TutorialStep[] = [
     id: 'chat-basics',
     title: 'Chat & Conversations',
     icon: 'M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z',
-    description: 'Talk to Claude in real time',
+    description: 'Talk to E in real time',
     body: `
-      <p>The <strong>center chat</strong> is where you interact with Claude. Messages stream in real-time with visible thinking steps and tool calls.</p>
+      <p>The <strong>center chat</strong> is where you interact with E. Messages stream in real-time with visible thinking steps and tool calls.</p>
       <h3>Key shortcuts</h3>
       <ul>
         <li><kbd>Enter</kbd> — Send your message</li>
@@ -77,7 +77,7 @@ export const TUTORIAL_STEPS: TutorialStep[] = [
       <ul>
         <li><code>/clear</code> — Clear the current conversation</li>
         <li><code>/new</code> — Start a new conversation</li>
-        <li><code>/plan</code> — Toggle Plan Mode (Claude thinks before acting)</li>
+        <li><code>/plan</code> — Toggle Plan Mode (E thinks before acting)</li>
         <li><code>/teach</code> — Toggle Teach Me mode</li>
         <li><code>/fork</code> — Branch the conversation</li>
         <li><code>/replay</code> — Open session replay</li>
@@ -99,9 +99,9 @@ export const TUTORIAL_STEPS: TutorialStep[] = [
         <li><strong>Chats</strong> — Conversation history and branching</li>
         <li><strong>Files</strong> — Workspace file tree</li>
         <li><strong>Work</strong> — PRDs, user stories, and project planning</li>
-        <li><strong>Memory</strong> — Persistent notes Claude remembers across conversations</li>
+        <li><strong>Memory</strong> — Persistent notes E remembers across conversations</li>
         <li><strong>Agents</strong> — Running agent loops and their status</li>
-        <li><strong>Tools</strong> — Custom tools you define for Claude</li>
+        <li><strong>Tools</strong> — Custom tools you define for E</li>
         <li><strong>MCP</strong> — External tool servers (databases, APIs, etc.)</li>
         <li><strong>Costs</strong> — Real-time token usage and spend tracking</li>
       </ul>
@@ -121,7 +121,7 @@ export const TUTORIAL_STEPS: TutorialStep[] = [
       <ul>
         <li><strong>File Tree</strong> — Click any file in the sidebar</li>
         <li><kbd>Ctrl+P</kbd> — Quick open (fuzzy file finder)</li>
-        <li><strong>Auto-open</strong> — When Claude edits a file, it opens in a diff tab</li>
+        <li><strong>Auto-open</strong> — When E edits a file, it opens in a diff tab</li>
       </ul>
       <h3>Layout modes</h3>
       <ul>
@@ -129,7 +129,7 @@ export const TUTORIAL_STEPS: TutorialStep[] = [
         <li><strong>Chat Only</strong> / <strong>Split</strong> / <strong>Editor Only</strong> — Cycle with the status bar button</li>
       </ul>
       <h3>Terminal</h3>
-      <p>Press <kbd>Ctrl+\`</kbd> to toggle the integrated terminal. Claude can run commands here when given permission.</p>
+      <p>Press <kbd>Ctrl+\`</kbd> to toggle the integrated terminal. E can run commands here when given permission.</p>
     `,
     actionLabel: 'Toggle Editor',
     actionId: 'toggle-editor',
@@ -159,7 +159,7 @@ export const TUTORIAL_STEPS: TutorialStep[] = [
     icon: 'M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5',
     description: 'Autonomous AI workflows',
     body: `
-      <p><strong>Loop Mode</strong> runs Claude autonomously: it picks a story, implements it, verifies, and moves to the next — without intervention.</p>
+      <p><strong>Loop Mode</strong> runs E autonomously: it picks a story, implements it, verifies, and moves to the next — without intervention.</p>
       <h3>How to start</h3>
       <ol>
         <li>Open the <strong>Work</strong> panel and create a PRD with user stories</li>
@@ -168,9 +168,9 @@ export const TUTORIAL_STEPS: TutorialStep[] = [
         <li>Click <strong>Run</strong></li>
       </ol>
       <h3>Plan Mode</h3>
-      <p>Press <kbd>Shift+Tab</kbd> twice (or click ✏ in the top bar) to toggle Plan Mode — Claude will outline its plan before taking action.</p>
+      <p>Press <kbd>Shift+Tab</kbd> twice (or click ✏ in the top bar) to toggle Plan Mode — E will outline its plan before taking action.</p>
       <h3>Agent Profiles</h3>
-      <p>Use <kbd>Ctrl+Shift+,</kbd> to cycle between Write, Ask, and Minimal profiles that control how much autonomy Claude has.</p>
+      <p>Use <kbd>Ctrl+Shift+,</kbd> to cycle between Write, Ask, and Minimal profiles that control how much autonomy E has.</p>
     `,
     actionLabel: 'Open Work Panel',
     actionId: 'open-work-panel',
@@ -206,15 +206,15 @@ export const TUTORIAL_STEPS: TutorialStep[] = [
     id: 'complete',
     title: 'You\'re Ready!',
     icon: 'M9 12l2 2 4-4m6 2a9 9 0 1 1-18 0 9 9 0 0 1 18 0z',
-    description: 'Start building with Claude',
+    description: 'Start building with E',
     body: `
       <p>You now know the essentials. Here are some tips as you get started:</p>
       <h3>Quick tips</h3>
       <ul>
         <li>Press <kbd>?</kbd> any time to open the <strong>Help Panel</strong> with detailed docs</li>
-        <li>Use <strong>Memory</strong> to teach Claude about your project's conventions</li>
+        <li>Use <strong>Memory</strong> to teach E about your project's conventions</li>
         <li>Try <strong>Teach Mode</strong> when learning new concepts</li>
-        <li>Use <strong>Session Replay</strong> to review how Claude solved a problem</li>
+        <li>Use <strong>Session Replay</strong> to review how E solved a problem</li>
         <li>The <strong>Daily Digest</strong> summarizes everything that happened in your workspace</li>
       </ul>
       <p>You can re-run this tutorial any time from the <strong>Help</strong> panel.</p>
