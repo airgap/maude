@@ -858,12 +858,13 @@
                 { value: 'melodic', label: 'Melodic', desc: 'Warm additive synthesis — marimba, vibraphone, bells' },
                 { value: 'classic', label: 'Classic', desc: 'Original oscillator chirps — the vintage E sound' },
                 { value: 'whimsy', label: 'Whimsy 🍬', desc: 'Music box, toy piano, kalimba & rubber-duck squeaks' },
+                { value: 'slot-machine', label: 'Slot Machine 🎰', desc: 'Casino coins, reel clicks, lever pulls & jackpot bells' },
               ] as opt}
                 <button
                   class="sound-style-btn"
                   class:active={settingsStore.soundStyle === opt.value}
                   disabled={!settingsStore.soundEnabled}
-                  onclick={() => settingsStore.update({ soundStyle: opt.value as 'classic' | 'melodic' | 'whimsy' })}
+                  onclick={() => settingsStore.update({ soundStyle: opt.value as 'classic' | 'melodic' | 'whimsy' | 'slot-machine' })}
                 >
                   <span class="sound-style-name">{opt.label}</span>
                   <span class="sound-style-desc">{opt.desc}</span>
@@ -2079,10 +2080,12 @@
   }
   .sound-style-row {
     display: flex;
+    flex-wrap: wrap;
     gap: 8px;
   }
   .sound-style-btn {
-    flex: 1;
+    flex: 1 1 calc(50% - 4px);
+    min-width: 140px;
     display: flex;
     flex-direction: column;
     align-items: flex-start;

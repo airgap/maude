@@ -1,10 +1,19 @@
 <script lang="ts">
   import { uiStore } from '$lib/stores/ui.svelte';
   import { loopStore } from '$lib/stores/loop.svelte';
+  import { workStore } from '$lib/stores/work.svelte';
   import { settingsStore } from '$lib/stores/settings.svelte';
   import { uuid } from '$lib/utils/uuid';
   import type { QualityCheckConfig, LoopConfig } from '@e/shared';
   import { onMount } from 'svelte';
+
+  // Standalone mode: no PRD selected
+  let isStandalone = $derived(!loopStore.selectedPrdId);
+  let standaloneStoryCount = $derived(
+    workStore.standaloneStories.filter(
+      (s) => s.status === 'pending' || s.status === 'in_progress',
+    ).length,
+  );
 
   let maxIterations = $state(50);
   let maxAttemptsPerStory = $state(3);
@@ -76,7 +85,7 @@
   let validatingDeps = $state(false);
 
   onMount(async () => {
-    // Also validate dependencies when modal opens
+    // Validate dependencies when modal opens (PRD mode only)
     const prdId = loopStore.selectedPrdId;
     if (prdId) {
       validatingDeps = true;
@@ -91,7 +100,7 @@
   async function startLoop() {
     const prdId = loopStore.selectedPrdId;
     const workspacePath = settingsStore.workspacePath;
-    if (!prdId || !workspacePath) return;
+    if (!workspacePath) return;
 
     const config: LoopConfig = {
       maxIterations,
@@ -105,7 +114,12 @@
     };
 
     try {
-      const result = await loopStore.startLoop(prdId, workspacePath, config);
+      // Set standalone story count for progress tracking before starting
+      if (!prdId) {
+        loopStore.setStandaloneStoryCount(standaloneStoryCount);
+      }
+
+      const result = await loopStore.startLoop(prdId ?? null, workspacePath, config);
       if (result.ok) {
         uiStore.toast('Autonomous loop started', 'success');
         close();
@@ -148,6 +162,11 @@
         <div class="prd-info">
           <strong>{loopStore.selectedPrd.name}</strong>
           <span class="prd-stories">{loopStore.selectedPrd.stories?.length || 0} stories</span>
+        </div>
+      {:else if isStandalone}
+        <div class="prd-info">
+          <strong>Standalone Stories</strong>
+          <span class="prd-stories">{standaloneStoryCount} pending</span>
         </div>
       {/if}
 

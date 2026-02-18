@@ -42,7 +42,7 @@ interface SettingsState {
   sendWithEnter: boolean;
   soundEnabled: boolean;
   soundVolume: number;
-  soundStyle: 'classic' | 'melodic' | 'whimsy';
+  soundStyle: 'classic' | 'melodic' | 'whimsy' | 'slot-machine';
   // Desktop notification settings
   notifyOnCompletion: boolean;
   notifyOnFailure: boolean;

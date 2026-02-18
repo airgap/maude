@@ -358,6 +358,222 @@ const TOY_XYLOPHONE: Overtone[] = [
   { ratio: 12.0, gain: 0.06, decay: 0.02 },
 ];
 
+// ---------------------------------------------------------------------------
+// Slot Machine instrument partial series
+// Casino-themed synthesis: coins, reels, levers, and jackpot bells.
+// ---------------------------------------------------------------------------
+
+/**
+ * Coin Drop — bright metallic ping, like a coin hitting a metal tray.
+ * Strong high-frequency attack with fast decay, metallic clang character.
+ * The inharmonic upper partials give it that distinctive "clink" sound.
+ */
+const COIN: Overtone[] = [
+  { ratio: 1,    gain: 1.00, decay: 0.35 },
+  { ratio: 2.73, gain: 0.55, decay: 0.12 },  // inharmonic metallic ring
+  { ratio: 5.18, gain: 0.30, decay: 0.06 },
+  { ratio: 8.45, gain: 0.15, decay: 0.03 },
+  { ratio: 13.1, gain: 0.08, decay: 0.015 },
+];
+
+/**
+ * Reel Click — short mechanical click, like a reel stop locking into place.
+ * Very percussive, almost no sustain, dense harmonics for that
+ * satisfying mechanical "chunk" when a reel lands.
+ */
+const REEL: Overtone[] = [
+  { ratio: 1,    gain: 0.80, decay: 0.08 },
+  { ratio: 2.35, gain: 0.60, decay: 0.04 },
+  { ratio: 4.10, gain: 0.40, decay: 0.025 },
+  { ratio: 6.80, gain: 0.25, decay: 0.015 },
+  { ratio: 11.2, gain: 0.12, decay: 0.008 },
+];
+
+/**
+ * Lever — spring-loaded pull sound, metallic with a slight wobble.
+ * Longer decay than reel, simulates the lever arm's vibration
+ * after being pulled and released.
+ */
+const LEVER: Overtone[] = [
+  { ratio: 1,    gain: 1.00, decay: 0.60 },
+  { ratio: 1.47, gain: 0.45, decay: 0.40 },  // close interval = beating wobble
+  { ratio: 3.22, gain: 0.20, decay: 0.15 },
+  { ratio: 5.87, gain: 0.10, decay: 0.06 },
+];
+
+/**
+ * Jackpot Bell — loud, celebratory bell with long sustain.
+ * Rich harmonics with slow decay, the unmistakable "ding ding ding"
+ * of a big win. Brighter and more aggressive than the tubular bell.
+ */
+const JACKPOT_BELL: Overtone[] = [
+  { ratio: 1,    gain: 1.00, decay: 3.00 },
+  { ratio: 2.00, gain: 0.70, decay: 2.20 },
+  { ratio: 3.56, gain: 0.45, decay: 1.40 },
+  { ratio: 5.12, gain: 0.25, decay: 0.80 },
+  { ratio: 7.80, gain: 0.12, decay: 0.40 },
+  { ratio: 11.5, gain: 0.06, decay: 0.20 },
+];
+
+/**
+ * Payout Cascade — bright, shimmery coin cascade sound.
+ * Multiple close-spaced partials that create a shimmering,
+ * cascading quality — like coins tumbling into a tray.
+ */
+const CASCADE: Overtone[] = [
+  { ratio: 1,    gain: 1.00, decay: 0.50 },
+  { ratio: 1.12, gain: 0.80, decay: 0.45 },  // close detuning = shimmer
+  { ratio: 2.87, gain: 0.40, decay: 0.25 },
+  { ratio: 4.53, gain: 0.20, decay: 0.12 },
+  { ratio: 7.20, gain: 0.10, decay: 0.06 },
+];
+
+// Slot machine scale — mixolydian (major with flat 7th) for that Vegas swagger
+// The b7 gives it a bluesy, confident, "lucky" quality
+const SLOT_NOTES = {
+  C4: 261.6,  D4: 293.7,  E4: 329.6,  F4: 349.2,
+  G4: 392.0,  A4: 440.0,  Bb4: 466.2,
+  C5: 523.3,  D5: 587.3,  E5: 659.3,  F5: 698.5,
+  G5: 784.0,  A5: 880.0,  Bb5: 932.3,
+  C6: 1046.5, E6: 1318.5, G6: 1568.0,
+  // Low lever pull note
+  G3: 196.0,
+};
+
+// Event → slot machine note specs
+const SLOT_MACHINE_EVENT_NOTES: Record<ChirpEvent, NoteSpec | NoteSpec[]> = {
+  // Lever pull — G3, metallic spring sound, "here we go"
+  message_start: {
+    freq: SLOT_NOTES.G3, partials: LEVER,
+    attack: 0.003, release: 0.15, gain: 0.30,
+  },
+
+  // Single coin insert — E5, bright metallic clink
+  text_start: {
+    freq: SLOT_NOTES.E5, partials: COIN,
+    attack: 0.001, release: 0.06, gain: 0.20,
+  },
+
+  // text_delta → playSlotSpin() — sentinel
+  text_delta: {
+    freq: SLOT_NOTES.C6, partials: REEL,
+    attack: 0.001, release: 0.02, gain: 0.0,
+  },
+
+  // Reel spinning — low lever wobble, anticipation
+  thinking_start: {
+    freq: SLOT_NOTES.C4, partials: LEVER,
+    attack: 0.04, release: 0.5, gain: 0.26,
+  },
+
+  // Reel stop click — D5
+  tool_start: {
+    freq: SLOT_NOTES.D5, partials: REEL,
+    attack: 0.001, release: 0.06, gain: 0.24,
+  },
+
+  // Two coins landing — E5 + A5 (small win)
+  tool_result_ok: [
+    { freq: SLOT_NOTES.E5, partials: COIN, attack: 0.002, release: 0.12, gain: 0.24 },
+    { freq: SLOT_NOTES.A5, partials: COIN, attack: 0.002, release: 0.12, gain: 0.16 },
+  ],
+
+  // Buzzer — Bb4 reel clank, the "no match" sound
+  tool_result_error: {
+    freq: SLOT_NOTES.Bb4, partials: REEL,
+    attack: 0.002, release: 0.10, gain: 0.28,
+  },
+
+  // Jackpot bells — C5 + E5 + G5 + C6, full celebration
+  tool_approval: [
+    { freq: SLOT_NOTES.C5, partials: JACKPOT_BELL, attack: 0.006, release: 0.6,  gain: 0.28 },
+    { freq: SLOT_NOTES.E5, partials: JACKPOT_BELL, attack: 0.006, release: 0.6,  gain: 0.22 },
+    { freq: SLOT_NOTES.G5, partials: JACKPOT_BELL, attack: 0.006, release: 0.6,  gain: 0.16 },
+    { freq: SLOT_NOTES.C6, partials: JACKPOT_BELL, attack: 0.006, release: 0.6,  gain: 0.10 },
+  ],
+
+  // user_question → playSlotQuestion() — sentinel
+  user_question: {
+    freq: SLOT_NOTES.E4, partials: COIN,
+    attack: 0.002, release: 0.10, gain: 0.0,
+  },
+
+  // Payout cascade — C5 + E5 + G5, coins tumbling into tray
+  message_stop: [
+    { freq: SLOT_NOTES.C5, partials: CASCADE, attack: 0.004, release: 0.40, gain: 0.28 },
+    { freq: SLOT_NOTES.E5, partials: CASCADE, attack: 0.004, release: 0.40, gain: 0.22 },
+    { freq: SLOT_NOTES.G5, partials: CASCADE, attack: 0.004, release: 0.40, gain: 0.16 },
+  ],
+
+  // Tilt alarm — Bb4 then G3, descending buzzer
+  error: [
+    { freq: SLOT_NOTES.Bb4, partials: REEL, attack: 0.003, release: 0.20, gain: 0.30 },
+    { freq: SLOT_NOTES.G3,  partials: REEL, attack: 0.003, release: 0.20, gain: 0.22 },
+  ],
+
+  // Cash out — A5 → G5, gentle descending coins
+  cancelled: [
+    { freq: SLOT_NOTES.A5, partials: COIN, attack: 0.004, release: 0.30, gain: 0.20 },
+    { freq: SLOT_NOTES.G5, partials: COIN, attack: 0.004, release: 0.40, gain: 0.14 },
+  ],
+};
+
+interface SlotToolNotes {
+  start: NoteSpec | NoteSpec[];
+  ok:    NoteSpec | NoteSpec[];
+}
+
+const SLOT_MACHINE_TOOL_NOTES: Record<ToolFamily, SlotToolNotes> = {
+  // Shell — low lever pull, decisive
+  shell: {
+    start: { freq: SLOT_NOTES.C4, partials: LEVER, attack: 0.003, release: 0.12, gain: 0.24 },
+    ok:    [
+      { freq: SLOT_NOTES.C4, partials: COIN, attack: 0.003, release: 0.14, gain: 0.22 },
+      { freq: SLOT_NOTES.G4, partials: COIN, attack: 0.003, release: 0.14, gain: 0.14 },
+    ],
+  },
+  // Read — high coin sparkle, scanning reels
+  read: {
+    start: { freq: SLOT_NOTES.A5, partials: COIN, attack: 0.001, release: 0.08, gain: 0.18 },
+    ok:    [
+      { freq: SLOT_NOTES.E5, partials: COIN, attack: 0.002, release: 0.12, gain: 0.18 },
+      { freq: SLOT_NOTES.A5, partials: COIN, attack: 0.002, release: 0.12, gain: 0.12 },
+    ],
+  },
+  // Write — mid reel lock, satisfying click
+  write: {
+    start: { freq: SLOT_NOTES.D5, partials: REEL, attack: 0.001, release: 0.10, gain: 0.24 },
+    ok:    [
+      { freq: SLOT_NOTES.G5, partials: COIN, attack: 0.002, release: 0.14, gain: 0.22 },
+      { freq: SLOT_NOTES.D5, partials: COIN, attack: 0.002, release: 0.14, gain: 0.14 },
+    ],
+  },
+  // Search — lever wobble sweep
+  search: {
+    start: { freq: SLOT_NOTES.D5, partials: LEVER, attack: 0.012, release: 0.20, gain: 0.20 },
+    ok:    [
+      { freq: SLOT_NOTES.G5, partials: CASCADE, attack: 0.004, release: 0.16, gain: 0.20 },
+      { freq: SLOT_NOTES.Bb5, partials: CASCADE, attack: 0.004, release: 0.16, gain: 0.12 },
+    ],
+  },
+  // Agent — jackpot bell, big spawn energy
+  agent: {
+    start: { freq: SLOT_NOTES.C5, partials: JACKPOT_BELL, attack: 0.010, release: 0.50, gain: 0.26 },
+    ok:    [
+      { freq: SLOT_NOTES.G5, partials: JACKPOT_BELL, attack: 0.008, release: 0.40, gain: 0.24 },
+      { freq: SLOT_NOTES.C6, partials: JACKPOT_BELL, attack: 0.008, release: 0.40, gain: 0.16 },
+    ],
+  },
+  // Default — reel click D5
+  default: {
+    start: { freq: SLOT_NOTES.D5, partials: REEL, attack: 0.001, release: 0.08, gain: 0.20 },
+    ok:    [
+      { freq: SLOT_NOTES.D5, partials: COIN, attack: 0.002, release: 0.12, gain: 0.22 },
+      { freq: SLOT_NOTES.A5, partials: COIN, attack: 0.002, release: 0.12, gain: 0.14 },
+    ],
+  },
+};
+
 // C major scale + extensions — bright, upbeat, no pentatonic flats
 const WHIMSY_NOTES = {
   C4: 261.6,  D4: 293.7,  E4: 329.6,  F4: 349.2,
@@ -508,7 +724,7 @@ const WHIMSY_TOOL_NOTES: Record<ToolFamily, WhimsyToolNotes> = {
 // Used when soundStyle === 'classic'
 // ---------------------------------------------------------------------------
 
-export type SoundStyle = 'classic' | 'melodic' | 'whimsy';
+export type SoundStyle = 'classic' | 'melodic' | 'whimsy' | 'slot-machine';
 
 interface ClassicConfig {
   freq: number;
@@ -834,6 +1050,90 @@ export class ChirpEngine {
     toyNote(0.19,  WHIMSY_NOTES.A5,       WHIMSY_NOTES.C6,       0.28, 0.30);  // bends up!
   }
 
+  /**
+   * Slot machine reel tick — replaces text_delta in slot-machine mode.
+   * A rapid mechanical clicking sound, like reels spinning past symbols.
+   * Short filtered noise burst with a metallic resonance.
+   */
+  private playSlotSpin(): void {
+    const ctx = this.ensureContext();
+    const master = this.masterGain!;
+    const now = ctx.currentTime;
+    const buf = this.makeNoiseBuffer(ctx);
+    const dur = 0.025;
+
+    // Metallic reel tick: narrow bandpass around 3.5 kHz
+    const src = ctx.createBufferSource();
+    src.buffer = buf;
+
+    const bp = ctx.createBiquadFilter();
+    bp.type = 'bandpass';
+    bp.frequency.value = 3500;
+    bp.Q.value = 6.0;  // narrow = more tonal, mechanical
+
+    const env = ctx.createGain();
+    env.gain.setValueAtTime(0, now);
+    env.gain.linearRampToValueAtTime(0.30, now + 0.002);  // sharp attack
+    env.gain.setTargetAtTime(0.0001, now + 0.002, 0.010);
+
+    src.connect(bp);
+    bp.connect(env);
+    env.connect(master);
+    src.start(now);
+    src.stop(now + dur + 0.005);
+
+    // Add a tiny pitched "click" overtone for extra mechanical feel
+    const click = ctx.createOscillator();
+    const clickEnv = ctx.createGain();
+    click.type = 'sine';
+    click.frequency.setValueAtTime(SLOT_NOTES.G6, now);
+    clickEnv.gain.setValueAtTime(0, now);
+    clickEnv.gain.linearRampToValueAtTime(0.12, now + 0.001);
+    clickEnv.gain.setTargetAtTime(0.0001, now + 0.001, 0.006);
+    click.connect(clickEnv);
+    clickEnv.connect(master);
+    click.start(now);
+    click.stop(now + dur + 0.005);
+  }
+
+  /**
+   * Slot machine question — "cha-ching?" rising coin toss.
+   * Three coin pings ascending with the last one bending upward,
+   * like tossing a coin and watching it arc.
+   */
+  private playSlotQuestion(): void {
+    const ctx = this.ensureContext();
+    const master = this.masterGain!;
+    const now = ctx.currentTime;
+
+    const coinPing = (startT: number, freqA: number, freqB: number, dur: number, gain: number) => {
+      for (const ot of COIN) {
+        const osc = ctx.createOscillator();
+        const env = ctx.createGain();
+        const peakGain = gain * ot.gain;
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(freqA * ot.ratio, now + startT);
+        if (freqB !== freqA && ot.ratio === 1) {
+          osc.frequency.linearRampToValueAtTime(freqB * ot.ratio, now + startT + dur);
+        }
+        env.gain.setValueAtTime(0, now + startT);
+        env.gain.linearRampToValueAtTime(peakGain, now + startT + 0.002);
+        env.gain.setTargetAtTime(0.0001, now + startT + 0.002, ot.decay * 0.4);
+        env.gain.setValueAtTime(0.0001, now + startT + dur);
+        env.gain.linearRampToValueAtTime(0, now + startT + dur + 0.05);
+        osc.connect(env);
+        env.connect(master);
+        osc.start(now + startT);
+        osc.stop(now + startT + dur + 0.08);
+      }
+    };
+
+    //              start  fA                fB                dur   gain
+    coinPing(0.00,  SLOT_NOTES.E5,   SLOT_NOTES.E5,   0.06, 0.24);
+    coinPing(0.08,  SLOT_NOTES.G5,   SLOT_NOTES.G5,   0.06, 0.26);
+    coinPing(0.17,  SLOT_NOTES.A5,   SLOT_NOTES.C6,   0.25, 0.30);  // bends up — "?"
+  }
+
   toolStart(name: string) {
     const key: ChirpEvent = 'tool_start';
     const cooldown = EVENT_COOLDOWNS[key];
@@ -847,6 +1147,8 @@ export class ChirpEngine {
         this.playClassicConfig(CLASSIC_TOOL_CHIRPS[toolFamily(name)].start);
       } else if (this.style === 'whimsy') {
         this.playSpec(WHIMSY_TOOL_NOTES[toolFamily(name)].start);
+      } else if (this.style === 'slot-machine') {
+        this.playSpec(SLOT_MACHINE_TOOL_NOTES[toolFamily(name)].start);
       } else {
         this.playSpec(TOOL_NOTES[toolFamily(name)].start);
       }
@@ -868,6 +1170,8 @@ export class ChirpEngine {
         this.playClassicConfig(CLASSIC_TOOL_CHIRPS[toolFamily(name)].ok);
       } else if (this.style === 'whimsy') {
         this.playSpec(WHIMSY_TOOL_NOTES[toolFamily(name)].ok);
+      } else if (this.style === 'slot-machine') {
+        this.playSpec(SLOT_MACHINE_TOOL_NOTES[toolFamily(name)].ok);
       } else {
         this.playSpec(TOOL_NOTES[toolFamily(name)].ok);
       }
@@ -897,6 +1201,15 @@ export class ChirpEngine {
         if (event === 'text_delta') { this.playWhimsySqueak(); return; }
         if (event === 'user_question') { this.playWhimsyQuestion(); return; }
         const spec = WHIMSY_EVENT_NOTES[event];
+        if (!spec) return;
+        this.playSpec(spec);
+        return;
+      }
+
+      if (this.style === 'slot-machine') {
+        if (event === 'text_delta') { this.playSlotSpin(); return; }
+        if (event === 'user_question') { this.playSlotQuestion(); return; }
+        const spec = SLOT_MACHINE_EVENT_NOTES[event];
         if (!spec) return;
         this.playSpec(spec);
         return;

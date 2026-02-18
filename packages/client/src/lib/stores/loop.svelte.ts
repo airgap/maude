@@ -111,6 +111,7 @@ function createLoopStore() {
   let log = $state<IterationLogEntry[]>([]);
   let eventReader = $state<ReadableStreamDefaultReader | null>(null);
   let eventAbort = $state<AbortController | null>(null);
+  let standaloneStoryCount = $state(0); // Tracks total stories for standalone loops
 
   // Sprint planning state
   let editMode = $state<EditMode>('locked');
@@ -222,6 +223,9 @@ function createLoopStore() {
       return activeLoop?.totalStoriesCompleted ?? 0;
     },
     get totalStories() {
+      if (activeLoop && !activeLoop.prdId) {
+        return standaloneStoryCount;
+      }
       const prd = prds.find((p) => p.id === activeLoop?.prdId);
       return prd?.stories?.length ?? 0;
     },
@@ -446,6 +450,8 @@ function createLoopStore() {
     handleLoopEvent(event: StreamLoopEvent) {
       if (!activeLoop || event.loopId !== activeLoop.id) return;
 
+      const isStandaloneLoop = !activeLoop.prdId;
+
       switch (event.event) {
         case 'started':
           activeLoop = { ...activeLoop, status: 'running' };
@@ -460,8 +466,12 @@ function createLoopStore() {
           break;
 
         case 'story_started':
-          // Update story status in the PRD list
-          this.updateStoryInPrds(event.data.storyId!, 'in_progress');
+          // Update story status in the appropriate store
+          if (isStandaloneLoop) {
+            this.updateStandaloneStory(event.data.storyId!, 'in_progress');
+          } else {
+            this.updateStoryInPrds(event.data.storyId!, 'in_progress');
+          }
           // Navigate to the new conversation so the user can watch the agent work
           if (event.data.conversationId) {
             this.navigateToLoopConversation(event.data.conversationId, event.data.storyTitle);
@@ -473,13 +483,23 @@ function createLoopStore() {
             ...activeLoop,
             totalStoriesCompleted: activeLoop.totalStoriesCompleted + 1,
           };
-          this.updateStoryInPrds(event.data.storyId!, 'completed');
+          if (isStandaloneLoop) {
+            this.updateStandaloneStory(event.data.storyId!, 'completed');
+          } else {
+            this.updateStoryInPrds(event.data.storyId!, 'completed');
+          }
           break;
 
-        case 'story_failed':
+        case 'story_failed': {
           // If the server will retry, mark as pending (not failed) so UI reflects retry
-          this.updateStoryInPrds(event.data.storyId!, event.data.willRetry ? 'pending' : 'failed');
+          const newStatus = event.data.willRetry ? 'pending' : 'failed';
+          if (isStandaloneLoop) {
+            this.updateStandaloneStory(event.data.storyId!, newStatus);
+          } else {
+            this.updateStoryInPrds(event.data.storyId!, newStatus);
+          }
           break;
+        }
 
         case 'paused':
           activeLoop = { ...activeLoop, status: 'paused', pausedAt: Date.now() };
@@ -522,6 +542,14 @@ function createLoopStore() {
           s.id === storyId ? { ...s, status: status as any } : s,
         ),
       }));
+    },
+
+    /** Update a standalone story status via workStore (lazy import to avoid circular dep). */
+    updateStandaloneStory(storyId: string, status: string) {
+      // Lazy import to break circular dependency (workStore imports loopStore)
+      import('../stores/work.svelte').then(({ workStore }) => {
+        workStore.updateStoryStatus(storyId, status);
+      });
     },
 
     /** Fetch and navigate to a conversation created by the loop. */
@@ -724,6 +752,10 @@ function createLoopStore() {
       } catch {
         /* server may not be ready */
       }
+    },
+
+    setStandaloneStoryCount(count: number) {
+      standaloneStoryCount = count;
     },
 
     async startLoop(
