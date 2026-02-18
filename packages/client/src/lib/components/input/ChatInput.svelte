@@ -7,10 +7,17 @@
   import { sendAndStream, cancelStream } from '$lib/api/sse';
   import { api } from '$lib/api/client';
   import { executeSlashCommand, type SlashCommandContext } from '$lib/commands/slash-commands';
-  import { onFocusChatInput } from '$lib/stores/ui.svelte';
+  import { uiStore, onFocusChatInput } from '$lib/stores/ui.svelte';
+  import { workStore } from '$lib/stores/work.svelte';
   import { onMount } from 'svelte';
   import SlashCommandMenu from './SlashCommandMenu.svelte';
+  import TaskSplitSuggestion from './TaskSplitSuggestion.svelte';
   import VoiceButton from './VoiceButton.svelte';
+  import {
+    detectMultiPartRequest,
+    type DetectedTask,
+    type DetectionResult,
+  } from '$lib/utils/task-detector';
 
   let inputText = $state('');
   let textarea: HTMLTextAreaElement;
@@ -29,6 +36,8 @@
   let contextFiles = $state<Set<string>>(new Set());
   let diffPreview = $state<any>(null);
   let diffLoading = $state(false);
+  let taskSuggestion = $state<DetectionResult | null>(null);
+  let pendingMessage = $state('');
 
   onMount(() => {
     onFocusChatInput(() => {
@@ -191,7 +200,24 @@
       }
     }
 
-    // Create conversation if none exists
+    // Check for multi-part tasks — suggest splitting into stories
+    if (!(conversationStore.active?.planMode || localPlanMode)) {
+      const detection = detectMultiPartRequest(text);
+      if (detection.isMultiPart && detection.tasks.length >= 2) {
+        pendingMessage = text;
+        taskSuggestion = detection;
+        inputText = '';
+        resizeTextarea();
+        return;
+      }
+    }
+
+    // Normal send
+    await sendOriginalMessage(text);
+  }
+
+  /** Send a message through the normal flow (conversation creation + stream). */
+  async function sendOriginalMessage(text: string) {
     if (!conversationStore.activeId) {
       await createConversation(text);
     }
@@ -203,6 +229,53 @@
     resizeTextarea();
     contextFiles = new Set();
     await sendAndStream(conversationStore.activeId!, diffContext + contextPrefix + text);
+  }
+
+  // ── Task split suggestion handlers ──
+
+  async function handleTaskConfirm(tasks: DetectedTask[]) {
+    const workspacePath =
+      workspaceListStore.activeWorkspace?.path || settingsStore.workspacePath;
+    if (!workspacePath) return;
+
+    const selected = tasks.filter((t) => t.selected);
+    const result = await workStore.createStandaloneStories(
+      workspacePath,
+      selected.map((t) => ({ title: t.text })),
+    );
+
+    uiStore.toast(`Created ${result.created} stories`, 'success');
+    uiStore.setSidebarTab('work');
+
+    taskSuggestion = null;
+    pendingMessage = '';
+  }
+
+  async function handleTaskConfirmAndLoop(tasks: DetectedTask[]) {
+    await handleTaskConfirm(tasks);
+    // Open loop config so user can configure and start
+    uiStore.openModal('loop-config');
+  }
+
+  function handleTaskDismiss() {
+    const text = pendingMessage;
+    taskSuggestion = null;
+    pendingMessage = '';
+    sendOriginalMessage(text);
+  }
+
+  function handleToggleTask(index: number) {
+    if (!taskSuggestion) return;
+    const updated = [...taskSuggestion.tasks];
+    updated[index] = { ...updated[index], selected: !updated[index].selected };
+    taskSuggestion = { ...taskSuggestion, tasks: updated };
+  }
+
+  function handleEditTask(index: number, newText: string) {
+    if (!taskSuggestion) return;
+    const updated = [...taskSuggestion.tasks];
+    updated[index] = { ...updated[index], text: newText };
+    taskSuggestion = { ...taskSuggestion, tasks: updated };
   }
 
   async function createConversation(text: string) {
@@ -376,6 +449,17 @@
         {/if}
       </div>
     </div>
+  {/if}
+
+  {#if taskSuggestion}
+    <TaskSplitSuggestion
+      tasks={taskSuggestion.tasks}
+      onConfirm={handleTaskConfirm}
+      onConfirmAndLoop={handleTaskConfirmAndLoop}
+      onDismiss={handleTaskDismiss}
+      onToggleTask={handleToggleTask}
+      onEditTask={handleEditTask}
+    />
   {/if}
 
   <div class="dir-scope" bind:this={dirScopeEl}>

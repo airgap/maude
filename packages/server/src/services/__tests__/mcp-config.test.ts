@@ -1,4 +1,4 @@
-import { describe, test, expect, beforeEach, mock, spyOn } from 'bun:test';
+import { describe, test, expect, beforeEach, mock } from 'bun:test';
 import { createTestDb } from '../../test-helpers';
 
 const testDb = createTestDb();
@@ -7,15 +7,24 @@ mock.module('../../db/database', () => ({
   initDatabase: () => {},
 }));
 
-// Mock fs to prevent actual file writes
+// Mock node:fs (used by mcp-config.ts) to capture file writes.
+// Using 'node:fs' avoids contaminating the bare 'fs' specifier used by other modules.
 let writtenPath = '';
 let writtenContent = '';
-mock.module('fs', () => ({
+mock.module('node:fs', () => ({
   writeFileSync: (path: string, content: string) => {
     writtenPath = path;
     writtenContent = content;
   },
   mkdirSync: () => {},
+  // Passthrough for functions used by other modules that import from node:fs
+  existsSync: (path: string) => false,
+  readFileSync: (path: string) => {
+    throw new Error(`ENOENT: no such file or directory, open '${path}'`);
+  },
+  readdirSync: (path: string) => {
+    throw new Error(`ENOENT: no such file or directory, scandir '${path}'`);
+  },
 }));
 
 import { generateMcpConfig } from '../mcp-config';
@@ -130,10 +139,8 @@ describe('generateMcpConfig', () => {
       env: '{bad json}',
     });
 
-    // Should not throw
     generateMcpConfig();
     const config = JSON.parse(writtenContent);
-    // env should be undefined since JSON.parse failed
     expect(config.mcpServers['bad-env'].env).toBeUndefined();
   });
 
@@ -163,7 +170,6 @@ describe('generateMcpConfig', () => {
   test('writes formatted JSON', () => {
     insertServer({ name: 'test' });
     generateMcpConfig();
-    // Check that content is formatted (has newlines from JSON.stringify indent)
     expect(writtenContent).toContain('\n');
   });
 });

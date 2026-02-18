@@ -9,6 +9,9 @@
  */
 
 import { getDb } from '../db/database';
+import { readFileSync } from 'fs';
+import { join } from 'path';
+import { homedir } from 'os';
 import type { Message } from '@e/shared';
 
 export interface CompactionOptions {
@@ -33,20 +36,68 @@ export interface CompactedHistory {
   tokensRemoved: number;
 }
 
+export interface LLMSummaryResult {
+  /** The summary text (extracted from <summary>...</summary> if present). */
+  summaryText: string;
+  /** The user message to prepend to the compacted history. */
+  summaryMessage: any;
+  /** Whether an actual LLM call was made (false = fell back to rule-based). */
+  usedLLM: boolean;
+}
+
 /**
- * Provider context window limits (in tokens)
+ * Model context window sizes (input tokens).
+ * Mirrors Claude Code's model registry.
  */
-const CONTEXT_LIMITS: Record<string, number> = {
+const CONTEXT_WINDOW: Record<string, number> = {
+  // Claude 4 family
   'claude-opus-4': 200000,
-  'claude-sonnet-3.5': 200000,
+  'claude-opus-4-6': 200000,
   'claude-sonnet-4': 200000,
+  'claude-sonnet-4-5': 200000,
+  'claude-sonnet-4-5-20250929': 200000,
+  'claude-haiku-4': 200000,
+  'claude-haiku-4-5': 200000,
+  'claude-haiku-4-5-20251001': 200000,
+  // Claude 3.x family
+  'claude-sonnet-3.5': 200000,
+  'claude-sonnet-3-5': 200000,
   'claude-haiku-3': 200000,
+  // Ollama local
   'ollama:llama3.1': 128000,
   'ollama:llama3.2': 128000,
   'ollama:qwen2.5': 32000,
   'ollama:mistral': 32000,
-  default: 100000,
+  default: 200000,
 };
+
+/**
+ * Max output token limits per model.
+ * Used in Claude Code's threshold formula.
+ */
+const MAX_OUTPUT_TOKENS: Record<string, number> = {
+  'claude-opus-4': 32000,
+  'claude-opus-4-6': 32000,
+  'claude-sonnet-4': 16000,
+  'claude-sonnet-4-5': 16000,
+  'claude-sonnet-4-5-20250929': 16000,
+  'claude-haiku-4': 8192,
+  'claude-haiku-4-5': 8192,
+  'claude-haiku-4-5-20251001': 8192,
+  'claude-sonnet-3.5': 8192,
+  'claude-haiku-3': 4096,
+  default: 16000,
+};
+
+// Mirrors Claude Code's compaction constants exactly
+const OUTPUT_TOKEN_CAP = 20000;   // QE1 — cap on the output-token reserve
+const SAFETY_BUFFER    = 13000;   // iSA — subtracted from effective window
+
+/**
+ * Provider context window limits (in tokens) — kept for backwards compatibility
+ * with the existing compaction API routes.
+ */
+const CONTEXT_LIMITS: Record<string, number> = CONTEXT_WINDOW;
 
 /**
  * Estimate token count for a message (rough approximation)
@@ -61,19 +112,200 @@ function estimateTokens(content: string): number {
  * Get context window limit for a model
  */
 export function getContextLimit(model: string): number {
-  // Check exact match
-  if (CONTEXT_LIMITS[model]) {
-    return CONTEXT_LIMITS[model];
+  if (CONTEXT_WINDOW[model]) return CONTEXT_WINDOW[model];
+  for (const [key, limit] of Object.entries(CONTEXT_WINDOW)) {
+    if (key !== 'default' && model.includes(key)) return limit;
   }
+  return CONTEXT_WINDOW.default;
+}
 
-  // Check prefixed models
-  for (const [key, limit] of Object.entries(CONTEXT_LIMITS)) {
-    if (model.includes(key)) {
-      return limit;
+/**
+ * Get max output token limit for a model
+ */
+function getMaxOutputTokens(model: string): number {
+  if (MAX_OUTPUT_TOKENS[model]) return MAX_OUTPUT_TOKENS[model];
+  for (const [key, limit] of Object.entries(MAX_OUTPUT_TOKENS)) {
+    if (key !== 'default' && model.includes(key)) return limit;
+  }
+  return MAX_OUTPUT_TOKENS.default;
+}
+
+/**
+ * Compute the token count at which autocompaction triggers.
+ *
+ * Mirrors Claude Code's ZgH() formula exactly:
+ *   effectiveWindow = contextWindow - min(maxOutputTokens, 20000)
+ *   threshold = effectiveWindow - 13000
+ *
+ * Supports CLAUDE_AUTOCOMPACT_PCT_OVERRIDE env var (0-100) to override as a
+ * percentage of the effective window (same as Claude Code).
+ */
+export function getAutoCompactThreshold(model: string): number {
+  const contextWindow = getContextLimit(model);
+  const maxOut = getMaxOutputTokens(model);
+  const outputReserve = Math.min(maxOut, OUTPUT_TOKEN_CAP);
+  const effectiveWindow = contextWindow - outputReserve;
+
+  // Support env var override (same as Claude Code's CLAUDE_AUTOCOMPACT_PCT_OVERRIDE)
+  const pctOverride = process.env.CLAUDE_AUTOCOMPACT_PCT_OVERRIDE;
+  if (pctOverride) {
+    const pct = parseFloat(pctOverride);
+    if (!isNaN(pct) && pct > 0 && pct <= 100) {
+      const overrideThreshold = Math.floor(effectiveWindow * (pct / 100));
+      return Math.min(overrideThreshold, effectiveWindow - SAFETY_BUFFER);
     }
   }
 
-  return CONTEXT_LIMITS.default;
+  return effectiveWindow - SAFETY_BUFFER;
+}
+
+/** The Anthropic API URL used for LLM-based summarization. */
+const ANTHROPIC_API_URL = 'https://api.anthropic.com/v1/messages';
+
+/** Read Anthropic auth token from env or Claude Code credentials. */
+function getAnthropicAuth(): { token: string; type: 'api-key' | 'oauth' } | null {
+  const apiKey = process.env.ANTHROPIC_API_KEY;
+  if (apiKey) return { token: apiKey, type: 'api-key' };
+  try {
+    const creds = JSON.parse(readFileSync(join(homedir(), '.claude', '.credentials.json'), 'utf-8'));
+    const oauthToken = creds?.claudeAiOauth?.accessToken;
+    if (oauthToken) return { token: oauthToken, type: 'oauth' };
+  } catch {
+    /* not available */
+  }
+  return null;
+}
+
+/**
+ * Claude Code's exact compaction prompt (DCI function in their source).
+ * Produces a structured LLM-generated summary of the conversation.
+ */
+const COMPACTION_SYSTEM_PROMPT = `You are a helpful AI assistant tasked with summarizing conversations.`;
+
+const COMPACTION_USER_PROMPT = `Your task is to create a detailed summary of the conversation so far, paying close attention to the user's explicit requests and your previous actions.
+This summary should be thorough in capturing technical details, code patterns, and architectural decisions that would be essential for continuing development work without losing context.
+
+Your summary should include:
+1. Primary Request and Intent — what the user is trying to accomplish
+2. Key Technical Concepts — languages, frameworks, patterns discussed
+3. Files and Code Sections — file names, key functions, important code snippets verbatim
+4. Errors and Fixes — any errors encountered and how they were resolved
+5. Problem Solving — approach and decisions made
+6. All user messages — capture the user's exact words for important requests
+7. Pending Tasks — work that was started but not completed
+8. Current Work — the most recent files/code being worked on with full snippets
+9. Optional Next Step — verbatim quote from the most recent message about what to do next
+
+IMPORTANT: Do NOT use any tools. Respond with ONLY a <summary>...</summary> block containing your structured summary.`;
+
+/**
+ * Produce an LLM-generated summary of the dropped messages.
+ * Falls back to the rule-based summary if the API call fails.
+ */
+export async function summarizeWithLLM(
+  droppedMessages: any[],
+  keptMessages: any[],
+  model: string,
+): Promise<LLMSummaryResult> {
+  const auth = getAnthropicAuth();
+  if (!auth || droppedMessages.length === 0) {
+    // Fall back to rule-based
+    const summary = buildRuleBasedSummary(droppedMessages);
+    return { summaryText: summary, summaryMessage: buildSummaryMessage(summary, false), usedLLM: false };
+  }
+
+  try {
+    // Build the message array: the dropped conversation + the summarization request
+    const conversationMessages = droppedMessages.map((m: any) => ({
+      role: m.role as 'user' | 'assistant',
+      content: Array.isArray(m.content) ? m.content : [{ type: 'text', text: String(m.content) }],
+    }));
+
+    // Add the summarization request as the final user message
+    conversationMessages.push({
+      role: 'user',
+      content: [{ type: 'text', text: COMPACTION_USER_PROMPT }],
+    });
+
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+      'anthropic-version': '2023-06-01',
+    };
+    if (auth.type === 'oauth') {
+      headers['Authorization'] = `Bearer ${auth.token}`;
+    } else {
+      headers['x-api-key'] = auth.token;
+    }
+
+    const response = await fetch(ANTHROPIC_API_URL, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        model,
+        max_tokens: 8192,
+        system: COMPACTION_SYSTEM_PROMPT,
+        messages: conversationMessages,
+      }),
+      signal: AbortSignal.timeout(60_000),
+    });
+
+    if (!response.ok) {
+      throw new Error(`API ${response.status}: ${await response.text().catch(() => '')}`);
+    }
+
+    const result = await response.json() as any;
+    let summaryText: string = result?.content?.[0]?.text || '';
+
+    // Extract content from <summary>...</summary> tags if present
+    const match = summaryText.match(/<summary>([\s\S]*?)<\/summary>/i);
+    if (match) summaryText = match[1].trim();
+
+    if (!summaryText) {
+      throw new Error('Empty summary from LLM');
+    }
+
+    console.log(`[compaction] LLM summary generated (${summaryText.length} chars)`);
+    return { summaryText, summaryMessage: buildSummaryMessage(summaryText, true), usedLLM: true };
+  } catch (err) {
+    console.error('[compaction] LLM summarization failed, falling back to rule-based:', err);
+    const summary = buildRuleBasedSummary(droppedMessages);
+    return { summaryText: summary, summaryMessage: buildSummaryMessage(summary, false), usedLLM: false };
+  }
+}
+
+/**
+ * Build the framed summary user message that gets prepended to the compacted history.
+ * Mirrors Claude Code's SRH() function.
+ */
+function buildSummaryMessage(summaryText: string, hasKeptMessages: boolean): any {
+  let text = `This session is being continued from a previous conversation that ran out of context. The summary below covers the earlier portion of the conversation.\n\n${summaryText}`;
+  if (hasKeptMessages) {
+    text += `\n\nRecent messages are preserved verbatim below.`;
+  }
+  text += `\n\nPlease continue the conversation from where we left off without asking the user any further questions. Continue with the last task that you were asked to work on.`;
+  return {
+    role: 'user',
+    content: [{ type: 'text', text }],
+  };
+}
+
+/** Rule-based summary fallback — concatenates text from dropped messages. */
+function buildRuleBasedSummary(messages: any[]): string {
+  const parts: string[] = [];
+  let toolCount = 0;
+  for (const msg of messages) {
+    if (Array.isArray(msg.content)) {
+      for (const block of msg.content) {
+        if (block.type === 'text' && block.text) {
+          parts.push(`[${msg.role}]: ${block.text.slice(0, 300)}`);
+        } else if (block.type === 'tool_use') {
+          toolCount++;
+        }
+      }
+    }
+  }
+  if (toolCount > 0) parts.push(`(${toolCount} tool operations were performed)`);
+  return parts.join('\n');
 }
 
 /**

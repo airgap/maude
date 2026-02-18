@@ -4,9 +4,10 @@
   import { workspaceMemoryStore } from '$lib/stores/project-memory.svelte';
   import { settingsStore } from '$lib/stores/settings.svelte';
   import { uiStore } from '$lib/stores/ui.svelte';
+  import { registerSkillCommands } from '$lib/commands/slash-commands';
   import type { MemoryCategory } from '@e/shared';
 
-  type ViewMode = 'files' | 'workspace';
+  type ViewMode = 'files' | 'workspace' | 'skills';
 
   interface MemoryFile {
     path: string;
@@ -33,6 +34,54 @@
   let editingMemory = $state<string | null>(null);
   let editMemoryContent = $state('');
 
+  // Skills registry state
+  interface RegistrySkill {
+    name: string;
+    description: string;
+    compatibility?: string;
+    license?: string;
+  }
+  let registrySkills = $state<RegistrySkill[]>([]);
+  let registryLoading = $state(false);
+  let registryError = $state<string | null>(null);
+  let installedSkills = $state<string[]>([]);
+  let installingSkill = $state<string | null>(null);
+
+  async function loadRegistry() {
+    if (registryLoading || registrySkills.length > 0) return;
+    registryLoading = true;
+    registryError = null;
+    try {
+      const [browseRes, installedRes] = await Promise.all([
+        api.skillsRegistry.browse(),
+        api.skillsRegistry.installed(settingsStore.workspacePath || undefined),
+      ]);
+      registrySkills = browseRes.data;
+      installedSkills = installedRes.data;
+    } catch (e) {
+      registryError = e instanceof Error ? e.message : 'Failed to load registry';
+    } finally {
+      registryLoading = false;
+    }
+  }
+
+  async function installSkill(name: string) {
+    if (installingSkill) return;
+    installingSkill = name;
+    try {
+      await api.skillsRegistry.install(name, settingsStore.workspacePath || undefined);
+      installedSkills = [...installedSkills, name];
+      uiStore.toast(`Skill "${name}" installed`, 'success');
+      // Refresh memory files so it appears in the Files tab
+      const res = await api.memory.list();
+      files = res.data;
+    } catch (e) {
+      uiStore.toast(`Failed to install "${name}"`, 'error');
+    } finally {
+      installingSkill = null;
+    }
+  }
+
   const CATEGORIES: Array<{ value: MemoryCategory | 'all'; label: string }> = [
     { value: 'all', label: 'All' },
     { value: 'convention', label: 'Conventions' },
@@ -54,6 +103,17 @@
     try {
       const res = await api.memory.list();
       files = res.data;
+      // Register installed skills as slash commands
+      const skillFiles = files.filter((f) => f.type === 'skills');
+      if (skillFiles.length > 0) {
+        registerSkillCommands(skillFiles);
+        // Also populate installedSkills for the registry tab
+        installedSkills = skillFiles.map((f) => {
+          // Extract skill name from path: .claude/skills/{name}/SKILL.md
+          const parts = f.path.split('/');
+          return parts[parts.length - 2] || '';
+        }).filter(Boolean);
+      }
     } catch {}
     if (settingsStore.workspacePath) {
       workspaceMemoryStore.load(settingsStore.workspacePath);
@@ -140,6 +200,16 @@
         Files
         {#if files.length > 0}
           <span class="count">{files.length}</span>
+        {/if}
+      </button>
+      <button
+        class="view-tab"
+        class:active={viewMode === 'skills'}
+        onclick={() => { viewMode = 'skills'; loadRegistry(); }}
+      >
+        Skills
+        {#if installedSkills.length > 0}
+          <span class="count">{installedSkills.length}</span>
         {/if}
       </button>
     </div>
@@ -257,6 +327,51 @@
                 </button>
               </div>
             </div>
+          {/each}
+        </div>
+      {/if}
+    </div>
+  {:else if viewMode === 'skills'}
+    <div class="skills-registry-view">
+      <div class="registry-header">
+        <span class="registry-title">agentskills.io</span>
+        <button class="btn-sm" onclick={loadRegistry} disabled={registryLoading} title="Refresh">
+          {registryLoading ? '…' : '↻'}
+        </button>
+      </div>
+      {#if registryError}
+        <div class="registry-error">{registryError}</div>
+      {:else if registryLoading && registrySkills.length === 0}
+        <div class="registry-loading">Loading skills…</div>
+      {:else}
+        <div class="registry-list">
+          {#each registrySkills as skill}
+            {@const isInstalled = installedSkills.includes(skill.name)}
+            <div class="registry-skill" class:installed={isInstalled}>
+              <div class="skill-meta">
+                <span class="skill-name">{skill.name}</span>
+                {#if isInstalled}
+                  <span class="installed-badge">Installed</span>
+                {/if}
+              </div>
+              <p class="skill-desc">{skill.description}</p>
+              {#if skill.compatibility}
+                <p class="skill-compat">{skill.compatibility}</p>
+              {/if}
+              {#if !isInstalled}
+                <button
+                  class="btn-sm install-btn"
+                  onclick={() => installSkill(skill.name)}
+                  disabled={installingSkill === skill.name}
+                >
+                  {installingSkill === skill.name ? 'Installing…' : 'Install'}
+                </button>
+              {/if}
+            </div>
+          {:else}
+            {#if !registryLoading}
+              <div class="empty">No skills found</div>
+            {/if}
           {/each}
         </div>
       {/if}
@@ -642,5 +757,91 @@
     text-align: center;
     color: var(--text-tertiary);
     font-size: 12px;
+  }
+
+  /* Skills registry */
+  .skills-registry-view {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  .registry-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 4px 2px 8px;
+  }
+  .registry-title {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text-tertiary);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  .registry-loading,
+  .registry-error {
+    padding: 20px;
+    text-align: center;
+    font-size: 12px;
+    color: var(--text-tertiary);
+  }
+  .registry-error {
+    color: var(--accent-error);
+  }
+  .registry-list {
+    flex: 1;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .registry-skill {
+    padding: 8px 10px;
+    background: var(--bg-elevated);
+    border: 1px solid var(--border-primary);
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .registry-skill.installed {
+    border-color: var(--accent-secondary);
+    opacity: 0.8;
+  }
+  .skill-meta {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .skill-name {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-primary);
+    font-family: var(--font-mono);
+  }
+  .installed-badge {
+    font-size: 9px;
+    padding: 1px 5px;
+    background: var(--accent-secondary);
+    color: var(--bg-primary);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    font-weight: 700;
+  }
+  .skill-desc {
+    font-size: 11px;
+    color: var(--text-secondary);
+    margin: 0;
+    line-height: 1.4;
+  }
+  .skill-compat {
+    font-size: 10px;
+    color: var(--text-tertiary);
+    margin: 0;
+    font-style: italic;
+  }
+  .install-btn {
+    align-self: flex-end;
+    margin-top: 2px;
   }
 </style>

@@ -58,7 +58,7 @@ async function discoverServerTools(server: MCPServerConfig): Promise<MCPToolInfo
     let output = '';
 
     try {
-      const proc = spawn(server.command, server.args || [], {
+      const proc = spawn(server.command!, server.args || [], {
         stdio: ['pipe', 'pipe', 'pipe'],
         env: { ...process.env, ...server.env },
       });
@@ -96,7 +96,7 @@ async function discoverServerTools(server: MCPServerConfig): Promise<MCPToolInfo
       }, 100);
 
       // Collect output
-      proc.stdout.on('data', (data) => {
+      proc.stdout.on('data', (data: Buffer) => {
         output += data.toString();
       });
 
@@ -126,7 +126,7 @@ async function discoverServerTools(server: MCPServerConfig): Promise<MCPToolInfo
         resolve(tools);
       });
 
-      proc.on('error', (err) => {
+      proc.on('error', (err: Error) => {
         console.error(`[mcp-adapter] Error discovering ${server.name}:`, err);
         resolve([]);
       });

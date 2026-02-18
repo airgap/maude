@@ -234,10 +234,13 @@ class LoopRunner {
       this.updateStory(story.id, { status: 'in_progress', attempts: story.attempts + 1 });
       this.emitEvent('story_started', { storyId: story.id, storyTitle: story.title, iteration });
 
-      // Create git snapshot if configured
+      // Pre-generate assistant message ID for snapshot linkage
+      const assistantMsgId = nanoid();
+
+      // Create git snapshot if configured, linked to the upcoming assistant message
       if (this.config.autoSnapshot) {
         try {
-          await this.createGitSnapshot(story.id);
+          await this.createGitSnapshot(story.id, assistantMsgId);
         } catch (err) {
           console.error(`[loop:${this.loopId}] Git snapshot failed:`, err);
         }
@@ -754,7 +757,7 @@ ${criteria}
 
   // --- Git operations ---
 
-  private async createGitSnapshot(storyId: string): Promise<void> {
+  private async createGitSnapshot(storyId: string, messageId?: string): Promise<void> {
     try {
       const checkProc = Bun.spawn(['git', 'rev-parse', '--is-inside-work-tree'], {
         cwd: this.workspacePath,
@@ -792,8 +795,8 @@ ${criteria}
 
       const db = getDb();
       db.query(
-        `INSERT INTO git_snapshots (id, workspace_path, head_sha, stash_sha, reason, has_changes, created_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO git_snapshots (id, workspace_path, head_sha, stash_sha, reason, has_changes, message_id, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
       ).run(
         nanoid(),
         this.workspacePath,
@@ -801,6 +804,7 @@ ${criteria}
         stashSha,
         `loop:${this.loopId}:story:${storyId}`,
         hasChanges ? 1 : 0,
+        messageId || null,
         Date.now(),
       );
     } catch (err) {

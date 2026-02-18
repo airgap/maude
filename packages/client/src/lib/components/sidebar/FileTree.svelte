@@ -3,8 +3,30 @@
   import { conversationStore } from '$lib/stores/conversation.svelte';
   import { settingsStore } from '$lib/stores/settings.svelte';
   import { workspaceListStore } from '$lib/stores/projects.svelte';
-  import { editorStore } from '$lib/stores/editor.svelte';
+  import { primaryPaneStore } from '$lib/stores/primaryPane.svelte';
   import { gitStore } from '$lib/stores/git.svelte';
+
+  function detectLanguage(fileName: string): string {
+    const ext = fileName.split('.').pop()?.toLowerCase() ?? '';
+    const map: Record<string, string> = {
+      ts: 'typescript', tsx: 'typescript', js: 'javascript', jsx: 'javascript',
+      py: 'python', rs: 'rust', go: 'go', java: 'java', c: 'cpp', cpp: 'cpp',
+      css: 'css', scss: 'css', html: 'html', svelte: 'html', vue: 'html',
+      json: 'json', md: 'markdown', sql: 'sql', sh: 'shell', yaml: 'yaml',
+      yml: 'yaml', toml: 'toml', txt: 'text',
+    };
+    return map[ext] || 'text';
+  }
+
+  async function openFile(filePath: string) {
+    try {
+      const res = await api.files.read(filePath);
+      const fileName = filePath.split('/').pop() ?? filePath;
+      primaryPaneStore.openFileTab(filePath, res.data.content, detectLanguage(fileName));
+    } catch (e) {
+      // Silently ignore — file may be binary or inaccessible
+    }
+  }
 
   interface TreeNode {
     name: string;
@@ -143,12 +165,12 @@
       if (node.type === 'directory') {
         toggleDir(node.path);
       } else {
-        editorStore.openFile(node.path, true);
+        openFile(node.path);
       }
     }}
     ondblclick={() => {
       if (node.type === 'file') {
-        editorStore.openFile(node.path, false);
+        openFile(node.path);
       }
     }}
   >

@@ -22,6 +22,7 @@ interface SettingsState {
   autoScroll: boolean;
   streamingEnabled: boolean;
   compactMessages: boolean;
+  autoCompaction: boolean;
   showBudgetDisplay: boolean;
   workspacePath: string;
   effort: string;
@@ -37,6 +38,13 @@ interface SettingsState {
   streamingProgressBar: 'rainbow' | 'accent' | 'pulse' | 'none';
   streamingCursor: 'block' | 'line' | 'underscore' | 'none';
   sendWithEnter: boolean;
+  soundEnabled: boolean;
+  soundVolume: number;
+  soundStyle: 'classic' | 'melodic' | 'whimsy';
+  // Desktop notification settings
+  notifyOnCompletion: boolean;
+  notifyOnFailure: boolean;
+  notifyOnApproval: boolean;
 }
 
 const defaults: SettingsState = {
@@ -66,6 +74,7 @@ const defaults: SettingsState = {
   autoScroll: true,
   streamingEnabled: true,
   compactMessages: false,
+  autoCompaction: true,
   showBudgetDisplay: true,
   workspacePath: '.',
   effort: 'high',
@@ -78,6 +87,12 @@ const defaults: SettingsState = {
   streamingProgressBar: 'rainbow',
   streamingCursor: 'block',
   sendWithEnter: true,
+  soundEnabled: true,
+  soundVolume: 80,
+  soundStyle: 'melodic',
+  notifyOnCompletion: true,
+  notifyOnFailure: true,
+  notifyOnApproval: true,
 };
 
 function loadFromStorage(): SettingsState {
@@ -107,7 +122,7 @@ function createSettingsStore() {
   let state = $state<SettingsState>(loadFromStorage());
 
   // Settings the server needs to know about (used for CLI process spawning)
-  const SERVER_SYNCED_KEYS: (keyof SettingsState)[] = ['cliProvider'];
+  const SERVER_SYNCED_KEYS: (keyof SettingsState)[] = ['cliProvider', 'autoCompaction', 'permissionMode'];
 
   function persist() {
     if (typeof window === 'undefined') return;
@@ -232,6 +247,9 @@ function createSettingsStore() {
     get compactMessages() {
       return state.compactMessages;
     },
+    get autoCompaction() {
+      return state.autoCompaction;
+    },
     get showBudgetDisplay() {
       return state.showBudgetDisplay;
     },
@@ -262,6 +280,24 @@ function createSettingsStore() {
     get sendWithEnter() {
       return state.sendWithEnter;
     },
+    get soundEnabled() {
+      return state.soundEnabled;
+    },
+    get soundVolume() {
+      return state.soundVolume;
+    },
+    get soundStyle() {
+      return state.soundStyle;
+    },
+    get notifyOnCompletion() {
+      return state.notifyOnCompletion;
+    },
+    get notifyOnFailure() {
+      return state.notifyOnFailure;
+    },
+    get notifyOnApproval() {
+      return state.notifyOnApproval;
+    },
     get all() {
       return state;
     },
@@ -281,6 +317,9 @@ function createSettingsStore() {
     setPermissionMode(mode: PermissionMode) {
       state.permissionMode = mode;
       persist();
+      // Sync to server so it takes effect for the running process immediately.
+      // The server reads permissionMode from its settings DB on every tool call.
+      syncToServer({ permissionMode: mode });
     },
     update(partial: Partial<SettingsState>) {
       state = { ...state, ...partial };

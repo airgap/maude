@@ -171,7 +171,7 @@ export function createBedrockStream(opts: {
         const apiResponse = await client.send(command);
 
         // Process the response stream
-        for await (const item of apiResponse.body) {
+        for await (const item of apiResponse.body!) {
           if (!item.chunk?.bytes) continue;
 
           const chunk = JSON.parse(new TextDecoder().decode(item.chunk.bytes));

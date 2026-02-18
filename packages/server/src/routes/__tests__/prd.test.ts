@@ -63,6 +63,7 @@ function insertStory(overrides: Record<string, any> = {}) {
     ]),
     priority: 'medium',
     depends_on: '[]',
+    dependency_reasons: '{}',
     status: 'pending',
     task_id: null,
     agent_id: null,
@@ -72,14 +73,18 @@ function insertStory(overrides: Record<string, any> = {}) {
     max_attempts: 3,
     learnings: '[]',
     sort_order: 0,
+    workspace_path: null,
+    external_ref: null,
+    external_status: null,
+    estimate: null,
     created_at: 1000000,
     updated_at: 1000000,
   };
   const row = { ...defaults, ...overrides };
   testDb
     .query(
-      `INSERT INTO prd_stories (id, prd_id, title, description, acceptance_criteria, priority, depends_on, status, task_id, agent_id, conversation_id, commit_sha, attempts, max_attempts, learnings, sort_order, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO prd_stories (id, prd_id, title, description, acceptance_criteria, priority, depends_on, dependency_reasons, status, task_id, agent_id, conversation_id, commit_sha, attempts, max_attempts, learnings, sort_order, workspace_path, external_ref, external_status, estimate, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     )
     .run(
       row.id,
@@ -89,6 +94,7 @@ function insertStory(overrides: Record<string, any> = {}) {
       row.acceptance_criteria,
       row.priority,
       row.depends_on,
+      row.dependency_reasons,
       row.status,
       row.task_id,
       row.agent_id,
@@ -98,6 +104,10 @@ function insertStory(overrides: Record<string, any> = {}) {
       row.max_attempts,
       row.learnings,
       row.sort_order,
+      row.workspace_path,
+      row.external_ref,
+      row.external_status,
+      row.estimate,
       row.created_at,
       row.updated_at,
     );
@@ -4779,6 +4789,696 @@ describe('PRD Routes', () => {
           expect(json.data.stories[0].priority).toBe('medium');
         }),
       );
+    });
+  });
+
+  // ---------------------------------------------------------------
+  // GET /stories — List standalone stories
+  // ---------------------------------------------------------------
+  describe('GET /stories — list standalone stories', () => {
+    test('returns 400 when workspacePath is missing', async () => {
+      const res = await app.request('/stories');
+      expect(res.status).toBe(400);
+      const json = await res.json();
+      expect(json.ok).toBe(false);
+      expect(json.error).toContain('workspacePath');
+    });
+
+    test('returns empty array when no standalone stories exist', async () => {
+      const res = await app.request('/stories?workspacePath=/test/project');
+      expect(res.status).toBe(200);
+      const json = await res.json();
+      expect(json.ok).toBe(true);
+      expect(json.data).toEqual([]);
+    });
+
+    test('returns only standalone stories for workspace (prd_id IS NULL)', async () => {
+      // Insert a standalone story (prd_id = null)
+      insertStory({
+        id: 'standalone-1',
+        prd_id: null,
+        workspace_path: '/test/project',
+        title: 'Standalone Story',
+      });
+      // Insert a PRD-bound story — should NOT appear
+      insertPrd({ id: 'prd-1', workspace_path: '/test/project' });
+      insertStory({ id: 'prd-story-1', prd_id: 'prd-1', title: 'PRD Story' });
+
+      const res = await app.request('/stories?workspacePath=/test/project');
+      const json = await res.json();
+      expect(json.data).toHaveLength(1);
+      expect(json.data[0].id).toBe('standalone-1');
+      expect(json.data[0].title).toBe('Standalone Story');
+      expect(json.data[0].prdId).toBeNull();
+    });
+
+    test('filters by workspace path', async () => {
+      insertStory({
+        id: 'story-ws-a',
+        prd_id: null,
+        workspace_path: '/project-a',
+        title: 'A Story',
+      });
+      insertStory({
+        id: 'story-ws-b',
+        prd_id: null,
+        workspace_path: '/project-b',
+        title: 'B Story',
+      });
+
+      const res = await app.request('/stories?workspacePath=/project-a');
+      const json = await res.json();
+      expect(json.data).toHaveLength(1);
+      expect(json.data[0].id).toBe('story-ws-a');
+    });
+
+    test('orders by sort_order ASC then created_at ASC', async () => {
+      insertStory({
+        id: 'story-second',
+        prd_id: null,
+        workspace_path: '/test/project',
+        title: 'Second',
+        sort_order: 1,
+        created_at: 100,
+      });
+      insertStory({
+        id: 'story-first',
+        prd_id: null,
+        workspace_path: '/test/project',
+        title: 'First',
+        sort_order: 0,
+        created_at: 200,
+      });
+
+      const res = await app.request('/stories?workspacePath=/test/project');
+      const json = await res.json();
+      expect(json.data[0].title).toBe('First');
+      expect(json.data[1].title).toBe('Second');
+    });
+  });
+
+  // ---------------------------------------------------------------
+  // GET /stories/all — List all stories for workspace
+  // ---------------------------------------------------------------
+  describe('GET /stories/all — list all stories for workspace', () => {
+    test('returns 400 when workspacePath is missing', async () => {
+      const res = await app.request('/stories/all');
+      expect(res.status).toBe(400);
+      const json = await res.json();
+      expect(json.ok).toBe(false);
+      expect(json.error).toContain('workspacePath');
+    });
+
+    test('returns standalone and PRD-bound stories separately', async () => {
+      insertPrd({ id: 'prd-1', workspace_path: '/test/project', name: 'My PRD' });
+      insertStory({
+        id: 'standalone-1',
+        prd_id: null,
+        workspace_path: '/test/project',
+        title: 'Standalone',
+      });
+      insertStory({
+        id: 'prd-story-1',
+        prd_id: 'prd-1',
+        title: 'PRD Bound',
+      });
+
+      const res = await app.request('/stories/all?workspacePath=/test/project');
+      expect(res.status).toBe(200);
+      const json = await res.json();
+      expect(json.ok).toBe(true);
+      expect(json.data.standalone).toHaveLength(1);
+      expect(json.data.standalone[0].title).toBe('Standalone');
+      expect(json.data.byPrd).toHaveLength(1);
+      expect(json.data.byPrd[0].title).toBe('PRD Bound');
+      expect(json.data.byPrd[0].prdName).toBe('My PRD');
+    });
+
+    test('returns empty arrays when no stories exist', async () => {
+      const res = await app.request('/stories/all?workspacePath=/empty/project');
+      const json = await res.json();
+      expect(json.ok).toBe(true);
+      expect(json.data.standalone).toEqual([]);
+      expect(json.data.byPrd).toEqual([]);
+    });
+  });
+
+  // ---------------------------------------------------------------
+  // POST /stories — Create standalone story
+  // ---------------------------------------------------------------
+  describe('POST /stories — create standalone story', () => {
+    test('creates a standalone story with all fields', async () => {
+      const res = await app.request('/stories', {
+        method: 'POST',
+        body: JSON.stringify({
+          workspacePath: '/test/project',
+          title: 'New Standalone Story',
+          description: 'A standalone story description',
+          acceptanceCriteria: ['AC 1', 'AC 2'],
+          priority: 'high',
+          dependsOn: ['dep-1'],
+        }),
+        headers: { 'Content-Type': 'application/json' },
+      });
+
+      expect(res.status).toBe(201);
+      const json = await res.json();
+      expect(json.ok).toBe(true);
+      expect(json.data.id).toBeDefined();
+      expect(json.data.title).toBe('New Standalone Story');
+      expect(json.data.description).toBe('A standalone story description');
+      expect(json.data.priority).toBe('high');
+      expect(json.data.prdId).toBeNull();
+      expect(json.data.workspacePath).toBe('/test/project');
+      expect(json.data.acceptanceCriteria).toHaveLength(2);
+      expect(json.data.acceptanceCriteria[0].description).toBe('AC 1');
+      expect(json.data.acceptanceCriteria[0].passed).toBe(false);
+      expect(json.data.acceptanceCriteria[0].id).toBeDefined();
+      expect(json.data.dependsOn).toEqual(['dep-1']);
+    });
+
+    test('returns 400 when workspacePath is missing', async () => {
+      const res = await app.request('/stories', {
+        method: 'POST',
+        body: JSON.stringify({
+          title: 'No Workspace',
+        }),
+        headers: { 'Content-Type': 'application/json' },
+      });
+
+      expect(res.status).toBe(400);
+      const json = await res.json();
+      expect(json.ok).toBe(false);
+    });
+
+    test('returns 400 when title is missing', async () => {
+      const res = await app.request('/stories', {
+        method: 'POST',
+        body: JSON.stringify({
+          workspacePath: '/test/project',
+          title: '',
+        }),
+        headers: { 'Content-Type': 'application/json' },
+      });
+
+      expect(res.status).toBe(400);
+    });
+
+    test('defaults priority to medium and empty arrays', async () => {
+      const res = await app.request('/stories', {
+        method: 'POST',
+        body: JSON.stringify({
+          workspacePath: '/test/project',
+          title: 'Minimal Story',
+        }),
+        headers: { 'Content-Type': 'application/json' },
+      });
+
+      expect(res.status).toBe(201);
+      const json = await res.json();
+      expect(json.data.priority).toBe('medium');
+      expect(json.data.acceptanceCriteria).toEqual([]);
+      expect(json.data.dependsOn).toEqual([]);
+      expect(json.data.status).toBe('pending');
+    });
+  });
+
+  // ---------------------------------------------------------------
+  // PATCH /stories/:storyId — Update standalone story
+  // ---------------------------------------------------------------
+  describe('PATCH /stories/:storyId — update standalone story', () => {
+    test('returns 404 for non-existent standalone story', async () => {
+      const res = await app.request('/stories/nonexistent', {
+        method: 'PATCH',
+        body: JSON.stringify({ title: 'Updated' }),
+        headers: { 'Content-Type': 'application/json' },
+      });
+      expect(res.status).toBe(404);
+      const json = await res.json();
+      expect(json.ok).toBe(false);
+      expect(json.error).toContain('Standalone story not found');
+    });
+
+    test('returns 404 for PRD-bound story (not standalone)', async () => {
+      insertPrd({ id: 'prd-1' });
+      insertStory({ id: 'prd-story', prd_id: 'prd-1' });
+
+      const res = await app.request('/stories/prd-story', {
+        method: 'PATCH',
+        body: JSON.stringify({ title: 'Updated' }),
+        headers: { 'Content-Type': 'application/json' },
+      });
+      expect(res.status).toBe(404);
+    });
+
+    test('updates title, description, and priority', async () => {
+      insertStory({
+        id: 'standalone-1',
+        prd_id: null,
+        workspace_path: '/test/project',
+        title: 'Original',
+        description: 'Original desc',
+        priority: 'low',
+      });
+
+      const res = await app.request('/stories/standalone-1', {
+        method: 'PATCH',
+        body: JSON.stringify({
+          title: 'Updated Title',
+          description: 'Updated desc',
+          priority: 'critical',
+        }),
+        headers: { 'Content-Type': 'application/json' },
+      });
+
+      expect(res.status).toBe(200);
+      const json = await res.json();
+      expect(json.ok).toBe(true);
+      expect(json.data.title).toBe('Updated Title');
+      expect(json.data.description).toBe('Updated desc');
+      expect(json.data.priority).toBe('critical');
+    });
+
+    test('updates status and sortOrder', async () => {
+      insertStory({
+        id: 'standalone-1',
+        prd_id: null,
+        workspace_path: '/test/project',
+        status: 'pending',
+        sort_order: 0,
+      });
+
+      const res = await app.request('/stories/standalone-1', {
+        method: 'PATCH',
+        body: JSON.stringify({ status: 'in_progress', sortOrder: 5 }),
+        headers: { 'Content-Type': 'application/json' },
+      });
+
+      const json = await res.json();
+      expect(json.data.status).toBe('in_progress');
+      expect(json.data.sortOrder).toBe(5);
+    });
+
+    test('updates acceptanceCriteria (string array converted to objects)', async () => {
+      insertStory({
+        id: 'standalone-1',
+        prd_id: null,
+        workspace_path: '/test/project',
+      });
+
+      const res = await app.request('/stories/standalone-1', {
+        method: 'PATCH',
+        body: JSON.stringify({
+          acceptanceCriteria: ['New AC 1', 'New AC 2'],
+        }),
+        headers: { 'Content-Type': 'application/json' },
+      });
+
+      const json = await res.json();
+      expect(json.data.acceptanceCriteria).toHaveLength(2);
+      expect(json.data.acceptanceCriteria[0].description).toBe('New AC 1');
+      expect(json.data.acceptanceCriteria[0].passed).toBe(false);
+      expect(json.data.acceptanceCriteria[0].id).toBeDefined();
+    });
+
+    test('updates dependsOn and dependencyReasons', async () => {
+      insertStory({
+        id: 'standalone-1',
+        prd_id: null,
+        workspace_path: '/test/project',
+      });
+
+      const res = await app.request('/stories/standalone-1', {
+        method: 'PATCH',
+        body: JSON.stringify({
+          dependsOn: ['story-a', 'story-b'],
+          dependencyReasons: { 'story-a': 'Needs auth first' },
+        }),
+        headers: { 'Content-Type': 'application/json' },
+      });
+
+      const json = await res.json();
+      expect(json.data.dependsOn).toEqual(['story-a', 'story-b']);
+      expect(json.data.dependencyReasons).toEqual({ 'story-a': 'Needs auth first' });
+    });
+
+    test('updates externalRef', async () => {
+      insertStory({
+        id: 'standalone-1',
+        prd_id: null,
+        workspace_path: '/test/project',
+      });
+
+      const res = await app.request('/stories/standalone-1', {
+        method: 'PATCH',
+        body: JSON.stringify({
+          externalRef: { provider: 'github', id: '123', url: 'https://github.com/issue/123' },
+        }),
+        headers: { 'Content-Type': 'application/json' },
+      });
+
+      const json = await res.json();
+      expect(json.data.externalRef).toEqual({
+        provider: 'github',
+        id: '123',
+        url: 'https://github.com/issue/123',
+      });
+    });
+
+    test('returns existing data when no fields to update', async () => {
+      insertStory({
+        id: 'standalone-1',
+        prd_id: null,
+        workspace_path: '/test/project',
+        title: 'Original',
+      });
+
+      const res = await app.request('/stories/standalone-1', {
+        method: 'PATCH',
+        body: JSON.stringify({}),
+        headers: { 'Content-Type': 'application/json' },
+      });
+
+      expect(res.status).toBe(200);
+      const json = await res.json();
+      expect(json.ok).toBe(true);
+      expect(json.data.title).toBe('Original');
+    });
+
+    test('updates updated_at timestamp', async () => {
+      insertStory({
+        id: 'standalone-1',
+        prd_id: null,
+        workspace_path: '/test/project',
+        updated_at: 1000,
+      });
+
+      await app.request('/stories/standalone-1', {
+        method: 'PATCH',
+        body: JSON.stringify({ title: 'Touched' }),
+        headers: { 'Content-Type': 'application/json' },
+      });
+
+      const row = testDb
+        .query('SELECT updated_at FROM prd_stories WHERE id = ?')
+        .get('standalone-1') as any;
+      expect(row.updated_at).toBeGreaterThan(1000);
+    });
+  });
+
+  // ---------------------------------------------------------------
+  // DELETE /stories/:storyId — Delete standalone story
+  // ---------------------------------------------------------------
+  describe('DELETE /stories/:storyId — delete standalone story', () => {
+    test('deletes a standalone story', async () => {
+      insertStory({
+        id: 'standalone-1',
+        prd_id: null,
+        workspace_path: '/test/project',
+      });
+
+      const res = await app.request('/stories/standalone-1', { method: 'DELETE' });
+      expect(res.status).toBe(200);
+      const json = await res.json();
+      expect(json.ok).toBe(true);
+
+      const row = testDb.query('SELECT * FROM prd_stories WHERE id = ?').get('standalone-1');
+      expect(row).toBeNull();
+    });
+
+    test('returns 404 for non-existent standalone story', async () => {
+      const res = await app.request('/stories/nonexistent', { method: 'DELETE' });
+      expect(res.status).toBe(404);
+      const json = await res.json();
+      expect(json.ok).toBe(false);
+      expect(json.error).toContain('Standalone story not found');
+    });
+
+    test('returns 404 for PRD-bound story (not standalone)', async () => {
+      insertPrd({ id: 'prd-1' });
+      insertStory({ id: 'prd-story', prd_id: 'prd-1' });
+
+      const res = await app.request('/stories/prd-story', { method: 'DELETE' });
+      expect(res.status).toBe(404);
+    });
+  });
+
+  // ---------------------------------------------------------------
+  // PUT /stories/:storyId/estimate — Save manual estimate for standalone story
+  // ---------------------------------------------------------------
+  describe('PUT /stories/:storyId/estimate — manual estimate for standalone story', () => {
+    test('saves a manual estimate', async () => {
+      insertStory({
+        id: 'standalone-1',
+        prd_id: null,
+        workspace_path: '/test/project',
+      });
+
+      const res = await app.request('/stories/standalone-1/estimate', {
+        method: 'PUT',
+        body: JSON.stringify({
+          size: 'large',
+          storyPoints: 8,
+          reasoning: 'Complex integration work',
+        }),
+        headers: { 'Content-Type': 'application/json' },
+      });
+
+      expect(res.status).toBe(200);
+      const json = await res.json();
+      expect(json.ok).toBe(true);
+      expect(json.data.storyId).toBe('standalone-1');
+      expect(json.data.estimate.size).toBe('large');
+      expect(json.data.estimate.storyPoints).toBe(8);
+      expect(json.data.estimate.confidence).toBe('high');
+      expect(json.data.estimate.confidenceScore).toBe(100);
+      expect(json.data.estimate.isManualOverride).toBe(true);
+      expect(json.data.estimate.reasoning).toBe('Complex integration work');
+    });
+
+    test('returns 404 for non-existent standalone story', async () => {
+      const res = await app.request('/stories/nonexistent/estimate', {
+        method: 'PUT',
+        body: JSON.stringify({ size: 'small', storyPoints: 1 }),
+        headers: { 'Content-Type': 'application/json' },
+      });
+      expect(res.status).toBe(404);
+    });
+
+    test('returns 404 for PRD-bound story', async () => {
+      insertPrd({ id: 'prd-1' });
+      insertStory({ id: 'prd-story', prd_id: 'prd-1' });
+
+      const res = await app.request('/stories/prd-story/estimate', {
+        method: 'PUT',
+        body: JSON.stringify({ size: 'small', storyPoints: 1 }),
+        headers: { 'Content-Type': 'application/json' },
+      });
+      expect(res.status).toBe(404);
+    });
+
+    test('preserves existing estimate fields and overrides with manual values', async () => {
+      const existingEstimate = {
+        storyId: 'standalone-1',
+        size: 'small',
+        storyPoints: 2,
+        confidence: 'medium',
+        confidenceScore: 60,
+        factors: [{ factor: 'simple', impact: 'decreases', weight: 'minor' }],
+        reasoning: 'AI estimate',
+        isManualOverride: false,
+      };
+      insertStory({
+        id: 'standalone-1',
+        prd_id: null,
+        workspace_path: '/test/project',
+        estimate: JSON.stringify(existingEstimate),
+      });
+
+      const res = await app.request('/stories/standalone-1/estimate', {
+        method: 'PUT',
+        body: JSON.stringify({
+          size: 'large',
+          storyPoints: 13,
+        }),
+        headers: { 'Content-Type': 'application/json' },
+      });
+
+      const json = await res.json();
+      expect(json.data.estimate.size).toBe('large');
+      expect(json.data.estimate.storyPoints).toBe(13);
+      expect(json.data.estimate.isManualOverride).toBe(true);
+      expect(json.data.estimate.confidence).toBe('high');
+      expect(json.data.estimate.confidenceScore).toBe(100);
+      // Original factors should be preserved
+      expect(json.data.estimate.factors).toEqual(existingEstimate.factors);
+    });
+
+    test('defaults size and storyPoints when not provided', async () => {
+      insertStory({
+        id: 'standalone-1',
+        prd_id: null,
+        workspace_path: '/test/project',
+      });
+
+      const res = await app.request('/stories/standalone-1/estimate', {
+        method: 'PUT',
+        body: JSON.stringify({}),
+        headers: { 'Content-Type': 'application/json' },
+      });
+
+      const json = await res.json();
+      expect(json.data.estimate.size).toBe('medium');
+      expect(json.data.estimate.storyPoints).toBe(3);
+      expect(json.data.estimate.reasoning).toBe('Manual estimate');
+    });
+
+    test('updates the story updated_at in database', async () => {
+      insertStory({
+        id: 'standalone-1',
+        prd_id: null,
+        workspace_path: '/test/project',
+        updated_at: 1000,
+      });
+
+      await app.request('/stories/standalone-1/estimate', {
+        method: 'PUT',
+        body: JSON.stringify({ size: 'small', storyPoints: 1 }),
+        headers: { 'Content-Type': 'application/json' },
+      });
+
+      const row = testDb
+        .query('SELECT updated_at FROM prd_stories WHERE id = ?')
+        .get('standalone-1') as any;
+      expect(row.updated_at).toBeGreaterThan(1000);
+    });
+  });
+
+  // ---------------------------------------------------------------
+  // POST /stories/:storyId/estimate — AI estimate for standalone story
+  // ---------------------------------------------------------------
+  describe('POST /stories/:storyId/estimate — AI estimate for standalone story', () => {
+    test('returns 404 for non-existent standalone story', async () => {
+      const res = await app.request('/stories/nonexistent/estimate', {
+        method: 'POST',
+        body: JSON.stringify({}),
+        headers: { 'Content-Type': 'application/json' },
+      });
+      expect(res.status).toBe(404);
+    });
+
+    test('returns 404 for PRD-bound story', async () => {
+      insertPrd({ id: 'prd-1' });
+      insertStory({ id: 'prd-story', prd_id: 'prd-1' });
+
+      const res = await app.request('/stories/prd-story/estimate', {
+        method: 'POST',
+        body: JSON.stringify({}),
+        headers: { 'Content-Type': 'application/json' },
+      });
+      expect(res.status).toBe(404);
+    });
+
+    test('calls AI API and saves estimate', async () => {
+      insertStory({
+        id: 'standalone-1',
+        prd_id: null,
+        workspace_path: '/test/project',
+        title: 'Build auth system',
+        description: 'Implement OAuth login',
+      });
+
+      const mockEstimate = {
+        size: 'medium',
+        storyPoints: 5,
+        confidence: 'high',
+        confidenceScore: 85,
+        factors: [
+          { factor: 'OAuth complexity', impact: 'increases', weight: 'moderate' },
+        ],
+        reasoning: 'OAuth integration is moderately complex',
+      };
+
+      globalThis.fetch = (async (url: string | URL | Request, init?: RequestInit) => {
+        const urlStr =
+          typeof url === 'string' ? url : url instanceof URL ? url.toString() : url.url;
+        if (urlStr.includes('api.anthropic.com')) {
+          return new Response(
+            JSON.stringify({
+              content: [{ type: 'text', text: JSON.stringify(mockEstimate) }],
+            }),
+            { status: 200, headers: { 'Content-Type': 'application/json' } },
+          );
+        }
+        return originalFetch(url, init);
+      }) as typeof fetch;
+
+      const origKey = process.env.ANTHROPIC_API_KEY;
+      process.env.ANTHROPIC_API_KEY = 'test-key';
+
+      try {
+        const res = await app.request('/stories/standalone-1/estimate', {
+          method: 'POST',
+          body: JSON.stringify({}),
+          headers: { 'Content-Type': 'application/json' },
+        });
+
+        expect(res.status).toBe(200);
+        const json = await res.json();
+        expect(json.ok).toBe(true);
+        expect(json.data.storyId).toBe('standalone-1');
+        expect(json.data.estimate.size).toBe('medium');
+        expect(json.data.estimate.storyPoints).toBe(5);
+        expect(json.data.estimate.confidence).toBe('high');
+        expect(json.data.estimate.isManualOverride).toBe(false);
+
+        // Verify DB was updated
+        const row = testDb
+          .query('SELECT estimate FROM prd_stories WHERE id = ?')
+          .get('standalone-1') as any;
+        const saved = JSON.parse(row.estimate);
+        expect(saved.storyPoints).toBe(5);
+      } finally {
+        if (origKey) process.env.ANTHROPIC_API_KEY = origKey;
+        else delete process.env.ANTHROPIC_API_KEY;
+      }
+    });
+
+    test('handles AI API error gracefully', async () => {
+      insertStory({
+        id: 'standalone-1',
+        prd_id: null,
+        workspace_path: '/test/project',
+        title: 'Test Story',
+      });
+
+      globalThis.fetch = (async (url: string | URL | Request, init?: RequestInit) => {
+        const urlStr =
+          typeof url === 'string' ? url : url instanceof URL ? url.toString() : url.url;
+        if (urlStr.includes('api.anthropic.com')) {
+          return new Response('Internal Error', { status: 500 });
+        }
+        return originalFetch(url, init);
+      }) as typeof fetch;
+
+      const origKey = process.env.ANTHROPIC_API_KEY;
+      process.env.ANTHROPIC_API_KEY = 'test-key';
+
+      try {
+        const res = await app.request('/stories/standalone-1/estimate', {
+          method: 'POST',
+          body: JSON.stringify({}),
+          headers: { 'Content-Type': 'application/json' },
+        });
+
+        expect(res.status).toBe(500);
+        const json = await res.json();
+        expect(json.ok).toBe(false);
+        expect(json.error).toContain('Estimation failed');
+      } finally {
+        if (origKey) process.env.ANTHROPIC_API_KEY = origKey;
+        else delete process.env.ANTHROPIC_API_KEY;
+      }
     });
   });
 });

@@ -3,6 +3,7 @@
   import { uiStore } from '$lib/stores/ui.svelte';
   import { api } from '$lib/api/client';
   import { onMount } from 'svelte';
+  import { desktopNotifications } from '$lib/notifications/desktop-notifications';
   import type { ThemeId, CliProvider } from '@e/shared';
   import { MONO_FONTS, SANS_FONTS, findFont } from '$lib/config/fonts';
   import { HYPERTHEMES } from '$lib/config/hyperthemes';
@@ -13,7 +14,7 @@
   ];
 
   let activeTab = $state<
-    'general' | 'appearance' | 'editor' | 'permissions' | 'security' | 'mcp' | 'keybindings'
+    'general' | 'appearance' | 'audio' | 'editor' | 'permissions' | 'security' | 'mcp' | 'keybindings'
   >('general');
 
   // --- BYOK state ---
@@ -200,6 +201,8 @@
     { id: 'one-dark', label: 'One Dark' },
     { id: 'everforest', label: 'Everforest' },
     { id: 'goth', label: 'Redrum' },
+    { id: 'sakura-light', label: '🌸 Sakura Light' },
+    { id: 'sakura', label: '🌸 Sakura Dark' },
   ];
 
   const cloudModels = [
@@ -213,14 +216,17 @@
   let models = $state(cloudModels);
 
   onMount(async () => {
+    let combined = [...cloudModels];
+
+    // Ollama local models
     try {
       const status = await api.settings.ollamaStatus();
       ollamaAvailable = status.data.available;
       if (ollamaAvailable) {
         const res = await api.settings.ollamaModels();
         ollamaModels = res.data;
-        models = [
-          ...cloudModels,
+        combined = [
+          ...combined,
           ...ollamaModels.map((m) => ({
             id: `ollama:${m.name}`,
             label: `${m.name} (local)`,
@@ -230,8 +236,41 @@
     } catch {
       /* Ollama not available */
     }
-    // Pre-load security data
-    loadApiKeyStatus();
+
+    // Pre-load security data so we know which keys are set before fetching remote models
+    await loadApiKeyStatus();
+
+    // OpenAI models (only if key is configured)
+    if (apiKeyStatus['openai']) {
+      try {
+        const res = await api.settings.openaiModels();
+        if (res.data?.length) {
+          combined = [
+            ...combined,
+            ...res.data.map((m) => ({ id: `openai:${m.id}`, label: `${m.name} (OpenAI)` })),
+          ];
+        }
+      } catch {
+        /* OpenAI not available */
+      }
+    }
+
+    // Google Gemini models (only if key is configured)
+    if (apiKeyStatus['google']) {
+      try {
+        const res = await api.settings.geminiModels();
+        if (res.data?.length) {
+          combined = [
+            ...combined,
+            ...res.data.map((m) => ({ id: `gemini:${m.id}`, label: `${m.name} (Gemini)` })),
+          ];
+        }
+      } catch {
+        /* Gemini not available */
+      }
+    }
+
+    models = combined;
     loadBudget();
     loadSandbox();
   });
@@ -240,7 +279,7 @@
     { id: 'plan', label: 'Plan', desc: 'Read-only, plan before executing' },
     { id: 'safe', label: 'Safe', desc: 'Prompts for all modifications' },
     { id: 'fast', label: 'Fast', desc: 'Auto-approves safe commands' },
-    { id: 'unrestricted', label: 'Unrestricted', desc: 'All tools auto-approved' },
+    { id: 'unrestricted', label: 'Yolo 🤙', desc: 'All tools auto-approved — no prompts, ever' },
   ];
 
   function close() {
@@ -270,7 +309,7 @@
 
     <div class="modal-body">
       <nav class="settings-tabs">
-        {#each ['general', 'appearance', 'editor', 'permissions', 'security', 'mcp', 'keybindings'] as tab}
+        {#each ['general', 'appearance', 'audio', 'editor', 'permissions', 'security', 'mcp', 'keybindings'] as tab}
           <button
             class="settings-tab"
             class:active={activeTab === tab}
@@ -526,6 +565,19 @@
             </label>
           </div>
           <div class="setting-group">
+            <label class="setting-label">Auto-compact context</label>
+            <label class="toggle">
+              <input
+                type="checkbox"
+                checked={settingsStore.autoCompaction}
+                onchange={() =>
+                  settingsStore.update({ autoCompaction: !settingsStore.autoCompaction })}
+              />
+              <span class="toggle-slider"></span>
+            </label>
+            <p class="setting-desc">Automatically compact conversation history when context window exceeds 95%</p>
+          </div>
+          <div class="setting-group">
             <label class="setting-label">Show budget in status bar</label>
             <label class="toggle">
               <input
@@ -586,6 +638,154 @@
                   <option value="none">None</option>
                 </select>
               </div>
+            </div>
+          </div>
+        {:else if activeTab === 'audio'}
+          <div class="setting-group">
+            <label class="setting-label">Sound effects</label>
+            <div class="audio-toggle-row">
+              <label class="toggle">
+                <input
+                  type="checkbox"
+                  checked={settingsStore.soundEnabled}
+                  onchange={() =>
+                    settingsStore.update({ soundEnabled: !settingsStore.soundEnabled })}
+                />
+                <span class="toggle-slider"></span>
+              </label>
+              <span class="audio-toggle-label">
+                {settingsStore.soundEnabled ? 'Enabled' : 'Disabled'}
+              </span>
+            </div>
+            <p class="setting-desc">Generative audio chirps for each stream event type</p>
+          </div>
+
+          <div class="setting-group" class:muted={!settingsStore.soundEnabled}>
+            <label class="setting-label">
+              Volume — {settingsStore.soundVolume}%
+            </label>
+            <div class="volume-row">
+              <span class="volume-icon">🔈</span>
+              <input
+                type="range"
+                min="0"
+                max="100"
+                step="1"
+                value={settingsStore.soundVolume}
+                disabled={!settingsStore.soundEnabled}
+                oninput={(e) =>
+                  settingsStore.update({ soundVolume: Number((e.target as HTMLInputElement).value) })}
+              />
+              <span class="volume-icon">🔊</span>
+            </div>
+          </div>
+
+          <div class="setting-group" class:muted={!settingsStore.soundEnabled}>
+            <label class="setting-label">Sound style</label>
+            <div class="sound-style-row">
+              {#each [
+                { value: 'melodic', label: 'Melodic', desc: 'Warm additive synthesis — marimba, vibraphone, bells' },
+                { value: 'classic', label: 'Classic', desc: 'Original oscillator chirps — the vintage E sound' },
+                { value: 'whimsy', label: 'Whimsy 🍬', desc: 'Music box, toy piano, kalimba & rubber-duck squeaks' },
+              ] as opt}
+                <button
+                  class="sound-style-btn"
+                  class:active={settingsStore.soundStyle === opt.value}
+                  disabled={!settingsStore.soundEnabled}
+                  onclick={() => settingsStore.update({ soundStyle: opt.value as 'classic' | 'melodic' | 'whimsy' })}
+                >
+                  <span class="sound-style-name">{opt.label}</span>
+                  <span class="sound-style-desc">{opt.desc}</span>
+                </button>
+              {/each}
+            </div>
+          </div>
+
+          <div class="setting-group">
+            <label class="setting-label">Desktop notifications</label>
+            <p class="setting-desc">
+              OS-level notifications when events occur while this tab is in the background.
+              {#if desktopNotifications.isSupported}
+                {#if desktopNotifications.permission === 'granted'}
+                  <span class="notify-status granted">Permitted</span>
+                {:else if desktopNotifications.permission === 'denied'}
+                  <span class="notify-status denied">Blocked — enable in browser settings</span>
+                {:else}
+                  <button class="btn-secondary notify-request-btn" onclick={async () => {
+                    const result = await desktopNotifications.requestPermission();
+                    if (result === 'granted') {
+                      uiStore.toast('Desktop notifications enabled', 'success');
+                    } else if (result === 'denied') {
+                      uiStore.toast('Notifications blocked by browser', 'error');
+                    }
+                  }}>Enable notifications</button>
+                {/if}
+              {:else}
+                <span class="notify-status denied">Not supported in this browser</span>
+              {/if}
+            </p>
+            <div class="notify-options">
+              <div class="notify-option-row">
+                <span class="notify-option-label">On completion</span>
+                <label class="toggle">
+                  <input
+                    type="checkbox"
+                    checked={settingsStore.notifyOnCompletion}
+                    onchange={() =>
+                      settingsStore.update({ notifyOnCompletion: !settingsStore.notifyOnCompletion })}
+                  />
+                  <span class="toggle-slider"></span>
+                </label>
+              </div>
+              <div class="notify-option-row">
+                <span class="notify-option-label">On failure</span>
+                <label class="toggle">
+                  <input
+                    type="checkbox"
+                    checked={settingsStore.notifyOnFailure}
+                    onchange={() =>
+                      settingsStore.update({ notifyOnFailure: !settingsStore.notifyOnFailure })}
+                  />
+                  <span class="toggle-slider"></span>
+                </label>
+              </div>
+              <div class="notify-option-row">
+                <span class="notify-option-label">On approval needed</span>
+                <label class="toggle">
+                  <input
+                    type="checkbox"
+                    checked={settingsStore.notifyOnApproval}
+                    onchange={() =>
+                      settingsStore.update({ notifyOnApproval: !settingsStore.notifyOnApproval })}
+                  />
+                  <span class="toggle-slider"></span>
+                </label>
+              </div>
+            </div>
+          </div>
+
+          <div class="setting-group" class:muted={!settingsStore.soundEnabled}>
+            <label class="setting-label">Event sounds</label>
+            <div class="chirp-legend">
+              {#each [
+                { event: 'Response start',   desc: 'Ascending tone when Claude begins responding' },
+                { event: 'Text block',        desc: 'Soft click as a new text block opens' },
+                { event: 'Streaming text',    desc: 'Gentle trickle while text flows (throttled)' },
+                { event: 'Thinking',          desc: 'Low hum when extended thinking begins' },
+                { event: 'Tool call',         desc: 'Mechanical blip on each tool invocation' },
+                { event: 'Tool success',      desc: 'Bright major-third chord on completion' },
+                { event: 'Tool error',        desc: 'Descending sawtooth on tool failure' },
+                { event: 'Approval needed',   desc: 'Sustained chime awaiting your approval' },
+                { event: 'Question asked',    desc: 'Three-note rising arpeggio with upward lilt — the classic "huh?" contour' },
+                { event: 'Response done',     desc: 'Resolved interval when the response completes' },
+                { event: 'Error',             desc: 'Warning buzz on stream error' },
+                { event: 'Cancelled',         desc: 'Soft fade when you stop the response' },
+              ] as row}
+                <div class="chirp-row">
+                  <span class="chirp-event">{row.event}</span>
+                  <span class="chirp-desc">{row.desc}</span>
+                </div>
+              {/each}
             </div>
           </div>
         {:else if activeTab === 'editor'}
@@ -1441,5 +1641,155 @@
   .font-preview.mono {
     font-size: 13px;
     letter-spacing: 0.3px;
+  }
+
+  /* Audio tab */
+  .audio-toggle-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 6px;
+  }
+  .audio-toggle-label {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-secondary);
+  }
+  .volume-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .volume-row input[type='range'] {
+    flex: 1;
+  }
+  .volume-icon {
+    font-size: 14px;
+    line-height: 1;
+    user-select: none;
+  }
+  .muted {
+    opacity: 0.4;
+    pointer-events: none;
+  }
+  .sound-style-row {
+    display: flex;
+    gap: 8px;
+  }
+  .sound-style-btn {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
+    padding: 10px 12px;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-secondary);
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    text-align: left;
+    transition: border-color 0.15s, background 0.15s;
+  }
+  .sound-style-btn:hover:not(:disabled) {
+    border-color: var(--accent-primary);
+    background: var(--bg-secondary);
+  }
+  .sound-style-btn.active {
+    border-color: var(--accent-primary);
+    background: color-mix(in srgb, var(--accent-primary) 10%, var(--bg-tertiary));
+  }
+  .sound-style-btn:disabled {
+    cursor: not-allowed;
+  }
+  .sound-style-name {
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--text-primary);
+    font-family: var(--font-family-sans);
+  }
+  .sound-style-btn.active .sound-style-name {
+    color: var(--accent-primary);
+  }
+  .sound-style-desc {
+    font-size: 11px;
+    color: var(--text-secondary);
+    line-height: 1.4;
+  }
+  .chirp-legend {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    border: 1px solid var(--border-secondary);
+    border-radius: var(--radius-sm);
+    overflow: hidden;
+  }
+  .chirp-row {
+    display: flex;
+    align-items: baseline;
+    gap: 12px;
+    padding: 7px 12px;
+    border-bottom: 1px solid var(--border-secondary);
+  }
+  .chirp-row:last-child {
+    border-bottom: none;
+  }
+  .chirp-row:nth-child(even) {
+    background: var(--bg-tertiary);
+  }
+  .chirp-event {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--accent-primary);
+    min-width: 130px;
+    flex-shrink: 0;
+  }
+  .chirp-desc {
+    font-size: 11px;
+    color: var(--text-tertiary);
+    line-height: 1.4;
+  }
+
+  /* Desktop notifications */
+  .notify-status {
+    font-size: 11px;
+    font-weight: 600;
+    margin-left: 4px;
+  }
+  .notify-status.granted {
+    color: var(--accent-secondary);
+  }
+  .notify-status.denied {
+    color: var(--accent-error);
+  }
+  .notify-request-btn {
+    margin-left: 4px;
+    padding: 2px 10px;
+    font-size: 11px;
+  }
+  .notify-options {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    border: 1px solid var(--border-secondary);
+    border-radius: var(--radius-sm);
+    overflow: hidden;
+  }
+  .notify-option-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--border-secondary);
+  }
+  .notify-option-row:last-child {
+    border-bottom: none;
+  }
+  .notify-option-row:nth-child(even) {
+    background: var(--bg-tertiary);
+  }
+  .notify-option-label {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-secondary);
   }
 </style>

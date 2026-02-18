@@ -378,4 +378,201 @@ describe('MCP Routes', () => {
       expect(res.status).toBe(404);
     });
   });
+
+  // ---------------------------------------------------------------
+  // GET /discover — Discover MCP servers
+  // ---------------------------------------------------------------
+  describe('GET /discover — discover MCP servers', () => {
+    test('returns ok with data array', async () => {
+      const res = await app.request('/discover');
+      expect(res.status).toBe(200);
+      const json = await res.json();
+      expect(json.ok).toBe(true);
+      expect(Array.isArray(json.data)).toBe(true);
+    });
+  });
+
+  // ---------------------------------------------------------------
+  // POST /import — Bulk import MCP servers
+  // ---------------------------------------------------------------
+  describe('POST /import — bulk import servers', () => {
+    test('returns 400 when servers array is empty', async () => {
+      const res = await app.request('/import', {
+        method: 'POST',
+        body: JSON.stringify({ servers: [] }),
+        headers: { 'Content-Type': 'application/json' },
+      });
+      expect(res.status).toBe(400);
+      const json = await res.json();
+      expect(json.ok).toBe(false);
+      expect(json.error).toBe('No servers provided');
+    });
+
+    test('returns 400 when servers is not an array', async () => {
+      const res = await app.request('/import', {
+        method: 'POST',
+        body: JSON.stringify({ servers: 'not-array' }),
+        headers: { 'Content-Type': 'application/json' },
+      });
+      expect(res.status).toBe(400);
+    });
+
+    test('returns 400 when servers key is missing', async () => {
+      const res = await app.request('/import', {
+        method: 'POST',
+        body: JSON.stringify({}),
+        headers: { 'Content-Type': 'application/json' },
+      });
+      expect(res.status).toBe(400);
+    });
+
+    test('imports a single server', async () => {
+      const res = await app.request('/import', {
+        method: 'POST',
+        body: JSON.stringify({
+          servers: [
+            { name: 'imported-server', transport: 'stdio', command: 'npx', args: ['server-pkg'] },
+          ],
+        }),
+        headers: { 'Content-Type': 'application/json' },
+      });
+      expect(res.status).toBe(201);
+      const json = await res.json();
+      expect(json.ok).toBe(true);
+      expect(json.data.imported).toBe(1);
+
+      const row = testDb.query('SELECT * FROM mcp_servers WHERE name = ?').get('imported-server') as any;
+      expect(row).toBeDefined();
+      expect(row.transport).toBe('stdio');
+      expect(row.command).toBe('npx');
+      expect(JSON.parse(row.args)).toEqual(['server-pkg']);
+      expect(row.scope).toBe('local');
+      expect(row.status).toBe('disconnected');
+    });
+
+    test('imports multiple servers', async () => {
+      const res = await app.request('/import', {
+        method: 'POST',
+        body: JSON.stringify({
+          servers: [
+            { name: 'server-a', transport: 'stdio', command: 'node' },
+            { name: 'server-b', transport: 'sse', url: 'http://localhost:9090' },
+          ],
+        }),
+        headers: { 'Content-Type': 'application/json' },
+      });
+      const json = await res.json();
+      expect(json.data.imported).toBe(2);
+
+      const all = testDb.query('SELECT * FROM mcp_servers').all();
+      expect(all).toHaveLength(2);
+    });
+
+    test('skips servers without name', async () => {
+      const res = await app.request('/import', {
+        method: 'POST',
+        body: JSON.stringify({
+          servers: [
+            { name: '', transport: 'stdio', command: 'node' },
+            { name: 'valid-server', transport: 'stdio', command: 'node' },
+          ],
+        }),
+        headers: { 'Content-Type': 'application/json' },
+      });
+      const json = await res.json();
+      // The server without name is skipped but imported count still increments
+      // because the continue check is !server.name (empty string is falsy)
+      expect(json.data.imported).toBe(1);
+    });
+
+    test('ignores duplicate servers (INSERT OR IGNORE)', async () => {
+      insertServer({ name: 'existing-server' });
+
+      const res = await app.request('/import', {
+        method: 'POST',
+        body: JSON.stringify({
+          servers: [
+            { name: 'existing-server', transport: 'stdio', command: 'different-command' },
+            { name: 'new-server', transport: 'stdio', command: 'npx' },
+          ],
+        }),
+        headers: { 'Content-Type': 'application/json' },
+      });
+      const json = await res.json();
+      expect(json.data.imported).toBe(2);
+
+      // The existing server should NOT be overwritten
+      const existing = testDb.query('SELECT command FROM mcp_servers WHERE name = ?').get('existing-server') as any;
+      expect(existing.command).toBe('npx'); // Original command, not 'different-command'
+    });
+
+    test('stores env variables for imported servers', async () => {
+      await app.request('/import', {
+        method: 'POST',
+        body: JSON.stringify({
+          servers: [
+            {
+              name: 'env-server',
+              transport: 'stdio',
+              command: 'node',
+              env: { API_KEY: 'test-key', DEBUG: 'true' },
+            },
+          ],
+        }),
+        headers: { 'Content-Type': 'application/json' },
+      });
+
+      const row = testDb.query('SELECT env FROM mcp_servers WHERE name = ?').get('env-server') as any;
+      expect(JSON.parse(row.env)).toEqual({ API_KEY: 'test-key', DEBUG: 'true' });
+    });
+
+    test('handles null optional fields during import', async () => {
+      await app.request('/import', {
+        method: 'POST',
+        body: JSON.stringify({
+          servers: [
+            { name: 'minimal-import', transport: 'sse', url: 'http://remote/sse' },
+          ],
+        }),
+        headers: { 'Content-Type': 'application/json' },
+      });
+
+      const row = testDb.query('SELECT * FROM mcp_servers WHERE name = ?').get('minimal-import') as any;
+      expect(row.command).toBeNull();
+      expect(row.args).toBeNull();
+      expect(row.env).toBeNull();
+      expect(row.url).toBe('http://remote/sse');
+    });
+
+    test('imported servers appear in server list', async () => {
+      await app.request('/import', {
+        method: 'POST',
+        body: JSON.stringify({
+          servers: [
+            { name: 'listed-server', transport: 'stdio', command: 'npx' },
+          ],
+        }),
+        headers: { 'Content-Type': 'application/json' },
+      });
+
+      const res = await app.request('/servers');
+      const json = await res.json();
+      expect(json.data.some((s: any) => s.name === 'listed-server')).toBe(true);
+    });
+
+    test('defaults transport to stdio when not provided', async () => {
+      await app.request('/import', {
+        method: 'POST',
+        body: JSON.stringify({
+          servers: [
+            { name: 'default-transport', command: 'node' },
+          ],
+        }),
+        headers: { 'Content-Type': 'application/json' },
+      });
+
+      const row = testDb.query('SELECT transport FROM mcp_servers WHERE name = ?').get('default-transport') as any;
+      expect(row.transport).toBe('stdio');
+    });
+  });
 });

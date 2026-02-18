@@ -241,7 +241,7 @@ export function createBedrockStreamV2(opts: BedrockStreamOptions): ReadableStrea
           let currentToolUse: any = null;
 
           // Process streaming response
-          for await (const item of apiResponse.body) {
+          for await (const item of apiResponse.body!) {
             if (!item.chunk?.bytes) continue;
 
             const chunk = JSON.parse(new TextDecoder().decode(item.chunk.bytes));

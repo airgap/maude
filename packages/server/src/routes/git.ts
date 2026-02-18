@@ -85,7 +85,7 @@ app.get('/branch', async (c) => {
 // Create a snapshot (stash-like) before agent runs
 app.post('/snapshot', async (c) => {
   const body = await c.req.json();
-  const { path: rootPath, conversationId, reason } = body;
+  const { path: rootPath, conversationId, reason, messageId } = body;
 
   if (!rootPath) return c.json({ ok: false, error: 'path required' }, 400);
 
@@ -136,7 +136,7 @@ app.post('/snapshot', async (c) => {
     const now = Date.now();
     const db = getDb();
     db.query(
-      `INSERT INTO git_snapshots (id, workspace_path, conversation_id, head_sha, stash_sha, reason, has_changes, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO git_snapshots (id, workspace_path, conversation_id, head_sha, stash_sha, reason, has_changes, message_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     ).run(
       id,
       rootPath,
@@ -145,6 +145,7 @@ app.post('/snapshot', async (c) => {
       stashSha,
       reason || 'pre-agent',
       hasChanges ? 1 : 0,
+      messageId || null,
       now,
     );
 
@@ -212,8 +213,35 @@ app.get('/snapshots', (c) => {
       stashSha: r.stash_sha,
       reason: r.reason,
       hasChanges: !!r.has_changes,
+      messageId: r.message_id || null,
       createdAt: r.created_at,
     })),
+  });
+});
+
+// Get snapshot by message ID
+app.get('/snapshot/by-message/:messageId', (c) => {
+  const messageId = c.req.param('messageId');
+  const db = getDb();
+  const row = db
+    .query(`SELECT * FROM git_snapshots WHERE message_id = ? ORDER BY created_at DESC LIMIT 1`)
+    .get(messageId) as any;
+
+  if (!row) return c.json({ ok: false, error: 'No snapshot for this message' }, 404);
+
+  return c.json({
+    ok: true,
+    data: {
+      id: row.id,
+      workspacePath: row.workspace_path,
+      conversationId: row.conversation_id,
+      headSha: row.head_sha,
+      stashSha: row.stash_sha,
+      reason: row.reason,
+      hasChanges: !!row.has_changes,
+      messageId: row.message_id || null,
+      createdAt: row.created_at,
+    },
   });
 });
 

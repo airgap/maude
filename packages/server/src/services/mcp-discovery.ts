@@ -8,7 +8,7 @@
 
 import { homedir } from 'os';
 import { join } from 'path';
-import { existsSync, readFileSync, readdirSync } from 'fs';
+import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import type { DiscoveredMcpSource, DiscoveredMcpServer, MCPTransport } from '@e/shared';
 
 // ── Known Config Locations ──

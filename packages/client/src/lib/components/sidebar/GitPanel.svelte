@@ -3,7 +3,7 @@
   import { api } from '$lib/api/client';
   import { gitStore, type GitFileStatus } from '$lib/stores/git.svelte';
   import { settingsStore } from '$lib/stores/settings.svelte';
-  import { editorStore } from '$lib/stores/editor.svelte';
+  import { primaryPaneStore } from '$lib/stores/primaryPane.svelte';
 
   // ── Derived state ────────────────────────────────────────────────────────
 
@@ -101,10 +101,10 @@
     loadingKey = key;
     try {
       const res = await api.git.diff(workspacePath, file.path, staged);
-      editorStore.openDiffTab(file.path, res.data.diff, staged);
+      primaryPaneStore.openDiffTab(file.path, res.data.diff, staged);
     } catch (err: any) {
       // Show error as diff content so it's visible in the panel
-      editorStore.openDiffTab(file.path, `Error: ${err?.message ?? err}`, staged);
+      primaryPaneStore.openDiffTab(file.path, `Error: ${err?.message ?? err}`, staged);
     } finally {
       loadingKey = null;
     }

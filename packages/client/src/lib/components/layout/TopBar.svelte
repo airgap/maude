@@ -301,4 +301,31 @@
     transition: width 500ms linear;
     box-shadow: var(--shadow-glow-sm);
   }
+
+  /* ── Mobile overrides ── */
+  :global([data-mobile]) .topbar {
+    padding: 0 10px;
+    gap: 6px;
+  }
+  /* Hide items that don't fit / aren't useful on mobile */
+  :global([data-mobile]) .plan-badge,
+  :global([data-mobile]) .context-meter {
+    display: none;
+  }
+  /* Model select: larger tap target */
+  :global([data-mobile]) .model-select {
+    font-size: 11px;
+    padding: 6px 8px;
+    min-height: 36px;
+  }
+  /* Topbar left: truncate workspace tabs */
+  :global([data-mobile]) .topbar-left {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+  }
+  :global([data-mobile]) .topbar-right {
+    flex-shrink: 0;
+    gap: 4px;
+  }
 </style>

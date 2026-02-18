@@ -38,8 +38,10 @@
   let drag = $state<DragState | null>(null);
   let tabBtnEls: HTMLButtonElement[] = $state([]);
 
-  function handleDragStart(tabId: SidebarTab, index: number, e: MouseEvent) {
-    if (e.button !== 0) return;
+  // Coordinate helper — normalise touch to {x, y}
+  function touchXY(e: TouchEvent) { const t = e.touches[0] ?? e.changedTouches[0]; return { x: t.clientX, y: t.clientY }; }
+
+  function startTabDrag(tabId: SidebarTab, index: number, x: number, y: number) {
     const widths: number[] = [];
     const offsets: number[] = [];
     for (let i = 0; i < tabBtnEls.length; i++) {
@@ -53,59 +55,61 @@
     drag = {
       tabId,
       startIndex: index,
-      startX: e.clientX,
-      startY: e.clientY,
-      currentX: e.clientX,
-      currentY: e.clientY,
+      startX: x,
+      startY: y,
+      currentX: x,
+      currentY: y,
       isDragging: false,
       crossDrag: false,
       tabWidths: widths,
       tabOffsets: offsets,
       order: [...group.tabs],
     };
+  }
+
+  function handleDragStart(tabId: SidebarTab, index: number, e: MouseEvent) {
+    if (e.button !== 0) return;
+    startTabDrag(tabId, index, e.clientX, e.clientY);
     document.addEventListener('mousemove', handleDragMove);
     document.addEventListener('mouseup', handleDragEnd);
   }
 
-  function handleDragMove(e: MouseEvent) {
+  function handleDragStartTouch(tabId: SidebarTab, index: number, e: TouchEvent) {
+    e.preventDefault();
+    cancelLongPress();
+    startLongPress(tabId, e);
+    const { x, y } = touchXY(e);
+    startTabDrag(tabId, index, x, y);
+    document.addEventListener('touchmove', handleDragMoveTouch, { passive: false });
+    document.addEventListener('touchend', handleDragEndTouch);
+  }
+
+  function applyTabDragMove(x: number, y: number, e: { preventDefault(): void }) {
     if (!drag || drag.crossDrag) return;
-    const deltaX = e.clientX - drag.startX;
-    const deltaY = e.clientY - drag.startY;
+    const deltaX = x - drag.startX;
+    const deltaY = y - drag.startY;
 
     if (!drag.isDragging) {
       if (Math.abs(deltaX) < DRAG_THRESHOLD && Math.abs(deltaY) < DRAG_THRESHOLD) return;
       drag.isDragging = true;
+      cancelLongPress(); // moved enough — not a long-press
       e.preventDefault();
     }
 
-    drag.currentX = e.clientX;
-    drag.currentY = e.clientY;
+    drag.currentX = x;
+    drag.currentY = y;
 
     // Tear-off: vertical drag enters cross-component drag mode
     if (Math.abs(deltaY) > TEAROFF_THRESHOLD) {
       drag.crossDrag = true;
       const tabId = drag.tabId;
-
-      // Start shared drag — this makes drop zones appear everywhere
-      panelDragStore.startDrag(
-        tabId,
-        { type: 'tab-bar', column, groupIndex },
-        e.clientX,
-        e.clientY,
-      );
-
-      // Now the global handlers take over
-      document.removeEventListener('mousemove', handleDragMove);
-      document.removeEventListener('mouseup', handleDragEnd);
-      document.addEventListener('mousemove', handleCrossDragMove);
-      document.addEventListener('mouseup', handleCrossDragEnd);
-      return;
+      panelDragStore.startDrag(tabId, { type: 'tab-bar', column, groupIndex }, x, y);
+      return; // cross-drag listeners attached by caller
     }
 
     // Horizontal reorder
-    const draggedOriginalIndex = drag.startIndex;
-    const draggedWidth = drag.tabWidths[draggedOriginalIndex];
-    const draggedCenter = drag.tabOffsets[draggedOriginalIndex] + draggedWidth / 2 + deltaX;
+    const draggedWidth = drag.tabWidths[drag.startIndex];
+    const draggedCenter = drag.tabOffsets[drag.startIndex] + draggedWidth / 2 + deltaX;
 
     let newOrder = [...drag.order];
     let swapped = true;
@@ -118,8 +122,7 @@
           const rightMid = drag.tabOffsets[rightOrigIndex] + drag.tabWidths[rightOrigIndex] / 2;
           if (draggedCenter > rightMid) {
             [newOrder[idx], newOrder[idx + 1]] = [newOrder[idx + 1], newOrder[idx]];
-            swapped = true;
-            continue;
+            swapped = true; continue;
           }
         }
       }
@@ -129,8 +132,7 @@
           const leftMid = drag.tabOffsets[leftOrigIndex] + drag.tabWidths[leftOrigIndex] / 2;
           if (draggedCenter < leftMid) {
             [newOrder[idx - 1], newOrder[idx]] = [newOrder[idx], newOrder[idx - 1]];
-            swapped = true;
-            continue;
+            swapped = true; continue;
           }
         }
       }
@@ -138,9 +140,44 @@
     drag.order = newOrder;
   }
 
-  function handleDragEnd() {
-    document.removeEventListener('mousemove', handleDragMove);
-    document.removeEventListener('mouseup', handleDragEnd);
+  function handleDragMove(e: MouseEvent) {
+    if (drag?.crossDrag) {
+      // Hand off to cross-drag
+      document.removeEventListener('mousemove', handleDragMove);
+      document.removeEventListener('mouseup', handleDragEnd);
+      document.addEventListener('mousemove', handleCrossDragMove);
+      document.addEventListener('mouseup', handleCrossDragEnd);
+      return;
+    }
+    applyTabDragMove(e.clientX, e.clientY, e);
+    if (drag?.crossDrag) {
+      document.removeEventListener('mousemove', handleDragMove);
+      document.removeEventListener('mouseup', handleDragEnd);
+      document.addEventListener('mousemove', handleCrossDragMove);
+      document.addEventListener('mouseup', handleCrossDragEnd);
+    }
+  }
+
+  function handleDragMoveTouch(e: TouchEvent) {
+    e.preventDefault();
+    if (drag?.crossDrag) {
+      document.removeEventListener('touchmove', handleDragMoveTouch);
+      document.removeEventListener('touchend', handleDragEndTouch);
+      document.addEventListener('touchmove', handleCrossDragMoveTouch, { passive: false });
+      document.addEventListener('touchend', handleCrossDragEndTouch);
+      return;
+    }
+    const { x, y } = touchXY(e);
+    applyTabDragMove(x, y, e);
+    if (drag?.crossDrag) {
+      document.removeEventListener('touchmove', handleDragMoveTouch);
+      document.removeEventListener('touchend', handleDragEndTouch);
+      document.addEventListener('touchmove', handleCrossDragMoveTouch, { passive: false });
+      document.addEventListener('touchend', handleCrossDragEndTouch);
+    }
+  }
+
+  function finishTabDrag() {
     if (!drag) return;
     if (drag.isDragging && !drag.crossDrag) {
       sidebarLayoutStore.reorderTabsInGroup(column, groupIndex, drag.order);
@@ -150,44 +187,61 @@
     drag = null;
   }
 
+  function handleDragEnd() {
+    document.removeEventListener('mousemove', handleDragMove);
+    document.removeEventListener('mouseup', handleDragEnd);
+    finishTabDrag();
+  }
+
+  function handleDragEndTouch(e: TouchEvent) {
+    document.removeEventListener('touchmove', handleDragMoveTouch);
+    document.removeEventListener('touchend', handleDragEndTouch);
+    cancelLongPress();
+    finishTabDrag();
+  }
+
   // --- Cross-component drag (after tear-off) ---
 
   function handleCrossDragMove(e: MouseEvent) {
     panelDragStore.updatePosition(e.clientX, e.clientY);
   }
 
-  function handleCrossDragEnd(_e: MouseEvent) {
-    document.removeEventListener('mousemove', handleCrossDragMove);
-    document.removeEventListener('mouseup', handleCrossDragEnd);
+  function handleCrossDragMoveTouch(e: TouchEvent) {
+    e.preventDefault();
+    const { x, y } = touchXY(e);
+    panelDragStore.updatePosition(x, y);
+  }
 
+  function finishCrossDrag(x: number, y: number) {
     const result = panelDragStore.endDrag();
-    if (!result) {
-      drag = null;
-      return;
-    }
-
+    if (!result) { drag = null; return; }
     const { tabId, target } = result;
-
     if (!target) {
-      // No drop target — pop out as floating panel
       sidebarLayoutStore.popOutTab(tabId, {
-        x: Math.max(0, _e.clientX - 160),
-        y: Math.max(0, _e.clientY - 14),
+        x: Math.max(0, x - 160),
+        y: Math.max(0, y - 14),
       });
     } else if (target.type === 'tab-bar') {
-      sidebarLayoutStore.moveTabToGroup(
-        tabId,
-        target.column,
-        target.groupIndex,
-        target.insertIndex,
-      );
+      sidebarLayoutStore.moveTabToGroup(tabId, target.column, target.groupIndex, target.insertIndex);
     } else if (target.type === 'split') {
       sidebarLayoutStore.createSplit(tabId, target.column, target.insertGroupAtIndex);
     } else if (target.type === 'column') {
       sidebarLayoutStore.addTabToColumn(tabId, target.column);
     }
-
     drag = null;
+  }
+
+  function handleCrossDragEnd(e: MouseEvent) {
+    document.removeEventListener('mousemove', handleCrossDragMove);
+    document.removeEventListener('mouseup', handleCrossDragEnd);
+    finishCrossDrag(e.clientX, e.clientY);
+  }
+
+  function handleCrossDragEndTouch(e: TouchEvent) {
+    document.removeEventListener('touchmove', handleCrossDragMoveTouch);
+    document.removeEventListener('touchend', handleCrossDragEndTouch);
+    const { x, y } = touchXY(e);
+    finishCrossDrag(x, y);
   }
 
   // --- Drop target: this tab bar itself accepts drops ---
@@ -281,10 +335,6 @@
     sidebarLayoutStore.setActiveTabInGroup(column, groupIndex, tabId);
   }
 
-  function toggleMenu() {
-    showMenu = !showMenu;
-  }
-
   function closeMenu() {
     showMenu = false;
   }
@@ -293,9 +343,43 @@
     contextMenu = null;
   }
 
-  function handleContextMenu(tabId: SidebarTab, e: MouseEvent) {
-    e.preventDefault();
-    contextMenu = { tabId, x: e.clientX, y: e.clientY };
+  // --- Context menu ---
+  // We block ALL native contextmenu events on the nav (prevents the browser
+  // menu and the touch-synthesized popup). Instead:
+  //   • Mouse right-click  → detected via pointerdown with pointerType='mouse' and button=2
+  //   • Touch long-press   → detected via our own timer in handleDragStartTouch
+
+  const LONG_PRESS_MS = 500;
+  let longPressTimer: ReturnType<typeof setTimeout> | null = null;
+
+  function startLongPress(tabId: SidebarTab, e: TouchEvent) {
+    const { x, y } = touchXY(e);
+    longPressTimer = setTimeout(() => {
+      longPressTimer = null;
+      if (!drag?.isDragging) {
+        contextMenu = { tabId, x, y };
+      }
+    }, LONG_PRESS_MS);
+  }
+
+  function cancelLongPress() {
+    if (longPressTimer !== null) {
+      clearTimeout(longPressTimer);
+      longPressTimer = null;
+    }
+  }
+
+  // Right-click via pointer API (works on mouse and pen, never fires for touch)
+  function handleTabPointerDown(tabId: SidebarTab, e: PointerEvent) {
+    if (e.pointerType !== 'mouse' || e.button !== 2) return;
+    // Show context menu on pointerup to match OS convention
+    const onUp = (up: PointerEvent) => {
+      document.removeEventListener('pointerup', onUp);
+      if (up.button === 2) {
+        contextMenu = { tabId, x: up.clientX, y: up.clientY };
+      }
+    };
+    document.addEventListener('pointerup', onUp);
   }
 
   function handlePopOut(tabId: SidebarTab) {
@@ -321,6 +405,208 @@
   }
 
   const otherColumn = $derived(column === 'left' ? 'right' : 'left');
+
+  // --- Menu drag-to-reorder / drag-into-tab-bar ---
+
+  /** All sidebar tabs in display order for the menu */
+  let menuOrder = $state<SidebarTab[]>(SIDEBAR_TABS.map((t) => t.id));
+
+  /** Sync menuOrder when menu opens */
+  function openMenu() {
+    menuOrder = SIDEBAR_TABS.map((t) => t.id);
+    showMenu = true;
+  }
+
+  function toggleMenu() {
+    if (showMenu) {
+      closeMenu();
+    } else {
+      openMenu();
+    }
+  }
+
+  const MENU_DRAG_THRESHOLD = 4;
+  /** Pixels of horizontal movement before we convert to a tab-bar cross-drag */
+  const MENU_CROSS_THRESHOLD = 40;
+
+  interface MenuDragState {
+    tabId: SidebarTab;
+    startIndex: number;
+    startY: number;
+    startX: number;
+    currentY: number;
+    isDragging: boolean;
+    crossDrag: boolean;
+    order: SidebarTab[];
+    itemOffsets: number[];
+    itemHeights: number[];
+  }
+
+  let menuDrag = $state<MenuDragState | null>(null);
+  let menuItemEls: HTMLElement[] = $state([]);
+
+  function startMenuDrag(tabId: SidebarTab, index: number, x: number, y: number) {
+    const heights: number[] = [];
+    const offsets: number[] = [];
+    for (const el of menuItemEls) {
+      if (el) {
+        const rect = el.getBoundingClientRect();
+        heights.push(rect.height);
+        offsets.push(rect.top);
+      }
+    }
+    menuDrag = {
+      tabId,
+      startIndex: index,
+      startY: y,
+      startX: x,
+      currentY: y,
+      isDragging: false,
+      crossDrag: false,
+      order: [...menuOrder],
+      itemOffsets: offsets,
+      itemHeights: heights,
+    };
+  }
+
+  function handleMenuItemMousedown(tabId: SidebarTab, index: number, e: MouseEvent) {
+    if (e.button !== 0) return;
+    e.preventDefault();
+    e.stopPropagation();
+    startMenuDrag(tabId, index, e.clientX, e.clientY);
+    document.addEventListener('mousemove', handleMenuDragMove);
+    document.addEventListener('mouseup', handleMenuDragEnd);
+  }
+
+  function handleMenuItemTouchstart(tabId: SidebarTab, index: number, e: TouchEvent) {
+    e.preventDefault();
+    e.stopPropagation();
+    const { x, y } = touchXY(e);
+    startMenuDrag(tabId, index, x, y);
+    document.addEventListener('touchmove', handleMenuDragMoveTouch, { passive: false });
+    document.addEventListener('touchend', handleMenuDragEndTouch);
+  }
+
+  function applyMenuDragMove(x: number, y: number) {
+    if (!menuDrag || menuDrag.crossDrag) return false;
+
+    const deltaY = y - menuDrag.startY;
+    const deltaX = x - menuDrag.startX;
+
+    if (!menuDrag.isDragging) {
+      if (Math.abs(deltaY) < MENU_DRAG_THRESHOLD && Math.abs(deltaX) < MENU_DRAG_THRESHOLD) return false;
+      menuDrag.isDragging = true;
+    }
+
+    menuDrag.currentY = y;
+
+    // Enough horizontal movement → cross-component drag into tab bar
+    if (Math.abs(deltaX) > MENU_CROSS_THRESHOLD) {
+      menuDrag.crossDrag = true;
+      const tabId = menuDrag.tabId;
+      closeMenu();
+      panelDragStore.startDrag(tabId, { type: 'tab-bar', column, groupIndex }, x, y);
+      return true; // signal: switch to cross-drag listeners
+    }
+
+    // Vertical reorder within the menu list
+    let newOrder = [...menuDrag.order];
+    let swapped = true;
+    while (swapped) {
+      swapped = false;
+      const idx = newOrder.indexOf(menuDrag.tabId);
+      if (idx < newOrder.length - 1) {
+        const nextOrigIdx = menuOrder.indexOf(newOrder[idx + 1]);
+        if (nextOrigIdx >= 0 && nextOrigIdx < menuDrag.itemOffsets.length) {
+          const nextMid = menuDrag.itemOffsets[nextOrigIdx] + menuDrag.itemHeights[nextOrigIdx] / 2;
+          if (y > nextMid) {
+            [newOrder[idx], newOrder[idx + 1]] = [newOrder[idx + 1], newOrder[idx]];
+            swapped = true; continue;
+          }
+        }
+      }
+      if (idx > 0) {
+        const prevOrigIdx = menuOrder.indexOf(newOrder[idx - 1]);
+        if (prevOrigIdx >= 0 && prevOrigIdx < menuDrag.itemOffsets.length) {
+          const prevMid = menuDrag.itemOffsets[prevOrigIdx] + menuDrag.itemHeights[prevOrigIdx] / 2;
+          if (y < prevMid) {
+            [newOrder[idx - 1], newOrder[idx]] = [newOrder[idx], newOrder[idx - 1]];
+            swapped = true; continue;
+          }
+        }
+      }
+    }
+    menuDrag.order = newOrder;
+    return false;
+  }
+
+  function handleMenuDragMove(e: MouseEvent) {
+    const crossDragStarted = applyMenuDragMove(e.clientX, e.clientY);
+    if (crossDragStarted) {
+      document.removeEventListener('mousemove', handleMenuDragMove);
+      document.removeEventListener('mouseup', handleMenuDragEnd);
+      document.addEventListener('mousemove', handleCrossDragMove);
+      document.addEventListener('mouseup', handleCrossDragEnd);
+    }
+  }
+
+  function handleMenuDragMoveTouch(e: TouchEvent) {
+    e.preventDefault();
+    const { x, y } = touchXY(e);
+    const crossDragStarted = applyMenuDragMove(x, y);
+    if (crossDragStarted) {
+      document.removeEventListener('touchmove', handleMenuDragMoveTouch);
+      document.removeEventListener('touchend', handleMenuDragEndTouch);
+      document.addEventListener('touchmove', handleCrossDragMoveTouch, { passive: false });
+      document.addEventListener('touchend', handleCrossDragEndTouch);
+    }
+  }
+
+  function finishMenuDrag() {
+    if (!menuDrag) return;
+    if (menuDrag.isDragging && !menuDrag.crossDrag) {
+      menuOrder = menuDrag.order;
+    } else if (!menuDrag.isDragging) {
+      handleAddTab(menuDrag.tabId);
+    }
+    menuDrag = null;
+  }
+
+  function handleMenuDragEnd(e: MouseEvent) {
+    document.removeEventListener('mousemove', handleMenuDragMove);
+    document.removeEventListener('mouseup', handleMenuDragEnd);
+    finishMenuDrag();
+  }
+
+  function handleMenuDragEndTouch(e: TouchEvent) {
+    document.removeEventListener('touchmove', handleMenuDragMoveTouch);
+    document.removeEventListener('touchend', handleMenuDragEndTouch);
+    finishMenuDrag();
+  }
+
+  function getMenuItemDragStyle(tabId: SidebarTab, index: number): string {
+    if (!menuDrag || !menuDrag.isDragging || menuDrag.crossDrag) return '';
+    if (tabId === menuDrag.tabId) {
+      const dy = menuDrag.currentY - menuDrag.startY;
+      return `transform: translateY(${dy}px); opacity: 0.75; z-index: 10; position: relative;`;
+    }
+    const origIdx = menuOrder.indexOf(tabId);
+    const newIdx = menuDrag.order.indexOf(tabId);
+    if (origIdx === newIdx) return '';
+    const direction = newIdx > origIdx ? 1 : -1;
+    const draggedHeight = menuDrag.itemHeights[menuDrag.startIndex] ?? 28;
+    return `transform: translateY(${direction * draggedHeight}px); transition: transform 150ms ease;`;
+  }
+
+  /** Whether a tab is in this group */
+  function isInThisGroup(tabId: SidebarTab): boolean {
+    return group.tabs.includes(tabId);
+  }
+
+  /** Whether a tab is placed anywhere (in a group or floating) */
+  function isPlaced(tabId: SidebarTab): boolean {
+    return !sidebarLayoutStore.unplacedTabs.some((t) => t.id === tabId);
+  }
 </script>
 
 <!-- svelte-ignore a11y_no_static_element_interactions -->
@@ -330,6 +616,7 @@
   class:drop-target={isDropTarget}
   onmouseenter={handleBarMouseEnter}
   onmouseleave={handleBarMouseLeave}
+  oncontextmenu={(e) => e.preventDefault()}
 >
   {#each group.tabs as tab, i (tab)}
     {@const tabDef = SIDEBAR_TABS.find((t) => t.id === tab)}
@@ -345,8 +632,9 @@
         class:drag-source={drag?.isDragging && !drag.crossDrag && drag.tabId === tab}
         class:hidden-tab={tabHidden === tab}
         onmousedown={(e) => handleDragStart(tab, i, e)}
+        ontouchstart={(e) => handleDragStartTouch(tab, i, e)}
+        onpointerdown={(e) => handleTabPointerDown(tab, e)}
         onmouseenter={() => handleTabSlotEnter(i)}
-        oncontextmenu={(e) => handleContextMenu(tab, e)}
         style={getDragStyle(tab)}
         title={tabDef.label}
       >
@@ -374,7 +662,7 @@
       class="tab-btn hamburger-btn"
       class:active={showMenu}
       onclick={toggleMenu}
-      title="Add tab"
+      title="Manage tabs"
     >
       <svg
         width="20"
@@ -384,33 +672,58 @@
         stroke="currentColor"
         stroke-width="2"
       >
-        <path d="M12 5v14M5 12h14" />
+        <path d="M4 6h16M4 12h16M4 18h16" />
       </svg>
     </button>
 
     {#if showMenu}
       <!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
-      <div class="menu-backdrop" onclick={closeMenu}></div>
+      <div class="menu-backdrop" onclick={closeMenu} ontouchend={closeMenu}></div>
       <div class="dropdown-menu" role="menu">
-        {#each sidebarLayoutStore.unplacedTabs as tab (tab.id)}
-          <button class="menu-item" role="menuitem" onclick={() => handleAddTab(tab.id)}>
-            <svg
-              class="menu-item-icon"
-              width="16"
-              height="16"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="2"
+        <div class="menu-header">Panels</div>
+        {#each menuDrag?.order ?? menuOrder as tabId, i (tabId)}
+          {@const tab = SIDEBAR_TABS.find((t) => t.id === tabId)}
+          {#if tab}
+            {@const inThisGroup = isInThisGroup(tabId)}
+            {@const placed = isPlaced(tabId)}
+            <!-- svelte-ignore a11y_no_static_element_interactions -->
+            <div
+              class="menu-item"
+              class:menu-item-active={inThisGroup}
+              class:menu-item-placed={placed && !inThisGroup}
+              class:menu-item-dragging={menuDrag?.isDragging && menuDrag.tabId === tabId}
+              role="menuitem"
+              tabindex="0"
+              bind:this={menuItemEls[i]}
+              onmousedown={(e) => handleMenuItemMousedown(tabId, i, e)}
+              ontouchstart={(e) => handleMenuItemTouchstart(tabId, i, e)}
+              style={getMenuItemDragStyle(tabId, i)}
+              title={placed && !inThisGroup ? `${tab.label} (in another panel — drag to move here)` : tab.label}
             >
-              <path d={tab.icon} />
-            </svg>
-            <span class="menu-item-label">{tab.label}</span>
-          </button>
+              <svg
+                class="menu-item-icon"
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+              >
+                <path d={tab.icon} />
+              </svg>
+              <span class="menu-item-label">{tab.label}</span>
+              {#if inThisGroup}
+                <span class="menu-item-badge menu-item-badge-here">here</span>
+              {:else if placed}
+                <span class="menu-item-badge">placed</span>
+              {/if}
+              <svg class="menu-drag-handle" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M8 6h.01M8 12h.01M8 18h.01M16 6h.01M16 12h.01M16 18h.01" />
+              </svg>
+            </div>
+          {/if}
         {/each}
-        {#if sidebarLayoutStore.unplacedTabs.length === 0}
-          <div class="menu-empty">All tabs placed</div>
-        {/if}
+        <div class="menu-hint">Drag rows to reorder · Drag sideways to place in bar</div>
       </div>
     {/if}
   </div>
@@ -418,7 +731,7 @@
 
 {#if contextMenu}
   <!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
-  <div class="context-backdrop" onclick={closeContextMenu}></div>
+  <div class="context-backdrop" onclick={closeContextMenu} ontouchend={closeContextMenu}></div>
   <div class="context-menu" style="left: {contextMenu.x}px; top: {contextMenu.y}px;">
     <button class="menu-item" onclick={() => handleMoveToColumn(contextMenu!.tabId, otherColumn)}>
       <svg
@@ -480,6 +793,19 @@
     flex-shrink: 0;
     background: var(--bg-elevated);
     transition: background 150ms ease;
+    touch-action: none;
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-touch-callout: none;
+  }
+
+  /* SVGs are treated as images by Android Chrome — long-press triggers its
+     image context menu before any JS can fire. Disable pointer events on all
+     SVGs so touches land on the parent button instead. */
+  .tab-group-bar svg,
+  .dropdown-menu svg,
+  .context-menu svg {
+    pointer-events: none;
   }
 
   .tab-group-bar.drop-target {
@@ -501,6 +827,9 @@
     min-height: 32px;
     background: none;
     cursor: pointer;
+    touch-action: none;
+    -webkit-user-select: none;
+    user-select: none;
   }
   .tab-btn:hover {
     color: var(--accent-primary);
@@ -575,12 +904,32 @@
     box-shadow: var(--shadow);
   }
 
+  .menu-header {
+    padding: 4px 12px 2px;
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--text-tertiary);
+    user-select: none;
+  }
+
+  .menu-hint {
+    padding: 4px 12px 6px;
+    font-size: 10px;
+    color: var(--text-tertiary);
+    font-style: italic;
+    border-top: 1px solid var(--border-primary);
+    margin-top: 2px;
+    user-select: none;
+  }
+
   .menu-item {
     display: flex;
     align-items: center;
     gap: 8px;
     width: 100%;
-    padding: 6px 12px;
+    padding: 6px 10px 6px 12px;
     min-height: 28px;
     font-size: 12px;
     font-weight: 500;
@@ -588,12 +937,29 @@
     background: none;
     border: none;
     text-align: left;
-    cursor: pointer;
+    cursor: grab;
     white-space: nowrap;
+    user-select: none;
+    touch-action: none;
+    -webkit-touch-callout: none;
   }
   .menu-item:hover {
     color: var(--text-primary);
     background: var(--bg-hover);
+  }
+  .menu-item-active {
+    color: var(--accent-primary);
+  }
+  .menu-item-active:hover {
+    color: var(--accent-primary);
+  }
+  .menu-item-placed {
+    opacity: 0.65;
+  }
+  .menu-item-dragging {
+    cursor: grabbing;
+    background: var(--bg-active);
+    color: var(--text-primary);
   }
 
   .menu-item-icon {
@@ -601,6 +967,33 @@
   }
   .menu-item-label {
     flex: 1;
+  }
+
+  .menu-item-badge {
+    flex-shrink: 0;
+    font-size: 9px;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    padding: 1px 4px;
+    border-radius: 3px;
+    color: var(--text-tertiary);
+    background: var(--bg-hover);
+    border: 1px solid var(--border-primary);
+  }
+  .menu-item-badge-here {
+    color: var(--accent-primary);
+    background: color-mix(in srgb, var(--accent-primary) 12%, transparent);
+    border-color: color-mix(in srgb, var(--accent-primary) 30%, transparent);
+  }
+
+  .menu-drag-handle {
+    flex-shrink: 0;
+    color: var(--text-tertiary);
+    opacity: 0.5;
+  }
+  .menu-item:hover .menu-drag-handle {
+    opacity: 1;
   }
 
   .menu-empty {

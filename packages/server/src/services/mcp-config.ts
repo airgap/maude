@@ -1,7 +1,7 @@
 import { getDb } from '../db/database';
 import { join } from 'path';
 import { homedir } from 'os';
-import { writeFileSync, mkdirSync } from 'fs';
+import { writeFileSync, mkdirSync } from 'node:fs';
 
 const MCP_CONFIG_PATH = join(homedir(), '.e', 'mcp-config.json');
 

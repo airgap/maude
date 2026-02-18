@@ -50,6 +50,9 @@
 </script>
 
 <footer class="statusbar">
+  {#if streamStore.isStreaming && settingsStore.streamingProgressBar !== 'none'}
+    <div class="statusbar-throbber {settingsStore.streamingProgressBar}" aria-hidden="true"></div>
+  {/if}
   <div class="statusbar-left">
     <span class="status-item">
       {#if streamStore.isStreaming}
@@ -196,6 +199,51 @@
 </footer>
 
 <style>
+  .statusbar-throbber {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 2px;
+    transform: translateY(-100%);
+    pointer-events: none;
+  }
+  .statusbar-throbber.rainbow {
+    background: linear-gradient(
+      in oklab 90deg,
+      oklch(var(--rainbow-l) 0.2 0),
+      oklch(var(--rainbow-l) 0.2 60),
+      oklch(var(--rainbow-l) 0.2 120),
+      oklch(var(--rainbow-l) 0.2 180),
+      oklch(var(--rainbow-l) 0.2 240),
+      oklch(var(--rainbow-l) 0.2 300),
+      oklch(var(--rainbow-l) 0.2 360)
+    );
+    background-size: 200% 100%;
+    animation: rainbowSlide 2s linear infinite;
+  }
+  .statusbar-throbber.accent {
+    background: linear-gradient(90deg, transparent, var(--accent-primary), transparent);
+    background-size: 200% 100%;
+    animation: accentSlide 1.5s ease-in-out infinite;
+  }
+  .statusbar-throbber.pulse {
+    background: var(--accent-primary);
+    animation: barPulse 2s ease-in-out infinite;
+  }
+  @keyframes rainbowSlide {
+    0% { background-position: 0% 0%; }
+    100% { background-position: 200% 0%; }
+  }
+  @keyframes accentSlide {
+    0% { background-position: -200% 0%; }
+    100% { background-position: 200% 0%; }
+  }
+  @keyframes barPulse {
+    0%, 100% { opacity: 0.15; }
+    50% { opacity: 0.6; box-shadow: 0 0 8px var(--accent-primary); }
+  }
+
   .statusbar {
     height: var(--statusbar-height);
     display: flex;
@@ -404,6 +452,29 @@
   }
   .lsp-dismiss:hover {
     color: var(--text-primary);
+  }
+
+  /* ── Mobile: hide editor-specific clutter, keep stream status + layout toggle ── */
+  :global([data-mobile]) .cursor-pos,
+  :global([data-mobile]) .indent-label,
+  :global([data-mobile]) .lang-label,
+  :global([data-mobile]) .lsp-status,
+  :global([data-mobile]) .lsp-install,
+  :global([data-mobile]) .lsp-dismiss,
+  :global([data-mobile]) .tokens,
+  :global([data-mobile]) .session-cost,
+  :global([data-mobile]) .mode,
+  :global([data-mobile]) .model {
+    display: none;
+  }
+  :global([data-mobile]) .task-status {
+    max-width: 40vw;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  :global([data-mobile]) .statusbar {
+    padding: 0 10px;
   }
 
   @keyframes pulse {

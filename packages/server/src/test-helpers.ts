@@ -125,7 +125,7 @@ export function createTestDb(): Database {
   db.exec(`
     CREATE TABLE IF NOT EXISTS prd_stories (
       id TEXT PRIMARY KEY,
-      prd_id TEXT NOT NULL,
+      prd_id TEXT,
       title TEXT NOT NULL,
       description TEXT NOT NULL DEFAULT '',
       acceptance_criteria TEXT NOT NULL DEFAULT '[]',
@@ -143,6 +143,9 @@ export function createTestDb(): Database {
       dependency_reasons TEXT NOT NULL DEFAULT '{}',
       priority_recommendation TEXT,
       sort_order INTEGER NOT NULL DEFAULT 0,
+      workspace_path TEXT,
+      external_ref TEXT,
+      external_status TEXT,
       created_at INTEGER NOT NULL,
       updated_at INTEGER NOT NULL,
       FOREIGN KEY (prd_id) REFERENCES prds(id) ON DELETE CASCADE

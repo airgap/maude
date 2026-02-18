@@ -50,6 +50,14 @@ export interface Settings {
   autoScroll: boolean;
   streamingEnabled: boolean;
   compactMessages: boolean;
+  autoCompaction: boolean;
+  // Audio & notifications
+  soundEnabled: boolean;
+  soundVolume: number;
+  soundStyle: 'classic' | 'melodic' | 'whimsy';
+  notifyOnCompletion: boolean;
+  notifyOnFailure: boolean;
+  notifyOnApproval: boolean;
 }
 
 export interface Keybinding {
@@ -102,4 +110,11 @@ export const DEFAULT_SETTINGS: Settings = {
   autoScroll: true,
   streamingEnabled: true,
   compactMessages: false,
+  autoCompaction: true,
+  soundEnabled: true,
+  soundVolume: 80,
+  soundStyle: 'melodic',
+  notifyOnCompletion: true,
+  notifyOnFailure: true,
+  notifyOnApproval: true,
 };

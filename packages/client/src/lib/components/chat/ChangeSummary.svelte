@@ -1,7 +1,29 @@
 <script lang="ts">
   import { changesStore } from '$lib/stores/changes.svelte';
-  import { editorStore } from '$lib/stores/editor.svelte';
+  import { api } from '$lib/api/client';
+  import { primaryPaneStore } from '$lib/stores/primaryPane.svelte';
   import { streamStore } from '$lib/stores/stream.svelte';
+
+  function detectLanguage(fileName: string): string {
+    const ext = fileName.split('.').pop()?.toLowerCase() ?? '';
+    const map: Record<string, string> = {
+      ts: 'typescript', tsx: 'typescript', js: 'javascript', jsx: 'javascript',
+      py: 'python', rs: 'rust', go: 'go', java: 'java', c: 'cpp', cpp: 'cpp',
+      css: 'css', html: 'html', svelte: 'html', json: 'json', md: 'markdown',
+      sql: 'sql', sh: 'shell', yaml: 'yaml', yml: 'yaml', toml: 'toml', txt: 'text',
+    };
+    return map[ext] || 'text';
+  }
+
+  async function openFile(filePath: string) {
+    try {
+      const res = await api.files.read(filePath);
+      const fileName = filePath.split('/').pop() ?? filePath;
+      primaryPaneStore.openFileTab(filePath, res.data.content, detectLanguage(fileName));
+    } catch {
+      // Silently ignore
+    }
+  }
 </script>
 
 {#if changesStore.visible && changesStore.hasChanges}
@@ -38,7 +60,7 @@
           <div class="group-header">
             <button
               class="file-path"
-              onclick={() => editorStore.openFile(group.path)}
+              onclick={() => openFile(group.path)}
               title="Open in editor"
             >
               {group.path.split('/').pop()}

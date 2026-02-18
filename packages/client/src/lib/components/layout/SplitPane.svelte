@@ -42,6 +42,28 @@
     document.removeEventListener('mousemove', onResizeMove);
     document.removeEventListener('mouseup', onResizeEnd);
   }
+
+  // Touch equivalents
+  function onTouchResizeStart(e: TouchEvent) {
+    e.preventDefault();
+    resizing = true;
+  }
+
+  function onTouchResizeMove(e: TouchEvent) {
+    if (!resizing || !container || !e.touches[0]) return;
+    const rect = container.getBoundingClientRect();
+    let newRatio: number;
+    if (direction === 'horizontal') {
+      newRatio = (e.touches[0].clientX - rect.left) / rect.width;
+    } else {
+      newRatio = (e.touches[0].clientY - rect.top) / rect.height;
+    }
+    onRatioChange(Math.max(0.15, Math.min(0.85, newRatio)));
+  }
+
+  function onTouchResizeEnd() {
+    resizing = false;
+  }
 </script>
 
 <div
@@ -59,7 +81,13 @@
   </div>
 
   <!-- svelte-ignore a11y_no_static_element_interactions -->
-  <div class="split-handle" onmousedown={onResizeStart}></div>
+  <div
+    class="split-handle"
+    onmousedown={onResizeStart}
+    ontouchstart={onTouchResizeStart}
+    ontouchmove={onTouchResizeMove}
+    ontouchend={onTouchResizeEnd}
+  ></div>
 
   <div class="split-second">
     {@render second()}
@@ -105,6 +133,7 @@
     transition: background var(--transition);
     position: relative;
     z-index: 5;
+    touch-action: none;
   }
   .horizontal > .split-handle {
     width: 6px;
@@ -113,6 +142,17 @@
   .vertical > .split-handle {
     height: 6px;
     cursor: row-resize;
+  }
+  /* Expand touch target on touch devices without affecting visual width */
+  @media (pointer: coarse) {
+    .horizontal > .split-handle {
+      width: 44px;
+      margin: 0 -19px;
+    }
+    .vertical > .split-handle {
+      height: 44px;
+      margin: -19px 0;
+    }
   }
   .split-handle:hover,
   .resizing .split-handle {

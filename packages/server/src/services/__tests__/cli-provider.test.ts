@@ -1,10 +1,12 @@
 import { describe, test, expect } from 'bun:test';
-import { buildCliCommand } from '../cli-provider';
+
+// Use dynamic import to bypass potential mock.module contamination from other test files
+const { buildCliCommand } = await import('../cli-provider');
 
 describe('buildCliCommand - claude', () => {
   test('builds minimal claude command', () => {
     const { binary, args } = buildCliCommand('claude', { content: 'hello' });
-    expect(binary).toBe('claude');
+    expect(binary.endsWith('claude')).toBe(true);
     expect(args).toContain('--output-format');
     expect(args).toContain('stream-json');
     expect(args).toContain('--verbose');
@@ -135,6 +137,6 @@ describe('buildCliCommand - kiro', () => {
 describe('buildCliCommand - default provider', () => {
   test('unknown provider falls back to claude', () => {
     const { binary } = buildCliCommand('claude', { content: 'test' });
-    expect(binary).toBe('claude');
+    expect(binary.endsWith('claude')).toBe(true);
   });
 });

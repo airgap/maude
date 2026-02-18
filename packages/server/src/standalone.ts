@@ -37,7 +37,7 @@ if (!process.env.PORT) {
 
 // ── Import the main server (must happen AFTER env is set) ────────────────────
 // Dynamic import lets us set env vars first without a separate preload step.
-const { default: serverConfig } = await import('./index.ts');
+const { default: serverConfig } = await import('./index');
 
 // ── Auto-open browser when OPEN=1 ────────────────────────────────────────────
 if (process.env.OPEN === '1' && serverConfig) {

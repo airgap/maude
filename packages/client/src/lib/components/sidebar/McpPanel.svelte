@@ -33,6 +33,8 @@
       transport: 'stdio',
       command: 'npx',
       args: ['-y', '@modelcontextprotocol/server-filesystem', '/'],
+      builtIn: true,
+      builtInNote: 'Built In',
     },
     {
       name: 'github',
@@ -75,6 +77,51 @@
       transport: 'stdio',
       command: 'npx',
       args: ['-y', '@modelcontextprotocol/server-puppeteer'],
+    },
+    {
+      name: 'git',
+      label: 'Git',
+      desc: 'Commit history, blame, diff',
+      transport: 'stdio',
+      command: 'npx',
+      args: ['-y', '@modelcontextprotocol/server-git'],
+      builtIn: true,
+      builtInNote: 'Built In',
+    },
+    {
+      name: 'sqlite',
+      label: 'SQLite',
+      desc: 'Query local databases',
+      transport: 'stdio',
+      command: 'npx',
+      args: ['-y', 'mcp-server-sqlite', '/path/to/db.sqlite'],
+    },
+    {
+      name: 'shell',
+      label: 'Shell',
+      desc: 'Run shell commands',
+      transport: 'stdio',
+      command: 'npx',
+      args: ['-y', 'mcp-shell'],
+      builtIn: true,
+      builtInNote: 'Built In',
+    },
+    {
+      name: 'obsidian',
+      label: 'Obsidian',
+      desc: 'Read markdown vaults',
+      transport: 'stdio',
+      command: 'npx',
+      args: ['-y', 'mcp-obsidian', '/path/to/vault'],
+    },
+    {
+      name: 'linear',
+      label: 'Linear',
+      desc: 'Issues & projects',
+      transport: 'stdio',
+      command: 'npx',
+      args: ['-y', 'mcp-linear'],
+      env: { LINEAR_API_KEY: '' },
     },
   ];
 
@@ -183,7 +230,7 @@
     const next = new Set(selectedImports);
     for (const server of source.servers) {
       const key = `${source.source}:${server.name}`;
-      if (!installedNames.has(server.name)) {
+      if (!installedNames.has(server.name) && !builtInNames.has(server.name)) {
         next.add(key);
       }
     }
@@ -220,6 +267,7 @@
   onMount(loadServers);
 
   let installedNames = $derived(new Set(servers.map((s) => s.name)));
+  let builtInNames = $derived(new Set(PRESETS.filter((p) => p.builtIn).map((p) => p.name)));
   let totalDiscovered = $derived(
     discoveredSources.reduce(
       (sum, s) => sum + s.servers.filter((sv) => !installedNames.has(sv.name)).length,
@@ -308,8 +356,8 @@
       {:else}
         <div class="discovered-list">
           {#each discoveredSources as source}
-            {@const importable = source.servers.filter((s) => !installedNames.has(s.name))}
-            {#if importable.length > 0 || source.servers.some((s) => installedNames.has(s.name))}
+            {@const importable = source.servers.filter((s) => !installedNames.has(s.name) && !builtInNames.has(s.name))}
+            {#if importable.length > 0 || source.servers.some((s) => installedNames.has(s.name) || builtInNames.has(s.name))}
               <div class="import-source">
                 <div class="source-header">
                   <span class="source-label">{source.source}</span>
@@ -323,17 +371,20 @@
                 {#each source.servers as server}
                   {@const key = `${source.source}:${server.name}`}
                   {@const alreadyInstalled = installedNames.has(server.name)}
-                  <label class="import-item" class:disabled={alreadyInstalled}>
+                  {@const isBuiltIn = builtInNames.has(server.name)}
+                  <label class="import-item" class:disabled={alreadyInstalled || isBuiltIn}>
                     <input
                       type="checkbox"
                       checked={selectedImports.has(key)}
-                      disabled={alreadyInstalled}
+                      disabled={alreadyInstalled || isBuiltIn}
                       onchange={() => toggleImport(key)}
                     />
                     <span class="import-name">{server.name}</span>
                     <span class="import-transport">{server.transport}</span>
                     {#if alreadyInstalled}
                       <span class="preset-installed">Installed</span>
+                    {:else if isBuiltIn}
+                      <span class="preset-builtin-badge">Built In</span>
                     {/if}
                   </label>
                 {/each}
@@ -369,18 +420,26 @@
       <h4 class="section-title">Quick Add</h4>
       <div class="preset-grid">
         {#each PRESETS as preset}
-          <button
-            class="preset-btn"
-            disabled={installedNames.has(preset.name)}
-            onclick={() => installPreset(preset)}
-            title={preset.desc}
-          >
-            <span class="preset-name">{preset.label}</span>
-            <span class="preset-desc">{preset.desc}</span>
-            {#if installedNames.has(preset.name)}
-              <span class="preset-installed">Installed</span>
-            {/if}
-          </button>
+          {#if preset.builtIn}
+            <div class="preset-btn preset-builtin" title={preset.desc}>
+              <span class="preset-name">{preset.label}</span>
+              <span class="preset-desc">{preset.desc}</span>
+              <span class="preset-builtin-badge">{preset.builtInNote}</span>
+            </div>
+          {:else}
+            <button
+              class="preset-btn"
+              disabled={installedNames.has(preset.name)}
+              onclick={() => installPreset(preset)}
+              title={preset.desc}
+            >
+              <span class="preset-name">{preset.label}</span>
+              <span class="preset-desc">{preset.desc}</span>
+              {#if installedNames.has(preset.name)}
+                <span class="preset-installed">Installed</span>
+              {/if}
+            </button>
+          {/if}
         {/each}
       </div>
     </div>
@@ -726,6 +785,20 @@
     right: 8px;
     font-size: 9px;
     color: var(--accent-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  .preset-builtin {
+    opacity: 0.45;
+    cursor: default;
+    border-style: dashed;
+  }
+  .preset-builtin-badge {
+    position: absolute;
+    top: 6px;
+    right: 8px;
+    font-size: 9px;
+    color: var(--text-tertiary);
     text-transform: uppercase;
     letter-spacing: 0.5px;
   }

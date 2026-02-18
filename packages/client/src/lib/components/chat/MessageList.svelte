@@ -151,6 +151,30 @@
       <StreamingMessage />
     {/if}
 
+    {#if streamStore.compactBoundary && streamStore.conversationId === conversationStore.activeId}
+      {@const b = streamStore.compactBoundary}
+      <div class="compact-boundary">
+        <div class="compact-boundary-line"></div>
+        <div class="compact-boundary-label">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="1 4 1 10 7 10"></polyline>
+            <polyline points="23 20 23 14 17 14"></polyline>
+            <path d="M20.49 9A9 9 0 0 0 5.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 0 1 3.51 15"></path>
+          </svg>
+          Conversation compacted · {b.pre_tokens.toLocaleString()} tokens → summary
+        </div>
+        <div class="compact-boundary-line"></div>
+      </div>
+    {:else if streamStore.contextWarning && !streamStore.contextWarning.autocompacted && streamStore.conversationId === conversationStore.activeId}
+      {@const w = streamStore.contextWarning}
+      <div class="context-warning">
+        <span class="context-warning-icon">⚠</span>
+        <span class="context-warning-text">
+          Context window is {w.usagePercent}% full ({w.inputTokens.toLocaleString()} / {w.contextLimit.toLocaleString()} tokens). Auto-compact will trigger soon.
+        </span>
+      </div>
+    {/if}
+
     {#if streamStore.status === 'error' && streamStore.error}
       <div class="stream-error">
         <span class="error-label">ERROR</span>
@@ -231,6 +255,50 @@
     margin-right: 5px;
     border: 1px solid var(--border-primary);
     color: var(--accent-primary);
+  }
+
+  .compact-boundary {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin: 16px 28px;
+    color: var(--text-tertiary);
+  }
+  .compact-boundary-line {
+    flex: 1;
+    height: 1px;
+    background: linear-gradient(to right, transparent, var(--border-primary), transparent);
+  }
+  .compact-boundary-label {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: var(--ht-label-spacing, 0.06em);
+    white-space: nowrap;
+    color: var(--accent-primary);
+    opacity: 0.65;
+  }
+
+  .context-warning {
+    margin: 4px 28px 8px;
+    padding: 8px 14px;
+    background: rgba(255, 170, 0, 0.07);
+    border-left: 2px solid rgba(255, 170, 0, 0.5);
+    font-size: 12px;
+    color: var(--text-secondary);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  }
+  .context-warning-icon {
+    font-size: 13px;
+    flex-shrink: 0;
+  }
+  .context-warning-text {
+    letter-spacing: 0.01em;
   }
 
   .stream-error {

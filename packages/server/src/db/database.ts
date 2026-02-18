@@ -4,15 +4,17 @@ import { homedir } from 'os';
 import { mkdirSync } from 'fs';
 import { nanoid } from 'nanoid';
 
-const DB_PATH = join(homedir(), '.e', 'e.db');
+const DB_PATH = Bun.env.E_DB_PATH || join(homedir(), '.e', 'e.db');
 
 let db: Database;
 
 export function getDb(): Database {
   if (!db) {
-    // Ensure directory exists
-    const dir = join(homedir(), '.e');
-    mkdirSync(dir, { recursive: true });
+    if (DB_PATH !== ':memory:') {
+      // Ensure directory exists for file-based databases
+      const dir = join(homedir(), '.e');
+      mkdirSync(dir, { recursive: true });
+    }
     db = new Database(DB_PATH);
     db.exec('PRAGMA journal_mode=WAL');
     db.exec('PRAGMA foreign_keys=ON');
@@ -213,11 +215,13 @@ export function initDatabase(): void {
     `ALTER TABLE conversations ADD COLUMN allowed_tools TEXT`,
     `ALTER TABLE conversations ADD COLUMN disallowed_tools TEXT`,
     `ALTER TABLE conversations ADD COLUMN cli_session_id TEXT`,
+    `ALTER TABLE conversations ADD COLUMN compact_summary TEXT`,
     `ALTER TABLE conversations ADD COLUMN workspace_id TEXT REFERENCES workspaces(id)`,
     `ALTER TABLE conversations ADD COLUMN user_id TEXT`,
     `ALTER TABLE prd_stories ADD COLUMN estimate TEXT`,
     `ALTER TABLE prd_stories ADD COLUMN dependency_reasons TEXT NOT NULL DEFAULT '{}'`,
     `ALTER TABLE prd_stories ADD COLUMN priority_recommendation TEXT`,
+    `ALTER TABLE git_snapshots ADD COLUMN message_id TEXT`,
   ];
   for (const sql of alterColumns) {
     try {

@@ -1,39 +1,40 @@
 <script lang="ts">
-  import { api } from '$lib/api/client';
   import { streamStore } from '$lib/stores/stream.svelte';
-  import { onMount } from 'svelte';
 
   interface Agent {
     id: string;
     type: string;
     description: string;
-    status: string;
-    spawnedAt: number;
-    completedAt?: number;
-    result?: string;
-    error?: string;
+    status: 'running' | 'completed' | 'error';
   }
 
-  let agents = $state<Agent[]>([]);
-  let pollInterval: ReturnType<typeof setInterval>;
+  // Derive agents from Task tool_use blocks in the current stream
+  const agents = $derived.by<Agent[]>(() => {
+    const blocks = streamStore.contentBlocks;
+    const results = streamStore.toolResults;
+    const isStreaming = streamStore.status === 'streaming' || streamStore.status === 'tool_pending';
 
-  onMount(() => {
-    loadAgents();
-    pollInterval = setInterval(loadAgents, 5000);
-    return () => clearInterval(pollInterval);
+    return blocks
+      .filter((b) => b.type === 'tool_use' && b.name === 'Task')
+      .map((b) => {
+        if (b.type !== 'tool_use') return null;
+        const result = results.get(b.id);
+        let status: Agent['status'];
+        if (result) {
+          status = result.isError ? 'error' : 'completed';
+        } else {
+          status = isStreaming ? 'running' : 'completed';
+        }
+        const input = b.input as Record<string, unknown>;
+        return {
+          id: b.id,
+          type: (input.subagent_type as string) || 'agent',
+          description: (input.description as string) || (input.prompt as string) || '',
+          status,
+        };
+      })
+      .filter((a): a is Agent => a !== null);
   });
-
-  async function loadAgents() {
-    try {
-      const res = await api.agents.list(streamStore.sessionId ?? undefined);
-      agents = res.data;
-    } catch {}
-  }
-
-  async function cancelAgent(id: string) {
-    await api.agents.cancel(id);
-    loadAgents();
-  }
 
   function statusColor(status: string): string {
     switch (status) {
@@ -46,13 +47,6 @@
       default:
         return 'var(--text-tertiary)';
     }
-  }
-
-  function elapsed(from: number, to?: number): string {
-    const ms = (to || Date.now()) - from;
-    if (ms < 1000) return '<1s';
-    if (ms < 60000) return `${Math.round(ms / 1000)}s`;
-    return `${Math.round(ms / 60000)}m`;
   }
 </script>
 
@@ -68,14 +62,10 @@
         <div class="agent-item-header">
           <span class="agent-dot" style:background={statusColor(agent.status)}></span>
           <span class="agent-type">{agent.type}</span>
-          <span class="agent-time">{elapsed(agent.spawnedAt, agent.completedAt)}</span>
-          {#if agent.status === 'running'}
-            <button class="cancel-btn" onclick={() => cancelAgent(agent.id)}>Cancel</button>
-          {/if}
+          <span class="agent-status-label">{agent.status}</span>
         </div>
-        <div class="agent-desc truncate">{agent.description}</div>
-        {#if agent.error}
-          <div class="agent-error">{agent.error}</div>
+        {#if agent.description}
+          <div class="agent-desc truncate">{agent.description}</div>
         {/if}
       </div>
     {:else}
@@ -132,7 +122,7 @@
     font-weight: 600;
     color: var(--text-primary);
   }
-  .agent-time {
+  .agent-status-label {
     font-size: 10px;
     color: var(--text-tertiary);
     margin-left: auto;
@@ -141,20 +131,6 @@
     font-size: 11px;
     color: var(--text-secondary);
   }
-  .agent-error {
-    font-size: 11px;
-    color: var(--accent-error);
-    margin-top: 4px;
-  }
-
-  .cancel-btn {
-    font-size: 10px;
-    padding: 1px 6px;
-    border-radius: 3px;
-    background: var(--accent-error);
-    color: var(--text-on-accent);
-  }
-
   .empty {
     padding: 20px;
     text-align: center;

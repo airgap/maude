@@ -8,9 +8,17 @@
   import { findFont, buildGoogleFontsUrl, type FontOption } from '$lib/config/fonts';
   import { onMount, setContext, tick } from 'svelte';
   import SparkleCursor from '$lib/components/effects/SparkleCursor.svelte';
+  import StreamAudio from '$lib/components/effects/StreamAudio.svelte';
+  import LoopNotifications from '$lib/components/effects/LoopNotifications.svelte';
+  import { goto } from '$app/navigation';
 
   // Set stream store in context for proper Svelte 5 reactivity tracking
   setContext(STREAM_CONTEXT_KEY, streamStore);
+
+  // Expose goto on window so desktop notification click handlers can navigate
+  if (typeof window !== 'undefined') {
+    window.__e_goto = goto;
+  }
 
   // --- Dynamic font loading & CSS variable application ---
   const loadedFonts = new Set<string>();
@@ -111,3 +119,5 @@
 {#if settingsStore.hypertheme === 'study'}
   <SparkleCursor />
 {/if}
+<StreamAudio />
+<LoopNotifications />

@@ -1327,6 +1327,107 @@
   --syn-operator: #f87171;
 }
 
+/* ---- SAKURA LIGHT ---- */
+[data-theme='sakura-light'] {
+  --rainbow-l: 0.65;
+  --bg-primary: #fdf6f9;
+  --bg-secondary: #f7edf3;
+  --bg-tertiary: #eedde8;
+  --bg-elevated: #fdf6f9;
+  --bg-input: #fdf6f9;
+  --bg-hover: rgba(220, 80, 130, 0.06);
+  --bg-active: rgba(220, 80, 130, 0.12);
+  --bg-selection: rgba(220, 80, 130, 0.18);
+  --bg-code: #f7edf3;
+  --bg-diff-add: rgba(80, 170, 110, 0.10);
+  --bg-diff-remove: rgba(220, 80, 130, 0.10);
+  --bg-glass: rgba(253, 246, 249, 0.92);
+  --bg-message-user: rgba(220, 80, 130, 0.04);
+  --bg-message-assistant: rgba(100, 160, 220, 0.05);
+  --border-primary: rgba(220, 80, 130, 0.16);
+  --border-secondary: rgba(220, 80, 130, 0.08);
+  --border-focus: #d45090;
+  --border-glow: rgba(220, 80, 130, 0.28);
+  --text-primary: #4a2040;
+  --text-secondary: #8a5070;
+  --text-tertiary: #b890a8;
+  --text-link: #c03878;
+  --text-on-accent: #fdf6f9;
+  --accent-primary: #d45090;
+  --accent-secondary: #50a878;
+  --accent-warning: #c88030;
+  --accent-error: #c83058;
+  --accent-info: #4880c0;
+  --accent-purple: #8048b0;
+  --accent-pink: #d45090;
+  --accent-gradient: linear-gradient(135deg, #d45090, #8048b0);
+  --accent-gradient-vivid: linear-gradient(135deg, #c03878, #d45090, #50a878, #c88030);
+  --scrollbar-track: transparent;
+  --scrollbar-thumb: rgba(220, 80, 130, 0.18);
+  --shadow: 0 2px 12px rgba(74, 32, 64, 0.08);
+  --shadow-lg: 0 8px 32px rgba(74, 32, 64, 0.12);
+  --shadow-glow: 0 0 14px rgba(220, 80, 130, 0.12);
+  --shadow-glow-sm: 0 0 7px rgba(220, 80, 130, 0.08);
+  --syn-keyword: #c03878;
+  --syn-string: #50a878;
+  --syn-number: #c88030;
+  --syn-function: #4880c0;
+  --syn-comment: #b890a8;
+  --syn-type: #8048b0;
+  --syn-variable: #4a2040;
+  --syn-operator: #c03878;
+}
+
+/* ---- SAKURA ---- */
+[data-theme='sakura'] {
+  --bg-primary: #1a1017;
+  --bg-secondary: #221520;
+  --bg-tertiary: #2c1c2a;
+  --bg-elevated: #372232;
+  --bg-input: rgba(20, 10, 18, 0.95);
+  --bg-hover: rgba(255, 182, 193, 0.09);
+  --bg-active: rgba(255, 182, 193, 0.17);
+  --bg-selection: rgba(255, 182, 193, 0.26);
+  --bg-code: rgba(20, 10, 18, 0.95);
+  --bg-diff-add: rgba(120, 220, 150, 0.10);
+  --bg-diff-remove: rgba(255, 140, 160, 0.10);
+  --bg-glass: rgba(26, 16, 23, 0.88);
+  --bg-message-user: rgba(255, 182, 193, 0.05);
+  --bg-message-assistant: rgba(200, 220, 255, 0.06);
+  --border-primary: rgba(255, 182, 193, 0.20);
+  --border-secondary: rgba(255, 182, 193, 0.08);
+  --border-focus: #f9a8c0;
+  --border-glow: rgba(255, 182, 193, 0.45);
+  --text-primary: #fdeef4;
+  --text-secondary: #c9a0b8;
+  --text-tertiary: #8a6478;
+  --text-link: #f9a8c0;
+  --text-on-accent: #1a1017;
+  --accent-primary: #f9a8c0;
+  --accent-secondary: #a8d8b0;
+  --accent-warning: #f0c890;
+  --accent-error: #f07090;
+  --accent-info: #a8c8f0;
+  --accent-purple: #c8a8e8;
+  --accent-pink: #f9a8c0;
+  --accent-gradient: linear-gradient(135deg, #f9a8c0, #c8a8e8);
+  --accent-gradient-vivid: linear-gradient(135deg, #f07090, #f9a8c0, #a8d8b0, #f0c890);
+  --scrollbar-track: rgba(255, 182, 193, 0.04);
+  --scrollbar-thumb: rgba(255, 182, 193, 0.20);
+  --shadow: 0 4px 20px rgba(0, 0, 0, 0.55), 0 0 40px rgba(255, 182, 193, 0.04);
+  --shadow-lg: 0 10px 36px rgba(0, 0, 0, 0.65);
+  --shadow-glow: 0 0 16px rgba(255, 182, 193, 0.22), 0 0 40px rgba(255, 182, 193, 0.07);
+  --shadow-glow-sm: 0 0 8px rgba(255, 182, 193, 0.16);
+  --syn-keyword: #f9a8c0;
+  --syn-string: #a8d8b0;
+  --syn-number: #f0c890;
+  --syn-function: #a8c8f0;
+  --syn-comment: #8a6478;
+  --syn-type: #c8a8e8;
+  --syn-variable: #fdeef4;
+  --syn-operator: #f9a8c0;
+}
+
 /* ============================================
    GLOBAL STYLES
    ============================================ */
@@ -1985,4 +2086,111 @@ select:focus {
   border: none;
   height: 1px;
   background: var(--border-primary);
+}
+
+/* ============================================
+   MOBILE / PWA OPTIMIZATIONS
+   ============================================ */
+
+/* ── Prevent 300ms tap delay on touch devices ── */
+* {
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* ── Enforce minimum touch targets (44px Apple / 48px Google) ── */
+@media (pointer: coarse) {
+  button,
+  [role='button'],
+  a,
+  select,
+  input[type='checkbox'],
+  input[type='radio'] {
+    min-height: 44px;
+    min-width: 44px;
+  }
+
+  /* Inline icon buttons — grow hit area with padding instead of size */
+  .icon-btn {
+    padding: 10px !important;
+    min-height: 44px;
+    min-width: 44px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+}
+
+/* ── Responsive sizing (screen-size based, always applies for visual density) ── */
+
+@media (max-width: 1024px) {
+  :root {
+    --sidebar-width: 240px;
+    --topbar-height: 44px;
+    --font-size: 13px;
+    --font-size-sans: 13px;
+  }
+}
+
+@media (max-width: 768px) {
+  :root {
+    --font-size: 14px;
+    --font-size-sans: 14px;
+    --input-min-height: 60px;
+  }
+  body {
+    overflow-x: hidden;
+  }
+}
+
+/* ── Mobile-first layout — driven by [data-mobile] on <html> ──
+   Set by deviceStore when: pointer:coarse AND no hardware keyboard detected.
+   Removed immediately when a physical key is pressed.              ── */
+
+[data-mobile] {
+  --sidebar-width: 85vw;
+  --topbar-height: 48px;
+  --statusbar-height: 24px;
+  --ht-msg-padding: 12px 16px;
+  --ht-item-padding: 10px 12px;
+  --input-min-height: 60px;
+}
+
+@media (max-width: 480px) {
+  [data-mobile] {
+    --sidebar-width: 92vw;
+    --ht-msg-padding: 10px 12px;
+  }
+}
+
+/* Landscape phone: shrink chrome to reclaim vertical space */
+@media (orientation: landscape) and (max-height: 500px) {
+  [data-mobile] {
+    --topbar-height: 36px;
+    --statusbar-height: 20px;
+  }
+}
+
+/* ── Mobile status bar: hide noisy editor-specific info ── */
+[data-mobile] .cursor-pos,
+[data-mobile] .indent-label,
+[data-mobile] .lang-label,
+[data-mobile] .lsp-status,
+[data-mobile] .lsp-install,
+[data-mobile] .lsp-dismiss,
+[data-mobile] .tokens,
+[data-mobile] .session-cost,
+[data-mobile] .mode,
+[data-mobile] .model {
+  display: none;
+}
+
+/* ── Mobile: split panes stack vertically (chat on top, editor below) ── */
+[data-mobile] .split-pane.horizontal {
+  flex-direction: column;
+}
+[data-mobile] .split-pane.horizontal > .split-first {
+  flex-basis: 50% !important;
+}
+[data-mobile] .split-pane.horizontal > .split-handle {
+  display: none;
 }

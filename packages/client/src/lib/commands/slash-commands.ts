@@ -278,18 +278,92 @@ const commands: SlashCommand[] = [
   },
 ];
 
-// Export for use in SlashCommandMenu
+// Dynamically registered skill commands (from installed SKILL.md files)
+const skillCommands: SlashCommand[] = [];
+
+/**
+ * Parse frontmatter from a SKILL.md string to extract name and description.
+ */
+function parseSkillFrontmatter(content: string): { name: string; description: string } | null {
+  const match = content.match(/^---\r?\n([\s\S]*?)\r?\n---/);
+  if (!match) return null;
+  const yaml = match[1];
+  const nameMatch = yaml.match(/^name:\s*(.+)$/m);
+  const descMatch = yaml.match(/^description:\s*(.+)$/m);
+  if (!nameMatch) return null;
+  return {
+    name: nameMatch[1].trim().replace(/^["']|["']$/g, ''),
+    description: descMatch ? descMatch[1].trim().replace(/^["']|["']$/g, '') : '',
+  };
+}
+
+/**
+ * Register installed skills as slash commands.
+ * Called when memory files are loaded so skill commands appear in the menu.
+ */
+export function registerSkillCommands(
+  skillFiles: Array<{ content: string; path: string }>,
+): void {
+  // Clear previous skill commands
+  skillCommands.length = 0;
+
+  for (const file of skillFiles) {
+    const fm = parseSkillFrontmatter(file.content);
+    if (!fm || !fm.name) continue;
+
+    // Sanitize: only lowercase alphanumeric + hyphens
+    const cmdName = fm.name.toLowerCase().replace(/[^a-z0-9-]/g, '-');
+
+    // Don't override built-in commands
+    if (commands.find((c) => c.name === cmdName)) continue;
+
+    const skillContent = file.content;
+    skillCommands.push({
+      name: cmdName,
+      description: fm.description || `Run skill: ${fm.name}`,
+      execute: (ctx: SlashCommandContext) => {
+        // Send the skill content + user args as a message to the AI
+        const userMsg = ctx.args
+          ? `Use the following skill:\n\n${skillContent}\n\nTask: ${ctx.args}`
+          : `Use the following skill:\n\n${skillContent}`;
+        return { handled: true, sendAsMessage: userMsg };
+      },
+    });
+  }
+}
+
+// Export for use in SlashCommandMenu — includes both built-in and skill commands
 export const COMMANDS = commands.map((c) => ({ name: c.name, description: c.description }));
 
-export function executeSlashCommand(name: string, ctx: SlashCommandContext): SlashCommandResult {
-  const cmd = commands.find((c) => c.name === name);
-  if (!cmd) return { handled: false };
+export function getAllCommands(): Array<{ name: string; description: string }> {
+  return [
+    ...commands.map((c) => ({ name: c.name, description: c.description })),
+    ...skillCommands.map((c) => ({ name: c.name, description: c.description })),
+  ];
+}
 
-  const result = cmd.execute(ctx);
-  // Handle async commands
-  if (result instanceof Promise) {
-    result.catch(console.error);
-    return { handled: true };
+export function executeSlashCommand(name: string, ctx: SlashCommandContext): SlashCommandResult {
+  // Check built-in commands first
+  const cmd = commands.find((c) => c.name === name);
+  if (cmd) {
+    const result = cmd.execute(ctx);
+    if (result instanceof Promise) {
+      result.catch(console.error);
+      return { handled: true };
+    }
+    return result;
   }
-  return result;
+
+  // Check skill commands
+  const skillCmd = skillCommands.find((c) => c.name === name);
+  if (skillCmd) {
+    const result = skillCmd.execute(ctx);
+    if (result instanceof Promise) {
+      result.catch(console.error);
+      return { handled: true };
+    }
+    return result;
+  }
+
+  return { handled: false };
 }

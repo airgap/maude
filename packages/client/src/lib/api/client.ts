@@ -216,6 +216,14 @@ export const api = {
         ok: boolean;
         data: Array<{ name: string; size: number; modified_at: string }>;
       }>('/settings/ollama/models'),
+    openaiModels: () =>
+      request<{ ok: boolean; data: Array<{ id: string; name: string }> }>(
+        '/settings/openai/models',
+      ),
+    geminiModels: () =>
+      request<{ ok: boolean; data: Array<{ id: string; name: string }> }>(
+        '/settings/gemini/models',
+      ),
     setApiKey: (provider: string, apiKey: string) =>
       request<{ ok: boolean }>('/settings/api-key', {
         method: 'PUT',
@@ -274,6 +282,41 @@ export const api = {
         method: 'PUT',
         body: JSON.stringify({ path, content }),
       }),
+  },
+
+  // --- Skills Registry (agentskills.io) ---
+  skillsRegistry: {
+    browse: () =>
+      request<{
+        ok: boolean;
+        data: Array<{
+          name: string;
+          description: string;
+          compatibility?: string;
+          license?: string;
+          metadata?: Record<string, string>;
+        }>;
+      }>('/skills-registry/browse'),
+    getSkill: (name: string) =>
+      request<{
+        ok: boolean;
+        data: {
+          name: string;
+          description: string;
+          content: string;
+          compatibility?: string;
+          license?: string;
+        };
+      }>(`/skills-registry/skill/${encodeURIComponent(name)}`),
+    install: (skillName: string, workspacePath?: string) =>
+      request<{ ok: boolean; data: { path: string } }>('/skills-registry/install', {
+        method: 'POST',
+        body: JSON.stringify({ skillName, workspacePath }),
+      }),
+    installed: (workspacePath?: string) => {
+      const q = workspacePath ? `?workspacePath=${encodeURIComponent(workspacePath)}` : '';
+      return request<{ ok: boolean; data: string[] }>(`/skills-registry/installed${q}`);
+    },
   },
 
   // --- Files ---
@@ -449,13 +492,13 @@ export const api = {
       request<{ ok: boolean; data: { branch: string } }>(
         `/git/branch?path=${encodeURIComponent(path)}`,
       ),
-    snapshot: (path: string, conversationId?: string, reason?: string) =>
+    snapshot: (path: string, conversationId?: string, reason?: string, messageId?: string) =>
       request<{
         ok: boolean;
         data: { id: string; headSha: string; stashSha: string | null; hasChanges: boolean };
       }>('/git/snapshot', {
         method: 'POST',
-        body: JSON.stringify({ path, conversationId, reason }),
+        body: JSON.stringify({ path, conversationId, reason, messageId }),
       }),
     snapshots: (path: string) =>
       request<{
@@ -468,9 +511,25 @@ export const api = {
           stashSha: string | null;
           reason: string;
           hasChanges: boolean;
+          messageId: string | null;
           createdAt: number;
         }>;
       }>(`/git/snapshots?path=${encodeURIComponent(path)}`),
+    snapshotByMessage: (messageId: string) =>
+      request<{
+        ok: boolean;
+        data: {
+          id: string;
+          workspacePath: string;
+          conversationId: string | null;
+          headSha: string;
+          stashSha: string | null;
+          reason: string;
+          hasChanges: boolean;
+          messageId: string | null;
+          createdAt: number;
+        };
+      }>(`/git/snapshot/by-message/${messageId}`),
     restoreSnapshot: (id: string) =>
       request<{ ok: boolean; data: { restored: boolean } }>(`/git/snapshot/${id}/restore`, {
         method: 'POST',

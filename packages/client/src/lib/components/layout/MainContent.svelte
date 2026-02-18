@@ -1,22 +1,29 @@
 <script lang="ts">
   import type { Snippet } from 'svelte';
   import { editorStore } from '$lib/stores/editor.svelte';
+  import { deviceStore } from '$lib/stores/device.svelte';
   import SplitPane from './SplitPane.svelte';
   import EditorPane from '../editor/EditorPane.svelte';
   import PrimaryPane from './PrimaryPane.svelte';
 
   let { children } = $props<{ children: Snippet }>();
+
+  // On mobile (touch + no hardware keyboard), always show chat-only.
+  // The user can still access the editor via the sidebar file tree.
+  const effectiveLayout = $derived(
+    deviceStore.isMobileUI ? 'chat-only' : editorStore.layoutMode
+  );
 </script>
 
-{#if editorStore.layoutMode === 'chat-only'}
+{#if effectiveLayout === 'chat-only'}
   <div class="pane-full">
     <PrimaryPane {children} />
   </div>
-{:else if editorStore.layoutMode === 'editor-only'}
+{:else if effectiveLayout === 'editor-only'}
   <div class="pane-full">
     <EditorPane />
   </div>
-{:else if editorStore.layoutMode === 'split-horizontal'}
+{:else if effectiveLayout === 'split-horizontal'}
   <SplitPane
     ratio={editorStore.splitRatio}
     direction="horizontal"
@@ -31,7 +38,7 @@
       <EditorPane />
     {/snippet}
   </SplitPane>
-{:else if editorStore.layoutMode === 'split-vertical'}
+{:else if effectiveLayout === 'split-vertical'}
   <SplitPane
     ratio={editorStore.splitRatio}
     direction="vertical"

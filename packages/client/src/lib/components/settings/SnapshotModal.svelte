@@ -12,6 +12,7 @@
     stashSha: string | null;
     reason: string;
     hasChanges: boolean;
+    messageId: string | null;
     createdAt: number;
   }
 
@@ -120,6 +121,9 @@
                     <span class="snapshot-badge changes">uncommitted changes</span>
                   {:else}
                     <span class="snapshot-badge clean">clean</span>
+                  {/if}
+                  {#if snap.messageId}
+                    <span class="snapshot-badge message-linked" title="Linked to message {snap.messageId}">msg linked</span>
                   {/if}
                 </div>
               </div>
@@ -265,6 +269,10 @@
   .snapshot-badge.clean {
     color: var(--text-tertiary);
     border: 1px solid var(--border-secondary);
+  }
+  .snapshot-badge.message-linked {
+    color: var(--accent-primary);
+    border: 1px solid var(--accent-primary);
   }
   .restore-btn {
     padding: 5px 14px;

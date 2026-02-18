@@ -32,15 +32,28 @@
   import AmbientBackground from './AmbientBackground.svelte';
   import { waitForServer } from '$lib/api/client';
   import { reconnectActiveStream } from '$lib/api/sse';
+  import { deviceStore } from '$lib/stores/device.svelte';
   import { onMount } from 'svelte';
 
   let { children: appChildren } = $props<{ children: any }>();
 
   onMount(() => {
+    deviceStore.init();
+
     waitForServer().then(async () => {
       workspaceStore.init();
       sidebarLayoutStore.init();
       primaryPaneStore.init();
+
+      // On mobile, start with sidebar closed
+      if (deviceStore.isMobileUI) {
+        // sidebarLayoutStore.init() may open it — close after init
+        setTimeout(() => {
+          if (deviceStore.isMobileUI && uiStore.sidebarOpen) {
+            uiStore.toggleSidebar();
+          }
+        }, 0);
+      }
 
       // Check for in-flight streaming sessions and reconnect if found.
       // This handles page reloads during active Claude responses.
@@ -77,6 +90,36 @@
     resizing = false;
     document.removeEventListener('mousemove', onResizeMove);
     document.removeEventListener('mouseup', onResizeEnd);
+  }
+
+  // Touch equivalents for column resize
+  function onColumnTouchResizeStart(side: 'left' | 'right', e: TouchEvent) {
+    e.preventDefault();
+    resizing = true;
+    resizeSide = side;
+    startX = e.touches[0]?.clientX ?? 0;
+    const col = side === 'left' ? sidebarLayoutStore.leftColumn : sidebarLayoutStore.rightColumn;
+    startWidth = col?.width ?? 280;
+  }
+
+  function onColumnTouchResizeMove(e: TouchEvent) {
+    if (!resizing || !e.touches[0]) return;
+    const x = e.touches[0].clientX;
+    const delta = resizeSide === 'left' ? x - startX : startX - x;
+    sidebarLayoutStore.setColumnWidth(resizeSide, startWidth + delta);
+  }
+
+  function onColumnTouchResizeEnd() {
+    resizing = false;
+  }
+
+  // Derived from device store — true when touch-primary and no hardware keyboard
+  const isMobileUI = $derived(deviceStore.isMobileUI);
+
+  function onMainContentClick() {
+    if (isMobileUI && uiStore.sidebarOpen) {
+      uiStore.toggleSidebar();
+    }
   }
 
   // --- Edge drop zones for creating columns ---
@@ -230,10 +273,21 @@
     {#if uiStore.sidebarOpen && sidebarLayoutStore.leftColumn}
       <PanelColumn column={sidebarLayoutStore.leftColumn} side="left" />
       <!-- svelte-ignore a11y_no_static_element_interactions -->
-      <div class="resize-handle" onmousedown={(e) => onColumnResizeStart('left', e)}></div>
+      <div
+        class="resize-handle"
+        onmousedown={(e) => onColumnResizeStart('left', e)}
+        ontouchstart={(e) => onColumnTouchResizeStart('left', e)}
+        ontouchmove={onColumnTouchResizeMove}
+        ontouchend={onColumnTouchResizeEnd}
+      ></div>
     {/if}
 
-    <main class="main-content">
+    <main class="main-content" onclick={onMainContentClick}>
+      <!-- Mobile sidebar overlay backdrop -->
+      {#if isMobileUI && uiStore.sidebarOpen}
+        <!-- svelte-ignore a11y_no_static_element_interactions -->
+        <div class="mobile-sidebar-backdrop" onclick={onMainContentClick}></div>
+      {/if}
       <MainContent>
         {#snippet children()}
           {@render appChildren()}
@@ -243,7 +297,13 @@
 
     {#if sidebarLayoutStore.rightColumn}
       <!-- svelte-ignore a11y_no_static_element_interactions -->
-      <div class="resize-handle" onmousedown={(e) => onColumnResizeStart('right', e)}></div>
+      <div
+        class="resize-handle"
+        onmousedown={(e) => onColumnResizeStart('right', e)}
+        ontouchstart={(e) => onColumnTouchResizeStart('right', e)}
+        ontouchmove={onColumnTouchResizeMove}
+        ontouchend={onColumnTouchResizeEnd}
+      ></div>
       <PanelColumn column={sidebarLayoutStore.rightColumn} side="right" />
     {/if}
 
@@ -336,6 +396,11 @@
     height: 100dvh;
     overflow: hidden;
     position: relative;
+    /* Safe area insets for notch / Dynamic Island / home bar */
+    padding-top: env(safe-area-inset-top);
+    padding-bottom: env(safe-area-inset-bottom);
+    padding-left: env(safe-area-inset-left);
+    padding-right: env(safe-area-inset-right);
   }
   /* Ambient overlay — varies per hypertheme */
   .app-shell::before {
@@ -378,11 +443,27 @@
     flex-shrink: 0;
     transition: background var(--transition);
     position: relative;
+    touch-action: none;
   }
   .resize-handle:hover,
   .resizing .resize-handle {
     background: var(--accent-primary);
     box-shadow: var(--shadow-glow-sm);
+  }
+  @media (pointer: coarse) {
+    .resize-handle {
+      width: 44px;
+      margin: 0 -19px;
+      z-index: 10;
+    }
+  }
+
+  /* Mobile sidebar overlay backdrop */
+  .mobile-sidebar-backdrop {
+    position: absolute;
+    inset: 0;
+    z-index: 50;
+    background: rgba(0, 0, 0, 0.5);
   }
 
   /* --- Edge drop zones for creating columns --- */
@@ -437,6 +518,34 @@
     background: var(--bg-primary);
     position: relative;
     z-index: 1;
+  }
+
+  /* ── Mobile layout (data-mobile set by deviceStore when touch + no HW keyboard) ── */
+  :global([data-mobile]) .app-body {
+    position: relative;
+  }
+  /* Sidebar columns slide in as overlays */
+  :global([data-mobile] .panel-column.column-left),
+  :global([data-mobile] .panel-column.column-right) {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    z-index: 100;
+    box-shadow: 4px 0 24px rgba(0, 0, 0, 0.5);
+  }
+  :global([data-mobile] .panel-column.column-left) {
+    left: 0;
+  }
+  :global([data-mobile] .panel-column.column-right) {
+    right: 0;
+  }
+  /* Hide column resize handles on mobile (tap backdrop to close) */
+  :global([data-mobile]) .resize-handle {
+    display: none;
+  }
+  /* Edge drop zones not needed on mobile */
+  :global([data-mobile]) .edge-drop-zone {
+    display: none;
   }
   /* Let canvas effects bleed through in magic hyperthemes */
   :global([data-hypertheme='arcane']) .main-content,

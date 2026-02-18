@@ -3,6 +3,8 @@ import { nanoid } from 'nanoid';
 import { claudeManager } from '../services/claude-process';
 import { createOllamaStreamV2 } from '../services/ollama-provider-v2';
 import { createBedrockStreamV2 } from '../services/bedrock-provider-v2';
+import { createOpenAIStreamV2 } from '../services/openai-provider-v2';
+import { createGeminiStreamV2 } from '../services/gemini-provider-v2';
 import { getDb } from '../db/database';
 
 const app = new Hono();
@@ -205,6 +207,78 @@ app.post('/:conversationId', async (c) => {
     });
   }
 
+  // Route to OpenAI provider (prefixed with "openai:")
+  const isOpenAI = conv.model?.startsWith('openai:');
+  if (isOpenAI) {
+    const openaiModel = conv.model.replace('openai:', '');
+    let openaiSystemPrompt =
+      BASE_SYSTEM_PROMPT + (conv.system_prompt ? '\n\n' + conv.system_prompt : '');
+    if (conv.plan_mode) {
+      openaiSystemPrompt = PLAN_MODE_DIRECTIVE + openaiSystemPrompt;
+    }
+    let allowedTools: string[] | undefined;
+    let disallowedTools: string[] | undefined;
+    try {
+      if (conv.allowed_tools) allowedTools = JSON.parse(conv.allowed_tools);
+      if (conv.disallowed_tools) disallowedTools = JSON.parse(conv.disallowed_tools);
+    } catch {}
+    const images = body.images || [];
+    const stream = createOpenAIStreamV2({
+      model: openaiModel,
+      content,
+      conversationId,
+      systemPrompt: openaiSystemPrompt || undefined,
+      workspacePath: conv.workspace_path,
+      allowedTools,
+      disallowedTools,
+      images,
+    });
+    return new Response(stream, {
+      headers: {
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache',
+        Connection: 'keep-alive',
+        'Access-Control-Expose-Headers': 'X-Session-Id',
+      },
+    });
+  }
+
+  // Route to Google Gemini provider (prefixed with "gemini:")
+  const isGemini = conv.model?.startsWith('gemini:');
+  if (isGemini) {
+    const geminiModel = conv.model.replace('gemini:', '');
+    let geminiSystemPrompt =
+      BASE_SYSTEM_PROMPT + (conv.system_prompt ? '\n\n' + conv.system_prompt : '');
+    if (conv.plan_mode) {
+      geminiSystemPrompt = PLAN_MODE_DIRECTIVE + geminiSystemPrompt;
+    }
+    let allowedTools: string[] | undefined;
+    let disallowedTools: string[] | undefined;
+    try {
+      if (conv.allowed_tools) allowedTools = JSON.parse(conv.allowed_tools);
+      if (conv.disallowed_tools) disallowedTools = JSON.parse(conv.disallowed_tools);
+    } catch {}
+    const images = body.images || [];
+    const stream = createGeminiStreamV2({
+      model: geminiModel,
+      content,
+      conversationId,
+      systemPrompt: geminiSystemPrompt || undefined,
+      workspacePath: conv.workspace_path,
+      allowedTools,
+      disallowedTools,
+      images,
+    });
+    return new Response(stream, {
+      headers: {
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache',
+        Connection: 'keep-alive',
+        'Access-Control-Expose-Headers': 'X-Session-Id',
+      },
+    });
+  }
+
   // Route to Bedrock provider for AWS Bedrock models (prefixed with "bedrock:")
   const isBedrock = conv.model?.startsWith('bedrock:');
   if (isBedrock) {
@@ -264,7 +338,23 @@ app.post('/:conversationId', async (c) => {
     if (!sessionId) {
       sessionId = await claudeManager.createSession(conversationId, getSessionOpts(conv));
     }
-    const stream = await claudeManager.sendMessage(sessionId, content);
+
+    // If this is the first turn after autocompaction (no cli_session_id, has compact_summary),
+    // inject the summary into the message so the fresh CLI session has full context.
+    // Clear the summary afterwards — it's a one-shot injection.
+    let messageContent = content;
+    if (!conv.cli_session_id && conv.compact_summary) {
+      const summaryFrame =
+        `This session is being continued from a previous conversation that ran out of context. ` +
+        `The summary below covers the earlier portion of the conversation.\n\n${conv.compact_summary}\n\n` +
+        `Please continue the conversation from where we left off without asking the user any further questions.\n\n` +
+        `User's next message: ${content}`;
+      messageContent = summaryFrame;
+      // Clear after use — don't inject again on subsequent turns
+      db.query('UPDATE conversations SET compact_summary = NULL WHERE id = ?').run(conversationId);
+    }
+
+    const stream = await claudeManager.sendMessage(sessionId, messageContent);
 
     return new Response(stream, {
       headers: {

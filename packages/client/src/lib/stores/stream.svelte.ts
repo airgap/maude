@@ -76,6 +76,17 @@ function createStreamStore() {
       }
     >
   >(new Map());
+  let contextWarning = $state<{
+    inputTokens: number;
+    contextLimit: number;
+    usagePercent: number;
+    autocompacted: boolean;
+  } | null>(null);
+  let compactBoundary = $state<{
+    trigger: 'auto' | 'manual';
+    pre_tokens: number;
+    context_limit: number;
+  } | null>(null);
   // Offset for mapping event indices to contentBlocks array positions.
   // Reset to contentBlocks.length on each message_start so sub-agent
   // events with index=0 map to the correct position in the flat array.
@@ -114,7 +125,7 @@ function createStreamStore() {
       return error;
     },
     get isStreaming() {
-      return status === 'streaming' || status === 'connecting' || reconnecting;
+      return status === 'streaming' || status === 'connecting' || status === 'tool_pending' || reconnecting;
     },
     get isReconnecting() {
       return reconnecting;
@@ -130,6 +141,12 @@ function createStreamStore() {
     },
     get verifications() {
       return verifications;
+    },
+    get contextWarning() {
+      return contextWarning;
+    },
+    get compactBoundary() {
+      return compactBoundary;
     },
 
     setSessionId(id: string) {
@@ -153,6 +170,8 @@ function createStreamStore() {
       pendingQuestions = [];
       indexOffset = 0;
       currentParentId = null;
+      contextWarning = null;
+      compactBoundary = null;
       if (targetConversationId) conversationId = targetConversationId;
     },
 
@@ -252,7 +271,10 @@ function createStreamStore() {
           break;
 
         case 'message_stop':
-          status = 'idle';
+          // Don't drop to idle if we're still waiting for user input
+          if (pendingQuestions.length === 0 && pendingApprovals.length === 0) {
+            status = 'idle';
+          }
           partialText = '';
           partialThinking = '';
           break;
@@ -309,14 +331,13 @@ function createStreamStore() {
             }
           }
 
-          // Remove from pending approvals or questions if it was there
-          pendingApprovals = pendingApprovals.filter((a) => a.toolCallId !== event.toolCallId);
+          // Remove from pending questions only — approvals must be resolved
+          // explicitly by the user clicking Allow/Deny. The tool_result event
+          // arrives almost immediately after tool_approval_request (the CLI
+          // doesn't pause for client approval), so clearing pendingApprovals
+          // here would dismiss the dialog before the user ever sees it.
           pendingQuestions = pendingQuestions.filter((q) => q.toolCallId !== event.toolCallId);
-          if (
-            pendingApprovals.length === 0 &&
-            pendingQuestions.length === 0 &&
-            status === 'tool_pending'
-          ) {
+          if (pendingApprovals.length === 0 && pendingQuestions.length === 0 && status === 'tool_pending') {
             status = 'streaming';
           }
           break;
@@ -338,6 +359,23 @@ function createStreamStore() {
         }
 
         case 'ping':
+          break;
+
+        case 'context_warning':
+          contextWarning = {
+            inputTokens: event.inputTokens,
+            contextLimit: event.contextLimit,
+            usagePercent: event.usagePercent,
+            autocompacted: event.autocompacted,
+          };
+          break;
+
+        case 'compact_boundary':
+          compactBoundary = {
+            trigger: event.trigger,
+            pre_tokens: event.pre_tokens,
+            context_limit: event.context_limit,
+          };
           break;
       }
     },

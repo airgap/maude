@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { COMMANDS } from '$lib/commands/slash-commands';
+  import { getAllCommands } from '$lib/commands/slash-commands';
 
   let {
     query = '',
@@ -11,10 +11,8 @@
     onClose: () => void;
   }>();
 
-  const commands = COMMANDS;
-
   let filtered = $derived(
-    commands.filter(
+    getAllCommands().filter(
       (c) =>
         c.name.toLowerCase().includes(query.toLowerCase()) ||
         c.description.toLowerCase().includes(query.toLowerCase()),

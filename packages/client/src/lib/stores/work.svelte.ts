@@ -119,6 +119,32 @@ function createWorkStore() {
       return res;
     },
 
+    async createStandaloneStories(
+      workspacePath: string,
+      tasks: Array<{ title: string; description?: string }>,
+    ): Promise<{ created: number; failed: number }> {
+      let created = 0;
+      let failed = 0;
+      const newStories: typeof standaloneStories = [];
+      for (const task of tasks) {
+        const res = await api.prds.createStandaloneStory({
+          workspacePath,
+          title: task.title,
+          description: task.description,
+        });
+        if (res.ok) {
+          newStories.push(res.data);
+          created++;
+        } else {
+          failed++;
+        }
+      }
+      if (newStories.length > 0) {
+        standaloneStories = [...standaloneStories, ...newStories];
+      }
+      return { created, failed };
+    },
+
     async updateStandaloneStory(storyId: string, updates: Record<string, any>) {
       const res = await api.prds.updateStandaloneStory(storyId, updates);
       if (res.ok) {

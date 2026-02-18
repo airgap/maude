@@ -1,5 +1,6 @@
 <script lang="ts">
-  import { editorStore } from '$lib/stores/editor.svelte';
+  import { api } from '$lib/api/client';
+  import { primaryPaneStore } from '$lib/stores/primaryPane.svelte';
 
   let {
     code,
@@ -20,9 +21,21 @@
     }, 2000);
   }
 
-  function openInEditor() {
-    if (filePath) {
-      editorStore.openFile(filePath, false);
+  async function openInEditor() {
+    if (!filePath) return;
+    try {
+      const res = await api.files.read(filePath);
+      const fileName = filePath.split('/').pop() ?? filePath;
+      const ext = fileName.split('.').pop()?.toLowerCase() ?? '';
+      const langMap: Record<string, string> = {
+        ts: 'typescript', tsx: 'typescript', js: 'javascript', jsx: 'javascript',
+        py: 'python', rs: 'rust', go: 'go', java: 'java', c: 'cpp', cpp: 'cpp',
+        css: 'css', html: 'html', svelte: 'html', json: 'json', md: 'markdown',
+        sql: 'sql', sh: 'shell', yaml: 'yaml', yml: 'yaml', toml: 'toml',
+      };
+      primaryPaneStore.openFileTab(filePath, res.data.content, langMap[ext] ?? language ?? 'text');
+    } catch {
+      // Silently ignore
     }
   }
 </script>

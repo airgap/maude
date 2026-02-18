@@ -9,6 +9,8 @@
   import { renderMarkdown } from '$lib/utils/markdown';
   import ConversationBranchButton from './ConversationBranchButton.svelte';
   import { ttsStore } from '$lib/stores/tts.svelte';
+  import { uiStore } from '$lib/stores/ui.svelte';
+  import { api } from '$lib/api/client';
   import ReplayModal from './ReplayModal.svelte';
 
   let { message, conversationId, onEdit, onDelete, onFork } = $props<{
@@ -55,6 +57,26 @@
     }
     editing = false;
     editText = '';
+  }
+
+  // ── Snapshot restore state ──
+  let restoringSnapshot = $state(false);
+
+  async function handleRestore() {
+    if (restoringSnapshot || message.role !== 'assistant') return;
+    restoringSnapshot = true;
+    try {
+      const snapRes = await api.git.snapshotByMessage(message.id);
+      if (snapRes.ok && snapRes.data) {
+        await api.git.restoreSnapshot(snapRes.data.id);
+        uiStore.toast('Snapshot restored successfully', 'success');
+      } else {
+        uiStore.toast('No snapshot found for this message', 'info');
+      }
+    } catch {
+      uiStore.toast('Failed to restore snapshot', 'error');
+    }
+    restoringSnapshot = false;
   }
 
   // ── Replay state ──
@@ -245,6 +267,24 @@
           <ConversationBranchButton {conversationId} messageId={message.id} role={message.role} />
         {/if}
         {#if message.role === 'assistant'}
+          <button
+            class="action-btn action-restore"
+            title={restoringSnapshot ? 'Restoring...' : 'Restore to before this message'}
+            onclick={handleRestore}
+            disabled={restoringSnapshot}
+          >
+            <svg
+              width="12"
+              height="12"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+            >
+              <polyline points="1 4 1 10 7 10"></polyline>
+              <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"></path>
+            </svg>
+          </button>
           <button
             class="btn-icon"
             class:active={ttsStore.currentId === message.id}
@@ -635,6 +675,14 @@
   .action-delete:hover {
     color: var(--accent-error);
     border-color: var(--accent-error);
+  }
+  .action-restore:hover {
+    color: var(--accent-warning);
+    border-color: var(--accent-warning);
+  }
+  .action-restore:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
   }
 
   .btn-icon {

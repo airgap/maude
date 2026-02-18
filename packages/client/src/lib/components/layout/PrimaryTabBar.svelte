@@ -9,12 +9,11 @@
   }
 
   function handleSplitClose() {
-    primaryPaneStore.closeSplit();
+    primaryPaneStore.closePane(pane.id);
   }
 
-  let isSplitSecondary = $derived(
-    primaryPaneStore.isSplit && primaryPaneStore.panes[1]?.id === pane.id,
-  );
+  let isOnlyPane = $derived(primaryPaneStore.panes.length === 1);
+  let canSplit = $derived(primaryPaneStore.panes.length < 10);
 </script>
 
 <div class="primary-tab-bar" class:focused={primaryPaneStore.activePaneId === pane.id}>
@@ -31,18 +30,27 @@
         onclick={() => primaryPaneStore.setActiveTab(pane.id, tab.id)}
         onkeydown={(e) => e.key === 'Enter' && primaryPaneStore.setActiveTab(pane.id, tab.id)}
       >
-        <!-- Chat icon -->
-        <svg
-          class="tab-icon"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="1.8"
-        >
-          <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-        </svg>
+        {#if tab.kind === 'diff'}
+          <!-- Git diff icon -->
+          <svg class="tab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+            <circle cx="6" cy="6" r="3" />
+            <circle cx="18" cy="18" r="3" />
+            <path d="M6 9v3a6 6 0 0 0 6 6h2M18 15V9" />
+          </svg>
+        {:else if tab.kind === 'file'}
+          <!-- File icon -->
+          <svg class="tab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+            <polyline points="14 2 14 8 20 8" />
+          </svg>
+        {:else}
+          <!-- Chat icon -->
+          <svg class="tab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+          </svg>
+        {/if}
         <span class="tab-title">{tab.title}</span>
-        {#if pane.tabs.length > 1}
+        {#if pane.tabs.length > 1 || tab.kind === 'diff' || tab.kind === 'file'}
           <button
             class="tab-close"
             onclick={(e) => closeTab(e, tab.id)}
@@ -70,14 +78,16 @@
   </div>
 
   <div class="tab-bar-actions">
-    <!-- Split button (only on primary/first pane when not already split, or on secondary to close) -->
-    {#if isSplitSecondary}
-      <button class="action-btn" onclick={handleSplitClose} title="Close split">
+    <!-- Close pane button (all panes except when it's the only one) -->
+    {#if !isOnlyPane}
+      <button class="action-btn" onclick={handleSplitClose} title="Close pane">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <path d="M18 6L6 18M6 6l12 12" />
         </svg>
       </button>
-    {:else if !primaryPaneStore.isSplit}
+    {/if}
+    <!-- Split button (visible when under the 10-pane limit) -->
+    {#if canSplit}
       <button
         class="action-btn"
         title="Split pane"

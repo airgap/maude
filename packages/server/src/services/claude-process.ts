@@ -13,6 +13,13 @@ import {
 } from '@e/shared';
 import { getSandboxConfig } from '../middleware/sandbox';
 import { verifyFile } from './code-verifier';
+import {
+  getContextLimit,
+  getAutoCompactThreshold,
+  getRecommendedOptions,
+  loadConversationHistory,
+  summarizeWithLLM,
+} from './chat-compaction';
 
 // Check if `script` utility is available (util-linux) for PTY-wrapped spawning.
 // This avoids native addon issues with node-pty in Bun.
@@ -897,7 +904,7 @@ class ClaudeProcessManager {
                     enqueueEvent(controller, `data: ${evt}\n\n`);
                   }
 
-                  // Persist token usage on result
+                  // Persist token usage on result + check context pressure for autocompaction
                   if (cliEvent.type === 'result') {
                     sentStop = true;
                     const usage = cliEvent.usage;
@@ -910,6 +917,148 @@ class ClaudeProcessManager {
                         ).run(totalTokens, session.conversationId);
                       } catch (e) {
                         console.error('[claude] Failed to persist token usage:', e);
+                      }
+
+                      // Check context pressure — warn at 85%, autocompact at the Claude Code threshold
+                      try {
+                        const inputTokens = usage.input_tokens || 0;
+                        const model = session.model || 'default';
+                        const contextLimit = getContextLimit(model);
+                        const autoCompactThreshold = getAutoCompactThreshold(model);
+                        // 85% of context window as the warning threshold
+                        const warningThreshold = Math.floor(contextLimit * 0.85);
+
+                        if (inputTokens >= warningThreshold) {
+                          // Read autoCompaction setting
+                          let autoCompactionEnabled = true;
+                          try {
+                            const db = getDb();
+                            const row = db
+                              .query("SELECT value FROM settings WHERE key = 'autoCompaction'")
+                              .get() as any;
+                            if (row) autoCompactionEnabled = JSON.parse(row.value);
+                          } catch {
+                            /* use default */
+                          }
+
+                          const shouldAutoCompact =
+                            inputTokens >= autoCompactThreshold && autoCompactionEnabled;
+
+                          if (shouldAutoCompact) {
+                            console.log(
+                              `[claude:${session.id}] Context at ${inputTokens}/${contextLimit} tokens (threshold ${autoCompactThreshold}) — applying autocompaction`,
+                            );
+
+                            // Run LLM compaction async so we can still emit the boundary event
+                            // We do it in a fire-and-forget to avoid blocking the result event.
+                            // The compaction must complete before the next user turn, which is fine
+                            // since the user has to type and send a new message.
+                            (async () => {
+                              try {
+                                const db = getDb();
+                                const opts = getRecommendedOptions(model);
+
+                                // Load the full raw message history from DB
+                                const rawRows = db
+                                  .query(
+                                    'SELECT role, content FROM messages WHERE conversation_id = ? ORDER BY timestamp ASC',
+                                  )
+                                  .all(session.conversationId) as any[];
+                                const allMessages = rawRows.map((r: any) => ({
+                                  role: r.role,
+                                  content: (() => { try { return JSON.parse(r.content); } catch { return []; } })(),
+                                }));
+
+                                if (allMessages.length === 0) return;
+
+                                // Determine split point: which messages to drop vs keep
+                                // using the same smart strategy but without creating a summary
+                                const history = loadConversationHistory(session.conversationId, {
+                                  ...opts,
+                                  createSummary: false,
+                                });
+
+                                if (!history.compacted) {
+                                  console.log(`[claude:${session.id}] Compaction not needed after re-check`);
+                                  return;
+                                }
+
+                                // compactedCount is the number of messages kept.
+                                // Everything before that split is dropped.
+                                const splitIdx = allMessages.length - history.compactedCount;
+                                const finalDropped = allMessages.slice(0, splitIdx);
+                                const keptMessages = allMessages.slice(splitIdx);
+
+                                // Generate LLM summary (falls back to rule-based on failure)
+                                const { summaryText, summaryMessage, usedLLM } = await summarizeWithLLM(
+                                  finalDropped,
+                                  keptMessages,
+                                  model,
+                                );
+
+                                // Build final compacted message array: [summary, ...kept]
+                                const compactedMessages = [summaryMessage, ...keptMessages];
+
+                                // Write compacted history back to DB
+                                db.query('DELETE FROM messages WHERE conversation_id = ?').run(
+                                  session.conversationId,
+                                );
+                                let ts = Date.now();
+                                for (const msg of compactedMessages) {
+                                  db.query(
+                                    `INSERT INTO messages (id, conversation_id, role, content, timestamp)
+                                     VALUES (?, ?, ?, ?, ?)`,
+                                  ).run(
+                                    nanoid(),
+                                    session.conversationId,
+                                    msg.role,
+                                    JSON.stringify(msg.content),
+                                    ts++,
+                                  );
+                                }
+
+                                // Clear CLI session ID and store the summary text so the next
+                                // turn can inject it into the fresh CLI session's first prompt.
+                                session.cliSessionId = undefined;
+                                db.query(
+                                  'UPDATE conversations SET cli_session_id = NULL, compact_summary = ? WHERE id = ?',
+                                ).run(summaryText, session.conversationId);
+
+                                console.log(
+                                  `[claude:${session.id}] Autocompaction complete: ${history.originalCount} → ${compactedMessages.length} messages (LLM=${usedLLM})`,
+                                );
+                              } catch (compactErr) {
+                                console.error('[claude] Autocompaction failed:', compactErr);
+                              }
+                            })();
+                          }
+
+                          // Emit context_warning for the warning banner
+                          const usagePct = contextLimit > 0
+                            ? Math.round((inputTokens / contextLimit) * 1000) / 10
+                            : 0;
+                          const contextWarningEvent = JSON.stringify({
+                            type: 'context_warning',
+                            inputTokens,
+                            contextLimit,
+                            usagePercent: usagePct,
+                            autocompacted: shouldAutoCompact,
+                          });
+                          enqueueEvent(controller, `data: ${contextWarningEvent}\n\n`);
+
+                          // Also emit compact_boundary if compacting (matches Claude Code's SSE protocol)
+                          if (shouldAutoCompact) {
+                            const compactBoundaryEvent = JSON.stringify({
+                              type: 'compact_boundary',
+                              trigger: 'auto',
+                              pre_tokens: inputTokens,
+                              context_limit: contextLimit,
+                            });
+                            enqueueEvent(controller, `data: ${compactBoundaryEvent}\n\n`);
+                          }
+                        }
+                      } catch (pressureErr) {
+                        console.error('[claude] Context pressure check failed:', pressureErr);
                       }
                     }
                   }

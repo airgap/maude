@@ -19,7 +19,9 @@ export type StreamEvent =
   | StreamStoryUpdate
   | StreamAgentEvent
   | StreamVerificationResult
-  | StreamLoopEvent;
+  | StreamLoopEvent
+  | StreamContextWarning
+  | StreamCompactBoundary;
 
 export interface StreamMessageStart {
   type: 'message_start';
@@ -160,4 +162,28 @@ export interface StreamVerificationResult {
   }>;
   tool: string;
   duration: number;
+}
+
+/**
+ * Emitted when the conversation context is approaching the model's limit.
+ * `autocompacted` is true when the server already applied compaction automatically.
+ */
+export interface StreamContextWarning {
+  type: 'context_warning';
+  inputTokens: number;
+  contextLimit: number;
+  usagePercent: number;
+  autocompacted: boolean;
+}
+
+/**
+ * Emitted immediately when autocompaction fires — mirrors Claude Code's
+ * `compact_boundary` system event. The client can use this to show a
+ * "conversation compacted" divider in the message list.
+ */
+export interface StreamCompactBoundary {
+  type: 'compact_boundary';
+  trigger: 'auto' | 'manual';
+  pre_tokens: number;
+  context_limit: number;
 }

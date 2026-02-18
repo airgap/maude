@@ -1,9 +1,22 @@
 <script lang="ts">
   import { searchStore } from '$lib/stores/search.svelte';
-  import { editorStore } from '$lib/stores/editor.svelte';
+  import { api } from '$lib/api/client';
+  import { primaryPaneStore } from '$lib/stores/primaryPane.svelte';
   import { settingsStore } from '$lib/stores/settings.svelte';
   import { conversationStore } from '$lib/stores/conversation.svelte';
   import { workspaceListStore } from '$lib/stores/projects.svelte';
+
+  function detectLanguage(fileName: string): string {
+    const ext = fileName.split('.').pop()?.toLowerCase() ?? '';
+    const map: Record<string, string> = {
+      ts: 'typescript', tsx: 'typescript', js: 'javascript', jsx: 'javascript',
+      py: 'python', rs: 'rust', go: 'go', java: 'java', c: 'cpp', cpp: 'cpp',
+      css: 'css', scss: 'css', html: 'html', svelte: 'html', vue: 'html',
+      json: 'json', md: 'markdown', sql: 'sql', sh: 'shell', yaml: 'yaml',
+      yml: 'yaml', toml: 'toml', txt: 'text',
+    };
+    return map[ext] || 'text';
+  }
 
   let searchInput: HTMLInputElement;
   let debounceTimer: ReturnType<typeof setTimeout>;
@@ -41,8 +54,14 @@
     collapsedFiles = next;
   }
 
-  function openMatch(file: string, line: number) {
-    editorStore.openFile(file, false);
+  async function openMatch(file: string, _line: number) {
+    try {
+      const res = await api.files.read(file);
+      const fileName = file.split('/').pop() ?? file;
+      primaryPaneStore.openFileTab(file, res.data.content, detectLanguage(fileName));
+    } catch {
+      // Silently ignore unreadable files
+    }
   }
 
   function highlightContent(content: string, matchStart: number, matchEnd: number): string {

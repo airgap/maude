@@ -31,10 +31,13 @@ export async function sendAndStream(conversationId: string, content: string): Pr
     return;
   }
 
-  // Auto-snapshot before agent runs (fire-and-forget)
+  // Pre-generate the assistant message ID so snapshots can link to it
+  const assistantMsgIdForSnapshot = uuid();
+
+  // Auto-snapshot before agent runs (fire-and-forget), linked to the upcoming assistant message
   const wsPath = targetConversation.workspacePath;
   if (wsPath) {
-    api.git.snapshot(wsPath, conversationId, 'pre-agent').catch(() => {});
+    api.git.snapshot(wsPath, conversationId, 'pre-agent', assistantMsgIdForSnapshot).catch(() => {});
   }
 
   // Add user message to the target conversation
@@ -77,10 +80,9 @@ export async function sendAndStream(conversationId: string, content: string): Pr
       streamStore.setSessionId(newSessionId);
     }
 
-    // Add empty assistant message to the target conversation
-    const assistantMsgId = uuid();
+    // Add empty assistant message to the target conversation (using pre-generated ID for snapshot linkage)
     conversationStore.addMessageTo(targetConversation, {
-      id: assistantMsgId,
+      id: assistantMsgIdForSnapshot,
       role: 'assistant',
       content: [],
       timestamp: Date.now(),

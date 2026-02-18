@@ -239,4 +239,279 @@ describe('Settings Routes', () => {
       expect(json.data).toBe('solarized');
     });
   });
+
+  // ---------------------------------------------------------------
+  // GET / — Sensitive keys are masked
+  // ---------------------------------------------------------------
+  describe('GET / — sensitive key masking', () => {
+    test('masks anthropicApiKey as anthropicApiKeyConfigured', async () => {
+      insertSetting('anthropicApiKey', 'sk-ant-secret123');
+
+      const res = await app.request('/');
+      const json = await res.json();
+      expect(json.data.anthropicApiKey).toBeUndefined();
+      expect(json.data.anthropicApiKeyConfigured).toBe(true);
+    });
+
+    test('masks openaiApiKey as openaiApiKeyConfigured', async () => {
+      insertSetting('openaiApiKey', 'sk-openai-secret');
+
+      const res = await app.request('/');
+      const json = await res.json();
+      expect(json.data.openaiApiKey).toBeUndefined();
+      expect(json.data.openaiApiKeyConfigured).toBe(true);
+    });
+
+    test('masks googleApiKey as googleApiKeyConfigured', async () => {
+      insertSetting('googleApiKey', 'AIza-google-key');
+
+      const res = await app.request('/');
+      const json = await res.json();
+      expect(json.data.googleApiKey).toBeUndefined();
+      expect(json.data.googleApiKeyConfigured).toBe(true);
+    });
+
+    test('masks jiraConfig, linearConfig, asanaConfig', async () => {
+      insertSetting('jiraConfig', { token: 'secret' });
+      insertSetting('linearConfig', { apiKey: 'secret' });
+      insertSetting('asanaConfig', { pat: 'secret' });
+
+      const res = await app.request('/');
+      const json = await res.json();
+      expect(json.data.jiraConfig).toBeUndefined();
+      expect(json.data.jiraConfigConfigured).toBe(true);
+      expect(json.data.linearConfig).toBeUndefined();
+      expect(json.data.linearConfigConfigured).toBe(true);
+      expect(json.data.asanaConfig).toBeUndefined();
+      expect(json.data.asanaConfigConfigured).toBe(true);
+    });
+
+    test('reports configured=false for falsy sensitive values', async () => {
+      insertSetting('anthropicApiKey', '');
+
+      const res = await app.request('/');
+      const json = await res.json();
+      expect(json.data.anthropicApiKeyConfigured).toBe(false);
+    });
+
+    test('non-sensitive settings pass through alongside masked ones', async () => {
+      insertSetting('theme', 'dark');
+      insertSetting('anthropicApiKey', 'sk-secret');
+
+      const res = await app.request('/');
+      const json = await res.json();
+      expect(json.data.theme).toBe('dark');
+      expect(json.data.anthropicApiKeyConfigured).toBe(true);
+      expect(json.data.anthropicApiKey).toBeUndefined();
+    });
+  });
+
+  // ---------------------------------------------------------------
+  // PUT /api-key — Set API key (BYOK)
+  // ---------------------------------------------------------------
+  describe('PUT /api-key — set API key', () => {
+    test('returns 400 when provider is missing', async () => {
+      const res = await app.request('/api-key', {
+        method: 'PUT',
+        body: JSON.stringify({ apiKey: 'sk-test' }),
+        headers: { 'Content-Type': 'application/json' },
+      });
+      expect(res.status).toBe(400);
+      const json = await res.json();
+      expect(json.ok).toBe(false);
+      expect(json.error).toBe('provider and apiKey required');
+    });
+
+    test('returns 400 when apiKey is missing', async () => {
+      const res = await app.request('/api-key', {
+        method: 'PUT',
+        body: JSON.stringify({ provider: 'anthropic' }),
+        headers: { 'Content-Type': 'application/json' },
+      });
+      expect(res.status).toBe(400);
+    });
+
+    test('returns 400 for unknown provider', async () => {
+      const res = await app.request('/api-key', {
+        method: 'PUT',
+        body: JSON.stringify({ provider: 'unknown', apiKey: 'key123' }),
+        headers: { 'Content-Type': 'application/json' },
+      });
+      expect(res.status).toBe(400);
+      const json = await res.json();
+      expect(json.error).toBe('Unknown provider');
+    });
+
+    test('stores anthropic api key in settings', async () => {
+      const res = await app.request('/api-key', {
+        method: 'PUT',
+        body: JSON.stringify({ provider: 'anthropic', apiKey: 'sk-ant-test123' }),
+        headers: { 'Content-Type': 'application/json' },
+      });
+      expect(res.status).toBe(200);
+      const json = await res.json();
+      expect(json.ok).toBe(true);
+
+      const row = testDb.query('SELECT value FROM settings WHERE key = ?').get('anthropicApiKey') as any;
+      expect(JSON.parse(row.value)).toBe('sk-ant-test123');
+    });
+
+    test('stores openai api key in settings', async () => {
+      await app.request('/api-key', {
+        method: 'PUT',
+        body: JSON.stringify({ provider: 'openai', apiKey: 'sk-openai-key' }),
+        headers: { 'Content-Type': 'application/json' },
+      });
+
+      const row = testDb.query('SELECT value FROM settings WHERE key = ?').get('openaiApiKey') as any;
+      expect(JSON.parse(row.value)).toBe('sk-openai-key');
+    });
+
+    test('stores google api key in settings', async () => {
+      await app.request('/api-key', {
+        method: 'PUT',
+        body: JSON.stringify({ provider: 'google', apiKey: 'AIza-google-test' }),
+        headers: { 'Content-Type': 'application/json' },
+      });
+
+      const row = testDb.query('SELECT value FROM settings WHERE key = ?').get('googleApiKey') as any;
+      expect(JSON.parse(row.value)).toBe('AIza-google-test');
+    });
+
+    test('sets environment variable for anthropic', async () => {
+      process.env.ANTHROPIC_API_KEY = undefined as unknown as string;
+      await app.request('/api-key', {
+        method: 'PUT',
+        body: JSON.stringify({ provider: 'anthropic', apiKey: 'sk-ant-env-test' }),
+        headers: { 'Content-Type': 'application/json' },
+      });
+      expect(process.env.ANTHROPIC_API_KEY).toBe('sk-ant-env-test');
+      delete process.env.ANTHROPIC_API_KEY;
+    });
+
+    test('overwrites existing api key', async () => {
+      insertSetting('anthropicApiKey', 'old-key');
+
+      await app.request('/api-key', {
+        method: 'PUT',
+        body: JSON.stringify({ provider: 'anthropic', apiKey: 'new-key' }),
+        headers: { 'Content-Type': 'application/json' },
+      });
+
+      const row = testDb.query('SELECT value FROM settings WHERE key = ?').get('anthropicApiKey') as any;
+      expect(JSON.parse(row.value)).toBe('new-key');
+    });
+  });
+
+  // ---------------------------------------------------------------
+  // GET /api-keys/status — Check API key status
+  // ---------------------------------------------------------------
+  describe('GET /api-keys/status — check API key status', () => {
+    test('returns all providers as false when no keys configured', async () => {
+      // Ensure env vars are not set
+      const savedAnth = process.env.ANTHROPIC_API_KEY;
+      const savedOpenai = process.env.OPENAI_API_KEY;
+      const savedGoogle = process.env.GOOGLE_API_KEY;
+      delete process.env.ANTHROPIC_API_KEY;
+      delete process.env.OPENAI_API_KEY;
+      delete process.env.GOOGLE_API_KEY;
+
+      const res = await app.request('/api-keys/status');
+      expect(res.status).toBe(200);
+      const json = await res.json();
+      expect(json.ok).toBe(true);
+      expect(json.data.anthropic).toBe(false);
+      expect(json.data.openai).toBe(false);
+      expect(json.data.google).toBe(false);
+
+      // Restore
+      if (savedAnth) process.env.ANTHROPIC_API_KEY = savedAnth;
+      if (savedOpenai) process.env.OPENAI_API_KEY = savedOpenai;
+      if (savedGoogle) process.env.GOOGLE_API_KEY = savedGoogle;
+    });
+
+    test('returns true for provider with key in DB', async () => {
+      const savedAnth = process.env.ANTHROPIC_API_KEY;
+      delete process.env.ANTHROPIC_API_KEY;
+
+      insertSetting('anthropicApiKey', 'sk-test-key');
+
+      const res = await app.request('/api-keys/status');
+      const json = await res.json();
+      expect(json.data.anthropic).toBe(true);
+
+      if (savedAnth) process.env.ANTHROPIC_API_KEY = savedAnth;
+    });
+
+    test('returns true for provider with env var set', async () => {
+      const saved = process.env.OPENAI_API_KEY;
+      process.env.OPENAI_API_KEY = 'sk-env-key';
+
+      const res = await app.request('/api-keys/status');
+      const json = await res.json();
+      expect(json.data.openai).toBe(true);
+
+      if (saved) process.env.OPENAI_API_KEY = saved;
+      else delete process.env.OPENAI_API_KEY;
+    });
+  });
+
+  // ---------------------------------------------------------------
+  // PUT /budget — Set session budget
+  // ---------------------------------------------------------------
+  describe('PUT /budget — set session budget', () => {
+    test('sets a budget', async () => {
+      const res = await app.request('/budget', {
+        method: 'PUT',
+        body: JSON.stringify({ budgetUsd: 10.0 }),
+        headers: { 'Content-Type': 'application/json' },
+      });
+      expect(res.status).toBe(200);
+      const json = await res.json();
+      expect(json.ok).toBe(true);
+
+      const row = testDb.query("SELECT value FROM settings WHERE key = 'sessionBudgetUsd'").get() as any;
+      expect(JSON.parse(row.value)).toBe(10.0);
+    });
+
+    test('clears budget when budgetUsd is null', async () => {
+      insertSetting('sessionBudgetUsd', 5.0);
+
+      const res = await app.request('/budget', {
+        method: 'PUT',
+        body: JSON.stringify({ budgetUsd: null }),
+        headers: { 'Content-Type': 'application/json' },
+      });
+      expect(res.status).toBe(200);
+
+      const row = testDb.query("SELECT value FROM settings WHERE key = 'sessionBudgetUsd'").get();
+      expect(row).toBeNull();
+    });
+
+    test('overwrites existing budget', async () => {
+      insertSetting('sessionBudgetUsd', 5.0);
+
+      await app.request('/budget', {
+        method: 'PUT',
+        body: JSON.stringify({ budgetUsd: 20.0 }),
+        headers: { 'Content-Type': 'application/json' },
+      });
+
+      const row = testDb.query("SELECT value FROM settings WHERE key = 'sessionBudgetUsd'").get() as any;
+      expect(JSON.parse(row.value)).toBe(20.0);
+    });
+
+    test('budget is retrievable via GET /:key after setting', async () => {
+      await app.request('/budget', {
+        method: 'PUT',
+        body: JSON.stringify({ budgetUsd: 15.0 }),
+        headers: { 'Content-Type': 'application/json' },
+      });
+
+      // sessionBudgetUsd key is stored, so we can read it through GET /:key
+      const res = await app.request('/sessionBudgetUsd');
+      const json = await res.json();
+      expect(json.data).toBe(15.0);
+    });
+  });
 });

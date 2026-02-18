@@ -1,6 +1,8 @@
 import { Hono } from 'hono';
 import { getDb } from '../db/database';
 import { listOllamaModels, checkOllamaHealth } from '../services/ollama-provider';
+import { listOpenAIModels } from '../services/openai-provider-v2';
+import { listGeminiModels } from '../services/gemini-provider-v2';
 
 const app = new Hono();
 
@@ -63,6 +65,18 @@ app.get('/ollama/status', async (c) => {
 
 app.get('/ollama/models', async (c) => {
   const models = await listOllamaModels();
+  return c.json({ ok: true, data: models });
+});
+
+// OpenAI model discovery
+app.get('/openai/models', async (c) => {
+  const models = await listOpenAIModels();
+  return c.json({ ok: true, data: models });
+});
+
+// Google Gemini model discovery
+app.get('/gemini/models', async (c) => {
+  const models = await listGeminiModels();
   return c.json({ ok: true, data: models });
 });
 

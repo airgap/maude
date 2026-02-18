@@ -632,4 +632,354 @@ describe('Conversation Routes', () => {
       expect(messages).toHaveLength(0);
     });
   });
+
+  // ---------------------------------------------------------------
+  // DELETE /:id/messages/:messageId — Delete a message
+  // ---------------------------------------------------------------
+  describe('DELETE /:id/messages/:messageId — delete message', () => {
+    test('returns 404 for non-existent message', async () => {
+      insertConversation({ id: 'conv-1' });
+
+      const res = await app.request('/conv-1/messages/nonexistent', { method: 'DELETE' });
+      expect(res.status).toBe(404);
+      const json = await res.json();
+      expect(json.ok).toBe(false);
+      expect(json.error).toBe('Message not found');
+    });
+
+    test('returns 404 if message belongs to different conversation', async () => {
+      insertConversation({ id: 'conv-1' });
+      insertConversation({ id: 'conv-2' });
+      insertMessage({ id: 'msg-1', conversation_id: 'conv-2' });
+
+      const res = await app.request('/conv-1/messages/msg-1', { method: 'DELETE' });
+      expect(res.status).toBe(404);
+    });
+
+    test('deletes a single message', async () => {
+      insertConversation({ id: 'conv-1' });
+      insertMessage({ id: 'msg-1', conversation_id: 'conv-1', role: 'user', timestamp: 100 });
+      insertMessage({ id: 'msg-2', conversation_id: 'conv-1', role: 'assistant', timestamp: 200 });
+
+      const res = await app.request('/conv-1/messages/msg-1', { method: 'DELETE' });
+      expect(res.status).toBe(200);
+      const json = await res.json();
+      expect(json.ok).toBe(true);
+
+      // Only msg-1 should be deleted
+      const remaining = testDb.query('SELECT id FROM messages WHERE conversation_id = ?').all('conv-1') as any[];
+      expect(remaining).toHaveLength(1);
+      expect(remaining[0].id).toBe('msg-2');
+    });
+
+    test('deletePair=true deletes user message and next assistant message', async () => {
+      insertConversation({ id: 'conv-1' });
+      insertMessage({ id: 'msg-1', conversation_id: 'conv-1', role: 'user', timestamp: 100 });
+      insertMessage({ id: 'msg-2', conversation_id: 'conv-1', role: 'assistant', timestamp: 200 });
+      insertMessage({ id: 'msg-3', conversation_id: 'conv-1', role: 'user', timestamp: 300 });
+
+      const res = await app.request('/conv-1/messages/msg-1?deletePair=true', { method: 'DELETE' });
+      expect(res.status).toBe(200);
+
+      const remaining = testDb.query('SELECT id FROM messages WHERE conversation_id = ? ORDER BY timestamp ASC').all('conv-1') as any[];
+      expect(remaining).toHaveLength(1);
+      expect(remaining[0].id).toBe('msg-3');
+    });
+
+    test('deletePair=true only deletes user message if next is not assistant', async () => {
+      insertConversation({ id: 'conv-1' });
+      insertMessage({ id: 'msg-1', conversation_id: 'conv-1', role: 'user', timestamp: 100 });
+      insertMessage({ id: 'msg-2', conversation_id: 'conv-1', role: 'user', timestamp: 200 });
+
+      await app.request('/conv-1/messages/msg-1?deletePair=true', { method: 'DELETE' });
+
+      const remaining = testDb.query('SELECT id FROM messages WHERE conversation_id = ?').all('conv-1') as any[];
+      expect(remaining).toHaveLength(1);
+      expect(remaining[0].id).toBe('msg-2');
+    });
+
+    test('deletePair=true on last user message deletes only that message', async () => {
+      insertConversation({ id: 'conv-1' });
+      insertMessage({ id: 'msg-1', conversation_id: 'conv-1', role: 'user', timestamp: 100 });
+
+      await app.request('/conv-1/messages/msg-1?deletePair=true', { method: 'DELETE' });
+
+      const remaining = testDb.query('SELECT id FROM messages WHERE conversation_id = ?').all('conv-1');
+      expect(remaining).toHaveLength(0);
+    });
+
+    test('deletePair with assistant message does not pair-delete', async () => {
+      insertConversation({ id: 'conv-1' });
+      insertMessage({ id: 'msg-1', conversation_id: 'conv-1', role: 'user', timestamp: 100 });
+      insertMessage({ id: 'msg-2', conversation_id: 'conv-1', role: 'assistant', timestamp: 200 });
+      insertMessage({ id: 'msg-3', conversation_id: 'conv-1', role: 'user', timestamp: 300 });
+
+      // deletePair on assistant message — only deletes the single message
+      await app.request('/conv-1/messages/msg-2?deletePair=true', { method: 'DELETE' });
+
+      const remaining = testDb.query('SELECT id FROM messages WHERE conversation_id = ? ORDER BY timestamp ASC').all('conv-1') as any[];
+      expect(remaining).toHaveLength(2);
+      expect(remaining[0].id).toBe('msg-1');
+      expect(remaining[1].id).toBe('msg-3');
+    });
+
+    test('invalidates cli_session_id after message deletion', async () => {
+      insertConversation({ id: 'conv-1', cli_session_id: 'session-123', updated_at: 1000 });
+      insertMessage({ id: 'msg-1', conversation_id: 'conv-1' });
+
+      await app.request('/conv-1/messages/msg-1', { method: 'DELETE' });
+
+      const row = testDb.query('SELECT cli_session_id, updated_at FROM conversations WHERE id = ?').get('conv-1') as any;
+      expect(row.cli_session_id).toBeNull();
+      expect(row.updated_at).toBeGreaterThan(1000);
+    });
+  });
+
+  // ---------------------------------------------------------------
+  // PUT /:id/messages/:messageId — Edit message (delete from this point)
+  // ---------------------------------------------------------------
+  describe('PUT /:id/messages/:messageId — edit message', () => {
+    test('returns 404 for non-existent message', async () => {
+      insertConversation({ id: 'conv-1' });
+
+      const res = await app.request('/conv-1/messages/nonexistent', {
+        method: 'PUT',
+        body: JSON.stringify({}),
+        headers: { 'Content-Type': 'application/json' },
+      });
+      expect(res.status).toBe(404);
+      const json = await res.json();
+      expect(json.ok).toBe(false);
+      expect(json.error).toBe('Message not found');
+    });
+
+    test('returns 404 if message belongs to different conversation', async () => {
+      insertConversation({ id: 'conv-1' });
+      insertConversation({ id: 'conv-2' });
+      insertMessage({ id: 'msg-1', conversation_id: 'conv-2' });
+
+      const res = await app.request('/conv-1/messages/msg-1', {
+        method: 'PUT',
+        body: JSON.stringify({}),
+        headers: { 'Content-Type': 'application/json' },
+      });
+      expect(res.status).toBe(404);
+    });
+
+    test('deletes target message and all subsequent messages', async () => {
+      insertConversation({ id: 'conv-1' });
+      insertMessage({ id: 'msg-1', conversation_id: 'conv-1', role: 'user', timestamp: 100 });
+      insertMessage({ id: 'msg-2', conversation_id: 'conv-1', role: 'assistant', timestamp: 200 });
+      insertMessage({ id: 'msg-3', conversation_id: 'conv-1', role: 'user', timestamp: 300 });
+
+      const res = await app.request('/conv-1/messages/msg-2', {
+        method: 'PUT',
+        body: JSON.stringify({}),
+        headers: { 'Content-Type': 'application/json' },
+      });
+      expect(res.status).toBe(200);
+      const json = await res.json();
+      expect(json.ok).toBe(true);
+
+      const remaining = testDb.query('SELECT id FROM messages WHERE conversation_id = ? ORDER BY timestamp ASC').all('conv-1') as any[];
+      expect(remaining).toHaveLength(1);
+      expect(remaining[0].id).toBe('msg-1');
+    });
+
+    test('deletes only the last message if it is the target', async () => {
+      insertConversation({ id: 'conv-1' });
+      insertMessage({ id: 'msg-1', conversation_id: 'conv-1', role: 'user', timestamp: 100 });
+      insertMessage({ id: 'msg-2', conversation_id: 'conv-1', role: 'assistant', timestamp: 200 });
+
+      await app.request('/conv-1/messages/msg-2', {
+        method: 'PUT',
+        body: JSON.stringify({}),
+        headers: { 'Content-Type': 'application/json' },
+      });
+
+      const remaining = testDb.query('SELECT id FROM messages WHERE conversation_id = ?').all('conv-1') as any[];
+      expect(remaining).toHaveLength(1);
+      expect(remaining[0].id).toBe('msg-1');
+    });
+
+    test('invalidates cli_session_id after message edit', async () => {
+      insertConversation({ id: 'conv-1', cli_session_id: 'session-abc', updated_at: 1000 });
+      insertMessage({ id: 'msg-1', conversation_id: 'conv-1', timestamp: 100 });
+
+      await app.request('/conv-1/messages/msg-1', {
+        method: 'PUT',
+        body: JSON.stringify({}),
+        headers: { 'Content-Type': 'application/json' },
+      });
+
+      const row = testDb.query('SELECT cli_session_id, updated_at FROM conversations WHERE id = ?').get('conv-1') as any;
+      expect(row.cli_session_id).toBeNull();
+      expect(row.updated_at).toBeGreaterThan(1000);
+    });
+
+    test('deletes all messages when editing the first one', async () => {
+      insertConversation({ id: 'conv-1' });
+      insertMessage({ id: 'msg-1', conversation_id: 'conv-1', role: 'user', timestamp: 100 });
+      insertMessage({ id: 'msg-2', conversation_id: 'conv-1', role: 'assistant', timestamp: 200 });
+      insertMessage({ id: 'msg-3', conversation_id: 'conv-1', role: 'user', timestamp: 300 });
+
+      await app.request('/conv-1/messages/msg-1', {
+        method: 'PUT',
+        body: JSON.stringify({}),
+        headers: { 'Content-Type': 'application/json' },
+      });
+
+      const remaining = testDb.query('SELECT * FROM messages WHERE conversation_id = ?').all('conv-1');
+      expect(remaining).toHaveLength(0);
+    });
+  });
+
+  // ---------------------------------------------------------------
+  // POST /:id/fork — Fork conversation
+  // ---------------------------------------------------------------
+  describe('POST /:id/fork — fork conversation', () => {
+    test('returns 404 for non-existent conversation', async () => {
+      const res = await app.request('/nonexistent/fork', {
+        method: 'POST',
+        body: JSON.stringify({ messageId: 'msg-1' }),
+        headers: { 'Content-Type': 'application/json' },
+      });
+      expect(res.status).toBe(404);
+      const json = await res.json();
+      expect(json.ok).toBe(false);
+      expect(json.error).toBe('Conversation not found');
+    });
+
+    test('returns 404 for non-existent message', async () => {
+      insertConversation({ id: 'conv-1' });
+
+      const res = await app.request('/conv-1/fork', {
+        method: 'POST',
+        body: JSON.stringify({ messageId: 'nonexistent' }),
+        headers: { 'Content-Type': 'application/json' },
+      });
+      expect(res.status).toBe(404);
+      const json = await res.json();
+      expect(json.error).toBe('Message not found');
+    });
+
+    test('creates a new conversation with "(fork)" suffix', async () => {
+      insertConversation({ id: 'conv-1', title: 'My Chat', model: 'claude-opus-4-6' });
+      insertMessage({ id: 'msg-1', conversation_id: 'conv-1', role: 'user', timestamp: 100 });
+
+      const res = await app.request('/conv-1/fork', {
+        method: 'POST',
+        body: JSON.stringify({ messageId: 'msg-1' }),
+        headers: { 'Content-Type': 'application/json' },
+      });
+      expect(res.status).toBe(201);
+      const json = await res.json();
+      expect(json.ok).toBe(true);
+      expect(json.data.id).toBeDefined();
+
+      const newConv = testDb.query('SELECT * FROM conversations WHERE id = ?').get(json.data.id) as any;
+      expect(newConv.title).toBe('My Chat (fork)');
+      expect(newConv.model).toBe('claude-opus-4-6');
+    });
+
+    test('copies messages up to and including the target message', async () => {
+      insertConversation({ id: 'conv-1' });
+      insertMessage({ id: 'msg-1', conversation_id: 'conv-1', role: 'user', timestamp: 100 });
+      insertMessage({ id: 'msg-2', conversation_id: 'conv-1', role: 'assistant', timestamp: 200 });
+      insertMessage({ id: 'msg-3', conversation_id: 'conv-1', role: 'user', timestamp: 300 });
+
+      const res = await app.request('/conv-1/fork', {
+        method: 'POST',
+        body: JSON.stringify({ messageId: 'msg-2' }),
+        headers: { 'Content-Type': 'application/json' },
+      });
+      const json = await res.json();
+
+      const messages = testDb.query('SELECT * FROM messages WHERE conversation_id = ? ORDER BY timestamp ASC').all(json.data.id) as any[];
+      expect(messages).toHaveLength(2);
+      expect(messages[0].role).toBe('user');
+      expect(messages[1].role).toBe('assistant');
+    });
+
+    test('forked messages get new IDs', async () => {
+      insertConversation({ id: 'conv-1' });
+      insertMessage({ id: 'msg-1', conversation_id: 'conv-1', role: 'user', timestamp: 100 });
+
+      const res = await app.request('/conv-1/fork', {
+        method: 'POST',
+        body: JSON.stringify({ messageId: 'msg-1' }),
+        headers: { 'Content-Type': 'application/json' },
+      });
+      const json = await res.json();
+
+      const messages = testDb.query('SELECT id FROM messages WHERE conversation_id = ?').all(json.data.id) as any[];
+      expect(messages).toHaveLength(1);
+      expect(messages[0].id).not.toBe('msg-1');
+    });
+
+    test('preserves conversation settings in fork', async () => {
+      insertConversation({
+        id: 'conv-1',
+        model: 'claude-opus-4-6',
+        system_prompt: 'Be helpful',
+        workspace_path: '/my/project',
+        permission_mode: 'trusted',
+        effort: 'low',
+        max_budget_usd: 5.0,
+        max_turns: 10,
+        allowed_tools: JSON.stringify(['Read']),
+        disallowed_tools: JSON.stringify(['Bash']),
+      });
+      insertMessage({ id: 'msg-1', conversation_id: 'conv-1', timestamp: 100 });
+
+      const res = await app.request('/conv-1/fork', {
+        method: 'POST',
+        body: JSON.stringify({ messageId: 'msg-1' }),
+        headers: { 'Content-Type': 'application/json' },
+      });
+      const json = await res.json();
+
+      const newConv = testDb.query('SELECT * FROM conversations WHERE id = ?').get(json.data.id) as any;
+      expect(newConv.model).toBe('claude-opus-4-6');
+      expect(newConv.system_prompt).toBe('Be helpful');
+      expect(newConv.workspace_path).toBe('/my/project');
+      expect(newConv.permission_mode).toBe('trusted');
+      expect(newConv.effort).toBe('low');
+      expect(newConv.max_budget_usd).toBe(5.0);
+      expect(newConv.max_turns).toBe(10);
+      expect(JSON.parse(newConv.allowed_tools)).toEqual(['Read']);
+      expect(JSON.parse(newConv.disallowed_tools)).toEqual(['Bash']);
+    });
+
+    test('does not modify original conversation', async () => {
+      insertConversation({ id: 'conv-1' });
+      insertMessage({ id: 'msg-1', conversation_id: 'conv-1', role: 'user', timestamp: 100 });
+      insertMessage({ id: 'msg-2', conversation_id: 'conv-1', role: 'assistant', timestamp: 200 });
+
+      await app.request('/conv-1/fork', {
+        method: 'POST',
+        body: JSON.stringify({ messageId: 'msg-1' }),
+        headers: { 'Content-Type': 'application/json' },
+      });
+
+      // Original still has both messages
+      const origMessages = testDb.query('SELECT * FROM messages WHERE conversation_id = ?').all('conv-1');
+      expect(origMessages).toHaveLength(2);
+    });
+
+    test('fork does not include cli_session_id', async () => {
+      insertConversation({ id: 'conv-1', cli_session_id: 'session-old' });
+      insertMessage({ id: 'msg-1', conversation_id: 'conv-1', timestamp: 100 });
+
+      const res = await app.request('/conv-1/fork', {
+        method: 'POST',
+        body: JSON.stringify({ messageId: 'msg-1' }),
+        headers: { 'Content-Type': 'application/json' },
+      });
+      const json = await res.json();
+
+      const newConv = testDb.query('SELECT cli_session_id FROM conversations WHERE id = ?').get(json.data.id) as any;
+      expect(newConv.cli_session_id).toBeNull();
+    });
+  });
 });

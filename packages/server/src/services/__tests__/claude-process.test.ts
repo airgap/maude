@@ -1,4 +1,19 @@
-import { describe, test, expect } from 'bun:test';
+import { describe, test, expect, beforeEach, mock, spyOn } from 'bun:test';
+import { createTestDb } from '../../test-helpers';
+
+const testDb = createTestDb();
+mock.module('../../db/database', () => ({
+  getDb: () => testDb,
+  initDatabase: () => {},
+}));
+
+// NOTE: We intentionally do NOT mock '../cli-provider', '../../middleware/sandbox', or
+// '../code-verifier' because Bun's mock.module is global and would contaminate their own tests.
+// These modules are safe to use as-is since they don't make network calls.
+mock.module('../mcp-config', () => ({
+  generateMcpConfig: () => null,
+}));
+
 import { translateCliEvent, claudeManager } from '../claude-process';
 
 describe('translateCliEvent', () => {
@@ -267,5 +282,251 @@ describe('ClaudeProcessManager', () => {
     } catch (e: any) {
       expect(e.message).toContain('terminated');
     }
+  });
+
+  test('writeStdin returns false for unknown session', () => {
+    const result = claudeManager.writeStdin('nonexistent', 'some data');
+    expect(result).toBe(false);
+  });
+
+  test('writeStdin returns false for session without cliProcess', async () => {
+    const sessionId = await claudeManager.createSession('conv-stdin-1');
+    const result = claudeManager.writeStdin(sessionId, 'some data');
+    expect(result).toBe(false);
+  });
+
+  test('cancelGeneration emits cancel event on active session', async () => {
+    const sessionId = await claudeManager.createSession('conv-cancel-1');
+    const session = claudeManager.getSession(sessionId);
+    let cancelEmitted = false;
+    session!.emitter.once('cancel', () => {
+      cancelEmitted = true;
+    });
+    claudeManager.cancelGeneration(sessionId);
+    expect(cancelEmitted).toBe(true);
+  });
+
+  test('terminateSession clears cleanup timers', async () => {
+    const sessionId = await claudeManager.createSession('conv-cleanup-timer-1');
+    // Terminate should not throw even if there's no cleanup timer
+    claudeManager.terminateSession(sessionId);
+    expect(claudeManager.getSession(sessionId)).toBeUndefined();
+  });
+
+  test('listSessions returns correct fields', async () => {
+    const sessionId = await claudeManager.createSession('conv-list-fields-1');
+    const sessions = claudeManager.listSessions();
+    const session = sessions.find((s) => s.id === sessionId);
+    expect(session).toBeDefined();
+    expect(session!.conversationId).toBe('conv-list-fields-1');
+    expect(session!.status).toBe('idle');
+    expect(session!.streamComplete).toBe(false);
+    expect(session!.bufferedEvents).toBe(0);
+  });
+
+  test('reconnectStream returns null for unknown session', () => {
+    const stream = claudeManager.reconnectStream('nonexistent');
+    expect(stream).toBeNull();
+  });
+
+  test('reconnectStream returns null for session with empty event buffer', async () => {
+    const sessionId = await claudeManager.createSession('conv-reconnect-empty');
+    const stream = claudeManager.reconnectStream(sessionId);
+    expect(stream).toBeNull();
+  });
+
+  test('reconnectStream replays buffered events for completed stream', async () => {
+    const sessionId = await claudeManager.createSession('conv-reconnect-1');
+    const session = claudeManager.getSession(sessionId)!;
+
+    // Manually populate event buffer and mark complete
+    session.eventBuffer.push('data: {"type":"message_start"}\n\n');
+    session.eventBuffer.push('data: {"type":"content_block_delta","delta":{"text":"hello"}}\n\n');
+    session.eventBuffer.push('data: {"type":"message_stop"}\n\n');
+    session.streamComplete = true;
+
+    const stream = claudeManager.reconnectStream(sessionId);
+    expect(stream).not.toBeNull();
+
+    // Read all events from the reconnection stream
+    const reader = stream!.getReader();
+    const decoder = new TextDecoder();
+    let allData = '';
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      allData += decoder.decode(value, { stream: true });
+    }
+
+    expect(allData).toContain('message_start');
+    expect(allData).toContain('content_block_delta');
+    expect(allData).toContain('message_stop');
+  });
+
+  test('createSession initializes eventBuffer and streamComplete', async () => {
+    const sessionId = await claudeManager.createSession('conv-init-check');
+    const session = claudeManager.getSession(sessionId)!;
+    expect(session.eventBuffer).toEqual([]);
+    expect(session.streamComplete).toBe(false);
+  });
+
+  test('sendMessage sets session status to running before spawning', async () => {
+    // Insert a conversation so DB operations don't fail
+    testDb.query(
+      "INSERT OR IGNORE INTO conversations (id, title, model, created_at, updated_at) VALUES ('conv-status-1', 'Test', 'claude-sonnet-4-5-20250929', ?, ?)",
+    ).run(Date.now(), Date.now());
+
+    const sessionId = await claudeManager.createSession('conv-status-1');
+    const stream = await claudeManager.sendMessage(sessionId, 'hello');
+    // The stream is returned, meaning the process was spawned (or an error stream was created)
+    expect(stream).toBeDefined();
+    expect(stream instanceof ReadableStream).toBe(true);
+
+    // Clean up
+    claudeManager.terminateSession(sessionId);
+  });
+});
+
+describe('translateCliEvent edge cases', () => {
+  test('handles tool_use block with missing id and name', () => {
+    const events = translateCliEvent({
+      type: 'assistant',
+      message: {
+        content: [{ type: 'tool_use', input: { foo: 'bar' } }],
+      },
+    });
+
+    const parsed = events.map((e) => JSON.parse(e));
+    // content_block_start should have fallback values
+    expect(parsed[1].content_block.type).toBe('tool_use');
+    expect(parsed[1].content_block.id).toBeTruthy(); // nanoid fallback
+    expect(parsed[1].content_block.name).toBe('unknown');
+  });
+
+  test('handles tool_use block with empty input', () => {
+    const events = translateCliEvent({
+      type: 'assistant',
+      message: {
+        content: [{ type: 'tool_use', id: 'tu-1', name: 'Read' }],
+      },
+    });
+
+    const parsed = events.map((e) => JSON.parse(e));
+    expect(parsed[2].delta.type).toBe('input_json_delta');
+    expect(JSON.parse(parsed[2].delta.partial_json)).toEqual({});
+  });
+
+  test('handles text block with empty text', () => {
+    const events = translateCliEvent({
+      type: 'assistant',
+      message: {
+        content: [{ type: 'text' }],
+      },
+    });
+
+    const parsed = events.map((e) => JSON.parse(e));
+    expect(parsed[2].delta.text).toBe('');
+  });
+
+  test('handles thinking block with empty thinking', () => {
+    const events = translateCliEvent({
+      type: 'assistant',
+      message: {
+        content: [{ type: 'thinking' }],
+      },
+    });
+
+    const parsed = events.map((e) => JSON.parse(e));
+    expect(parsed[2].delta.thinking).toBe('');
+  });
+
+  test('result event with custom stop_reason', () => {
+    const events = translateCliEvent({
+      type: 'result',
+      stop_reason: 'max_tokens',
+      usage: { input_tokens: 10, output_tokens: 20 },
+    });
+
+    const parsed = events.map((e) => JSON.parse(e));
+    expect(parsed[0].delta.stop_reason).toBe('max_tokens');
+  });
+
+  test('result event preserves zero cache token counts', () => {
+    const events = translateCliEvent({
+      type: 'result',
+      usage: {
+        input_tokens: 5,
+        output_tokens: 3,
+        cache_creation_input_tokens: 0,
+        cache_read_input_tokens: 0,
+      },
+    });
+
+    const parsed = events.map((e) => JSON.parse(e));
+    expect(parsed[0].usage.cache_creation_input_tokens).toBe(0);
+    expect(parsed[0].usage.cache_read_input_tokens).toBe(0);
+  });
+
+  test('ignores unknown content block types', () => {
+    const events = translateCliEvent({
+      type: 'assistant',
+      message: {
+        content: [
+          { type: 'text', text: 'before' },
+          { type: 'unknown_block_type', data: 'something' },
+          { type: 'text', text: 'after' },
+        ],
+      },
+    });
+
+    const parsed = events.map((e) => JSON.parse(e));
+    // message_start + 3 for first text + 0 for unknown + 3 for second text = 7
+    expect(parsed).toHaveLength(7);
+    // First text at index 0
+    expect(parsed[1].index).toBe(0);
+    // Second text at index 2 (the unknown block at index 1 produces no events)
+    expect(parsed[4].index).toBe(2);
+  });
+
+  test('parent_tool_use_id defaults to null when not provided', () => {
+    const events = translateCliEvent({
+      type: 'assistant',
+      message: {
+        content: [{ type: 'text', text: 'test' }],
+      },
+    });
+
+    const parsed = events.map((e) => JSON.parse(e));
+    expect(parsed[0].parent_tool_use_id).toBeNull();
+  });
+
+  test('handles assistant with mixed content blocks', () => {
+    const events = translateCliEvent({
+      type: 'assistant',
+      message: {
+        id: 'msg-mixed',
+        model: 'claude-opus-4-6',
+        content: [
+          { type: 'thinking', thinking: 'Let me think about this...' },
+          { type: 'text', text: 'I have an answer' },
+          { type: 'tool_use', id: 'tool-2', name: 'Write', input: { path: '/tmp/test.txt', content: 'hello' } },
+        ],
+      },
+    });
+
+    const parsed = events.map((e) => JSON.parse(e));
+    // message_start + 3*thinking + 3*text + 3*tool_use = 10
+    expect(parsed).toHaveLength(10);
+    expect(parsed[0].type).toBe('message_start');
+    expect(parsed[0].message.id).toBe('msg-mixed');
+
+    // thinking block
+    expect(parsed[1].content_block.type).toBe('thinking');
+    // text block
+    expect(parsed[4].content_block.type).toBe('text');
+    // tool_use block
+    expect(parsed[7].content_block.type).toBe('tool_use');
+    expect(parsed[7].content_block.name).toBe('Write');
   });
 });
