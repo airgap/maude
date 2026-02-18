@@ -1449,6 +1449,61 @@ export const api = {
     },
   },
 
+  // --- Manager View ---
+  manager: {
+    overview: () =>
+      request<{
+        ok: boolean;
+        data: {
+          workspaces: Array<{
+            id: string;
+            name: string;
+            path: string;
+            agentStatus: 'idle' | 'running' | 'waiting';
+            activeLoops: any[];
+            activeSessions: any[];
+            pendingApprovals: any[];
+            lastOpened: number;
+          }>;
+          pendingApprovals: Array<{
+            sessionId: string;
+            conversationId: string;
+            conversationTitle: string;
+            workspacePath: string | null;
+            toolCallId: string;
+            toolName: string;
+            description: string;
+          }>;
+          inProgressStories: Array<{
+            id: string;
+            title: string;
+            status: string;
+            workspace_path: string;
+            updated_at: number;
+            prd_id: string | null;
+            conversation_id: string | null;
+            prd_name: string | null;
+          }>;
+          completedStories: Array<{
+            id: string;
+            title: string;
+            status: string;
+            workspace_path: string;
+            updated_at: number;
+            prd_id: string | null;
+            prd_name: string | null;
+          }>;
+          summary: {
+            totalWorkspaces: number;
+            totalPendingApprovals: number;
+            totalRunningAgents: number;
+            totalActiveLoops: number;
+            totalCompletedToday: number;
+          };
+        };
+      }>('/manager/overview'),
+  },
+
   // --- Artifacts ---
   artifacts: {
     list: (conversationId: string) =>

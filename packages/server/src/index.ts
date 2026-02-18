@@ -36,6 +36,7 @@ import { skillsRegistryRoutes } from './routes/skills-registry';
 import { rulesRoutes } from './routes/rules';
 import { profileRoutes } from './routes/profiles';
 import { artifactRoutes } from './routes/artifacts';
+import { managerRoutes } from './routes/manager';
 import { authMiddleware } from './middleware/auth';
 import { websocket } from './ws';
 import { initDatabase } from './db/database';
@@ -109,6 +110,7 @@ app.route('/api/skills-registry', skillsRegistryRoutes);
 app.route('/api/rules', rulesRoutes);
 app.route('/api/profiles', profileRoutes);
 app.route('/api/artifacts', artifactRoutes);
+app.route('/api/manager', managerRoutes);
 
 // Initialize database
 initDatabase();

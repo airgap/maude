@@ -17,7 +17,8 @@ export type SidebarTab =
   | 'initiatives'
   | 'help'
   | 'git'
-  | 'artifacts';
+  | 'artifacts'
+  | 'manager';
 type ModalId =
   | 'settings'
   | 'command-palette'

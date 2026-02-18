@@ -124,7 +124,7 @@ class LoopOrchestrator {
       console.error(`[loop:${loopId}] Unhandled error:`, err);
       this.updateStatus(loopId, 'failed');
       this.emitEvent(loopId, 'completed', { message: `Loop failed: ${String(err)}` });
-      this.runners.delete(loopId);
+      this.events.emit('loop_done', loopId);
     });
 
     this.emitEvent(loopId, 'started', { message: `Loop started for ${label}` });
@@ -283,6 +283,9 @@ class LoopRunner {
       }
 
       iteration++;
+
+      try {
+      // === Begin iteration try block ===
       this.updateLoopDb({
         current_iteration: iteration,
         current_story_id: story.id,
@@ -556,6 +559,39 @@ class LoopRunner {
       }
 
       this.emitEvent('iteration_end', { storyId: story.id, storyTitle: story.title, iteration });
+      // === End iteration try block ===
+      } catch (iterErr) {
+        // Don't let a single iteration crash kill the entire loop.
+        // Log the error, mark the story as failed if it was in_progress, and continue.
+        console.error(`[loop:${this.loopId}] Iteration ${iteration} crashed:`, iterErr);
+        this.addLogEntry({
+          iteration,
+          storyId: story.id,
+          storyTitle: story.title,
+          action: 'failed',
+          detail: `Iteration crashed: ${String(iterErr).slice(0, 500)}`,
+          timestamp: Date.now(),
+        });
+
+        // Reset story to pending if it was in_progress (so it can be retried)
+        try {
+          const crashedStory = this.getStory(story.id);
+          if (crashedStory?.status === 'in_progress') {
+            if (crashedStory.attempts >= crashedStory.maxAttempts) {
+              this.updateStory(story.id, { status: 'failed' });
+            } else {
+              this.updateStory(story.id, { status: 'pending' });
+            }
+          }
+        } catch { /* best effort */ }
+
+        this.emitEvent('story_failed', {
+          storyId: story.id,
+          storyTitle: story.title,
+          iteration,
+          message: `Iteration crashed: ${String(iterErr).slice(0, 200)}`,
+        });
+      }
 
       // Small delay between iterations
       await new Promise((r) => setTimeout(r, 2000));
