@@ -518,13 +518,34 @@
 
     <div class="modal-body">
       <nav class="settings-tabs">
-        {#each ['general', 'appearance', 'audio', 'editor', 'permissions', 'profiles', 'security', 'mcp', 'keybindings'] as tab}
+        <span class="settings-section-header">Interface</span>
+        {#each ['general', 'appearance', 'audio', 'editor', 'keybindings'] as tab}
           <button
             class="settings-tab"
             class:active={activeTab === tab}
             onclick={() => (activeTab = tab as any)}
           >
             {tab.charAt(0).toUpperCase() + tab.slice(1)}
+          </button>
+        {/each}
+        <span class="settings-section-header">Access Control</span>
+        {#each ['permissions', 'profiles', 'security'] as tab}
+          <button
+            class="settings-tab"
+            class:active={activeTab === tab}
+            onclick={() => (activeTab = tab as any)}
+          >
+            {tab.charAt(0).toUpperCase() + tab.slice(1)}
+          </button>
+        {/each}
+        <span class="settings-section-header">Integrations</span>
+        {#each ['mcp'] as tab}
+          <button
+            class="settings-tab"
+            class:active={activeTab === tab}
+            onclick={() => (activeTab = tab as any)}
+          >
+            {tab === 'mcp' ? 'MCP' : tab.charAt(0).toUpperCase() + tab.slice(1)}
           </button>
         {/each}
       </nav>
@@ -1585,6 +1606,20 @@
     background: var(--bg-active);
     color: var(--accent-primary);
     font-weight: 600;
+  }
+
+  .settings-section-header {
+    display: block;
+    font-size: var(--fs-xxs);
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--text-tertiary);
+    padding: 10px 12px 4px;
+    user-select: none;
+  }
+  .settings-section-header:first-child {
+    padding-top: 4px;
   }
 
   .settings-content {
