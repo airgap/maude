@@ -429,6 +429,9 @@ class LoopRunner {
       // Update heartbeat at the start of each iteration
       this.sendHeartbeat();
 
+      // Recover any orphaned in_progress stories before selecting next
+      this.recoverOrphanedStories();
+
       // Select next story
       const story = this.selectNextStory();
       if (!story) {
@@ -446,6 +449,21 @@ class LoopRunner {
           this.emitEvent('completed', { message: 'All stories completed!' });
           this.events.emit('loop_done', this.loopId);
           return;
+        }
+
+        // Check if any stories are still in_progress (shouldn't happen after recovery, but guard)
+        const hasInProgress = stories.some((s) => s.status === 'in_progress');
+        if (hasInProgress) {
+          console.warn(`[loop:${this.loopId}] Stories still in_progress after recovery — forcing reset`);
+          for (const s of stories.filter((s) => s.status === 'in_progress')) {
+            if (s.attempts >= s.maxAttempts) {
+              this.updateStory(s.id, { status: 'failed' });
+            } else {
+              this.updateStory(s.id, { status: 'pending' });
+            }
+          }
+          // Retry selection after forced reset
+          continue;
         }
 
         // No eligible stories left (all failed/maxed out)
@@ -848,6 +866,33 @@ class LoopRunner {
   }
 
   // --- Story selection ---
+
+  /**
+   * Reset any orphaned in_progress stories back to pending.
+   * This handles the case where a story was marked in_progress but the iteration
+   * crashed or exited without properly transitioning the story to completed/failed/pending.
+   * Only resets stories that are NOT the current story being worked on.
+   */
+  private recoverOrphanedStories(): void {
+    const stories = this.getAllStories();
+    const db = getDb();
+    const loop = db.query('SELECT current_story_id FROM loops WHERE id = ?').get(this.loopId) as any;
+    const currentStoryId = loop?.current_story_id;
+
+    for (const s of stories) {
+      if (s.status !== 'in_progress') continue;
+      if (s.id === currentStoryId) continue; // Don't touch the actively-running story
+
+      console.warn(
+        `[loop:${this.loopId}] Recovering orphaned in_progress story "${s.title}" (${s.id}) — resetting to pending`,
+      );
+      if (s.attempts >= s.maxAttempts) {
+        this.updateStory(s.id, { status: 'failed' });
+      } else {
+        this.updateStory(s.id, { status: 'pending' });
+      }
+    }
+  }
 
   private selectNextStory(): UserStory | null {
     const stories = this.getAllStories();

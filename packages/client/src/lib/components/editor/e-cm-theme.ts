@@ -126,6 +126,12 @@ export const eEditorTheme = EditorView.theme(
       wordBreak: 'break-word',
       maxHeight: '200px',
       overflowY: 'auto',
+      // Reset global <pre> styling (border, background, box-shadow, border-radius)
+      // that leaks from app.css and theme-specific overrides
+      border: 'none',
+      background: 'none',
+      boxShadow: 'none',
+      borderRadius: '0',
     },
     '.cm-tooltip .e-hover-sep': {
       height: '1px',
