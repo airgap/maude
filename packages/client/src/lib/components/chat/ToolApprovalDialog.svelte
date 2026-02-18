@@ -3,6 +3,7 @@
   import { conversationStore } from '$lib/stores/conversation.svelte';
   import { cancelStream } from '$lib/api/sse';
   import { parseMcpToolName, isMcpToolDangerous } from '@e/shared';
+  import { settingsStore } from '$lib/stores/settings.svelte';
 
   let { toolCallId, toolName, input, description } = $props<{
     toolCallId: string;
@@ -15,6 +16,19 @@
 
   // Parse MCP tool names for display
   const parsed = $derived(parseMcpToolName(toolName));
+
+  // Check if a matching permission rule exists for informational display
+  const matchingRule = $derived.by(() => {
+    const rules = settingsStore.permissionRules;
+    if (!rules || rules.length === 0) return null;
+    // Simple client-side check for display purposes only
+    // (server-side enforcement is the source of truth)
+    for (const rule of rules) {
+      const toolMatches = rule.tool === '*' || rule.tool === toolName;
+      if (toolMatches) return rule;
+    }
+    return null;
+  });
 
   async function respond(approved: boolean) {
     if (responding) return;
@@ -59,6 +73,11 @@
       />
     </svg>
     <span class="approval-title">Tool requires approval</span>
+    {#if matchingRule}
+      <span class="rule-indicator" title="Matched rule: {matchingRule.type} {matchingRule.tool}{matchingRule.pattern ? ' ' + matchingRule.pattern : ''}">
+        rule
+      </span>
+    {/if}
   </div>
 
   <div class="approval-body">
@@ -108,6 +127,18 @@
   }
   .high-risk .approval-header {
     color: var(--accent-error);
+  }
+
+  .rule-indicator {
+    font-size: 9px;
+    font-weight: 700;
+    padding: 1px 5px;
+    border-radius: 3px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    background: color-mix(in srgb, var(--accent-primary) 20%, transparent);
+    color: var(--accent-primary);
+    margin-left: auto;
   }
 
   .approval-body {

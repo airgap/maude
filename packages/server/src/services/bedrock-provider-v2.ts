@@ -15,9 +15,10 @@ import {
   BedrockRuntimeClient,
   InvokeModelWithResponseStreamCommand,
 } from '@aws-sdk/client-bedrock-runtime';
-import { getToolDefinitions, getAllToolsWithMcp, requiresApproval } from './tool-schemas';
+import { getToolDefinitions, getAllToolsWithMcp, requiresApproval, shouldRequireApproval, loadPermissionRules, loadTerminalCommandPolicy, extractToolInputForMatching } from './tool-schemas';
 import { executeTool } from './tool-executor';
 import { loadConversationHistory, getRecommendedOptions } from './chat-compaction';
+import type { PermissionMode, PermissionRule, TerminalCommandPolicy } from '@e/shared';
 
 const DEFAULT_REGION = 'us-east-1';
 
@@ -328,14 +329,38 @@ export function createBedrockStreamV2(opts: BedrockStreamOptions): ReadableStrea
             break;
           }
 
+          // Load permission rules for this conversation
+          const permRules = loadPermissionRules(opts.conversationId, opts.workspacePath);
+          const termPolicy = loadTerminalCommandPolicy();
+          const permMode = (opts.permissionMode || 'safe') as PermissionMode;
+
           // Execute tools
           const toolResults: MessageContent[] = [];
           for (const content of assistantContent) {
             if (content.type === 'tool_use' && content.name && content.id) {
               toolCalls.push(content);
 
-              // Check if approval needed
-              if (requiresApproval(content.name)) {
+              // Evaluate permission rules for this tool call
+              const decision = shouldRequireApproval(
+                content.name,
+                (content.input || {}) as Record<string, unknown>,
+                permRules,
+                permMode,
+                termPolicy,
+              );
+
+              if (decision === 'deny') {
+                toolResults.push({
+                  type: 'tool_result',
+                  tool_use_id: content.id,
+                  content: 'Tool execution denied by permission rule',
+                  is_error: true,
+                });
+                continue;
+              }
+
+              // Check if approval needed (either rule says 'ask' or legacy check)
+              if (decision === 'ask' || (decision === 'default' && requiresApproval(content.name))) {
                 controller.enqueue(
                   encoder.encode(
                     `data: ${JSON.stringify({

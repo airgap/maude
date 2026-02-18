@@ -36,7 +36,11 @@ export type {
   ToolExecution,
   PermissionRule,
   PermissionMode,
+  TerminalCommandPolicy,
+  PermissionRulePreset,
 } from './tools.js';
+
+export { PERMISSION_PRESETS } from './tools.js';
 
 export type { TaskStatus, Task, TaskCreateInput, TaskUpdateInput } from './tasks.js';
 

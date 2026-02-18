@@ -11,8 +11,10 @@ import {
   isMcpFileWriteTool,
   extractFilePath,
 } from '@e/shared';
+import type { PermissionMode } from '@e/shared';
 import { getSandboxConfig } from '../middleware/sandbox';
 import { verifyFile } from './code-verifier';
+import { shouldRequireApproval, loadPermissionRules, loadTerminalCommandPolicy, extractToolInputForMatching } from './permission-rules';
 import {
   getContextLimit,
   getAutoCompactThreshold,
@@ -771,34 +773,35 @@ class ClaudeProcessManager {
                       'Write',
                       'Edit',
                     ];
-                    // Check permission mode for tool approval
-                    let permMode = 'safe';
+                    // Check permission mode and per-tool rules for approval
+                    let permMode: PermissionMode = 'safe';
                     try {
                       const pDb = getDb();
                       const pRow = pDb
                         .query("SELECT value FROM settings WHERE key = 'permissionMode'")
                         .get() as any;
-                      if (pRow) permMode = JSON.parse(pRow.value);
+                      if (pRow) permMode = JSON.parse(pRow.value) as PermissionMode;
                     } catch {
                       /* default to safe */
                     }
 
-                    const approvalTools = [
-                      ...fileWriteTools,
-                      'Bash',
-                      'bash',
-                      'execute_command',
-                      'NotebookEdit',
-                    ];
+                    // Load per-tool permission rules and terminal policy
+                    const permRules = loadPermissionRules(session.conversationId, session.workspacePath);
+                    const termPolicy = loadTerminalCommandPolicy();
+
                     for (const block of cliEvent.message.content) {
                       // Skip non-tool blocks (e.g. text blocks don't have .name)
                       if (block.type !== 'tool_use') continue;
 
-                      // Emit tool_approval_request for dangerous tools in safe mode
-                      // Check both built-in tool names and MCP-prefixed tool names
-                      const needsApproval =
-                        approvalTools.includes(block.name) || isMcpToolDangerous(block.name);
-                      if (needsApproval && (permMode === 'safe' || permMode === 'plan')) {
+                      // Evaluate per-tool permission rules
+                      const ruleDecision = shouldRequireApproval(
+                        block.name,
+                        (block.input || {}) as Record<string, unknown>,
+                        permRules,
+                        permMode,
+                        termPolicy,
+                      );
+                      if (ruleDecision === 'ask') {
                         const parsed = parseMcpToolName(block.name);
                         const filePath = extractFilePath(block.input || {});
                         const effectiveName = parsed.renderAs || parsed.toolName;

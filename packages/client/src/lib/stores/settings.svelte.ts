@@ -1,4 +1,4 @@
-import type { ThemeId, CliProvider, Keybinding, PermissionMode } from '@e/shared';
+import type { ThemeId, CliProvider, Keybinding, PermissionMode, TerminalCommandPolicy, PermissionRule } from '@e/shared';
 import { convertVsCodeSnippets, type ConvertedSnippet } from '$lib/utils/vscode-snippet-converter';
 import { convertVsCodeTheme, type ConvertedTheme } from '$lib/utils/vscode-theme-converter';
 import { findHypertheme, getDefaultHypertheme } from '$lib/config/hyperthemes';
@@ -12,6 +12,8 @@ interface SettingsState {
   cliProvider: CliProvider;
   model: string;
   permissionMode: PermissionMode;
+  terminalCommandPolicy: TerminalCommandPolicy;
+  permissionRules: PermissionRule[];
   keybindings: Keybinding[];
   autoMemoryEnabled: boolean;
   fontSize: number;
@@ -53,6 +55,8 @@ const defaults: SettingsState = {
   cliProvider: 'claude',
   model: 'claude-sonnet-4-5-20250929',
   permissionMode: 'safe',
+  terminalCommandPolicy: 'auto',
+  permissionRules: [],
   keybindings: [
     { keys: 'Enter', action: 'send', context: 'input', description: 'Send message' },
     {
@@ -122,7 +126,7 @@ function createSettingsStore() {
   let state = $state<SettingsState>(loadFromStorage());
 
   // Settings the server needs to know about (used for CLI process spawning)
-  const SERVER_SYNCED_KEYS: (keyof SettingsState)[] = ['cliProvider', 'autoCompaction', 'permissionMode'];
+  const SERVER_SYNCED_KEYS: (keyof SettingsState)[] = ['cliProvider', 'autoCompaction', 'permissionMode', 'terminalCommandPolicy'];
 
   function persist() {
     if (typeof window === 'undefined') return;
@@ -216,6 +220,12 @@ function createSettingsStore() {
     },
     get permissionMode() {
       return state.permissionMode;
+    },
+    get terminalCommandPolicy() {
+      return state.terminalCommandPolicy;
+    },
+    get permissionRules() {
+      return state.permissionRules;
     },
     get keybindings() {
       return state.keybindings;
@@ -320,6 +330,15 @@ function createSettingsStore() {
       // Sync to server so it takes effect for the running process immediately.
       // The server reads permissionMode from its settings DB on every tool call.
       syncToServer({ permissionMode: mode });
+    },
+    setTerminalCommandPolicy(policy: TerminalCommandPolicy) {
+      state.terminalCommandPolicy = policy;
+      persist();
+      syncToServer({ terminalCommandPolicy: policy });
+    },
+    setPermissionRules(rules: PermissionRule[]) {
+      state.permissionRules = rules;
+      persist();
     },
     update(partial: Partial<SettingsState>) {
       state = { ...state, ...partial };

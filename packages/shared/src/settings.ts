@@ -1,4 +1,4 @@
-import type { PermissionMode, PermissionRule } from './tools.js';
+import type { PermissionMode, PermissionRule, TerminalCommandPolicy } from './tools.js';
 import type { MCPServerConfig } from './mcp.js';
 
 export type ThemeId =
@@ -36,6 +36,7 @@ export interface Settings {
   model: string;
   permissionMode: PermissionMode;
   permissionRules: PermissionRule[];
+  terminalCommandPolicy: TerminalCommandPolicy;
   keybindings: Keybinding[];
   mcpServers: MCPServerConfig[];
   autoMemoryEnabled: boolean;
@@ -81,6 +82,7 @@ export const DEFAULT_SETTINGS: Settings = {
   model: 'claude-sonnet-4-5-20250929',
   permissionMode: 'safe',
   permissionRules: [],
+  terminalCommandPolicy: 'auto',
   keybindings: [
     { keys: 'Ctrl+Enter', action: 'send', context: 'input', description: 'Send message' },
     {

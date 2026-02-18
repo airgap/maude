@@ -270,7 +270,8 @@ export function getToolDefinitions(): ToolSchema[] {
 }
 
 /**
- * Check if a tool requires user approval before execution
+ * Check if a tool requires user approval before execution.
+ * This is the simple/legacy check used when no permission rules are provided.
  */
 export function requiresApproval(toolName: string): boolean {
   // Check if it's an MCP tool
@@ -282,6 +283,12 @@ export function requiresApproval(toolName: string): boolean {
   const dangerousTools = ['Write', 'Edit', 'Bash', 'NotebookEdit'];
   return dangerousTools.includes(toolName);
 }
+
+/**
+ * Enhanced approval check that evaluates per-tool permission rules.
+ * Returns 'allow' | 'deny' | 'ask' based on rules + permission mode + terminal policy.
+ */
+export { shouldRequireApproval, loadPermissionRules, loadTerminalCommandPolicy, extractToolInputForMatching } from './permission-rules';
 
 /**
  * Get tools filtered by allowed/disallowed lists

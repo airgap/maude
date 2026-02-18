@@ -1,8 +1,16 @@
 import { Hono } from 'hono';
+import { nanoid } from 'nanoid';
 import { getDb } from '../db/database';
 import { listOllamaModels, checkOllamaHealth } from '../services/ollama-provider';
 import { listOpenAIModels } from '../services/openai-provider-v2';
 import { listGeminiModels } from '../services/gemini-provider-v2';
+import {
+  ensurePermissionRulesTable,
+  loadPermissionRules,
+  savePermissionRule,
+  deletePermissionRule,
+} from '../services/permission-rules';
+import { PERMISSION_PRESETS } from '@e/shared';
 
 const app = new Hono();
 
@@ -47,6 +55,123 @@ app.patch('/', async (c) => {
   }
 
   return c.json({ ok: true });
+});
+
+// --- Permission Rules CRUD ---
+
+// List permission rule presets
+app.get('/permission-rules/presets', (c) => {
+  return c.json({ ok: true, data: PERMISSION_PRESETS });
+});
+
+// List permission rules (with optional scope filter)
+app.get('/permission-rules', (c) => {
+  ensurePermissionRulesTable();
+  const scope = c.req.query('scope');
+  const workspacePath = c.req.query('workspacePath');
+  const conversationId = c.req.query('conversationId');
+
+  const rules = loadPermissionRules(conversationId, workspacePath);
+
+  // If a specific scope is requested, filter
+  if (scope) {
+    return c.json({ ok: true, data: rules.filter((r) => r.scope === scope) });
+  }
+
+  return c.json({ ok: true, data: rules });
+});
+
+// Create a permission rule
+app.post('/permission-rules', async (c) => {
+  ensurePermissionRulesTable();
+  const body = await c.req.json();
+  const { type, tool, pattern, scope, workspacePath, conversationId } = body;
+
+  if (!type || !tool || !scope) {
+    return c.json({ ok: false, error: 'type, tool, and scope are required' }, 400);
+  }
+
+  const rule = {
+    id: nanoid(),
+    type: type as 'allow' | 'deny' | 'ask',
+    tool: tool as string,
+    pattern: pattern || undefined,
+    scope: scope as 'session' | 'project' | 'global',
+  };
+
+  savePermissionRule(rule, workspacePath, conversationId);
+
+  return c.json({ ok: true, data: rule });
+});
+
+// Update a permission rule
+app.patch('/permission-rules/:id', async (c) => {
+  ensurePermissionRulesTable();
+  const ruleId = c.req.param('id');
+  const body = await c.req.json();
+
+  const db = getDb();
+  const existing = db
+    .query('SELECT data FROM permission_rules WHERE id = ?')
+    .get(ruleId) as { data: string } | null;
+  if (!existing) {
+    return c.json({ ok: false, error: 'Rule not found' }, 404);
+  }
+
+  const rule = { ...JSON.parse(existing.data), ...body, id: ruleId };
+  savePermissionRule(rule, body.workspacePath, body.conversationId);
+
+  return c.json({ ok: true, data: rule });
+});
+
+// Delete a permission rule
+app.delete('/permission-rules/:id', (c) => {
+  ensurePermissionRulesTable();
+  const ruleId = c.req.param('id');
+  deletePermissionRule(ruleId);
+  return c.json({ ok: true });
+});
+
+// Apply a preset — replaces all rules for a given scope
+app.post('/permission-rules/apply-preset', async (c) => {
+  ensurePermissionRulesTable();
+  const body = await c.req.json();
+  const { presetId, scope, workspacePath, conversationId } = body;
+
+  const preset = PERMISSION_PRESETS.find((p) => p.id === presetId);
+  if (!preset) {
+    return c.json({ ok: false, error: 'Preset not found' }, 404);
+  }
+
+  const db = getDb();
+
+  // Delete existing rules for this scope
+  if (scope === 'global') {
+    db.query("DELETE FROM permission_rules WHERE scope = 'global'").run();
+  } else if (scope === 'project' && workspacePath) {
+    db.query("DELETE FROM permission_rules WHERE scope = 'project' AND workspace_path = ?").run(
+      workspacePath,
+    );
+  } else if (scope === 'session' && conversationId) {
+    db.query(
+      "DELETE FROM permission_rules WHERE scope = 'session' AND conversation_id = ?",
+    ).run(conversationId);
+  }
+
+  // Insert new rules from preset
+  const rules = preset.rules.map((r) => ({
+    id: nanoid(),
+    type: r.type,
+    tool: r.tool,
+    pattern: r.pattern,
+    scope: scope as 'session' | 'project' | 'global',
+  }));
+
+  for (const rule of rules) {
+    savePermissionRule(rule, workspacePath, conversationId);
+  }
+
+  return c.json({ ok: true, data: rules });
 });
 
 // Get single setting

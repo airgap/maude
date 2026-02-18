@@ -4,7 +4,8 @@
   import { api } from '$lib/api/client';
   import { onMount } from 'svelte';
   import { desktopNotifications } from '$lib/notifications/desktop-notifications';
-  import type { ThemeId, CliProvider } from '@e/shared';
+  import type { ThemeId, CliProvider, PermissionRule, PermissionRulePreset, TerminalCommandPolicy } from '@e/shared';
+  import { PERMISSION_PRESETS } from '@e/shared';
   import { MONO_FONTS, SANS_FONTS, findFont } from '$lib/config/fonts';
   import { HYPERTHEMES } from '$lib/config/hyperthemes';
 
@@ -273,6 +274,7 @@
     models = combined;
     loadBudget();
     loadSandbox();
+    loadPermissionRules();
   });
 
   const permModes = [
@@ -281,6 +283,81 @@
     { id: 'fast', label: 'Fast', desc: 'Auto-approves safe commands' },
     { id: 'unrestricted', label: 'Yolo 🤙', desc: 'All tools auto-approved — no prompts, ever' },
   ];
+
+  const terminalPolicies: { id: TerminalCommandPolicy; label: string; desc: string }[] = [
+    { id: 'off', label: 'Off', desc: 'Terminal commands are blocked' },
+    { id: 'auto', label: 'Auto', desc: 'Follows the general permission mode' },
+    { id: 'turbo', label: 'Turbo', desc: 'All terminal commands auto-approved' },
+    { id: 'custom', label: 'Custom', desc: 'Use per-tool rules for Bash' },
+  ];
+
+  // --- Permission rules state ---
+  let permRules = $state<PermissionRule[]>([]);
+  let permRulesLoading = $state(false);
+  let permRulesScope = $state<'global' | 'project' | 'session'>('global');
+  let newRuleType = $state<'allow' | 'deny' | 'ask'>('allow');
+  let newRuleTool = $state('');
+  let newRulePattern = $state('');
+  let editingRuleId = $state<string | null>(null);
+
+  const builtinToolNames = ['Read', 'Write', 'Edit', 'Glob', 'Grep', 'Bash', 'WebFetch', 'WebSearch', 'NotebookEdit', '*'];
+
+  async function loadPermissionRules() {
+    permRulesLoading = true;
+    try {
+      const res = await api.settings.getPermissionRules({
+        scope: permRulesScope,
+        workspacePath: permRulesScope === 'project' ? settingsStore.workspacePath : undefined,
+      });
+      permRules = res.data;
+    } catch {
+      permRules = [];
+    }
+    permRulesLoading = false;
+  }
+
+  async function addPermissionRule() {
+    if (!newRuleTool.trim()) return;
+    try {
+      const res = await api.settings.createPermissionRule({
+        type: newRuleType,
+        tool: newRuleTool.trim(),
+        pattern: newRulePattern.trim() || undefined,
+        scope: permRulesScope,
+        workspacePath: permRulesScope === 'project' ? settingsStore.workspacePath : undefined,
+      });
+      permRules = [...permRules, res.data];
+      newRuleTool = '';
+      newRulePattern = '';
+      uiStore.toast('Permission rule added', 'success');
+    } catch {
+      uiStore.toast('Failed to add rule', 'error');
+    }
+  }
+
+  async function deleteRule(ruleId: string) {
+    try {
+      await api.settings.deletePermissionRule(ruleId);
+      permRules = permRules.filter((r) => r.id !== ruleId);
+      uiStore.toast('Rule removed', 'success');
+    } catch {
+      uiStore.toast('Failed to delete rule', 'error');
+    }
+  }
+
+  async function applyPreset(presetId: string) {
+    try {
+      const res = await api.settings.applyPermissionPreset({
+        presetId,
+        scope: permRulesScope,
+        workspacePath: permRulesScope === 'project' ? settingsStore.workspacePath : undefined,
+      });
+      permRules = res.data;
+      uiStore.toast('Preset applied', 'success');
+    } catch {
+      uiStore.toast('Failed to apply preset', 'error');
+    }
+  }
 
   function close() {
     uiStore.closeModal();
@@ -844,6 +921,115 @@
                 </button>
               {/each}
             </div>
+          </div>
+
+          <!-- Terminal Command Policy -->
+          <div class="setting-group">
+            <label class="setting-label">Terminal command policy</label>
+            <p class="setting-desc">Independent control for Bash/terminal tool execution</p>
+            <div class="perm-options terminal-policy-options">
+              {#each terminalPolicies as pol}
+                <button
+                  class="perm-option terminal-policy-option"
+                  class:active={settingsStore.terminalCommandPolicy === pol.id}
+                  onclick={() => settingsStore.setTerminalCommandPolicy(pol.id)}
+                >
+                  <span class="perm-name">{pol.label}</span>
+                  <span class="perm-desc">{pol.desc}</span>
+                </button>
+              {/each}
+            </div>
+          </div>
+
+          <!-- Permission Rules Editor -->
+          <div class="setting-group">
+            <label class="setting-label">Permission rules</label>
+            <p class="setting-desc">
+              Fine-grained allow/deny/ask rules per tool. Rules override the general permission mode.
+            </p>
+
+            <!-- Scope selector -->
+            <div class="perm-scope-row">
+              {#each [
+                { id: 'global', label: 'Global' },
+                { id: 'project', label: 'Project' },
+                { id: 'session', label: 'Session' },
+              ] as s}
+                <button
+                  class="perm-scope-btn"
+                  class:active={permRulesScope === s.id}
+                  onclick={() => { permRulesScope = s.id as any; loadPermissionRules(); }}
+                >
+                  {s.label}
+                </button>
+              {/each}
+            </div>
+
+            <!-- Presets -->
+            <div class="perm-presets-row">
+              <span class="perm-presets-label">Presets:</span>
+              {#each PERMISSION_PRESETS as preset}
+                <button
+                  class="perm-preset-btn"
+                  title={preset.description}
+                  onclick={() => applyPreset(preset.id)}
+                >
+                  {preset.name}
+                </button>
+              {/each}
+            </div>
+
+            <!-- Add rule form -->
+            <div class="perm-add-rule">
+              <select class="perm-rule-select" bind:value={newRuleType}>
+                <option value="allow">Allow</option>
+                <option value="deny">Deny</option>
+                <option value="ask">Ask</option>
+              </select>
+              <select class="perm-rule-select perm-tool-select" bind:value={newRuleTool}>
+                <option value="" disabled>Tool...</option>
+                {#each builtinToolNames as t}
+                  <option value={t}>{t === '*' ? '* (all)' : t}</option>
+                {/each}
+              </select>
+              <input
+                type="text"
+                class="perm-pattern-input"
+                placeholder="Pattern (optional, e.g. rm -rf *)"
+                bind:value={newRulePattern}
+                onkeydown={(e) => { if (e.key === 'Enter') addPermissionRule(); }}
+              />
+              <button
+                class="btn-secondary perm-add-btn"
+                onclick={addPermissionRule}
+                disabled={!newRuleTool.trim()}
+              >
+                Add
+              </button>
+            </div>
+
+            <!-- Rules list -->
+            {#if permRulesLoading}
+              <div class="perm-rules-loading">Loading...</div>
+            {:else if permRules.length === 0}
+              <div class="perm-rules-empty">No rules configured for this scope. Add rules above or apply a preset.</div>
+            {:else}
+              <div class="perm-rules-list">
+                {#each permRules as rule (rule.id)}
+                  <div class="perm-rule-row">
+                    <span class="perm-rule-type" class:allow={rule.type === 'allow'} class:deny={rule.type === 'deny'} class:ask={rule.type === 'ask'}>
+                      {rule.type}
+                    </span>
+                    <span class="perm-rule-tool">{rule.tool}</span>
+                    {#if rule.pattern}
+                      <span class="perm-rule-pattern">{rule.pattern}</span>
+                    {/if}
+                    <span class="perm-rule-scope-badge">{rule.scope}</span>
+                    <button class="btn-danger-sm perm-rule-delete" onclick={() => deleteRule(rule.id)}>x</button>
+                  </div>
+                {/each}
+              </div>
+            {/if}
           </div>
         {:else if activeTab === 'security'}
           <!-- API Keys (BYOK) -->
@@ -1791,5 +1977,198 @@
     font-size: 12px;
     font-weight: 600;
     color: var(--text-secondary);
+  }
+
+  /* Terminal command policy */
+  .terminal-policy-options {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 6px;
+  }
+  .terminal-policy-option {
+    padding: 8px 10px;
+  }
+
+  /* Permission rules scope selector */
+  .perm-scope-row {
+    display: flex;
+    gap: 4px;
+    margin-bottom: 10px;
+    padding: 2px;
+    background: var(--bg-tertiary);
+    border-radius: var(--radius-sm);
+  }
+  .perm-scope-btn {
+    flex: 1;
+    padding: 5px 10px;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    border-radius: var(--radius-sm);
+    transition: all var(--transition);
+    text-align: center;
+  }
+  .perm-scope-btn:hover {
+    color: var(--text-primary);
+    background: var(--bg-hover);
+  }
+  .perm-scope-btn.active {
+    color: var(--accent-primary);
+    background: var(--bg-elevated);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
+  }
+
+  /* Presets row */
+  .perm-presets-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 10px;
+    flex-wrap: wrap;
+  }
+  .perm-presets-label {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text-tertiary);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  .perm-preset-btn {
+    padding: 3px 10px;
+    font-size: 11px;
+    font-weight: 600;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-secondary);
+    border-radius: var(--radius-sm);
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: all var(--transition);
+  }
+  .perm-preset-btn:hover {
+    border-color: var(--accent-primary);
+    color: var(--accent-primary);
+    background: var(--bg-hover);
+  }
+
+  /* Add rule form */
+  .perm-add-rule {
+    display: flex;
+    gap: 4px;
+    margin-bottom: 10px;
+    align-items: center;
+  }
+  .perm-rule-select {
+    padding: 5px 8px;
+    font-size: 12px;
+    background: var(--bg-input);
+    border: 1px solid var(--border-secondary);
+    border-radius: var(--radius-sm);
+    color: var(--text-primary);
+    min-width: 70px;
+  }
+  .perm-tool-select {
+    min-width: 100px;
+  }
+  .perm-pattern-input {
+    flex: 1;
+    padding: 5px 8px;
+    font-size: 12px;
+    background: var(--bg-input);
+    border: 1px solid var(--border-secondary);
+    border-radius: var(--radius-sm);
+    color: var(--text-primary);
+    font-family: var(--font-family);
+  }
+  .perm-pattern-input:focus,
+  .perm-rule-select:focus {
+    border-color: var(--accent-primary);
+    outline: none;
+  }
+  .perm-add-btn {
+    padding: 5px 12px;
+    font-size: 12px;
+    white-space: nowrap;
+  }
+
+  /* Rules list */
+  .perm-rules-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    border: 1px solid var(--border-secondary);
+    border-radius: var(--radius-sm);
+    overflow: hidden;
+  }
+  .perm-rule-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 10px;
+    border-bottom: 1px solid var(--border-secondary);
+    font-size: 12px;
+  }
+  .perm-rule-row:last-child {
+    border-bottom: none;
+  }
+  .perm-rule-row:nth-child(even) {
+    background: var(--bg-tertiary);
+  }
+  .perm-rule-type {
+    font-size: 10px;
+    font-weight: 700;
+    padding: 1px 6px;
+    border-radius: 3px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    flex-shrink: 0;
+  }
+  .perm-rule-type.allow {
+    color: var(--accent-secondary);
+    background: color-mix(in srgb, var(--accent-secondary) 15%, transparent);
+  }
+  .perm-rule-type.deny {
+    color: var(--accent-error);
+    background: color-mix(in srgb, var(--accent-error) 15%, transparent);
+  }
+  .perm-rule-type.ask {
+    color: var(--accent-warning);
+    background: color-mix(in srgb, var(--accent-warning) 15%, transparent);
+  }
+  .perm-rule-tool {
+    font-weight: 600;
+    color: var(--text-primary);
+    flex-shrink: 0;
+  }
+  .perm-rule-pattern {
+    font-family: var(--font-family);
+    color: var(--text-secondary);
+    font-size: 11px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    flex: 1;
+  }
+  .perm-rule-scope-badge {
+    font-size: 9px;
+    font-weight: 700;
+    padding: 1px 5px;
+    border-radius: 3px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-secondary);
+    color: var(--text-tertiary);
+    flex-shrink: 0;
+  }
+  .perm-rule-delete {
+    flex-shrink: 0;
+    margin-left: auto;
+  }
+  .perm-rules-loading,
+  .perm-rules-empty {
+    font-size: 12px;
+    color: var(--text-tertiary);
+    padding: 16px 0;
+    text-align: center;
   }
 </style>

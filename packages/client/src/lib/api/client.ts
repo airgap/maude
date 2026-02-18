@@ -238,6 +238,65 @@ export const api = {
         method: 'PUT',
         body: JSON.stringify({ budgetUsd }),
       }),
+    // Permission rules
+    getPermissionRules: (opts?: {
+      scope?: string;
+      workspacePath?: string;
+      conversationId?: string;
+    }) => {
+      const params = new URLSearchParams();
+      if (opts?.scope) params.set('scope', opts.scope);
+      if (opts?.workspacePath) params.set('workspacePath', opts.workspacePath);
+      if (opts?.conversationId) params.set('conversationId', opts.conversationId);
+      const q = params.toString();
+      return request<{
+        ok: boolean;
+        data: Array<import('@e/shared').PermissionRule>;
+      }>(`/settings/permission-rules${q ? '?' + q : ''}`);
+    },
+    createPermissionRule: (body: {
+      type: 'allow' | 'deny' | 'ask';
+      tool: string;
+      pattern?: string;
+      scope: 'session' | 'project' | 'global';
+      workspacePath?: string;
+      conversationId?: string;
+    }) =>
+      request<{ ok: boolean; data: import('@e/shared').PermissionRule }>(
+        '/settings/permission-rules',
+        {
+          method: 'POST',
+          body: JSON.stringify(body),
+        },
+      ),
+    updatePermissionRule: (id: string, body: Record<string, any>) =>
+      request<{ ok: boolean; data: import('@e/shared').PermissionRule }>(
+        `/settings/permission-rules/${id}`,
+        {
+          method: 'PATCH',
+          body: JSON.stringify(body),
+        },
+      ),
+    deletePermissionRule: (id: string) =>
+      request<{ ok: boolean }>(`/settings/permission-rules/${id}`, { method: 'DELETE' }),
+    getPermissionPresets: () =>
+      request<{
+        ok: boolean;
+        data: Array<import('@e/shared').PermissionRulePreset>;
+      }>('/settings/permission-rules/presets'),
+    applyPermissionPreset: (body: {
+      presetId: string;
+      scope: 'session' | 'project' | 'global';
+      workspacePath?: string;
+      conversationId?: string;
+    }) =>
+      request<{
+        ok: boolean;
+        data: Array<import('@e/shared').PermissionRule>;
+      }>('/settings/permission-rules/apply-preset', {
+        method: 'POST',
+        body: JSON.stringify(body),
+      }),
   },
 
   // --- MCP ---
