@@ -49,7 +49,7 @@ interface SettingsState {
   sendWithEnter: boolean;
   soundEnabled: boolean;
   soundVolume: number;
-  soundStyle: 'classic' | 'melodic' | 'whimsy' | 'slot-machine' | 'forest' | 'wind-chime';
+  soundStyle: 'classic' | 'melodic' | 'whimsy' | 'forest' | 'wind-chime';
   // Desktop notification settings
   notifyOnCompletion: boolean;
   notifyOnFailure: boolean;
@@ -125,6 +125,10 @@ function loadFromStorage(): SettingsState {
       // Migrate: ensure hypertheme exists
       if (!parsed.hypertheme) {
         parsed.hypertheme = defaults.hypertheme;
+      }
+      // Migrate: slot-machine sound style was removed
+      if (parsed.soundStyle === 'slot-machine') {
+        parsed.soundStyle = defaults.soundStyle;
       }
       return parsed;
     }
