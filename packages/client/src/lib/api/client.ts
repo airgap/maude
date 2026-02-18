@@ -1448,4 +1448,31 @@ export const api = {
       return request<{ ok: boolean; data: any[] }>(`/digest/week?${params}`);
     },
   },
+
+  // --- Artifacts ---
+  artifacts: {
+    list: (conversationId: string) =>
+      request<{ ok: boolean; data: import('@e/shared').Artifact[] }>(
+        `/artifacts?conversationId=${encodeURIComponent(conversationId)}`,
+      ),
+    get: (id: string) =>
+      request<{ ok: boolean; data: import('@e/shared').Artifact }>(`/artifacts/${id}`),
+    create: (body: import('@e/shared').ArtifactCreateInput) =>
+      request<{ ok: boolean; data: import('@e/shared').Artifact }>('/artifacts', {
+        method: 'POST',
+        body: JSON.stringify(body),
+      }),
+    update: (id: string, body: import('@e/shared').ArtifactUpdateInput) =>
+      request<{ ok: boolean; data: import('@e/shared').Artifact }>(`/artifacts/${id}`, {
+        method: 'PATCH',
+        body: JSON.stringify(body),
+      }),
+    delete: (id: string) =>
+      request<{ ok: boolean }>(`/artifacts/${id}`, { method: 'DELETE' }),
+    pin: (id: string, pinned: boolean) =>
+      request<{ ok: boolean; data: import('@e/shared').Artifact }>(`/artifacts/${id}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ pinned }),
+      }),
+  },
 };

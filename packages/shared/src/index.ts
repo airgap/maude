@@ -28,6 +28,7 @@ export type {
   StreamStoryUpdate,
   StreamAgentEvent,
   StreamVerificationResult,
+  StreamArtifactCreated,
 } from './streaming.js';
 
 export type {
@@ -91,6 +92,14 @@ export type {
   WorkspaceMemoryCreate,
   WorkspaceMemoryUpdate,
 } from './project-memory.js';
+
+export type {
+  ArtifactType,
+  Artifact,
+  ArtifactCreateInput,
+  ArtifactUpdateInput,
+  ArtifactContent,
+} from './artifacts.js';
 
 export type {
   CreateConversationRequest,

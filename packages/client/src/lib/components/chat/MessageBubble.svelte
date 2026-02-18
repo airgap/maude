@@ -12,6 +12,8 @@
   import { uiStore } from '$lib/stores/ui.svelte';
   import { api } from '$lib/api/client';
   import ReplayModal from './ReplayModal.svelte';
+  import ArtifactCard from './ArtifactCard.svelte';
+  import { artifactsStore } from '$lib/stores/artifacts.svelte';
 
   let { message, conversationId, onEdit, onDelete, onFork } = $props<{
     message: Message;
@@ -219,6 +221,11 @@
 
     return entries;
   });
+
+  // Artifacts emitted by this message (looked up from artifacts store by message ID)
+  let messageArtifacts = $derived(
+    artifactsStore.artifacts.filter((a) => a.messageId === message.id),
+  );
 </script>
 
 <!-- Close context menu on any click outside -->
@@ -480,6 +487,14 @@
                 {/if}
               {/if}
             {/each}
+            <!-- Artifacts emitted by this message -->
+            {#if messageArtifacts.length > 0}
+              <div class="message-artifacts">
+                {#each messageArtifacts as artifact (artifact.id)}
+                  <ArtifactCard {artifact} />
+                {/each}
+              </div>
+            {/if}
           {/if}
         </div>
       </div>
@@ -933,6 +948,14 @@
   }
   .prose :global(em) {
     color: var(--text-secondary);
+  }
+
+  /* ── Artifact cards in message body ── */
+  .message-artifacts {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin-top: 4px;
   }
 
   /* ── Nudge message bubble ── */

@@ -1,6 +1,7 @@
 import type { StreamEvent, MessageContent } from '@e/shared';
 import { isMcpFileWriteTool } from '@e/shared';
 import { editorStore } from './editor.svelte';
+import { artifactsStore } from './artifacts.svelte';
 
 // Context key for Svelte 5 context API - ensures proper reactivity tracking
 export const STREAM_CONTEXT_KEY = Symbol('streamStore');
@@ -376,6 +377,13 @@ function createStreamStore() {
             pre_tokens: event.pre_tokens,
             context_limit: event.context_limit,
           };
+          break;
+
+        case 'artifact_created':
+          // Forward to the artifacts store so the sidebar updates in real time
+          if (event.artifact) {
+            artifactsStore.addFromStream(event.artifact);
+          }
           break;
       }
     },

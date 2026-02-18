@@ -16,6 +16,7 @@
   import InitiativesPanel from './InitiativesPanel.svelte';
   import HelpPanel from './HelpPanel.svelte';
   import GitPanel from './GitPanel.svelte';
+  import ArtifactsPanel from './ArtifactsPanel.svelte';
 
   let { tabId }: { tabId: SidebarTab } = $props();
 </script>
@@ -52,4 +53,6 @@
   <HelpPanel />
 {:else if tabId === 'git'}
   <GitPanel />
+{:else if tabId === 'artifacts'}
+  <ArtifactsPanel />
 {/if}

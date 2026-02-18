@@ -230,6 +230,23 @@ export function initDatabase(): void {
     );
 
     CREATE INDEX IF NOT EXISTS idx_agent_profiles_name ON agent_profiles(name);
+
+    CREATE TABLE IF NOT EXISTS artifacts (
+      id TEXT PRIMARY KEY,
+      conversation_id TEXT NOT NULL,
+      message_id TEXT,
+      type TEXT NOT NULL DEFAULT 'plan',
+      title TEXT NOT NULL,
+      content TEXT NOT NULL,
+      metadata TEXT NOT NULL DEFAULT '{}',
+      pinned INTEGER NOT NULL DEFAULT 0,
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL,
+      FOREIGN KEY (conversation_id) REFERENCES conversations(id) ON DELETE CASCADE
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_artifacts_conversation ON artifacts(conversation_id, created_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_artifacts_pinned ON artifacts(conversation_id, pinned);
   `);
 
   // Migrate: add new conversation columns (safe ALTER TABLE — no-ops if already exist)

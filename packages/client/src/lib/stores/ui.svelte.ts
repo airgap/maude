@@ -16,7 +16,8 @@ export type SidebarTab =
   | 'custom-tools'
   | 'initiatives'
   | 'help'
-  | 'git';
+  | 'git'
+  | 'artifacts';
 type ModalId =
   | 'settings'
   | 'command-palette'

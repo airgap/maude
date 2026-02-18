@@ -375,6 +375,71 @@ export function translateCliEvent(event: any): string[] {
   return events;
 }
 
+/**
+ * Parse and store <artifact> XML blocks from assistant message text content.
+ * Returns an array of SSE event strings for each extracted artifact so the
+ * client can update the Artifacts panel in real time.
+ *
+ * Supported format:
+ * <artifact type="plan|diff|screenshot|walkthrough" title="...">
+ * ...content...
+ * </artifact>
+ */
+function extractAndStoreArtifacts(
+  conversationId: string,
+  messageId: string,
+  content: any[],
+): string[] {
+  const sseEvents: string[] = [];
+  const db = getDb();
+
+  const artifactRegex =
+    /<artifact\s+type="([^"]+)"\s+title="([^"]+)">([\s\S]*?)<\/artifact>/gi;
+
+  for (const block of content) {
+    if (block.type !== 'text' || !block.text) continue;
+
+    let match: RegExpExecArray | null;
+    artifactRegex.lastIndex = 0;
+    while ((match = artifactRegex.exec(block.text)) !== null) {
+      const [, rawType, title, artifactContent] = match;
+      const validTypes = ['plan', 'diff', 'screenshot', 'walkthrough'];
+      const type = validTypes.includes(rawType) ? rawType : 'plan';
+
+      try {
+        const id = nanoid(12);
+        const now = Date.now();
+        db.query(
+          `INSERT INTO artifacts (id, conversation_id, message_id, type, title, content, metadata, pinned, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, '{}', 0, ?, ?)`,
+        ).run(id, conversationId, messageId, type, title.trim(), artifactContent.trim(), now, now);
+
+        const artifactEvent = JSON.stringify({
+          type: 'artifact_created',
+          artifact: {
+            id,
+            conversationId,
+            messageId,
+            type,
+            title: title.trim(),
+            content: artifactContent.trim(),
+            metadata: {},
+            pinned: false,
+            createdAt: now,
+            updatedAt: now,
+          },
+        });
+        sseEvents.push(`data: ${artifactEvent}\n\n`);
+        console.log(`[artifacts] Stored artifact "${title}" (${type}) from message ${messageId}`);
+      } catch (err) {
+        console.error('[artifacts] Failed to store artifact:', err);
+      }
+    }
+  }
+
+  return sseEvents;
+}
+
 class ClaudeProcessManager {
   private sessions = new Map<string, ClaudeSession>();
   /** Timers for auto-removing completed sessions after a grace period. */
@@ -655,6 +720,8 @@ class ClaudeProcessManager {
                 Date.now(),
                 session.conversationId,
               );
+              // Extract artifacts from partial content on cancel too
+              extractAndStoreArtifacts(session.conversationId, msgId, assistantContent);
             } catch (dbErr) {
               console.error('[claude] Failed to save assistant message on cancel:', dbErr);
             }
@@ -1158,6 +1225,16 @@ class ClaudeProcessManager {
                   Date.now(),
                   session.conversationId,
                 );
+
+                // Extract <artifact> blocks from text content and store them
+                const artifactEvents = extractAndStoreArtifacts(
+                  session.conversationId,
+                  msgId,
+                  assistantContent,
+                );
+                for (const evt of artifactEvents) {
+                  enqueueEvent(controller, evt);
+                }
               } catch (dbErr) {
                 console.error('[claude] Failed to save assistant message:', dbErr);
               }

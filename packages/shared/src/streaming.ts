@@ -1,5 +1,6 @@
 import type { Task } from './tasks.js';
 import type { UserStory, StreamLoopEvent } from './prd.js';
+import type { Artifact } from './artifacts.js';
 
 // SSE event types matching Claude's stream-json format
 export type StreamEvent =
@@ -21,7 +22,8 @@ export type StreamEvent =
   | StreamVerificationResult
   | StreamLoopEvent
   | StreamContextWarning
-  | StreamCompactBoundary;
+  | StreamCompactBoundary
+  | StreamArtifactCreated;
 
 export interface StreamMessageStart {
   type: 'message_start';
@@ -186,4 +188,13 @@ export interface StreamCompactBoundary {
   trigger: 'auto' | 'manual';
   pre_tokens: number;
   context_limit: number;
+}
+
+/**
+ * Emitted when an agent extracts and stores an artifact from its output.
+ * The Artifacts panel listens for this to update in real time.
+ */
+export interface StreamArtifactCreated {
+  type: 'artifact_created';
+  artifact: Artifact;
 }
