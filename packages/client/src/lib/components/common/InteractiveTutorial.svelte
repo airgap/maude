@@ -5,6 +5,8 @@
   import { onMount } from 'svelte';
 
   let mounted = $state(false);
+  /** When true, the tutorial collapses to a small pill so the user can interact with opened panels/modals */
+  let minimized = $state(false);
 
   onMount(() => {
     mounted = true;
@@ -18,6 +20,10 @@
   const progress = $derived(tutorialStore.progress);
 
   function handleAction(actionId: string) {
+    // Minimize the tutorial overlay so the user can see and interact with
+    // whatever panel/modal/palette was just opened
+    minimized = true;
+
     switch (actionId) {
       case 'focus-chat':
         uiStore.focusChatInput();
@@ -44,6 +50,12 @@
     }
   }
 
+  function handleRestore() {
+    minimized = false;
+    // Close any modal that might have been opened by the action
+    uiStore.closeModal();
+  }
+
   function handleNext() {
     if (isLast) {
       tutorialStore.complete();
@@ -57,6 +69,7 @@
   }
 
   function handleDismiss() {
+    minimized = false;
     tutorialStore.dismiss();
   }
 
@@ -69,8 +82,13 @@
     if (e.key === 'Escape') {
       e.preventDefault();
       e.stopPropagation();
-      handleDismiss();
+      if (minimized) {
+        handleRestore();
+      } else {
+        handleDismiss();
+      }
     }
+    if (minimized) return;
     if (e.key === 'ArrowRight' || e.key === 'Enter') {
       if (!(e.target instanceof HTMLButtonElement)) {
         e.preventDefault();
@@ -87,148 +105,173 @@
 <svelte:window onkeydown={handleKeydown} />
 
 {#if tutorialStore.active && mounted}
-  <!-- svelte-ignore a11y_no_static_element_interactions -->
-  <div class="tutorial-overlay" onclick={handleDismiss}>
+  {#if minimized}
+    <!-- Minimized pill — the overlay is gone so the user can interact with panels/modals -->
+    <button
+      class="tutorial-pill"
+      onclick={handleRestore}
+      title="Resume Guide (Esc)"
+    >
+      <svg
+        width="16"
+        height="16"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" />
+      </svg>
+      <span class="pill-label">Resume Guide</span>
+      <span class="pill-step">{stepIndex + 1}/{total}</span>
+    </button>
+  {:else}
+    <!-- Full tutorial overlay -->
     <!-- svelte-ignore a11y_no_static_element_interactions -->
-    <div class="tutorial-modal" onclick={(e) => e.stopPropagation()}>
-      <!-- Progress bar -->
-      <div class="progress-track">
-        <div class="progress-fill" style="width: {progress}%"></div>
-      </div>
-
-      <!-- Header -->
-      <div class="tutorial-header">
-        <div class="step-indicator">
-          <svg
-            width="18"
-            height="18"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-          >
-            <path d={step.icon} />
-          </svg>
-          <span class="step-number">Step {stepIndex + 1} of {total}</span>
+    <div class="tutorial-overlay" onclick={handleDismiss}>
+      <!-- svelte-ignore a11y_no_static_element_interactions -->
+      <div class="tutorial-modal" onclick={(e) => e.stopPropagation()}>
+        <!-- Progress bar -->
+        <div class="progress-track">
+          <div class="progress-fill" style="width: {progress}%"></div>
         </div>
-        <button class="close-btn" onclick={handleDismiss} title="Dismiss tutorial (Esc)">
-          <svg
-            width="16"
-            height="16"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-          >
-            <path d="M18 6L6 18M6 6l12 12" />
-          </svg>
-        </button>
-      </div>
 
-      <!-- Step nav dots -->
-      <div class="step-dots">
-        {#each TUTORIAL_STEPS as s, i}
-          <button
-            class="step-dot"
-            class:active={i === stepIndex}
-            class:visited={tutorialStore.stepsVisited.includes(s.id)}
-            onclick={() => tutorialStore.goToStep(i)}
-            title={s.title}
-          >
-            {#if i === stepIndex}
-              <span class="dot-ring"></span>
-            {/if}
-          </button>
-        {/each}
-      </div>
-
-      <!-- Content -->
-      <div class="tutorial-content">
-        <h2 class="step-title">{step.title}</h2>
-        <p class="step-description">{step.description}</p>
-        <!-- eslint-disable-next-line svelte/no-at-html-tags -->
-        <div class="step-body">{@html step.body}</div>
-      </div>
-
-      <!-- Actions -->
-      <div class="tutorial-actions">
-        <div class="actions-left">
-          {#if step.actionLabel && step.actionId}
-            <button
-              class="try-btn"
-              onclick={() => step.actionId && handleAction(step.actionId)}
+        <!-- Header -->
+        <div class="tutorial-header">
+          <div class="step-indicator">
+            <svg
+              width="18"
+              height="18"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
             >
-              <svg
-                width="14"
-                height="14"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="2"
-              >
-                <polygon points="5 3 19 12 5 21 5 3" />
-              </svg>
-              {step.actionLabel}
-            </button>
-          {/if}
+              <path d={step.icon} />
+            </svg>
+            <span class="step-number">Step {stepIndex + 1} of {total}</span>
+          </div>
+          <button class="close-btn" onclick={handleDismiss} title="Dismiss tutorial (Esc)">
+            <svg
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+            >
+              <path d="M18 6L6 18M6 6l12 12" />
+            </svg>
+          </button>
         </div>
 
-        <div class="actions-right">
-          {#if !isFirst}
-            <button class="nav-btn secondary" onclick={handlePrev}>
-              <svg
-                width="14"
-                height="14"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="2"
-              >
-                <path d="M19 12H5M12 5l-7 7 7 7" />
-              </svg>
-              Back
+        <!-- Step nav dots -->
+        <div class="step-dots">
+          {#each TUTORIAL_STEPS as s, i}
+            <button
+              class="step-dot"
+              class:active={i === stepIndex}
+              class:visited={tutorialStore.stepsVisited.includes(s.id)}
+              onclick={() => tutorialStore.goToStep(i)}
+              title={s.title}
+            >
+              {#if i === stepIndex}
+                <span class="dot-ring"></span>
+              {/if}
             </button>
-          {/if}
+          {/each}
+        </div>
 
-          {#if !isLast && !isFirst}
-            <button class="skip-btn" onclick={handleFinish}>
-              Skip All
-            </button>
-          {/if}
+        <!-- Content -->
+        <div class="tutorial-content">
+          <h2 class="step-title">{step.title}</h2>
+          <p class="step-description">{step.description}</p>
+          <!-- eslint-disable-next-line svelte/no-at-html-tags -->
+          <div class="step-body">{@html step.body}</div>
+        </div>
 
-          <button class="nav-btn primary" onclick={handleNext}>
-            {#if isLast}
-              Get Started
-              <svg
-                width="14"
-                height="14"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="2"
+        <!-- Actions -->
+        <div class="tutorial-actions">
+          <div class="actions-left">
+            {#if step.actionLabel && step.actionId}
+              <button
+                class="try-btn"
+                onclick={() => step.actionId && handleAction(step.actionId)}
               >
-                <path d="M9 12l2 2 4-4m6 2a9 9 0 1 1-18 0 9 9 0 0 1 18 0z" />
-              </svg>
-            {:else}
-              Next
-              <svg
-                width="14"
-                height="14"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="2"
-              >
-                <path d="M5 12h14M12 5l7 7-7 7" />
-              </svg>
+                <svg
+                  width="14"
+                  height="14"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                >
+                  <polygon points="5 3 19 12 5 21 5 3" />
+                </svg>
+                {step.actionLabel}
+              </button>
             {/if}
-          </button>
+          </div>
+
+          <div class="actions-right">
+            {#if !isFirst}
+              <button class="nav-btn secondary" onclick={handlePrev}>
+                <svg
+                  width="14"
+                  height="14"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                >
+                  <path d="M19 12H5M12 5l-7 7 7 7" />
+                </svg>
+                Back
+              </button>
+            {/if}
+
+            {#if !isLast && !isFirst}
+              <button class="skip-btn" onclick={handleFinish}>
+                Skip All
+              </button>
+            {/if}
+
+            <button class="nav-btn primary" onclick={handleNext}>
+              {#if isLast}
+                Get Started
+                <svg
+                  width="14"
+                  height="14"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                >
+                  <path d="M9 12l2 2 4-4m6 2a9 9 0 1 1-18 0 9 9 0 0 1 18 0z" />
+                </svg>
+              {:else}
+                Next
+                <svg
+                  width="14"
+                  height="14"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                >
+                  <path d="M5 12h14M12 5l7 7-7 7" />
+                </svg>
+              {/if}
+            </button>
+          </div>
         </div>
       </div>
     </div>
-  </div>
+  {/if}
 {/if}
 
 <style>
@@ -550,6 +593,62 @@
   .skip-btn:hover {
     color: var(--text-secondary);
     background: var(--bg-hover);
+  }
+
+  /* ── Minimized pill ── */
+  .tutorial-pill {
+    position: fixed;
+    bottom: 16px;
+    right: 16px;
+    z-index: 9999;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 16px;
+    font-size: var(--fs-sm);
+    font-weight: 600;
+    color: var(--bg-primary);
+    background: var(--accent-primary);
+    border: 1px solid var(--accent-primary);
+    border-radius: 999px;
+    cursor: pointer;
+    box-shadow:
+      0 4px 24px rgba(0, 0, 0, 0.4),
+      var(--shadow-glow-sm);
+    transition: all 200ms ease;
+    animation: pillSlideIn 250ms ease;
+  }
+
+  .tutorial-pill:hover {
+    filter: brightness(1.15);
+    box-shadow:
+      0 6px 32px rgba(0, 0, 0, 0.5),
+      var(--shadow-glow-md, var(--shadow-glow-sm));
+    transform: translateY(-1px);
+  }
+
+  .pill-label {
+    white-space: nowrap;
+  }
+
+  .pill-step {
+    font-size: var(--fs-xxs);
+    opacity: 0.8;
+    font-weight: 500;
+    background: rgba(255, 255, 255, 0.2);
+    padding: 1px 6px;
+    border-radius: 999px;
+  }
+
+  @keyframes pillSlideIn {
+    from {
+      opacity: 0;
+      transform: translateY(8px) scale(0.95);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0) scale(1);
+    }
   }
 
   /* ── Hypertheme variants ── */
