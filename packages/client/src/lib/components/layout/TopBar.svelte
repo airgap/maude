@@ -216,6 +216,11 @@
     font-weight: 600;
     letter-spacing: var(--ht-label-spacing);
     text-transform: var(--ht-label-transform);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 100%;
+    display: block;
   }
 
   .icon-btn {

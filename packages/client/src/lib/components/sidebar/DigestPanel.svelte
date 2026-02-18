@@ -396,7 +396,8 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-    max-width: 160px;
+    min-width: 0;
+    flex: 1;
   }
 
   .conv-meta {

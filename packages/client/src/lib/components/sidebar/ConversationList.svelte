@@ -231,6 +231,7 @@
     margin-bottom: 1px;
     cursor: pointer;
     border-left: var(--ht-item-indicator) solid transparent;
+    overflow: hidden;
   }
   .conv-item:hover {
     background: var(--bg-hover);
@@ -317,6 +318,9 @@
     font-weight: 600;
     color: var(--text-primary);
     margin-bottom: 3px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
   .conv-item.active .conv-title {
     color: var(--accent-primary);

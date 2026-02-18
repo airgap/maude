@@ -536,6 +536,9 @@
     font-size: 11px;
     color: var(--text-primary);
     font-weight: 500;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
   .conv-meta {
     display: flex;
