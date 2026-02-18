@@ -7,12 +7,21 @@
   import { registerSkillCommands } from '$lib/commands/slash-commands';
   import type { MemoryCategory } from '@e/shared';
 
-  type ViewMode = 'files' | 'workspace' | 'skills';
+  type ViewMode = 'files' | 'workspace' | 'skills' | 'rules';
 
   interface MemoryFile {
     path: string;
     content: string;
     type: string;
+    lastModified: number;
+  }
+
+  interface RuleFile {
+    path: string;
+    name: string;
+    content: string;
+    type: string;
+    mode: string;
     lastModified: number;
   }
 
@@ -46,6 +55,84 @@
   let registryError = $state<string | null>(null);
   let installedSkills = $state<string[]>([]);
   let installingSkill = $state<string | null>(null);
+
+  // Rules state
+  let ruleFiles = $state<RuleFile[]>([]);
+  let rulesLoading = $state(false);
+  let editingRule = $state<RuleFile | null>(null);
+  let editRuleContent = $state('');
+  let savingRule = $state(false);
+  let showCreateRule = $state(false);
+  let newRuleName = $state('');
+  let creatingRule = $state(false);
+
+  async function loadRules() {
+    if (rulesLoading) return;
+    rulesLoading = true;
+    try {
+      const res = await api.rules.list(settingsStore.workspacePath || undefined);
+      ruleFiles = res.data;
+    } catch {
+      ruleFiles = [];
+    } finally {
+      rulesLoading = false;
+    }
+  }
+
+  async function toggleRuleMode(rule: RuleFile) {
+    if (!settingsStore.workspacePath) return;
+    const newMode = rule.mode === 'active' ? 'on-demand' : 'active';
+    try {
+      await api.rules.setMode(settingsStore.workspacePath, rule.path, newMode);
+      rule.mode = newMode;
+      // Force reactivity
+      ruleFiles = [...ruleFiles];
+      uiStore.toast(`Rule set to ${newMode}`, 'success');
+    } catch {
+      uiStore.toast('Failed to update rule mode', 'error');
+    }
+  }
+
+  function startEditRule(rule: RuleFile) {
+    editingRule = rule;
+    editRuleContent = rule.content;
+  }
+
+  async function saveRule() {
+    if (!editingRule) return;
+    savingRule = true;
+    try {
+      await api.rules.updateContent(editingRule.path, editRuleContent);
+      editingRule.content = editRuleContent;
+      editingRule = null;
+      uiStore.toast('Rule saved', 'success');
+    } catch {
+      uiStore.toast('Failed to save rule', 'error');
+    } finally {
+      savingRule = false;
+    }
+  }
+
+  async function createRule() {
+    if (!newRuleName || !settingsStore.workspacePath) return;
+    creatingRule = true;
+    try {
+      await api.rules.create(settingsStore.workspacePath, newRuleName);
+      uiStore.toast(`Rule "${newRuleName}" created`, 'success');
+      newRuleName = '';
+      showCreateRule = false;
+      // Reload rules and open the new one for editing
+      await loadRules();
+      const created = ruleFiles.find((r) => r.name === (newRuleName.endsWith('.md') ? newRuleName : `${newRuleName}.md`) || r.name.includes(newRuleName));
+      if (created) {
+        startEditRule(created);
+      }
+    } catch (e) {
+      uiStore.toast(e instanceof Error ? e.message : 'Failed to create rule', 'error');
+    } finally {
+      creatingRule = false;
+    }
+  }
 
   async function loadRegistry() {
     if (registryLoading || registrySkills.length > 0) return;
@@ -170,6 +257,16 @@
       'auto-topic': 'Topic',
       rules: 'Rule',
       skills: 'Skill',
+      'compat-rules': 'Compat',
+    };
+    return labels[type] || type;
+  }
+
+  function ruleTypeLabel(type: string): string {
+    const labels: Record<string, string> = {
+      rules: 'Rule',
+      project: 'CLAUDE.md',
+      'compat-rules': 'Compat',
     };
     return labels[type] || type;
   }
@@ -187,9 +284,19 @@
         class:active={viewMode === 'workspace'}
         onclick={() => (viewMode = 'workspace')}
       >
-        Workspace Memory
+        Memory
         {#if workspaceMemoryStore.stats.total > 0}
           <span class="count">{workspaceMemoryStore.stats.total}</span>
+        {/if}
+      </button>
+      <button
+        class="view-tab"
+        class:active={viewMode === 'rules'}
+        onclick={() => { viewMode = 'rules'; loadRules(); }}
+      >
+        Rules
+        {#if ruleFiles.length > 0}
+          <span class="count">{ruleFiles.length}</span>
         {/if}
       </button>
       <button
@@ -331,18 +438,89 @@
         </div>
       {/if}
     </div>
+  {:else if viewMode === 'rules'}
+    <div class="rules-view">
+      {#if editingRule}
+        <div class="edit-view">
+          <div class="edit-header">
+            <span class="edit-file truncate">{editingRule.name}</span>
+            <div class="edit-actions">
+              <button class="btn-sm" onclick={() => (editingRule = null)}>Cancel</button>
+              <button class="btn-sm primary" onclick={saveRule} disabled={savingRule}>
+                {savingRule ? 'Saving...' : 'Save'}
+              </button>
+            </div>
+          </div>
+          <textarea class="edit-textarea" bind:value={editRuleContent}></textarea>
+        </div>
+      {:else}
+        <div class="rules-toolbar">
+          <span class="rules-label">Active rules are injected into every prompt</span>
+          <button class="add-btn" onclick={() => (showCreateRule = !showCreateRule)} title="Create rule">+</button>
+        </div>
+
+        {#if showCreateRule}
+          <div class="add-form">
+            <input
+              bind:value={newRuleName}
+              placeholder="Rule name (e.g. code-style)"
+              class="form-input"
+              onkeydown={(e) => { if (e.key === 'Enter') createRule(); }}
+            />
+            <button class="save-btn" onclick={createRule} disabled={!newRuleName || creatingRule}>
+              {creatingRule ? 'Creating...' : 'Create Rule'}
+            </button>
+          </div>
+        {/if}
+
+        {#if rulesLoading}
+          <div class="empty">Loading rules...</div>
+        {:else if ruleFiles.length === 0}
+          <div class="empty">
+            No rules found. Create a rule or add .md files to .claude/rules/
+          </div>
+        {:else}
+          <div class="rules-list">
+            {#each ruleFiles as rule (rule.path)}
+              <div class="rule-item">
+                <div class="rule-header">
+                  <div class="rule-info">
+                    <span class="rule-type-badge">{ruleTypeLabel(rule.type)}</span>
+                    <span class="rule-name truncate">{rule.name}</span>
+                  </div>
+                  <div class="rule-controls">
+                    <button
+                      class="mode-toggle"
+                      class:active={rule.mode === 'active'}
+                      class:on-demand={rule.mode === 'on-demand'}
+                      onclick={() => toggleRuleMode(rule)}
+                      title={rule.mode === 'active' ? 'Active: always injected into prompts' : 'On-demand: use @rule to inject'}
+                    >
+                      {rule.mode === 'active' ? 'Active' : 'On-demand'}
+                    </button>
+                  </div>
+                </div>
+                <button class="rule-content-btn" onclick={() => startEditRule(rule)}>
+                  <div class="rule-preview truncate">{rule.content.slice(0, 120)}</div>
+                </button>
+              </div>
+            {/each}
+          </div>
+        {/if}
+      {/if}
+    </div>
   {:else if viewMode === 'skills'}
     <div class="skills-registry-view">
       <div class="registry-header">
         <span class="registry-title">agentskills.io</span>
         <button class="btn-sm" onclick={loadRegistry} disabled={registryLoading} title="Refresh">
-          {registryLoading ? '…' : '↻'}
+          {registryLoading ? '...' : 'Refresh'}
         </button>
       </div>
       {#if registryError}
         <div class="registry-error">{registryError}</div>
       {:else if registryLoading && registrySkills.length === 0}
-        <div class="registry-loading">Loading skills…</div>
+        <div class="registry-loading">Loading skills...</div>
       {:else}
         <div class="registry-list">
           {#each registrySkills as skill}
@@ -364,7 +542,7 @@
                   onclick={() => installSkill(skill.name)}
                   disabled={installingSkill === skill.name}
                 >
-                  {installingSkill === skill.name ? 'Installing…' : 'Install'}
+                  {installingSkill === skill.name ? 'Installing...' : 'Install'}
                 </button>
               {/if}
             </div>
@@ -757,6 +935,112 @@
     text-align: center;
     color: var(--text-tertiary);
     font-size: 12px;
+  }
+
+  /* Rules view */
+  .rules-view {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  .rules-toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 6px;
+    margin-bottom: 8px;
+  }
+  .rules-label {
+    font-size: 10px;
+    color: var(--text-tertiary);
+    font-style: italic;
+  }
+  .rules-list {
+    flex: 1;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+  .rule-item {
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-primary);
+    padding: 8px 10px;
+  }
+  .rule-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 6px;
+    margin-bottom: 4px;
+  }
+  .rule-info {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+    flex: 1;
+  }
+  .rule-type-badge {
+    font-size: 9px;
+    padding: 1px 5px;
+    background: var(--bg-secondary);
+    color: var(--text-tertiary);
+    flex-shrink: 0;
+    text-transform: var(--ht-label-transform);
+    letter-spacing: var(--ht-label-spacing);
+  }
+  .rule-name {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-primary);
+  }
+  .rule-controls {
+    flex-shrink: 0;
+  }
+  .mode-toggle {
+    font-size: 9px;
+    padding: 2px 8px;
+    border: 1px solid var(--border-secondary);
+    cursor: pointer;
+    font-weight: 700;
+    text-transform: var(--ht-label-transform);
+    letter-spacing: var(--ht-label-spacing);
+    transition: all var(--transition);
+    background: var(--bg-secondary);
+    color: var(--text-tertiary);
+  }
+  .mode-toggle.active {
+    background: var(--accent-primary);
+    color: var(--bg-primary);
+    border-color: var(--accent-primary);
+  }
+  .mode-toggle.on-demand {
+    background: var(--bg-tertiary);
+    color: var(--text-secondary);
+    border-color: var(--border-secondary);
+  }
+  .mode-toggle:hover {
+    opacity: 0.85;
+  }
+  .rule-content-btn {
+    display: block;
+    width: 100%;
+    text-align: left;
+    background: none;
+    border: none;
+    padding: 0;
+    cursor: pointer;
+  }
+  .rule-content-btn:hover .rule-preview {
+    color: var(--text-primary);
+  }
+  .rule-preview {
+    font-size: 11px;
+    color: var(--text-tertiary);
+    line-height: 1.4;
+    transition: color var(--transition);
   }
 
   /* Skills registry */

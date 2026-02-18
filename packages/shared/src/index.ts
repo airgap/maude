@@ -66,7 +66,7 @@ export type { ThemeId, CliProvider, Settings, Keybinding, ServerOnlySettings } f
 
 export { DEFAULT_SETTINGS } from './settings.js';
 
-export type { MemoryFile, MemoryFileType, Skill, MemoryState } from './memory.js';
+export type { MemoryFile, MemoryFileType, Skill, MemoryState, RuleMode, RuleMetadata, RuleFile } from './memory.js';
 
 export type { Workspace, WorkspaceSettings, WorkspaceSummary } from './projects.js';
 

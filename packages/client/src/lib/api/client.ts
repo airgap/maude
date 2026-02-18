@@ -319,6 +319,52 @@ export const api = {
     },
   },
 
+  // --- Rules ---
+  rules: {
+    list: (workspacePath?: string) => {
+      const q = workspacePath ? `?workspacePath=${encodeURIComponent(workspacePath)}` : '';
+      return request<{
+        ok: boolean;
+        data: Array<{
+          path: string;
+          name: string;
+          content: string;
+          type: string;
+          mode: string;
+          lastModified: number;
+        }>;
+      }>(`/rules${q}`);
+    },
+    create: (workspacePath: string, name: string, content?: string) =>
+      request<{ ok: boolean; data: { path: string; name: string } }>('/rules', {
+        method: 'POST',
+        body: JSON.stringify({ workspacePath, name, content }),
+      }),
+    updateContent: (path: string, content: string) =>
+      request<{ ok: boolean }>('/rules/content', {
+        method: 'PUT',
+        body: JSON.stringify({ path, content }),
+      }),
+    setMode: (workspacePath: string, filePath: string, mode: string) =>
+      request<{ ok: boolean }>('/rules/mode', {
+        method: 'PATCH',
+        body: JSON.stringify({ workspacePath, filePath, mode }),
+      }),
+    getActive: (workspacePath: string) => {
+      const q = `?workspacePath=${encodeURIComponent(workspacePath)}`;
+      return request<{ ok: boolean; data: { context: string; count: number } }>(
+        `/rules/active${q}`,
+      );
+    },
+    getByName: (name: string, workspacePath?: string) => {
+      const q = workspacePath ? `?workspacePath=${encodeURIComponent(workspacePath)}` : '';
+      return request<{
+        ok: boolean;
+        data: { path: string; name: string; content: string };
+      }>(`/rules/by-name/${encodeURIComponent(name)}${q}`);
+    },
+  },
+
   // --- Files ---
   files: {
     read: (path: string) =>

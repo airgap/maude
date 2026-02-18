@@ -33,6 +33,7 @@ import { customToolRoutes } from './routes/custom-tools';
 import { pairRoutes } from './routes/pair';
 import { initiativeRoutes } from './routes/initiatives';
 import { skillsRegistryRoutes } from './routes/skills-registry';
+import { rulesRoutes } from './routes/rules';
 import { authMiddleware } from './middleware/auth';
 import { websocket } from './ws';
 import { initDatabase } from './db/database';
@@ -103,6 +104,7 @@ app.route('/api/custom-tools', customToolRoutes);
 app.route('/api/pair', pairRoutes);
 app.route('/api/initiatives', initiativeRoutes);
 app.route('/api/skills-registry', skillsRegistryRoutes);
+app.route('/api/rules', rulesRoutes);
 
 // Initialize database
 initDatabase();

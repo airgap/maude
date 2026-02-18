@@ -6,6 +6,8 @@ import { createBedrockStreamV2 } from '../services/bedrock-provider-v2';
 import { createOpenAIStreamV2 } from '../services/openai-provider-v2';
 import { createGeminiStreamV2 } from '../services/gemini-provider-v2';
 import { getDb } from '../db/database';
+import { readFile, readdir } from 'fs/promises';
+import { join, basename } from 'path';
 
 const app = new Hono();
 
@@ -107,7 +109,68 @@ function getWorkspaceMemoryContext(workspacePath: string | null): string {
   }
 }
 
-function getSessionOpts(conv: any) {
+/** Compatible rule files from other tools */
+const COMPAT_RULE_FILES = ['.cursorrules', 'AGENTS.md', '.github/copilot-instructions.md'];
+
+/**
+ * Get the content of all active rules for injection into the system prompt.
+ * Active rules are those NOT marked as 'on-demand' in rules_metadata.
+ */
+async function getActiveRulesContext(workspacePath: string | null): Promise<string> {
+  if (!workspacePath) return '';
+  try {
+    const db = getDb();
+    // Get all file paths with explicit 'on-demand' mode
+    const onDemandRows = db
+      .query("SELECT file_path FROM rules_metadata WHERE workspace_path = ? AND mode = 'on-demand'")
+      .all(workspacePath) as Array<{ file_path: string }>;
+    const onDemandPaths = new Set(onDemandRows.map((r) => r.file_path));
+
+    const activeContents: string[] = [];
+
+    // Scan .claude/rules/*.md
+    const rulesDir = join(workspacePath, '.claude', 'rules');
+    try {
+      const entries = await readdir(rulesDir, { recursive: true });
+      for (const entry of entries) {
+        if (!String(entry).endsWith('.md')) continue;
+        const full = join(rulesDir, String(entry));
+        if (onDemandPaths.has(full)) continue;
+        try {
+          const content = await readFile(full, 'utf-8');
+          if (content.trim()) {
+            activeContents.push(`### Rule: ${String(entry)}\n${content.trim()}`);
+          }
+        } catch {
+          // Skip unreadable files
+        }
+      }
+    } catch {
+      // Directory doesn't exist
+    }
+
+    // Scan compatible files that are active
+    for (const p of COMPAT_RULE_FILES) {
+      const full = join(workspacePath, p);
+      if (onDemandPaths.has(full)) continue;
+      try {
+        const content = await readFile(full, 'utf-8');
+        if (content.trim()) {
+          activeContents.push(`### Rule: ${basename(p)}\n${content.trim()}`);
+        }
+      } catch {
+        // Skip
+      }
+    }
+
+    if (activeContents.length === 0) return '';
+    return `\n\n## Active Rules\n\n${activeContents.join('\n\n')}`;
+  } catch {
+    return '';
+  }
+}
+
+async function getSessionOpts(conv: any) {
   let allowedTools: string[] | undefined;
   let disallowedTools: string[] | undefined;
   try {
@@ -118,8 +181,9 @@ function getSessionOpts(conv: any) {
   } catch {}
 
   // Build system prompt (outermost → innermost):
-  //   [PLAN/TEACH directive] + [user system prompt] + [base prompt] + [workspace memories]
+  //   [PLAN/TEACH directive] + [user system prompt] + [base prompt] + [workspace memories] + [active rules]
   const memoryContext = getWorkspaceMemoryContext(conv.workspace_path);
+  const rulesContext = await getActiveRulesContext(conv.workspace_path);
   let systemPrompt = BASE_SYSTEM_PROMPT + (conv.system_prompt ? '\n\n' + conv.system_prompt : '');
 
   if (conv.plan_mode) {
@@ -132,6 +196,10 @@ function getSessionOpts(conv: any) {
 
   if (memoryContext) {
     systemPrompt = systemPrompt + memoryContext;
+  }
+
+  if (rulesContext) {
+    systemPrompt = systemPrompt + rulesContext;
   }
 
   return {
@@ -166,6 +234,9 @@ app.post('/:conversationId', async (c) => {
   `,
   ).run(userMsgId, conversationId, JSON.stringify([{ type: 'text', text: content }]), Date.now());
 
+  // Get active rules context once for all provider branches
+  const activeRulesCtx = await getActiveRulesContext(conv.workspace_path);
+
   // Route to Ollama provider for local models (prefixed with "ollama:")
   const isOllama = conv.model?.startsWith('ollama:');
   if (isOllama) {
@@ -174,6 +245,9 @@ app.post('/:conversationId', async (c) => {
       BASE_SYSTEM_PROMPT + (conv.system_prompt ? '\n\n' + conv.system_prompt : '');
     if (conv.plan_mode) {
       ollamaSystemPrompt = PLAN_MODE_DIRECTIVE + ollamaSystemPrompt;
+    }
+    if (activeRulesCtx) {
+      ollamaSystemPrompt = ollamaSystemPrompt + activeRulesCtx;
     }
 
     // Get allowed/disallowed tools
@@ -216,6 +290,9 @@ app.post('/:conversationId', async (c) => {
     if (conv.plan_mode) {
       openaiSystemPrompt = PLAN_MODE_DIRECTIVE + openaiSystemPrompt;
     }
+    if (activeRulesCtx) {
+      openaiSystemPrompt = openaiSystemPrompt + activeRulesCtx;
+    }
     let allowedTools: string[] | undefined;
     let disallowedTools: string[] | undefined;
     try {
@@ -252,6 +329,9 @@ app.post('/:conversationId', async (c) => {
     if (conv.plan_mode) {
       geminiSystemPrompt = PLAN_MODE_DIRECTIVE + geminiSystemPrompt;
     }
+    if (activeRulesCtx) {
+      geminiSystemPrompt = geminiSystemPrompt + activeRulesCtx;
+    }
     let allowedTools: string[] | undefined;
     let disallowedTools: string[] | undefined;
     try {
@@ -287,6 +367,9 @@ app.post('/:conversationId', async (c) => {
       BASE_SYSTEM_PROMPT + (conv.system_prompt ? '\n\n' + conv.system_prompt : '');
     if (conv.plan_mode) {
       bedrockSystemPrompt = PLAN_MODE_DIRECTIVE + bedrockSystemPrompt;
+    }
+    if (activeRulesCtx) {
+      bedrockSystemPrompt = bedrockSystemPrompt + activeRulesCtx;
     }
 
     // Get allowed/disallowed tools
@@ -336,7 +419,7 @@ app.post('/:conversationId', async (c) => {
 
   try {
     if (!sessionId) {
-      sessionId = await claudeManager.createSession(conversationId, getSessionOpts(conv));
+      sessionId = await claudeManager.createSession(conversationId, await getSessionOpts(conv));
     }
 
     // If this is the first turn after autocompaction (no cli_session_id, has compact_summary),

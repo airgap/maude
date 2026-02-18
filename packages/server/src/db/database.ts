@@ -204,6 +204,18 @@ export function initDatabase(): void {
     CREATE INDEX IF NOT EXISTS idx_loops_prd ON loops(prd_id);
     CREATE INDEX IF NOT EXISTS idx_loops_status ON loops(status);
     CREATE INDEX IF NOT EXISTS idx_story_templates_category ON story_templates(category);
+
+    CREATE TABLE IF NOT EXISTS rules_metadata (
+      id TEXT PRIMARY KEY,
+      workspace_path TEXT NOT NULL,
+      file_path TEXT NOT NULL,
+      mode TEXT NOT NULL DEFAULT 'active',
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL
+    );
+
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_rules_metadata_path ON rules_metadata(workspace_path, file_path);
+    CREATE INDEX IF NOT EXISTS idx_rules_metadata_mode ON rules_metadata(workspace_path, mode);
   `);
 
   // Migrate: add new conversation columns (safe ALTER TABLE — no-ops if already exist)
