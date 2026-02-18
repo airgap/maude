@@ -2,8 +2,9 @@ import { hoverTooltip, type Tooltip } from '@codemirror/view';
 import { lspStore } from '$lib/stores/lsp.svelte';
 import { api } from '$lib/api/client';
 import { fileUriField } from './file-uri-field';
-import { buildTreeSitterTooltip } from './hover-info';
+import { buildTreeSitterTooltip, extractDocComment } from './hover-info';
 import { highlightCode, tagHighlighter, tags } from '@lezer/highlight';
+import { symbolStore } from '$lib/stores/symbols.svelte';
 
 /**
  * CM6 extension: Unified hover tooltip.
@@ -279,6 +280,31 @@ async function tryLspHover(
     }
   }
 
+  // ── Extract doc comment from source (for when LSP doesn't provide docs) ──
+  const { sigSegs: checkSigSegs, docSegs: checkDocSegs } = splitSegments(nonEmpty);
+  let sourceDocComment: string | null = null;
+  // Only extract doc comments if LSP didn't return documentation sections
+  if (checkDocSegs.length === 0) {
+    // Extract the word under cursor to find the symbol
+    const lineText = line.text;
+    const col = pos - line.from;
+    let ws = col;
+    let we = col;
+    while (ws > 0 && /[\w$]/.test(lineText[ws - 1])) ws--;
+    while (we < lineText.length && /[\w$]/.test(lineText[we])) we++;
+    const hoveredWord = lineText.slice(ws, we);
+
+    if (hoveredWord) {
+      // Try to find the symbol in tree-sitter store to get its startRow
+      const fileId = uri.replace(/^file:\/\//, '');
+      const symbols = symbolStore.getSymbols(fileId);
+      const sym = findSymbolByNameLsp(symbols, hoveredWord);
+      if (sym) {
+        sourceDocComment = extractDocComment(view, sym.startRow);
+      }
+    }
+  }
+
   // ── Determine hover range ─────────────────────────────────────────────────
   let from = pos;
   let to = pos;
@@ -303,9 +329,21 @@ async function tryLspHover(
     end: to,
     above: true,
     create() {
-      return { dom: buildLspCard(nonEmpty, defSnippet) };
+      return { dom: buildLspCard(nonEmpty, defSnippet, sourceDocComment) };
     },
   };
+}
+
+/** Find a symbol by name in the tree-sitter symbol store (recursive) */
+function findSymbolByNameLsp(symbols: any[], name: string): any | null {
+  for (const sym of symbols) {
+    if (sym.name === name) return sym;
+    if (sym.children) {
+      const found = findSymbolByNameLsp(sym.children, name);
+      if (found) return found;
+    }
+  }
+  return null;
 }
 
 // ── Card builder ──────────────────────────────────────────────────────────────
@@ -314,7 +352,11 @@ type Seg = { kind: 'code' | 'markdown' | 'plaintext'; value: string };
 type DefSnippet = { filePath: string; lines: string[]; startLine: number; lang: string };
 
 /** Build the hover card with synchronous syntax highlighting. */
-function buildLspCard(segments: Seg[], defSnippet: DefSnippet | null): HTMLElement {
+function buildLspCard(
+  segments: Seg[],
+  defSnippet: DefSnippet | null,
+  sourceDocComment: string | null = null,
+): HTMLElement {
   const card = document.createElement('div');
   card.className = 'e-hover-card';
 
@@ -340,6 +382,19 @@ function buildLspCard(segments: Seg[], defSnippet: DefSnippet | null): HTMLEleme
       const p = document.createElement('p');
       p.className = 'e-hover-doc-para';
       p.innerHTML = simpleMarkdown(seg.value);
+      docSection.appendChild(p);
+    }
+    card.appendChild(docSection);
+  } else if (sourceDocComment) {
+    // LSP didn't return docs — show the JSDoc comment from source instead
+    if (sigSegs.length > 0) card.appendChild(makeSep());
+    const docSection = document.createElement('div');
+    docSection.className = 'e-hover-docs';
+    const paragraphs = sourceDocComment.split('\n\n').filter((p) => p.trim());
+    for (const para of paragraphs) {
+      const p = document.createElement('p');
+      p.className = 'e-hover-doc-para';
+      p.innerHTML = simpleMarkdown(para.trim());
       docSection.appendChild(p);
     }
     card.appendChild(docSection);

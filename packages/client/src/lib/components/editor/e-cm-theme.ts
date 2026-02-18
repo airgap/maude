@@ -189,6 +189,38 @@ export const eEditorTheme = EditorView.theme(
       color: 'var(--text-primary)',
       margin: '0',
     },
+    // Documentation link section in hover cards
+    '.cm-tooltip .e-hover-doc-link': {
+      display: 'flex',
+      alignItems: 'center',
+      gap: '5px',
+      padding: '5px 12px',
+      backgroundColor: 'var(--bg-secondary)',
+      borderTop: '1px solid var(--border-primary)',
+      fontSize: '11px',
+      fontFamily: 'var(--font-family-sans)',
+    },
+    '.cm-tooltip .e-hover-doc-link-icon': {
+      fontSize: '10px',
+      color: 'var(--accent-primary)',
+      opacity: '0.6',
+      lineHeight: '1',
+    },
+    '.cm-tooltip .e-hover-doc-link-anchor': {
+      color: 'var(--text-link, var(--accent-primary))',
+      textDecoration: 'none',
+      cursor: 'pointer',
+      transition: 'opacity 0.1s',
+    },
+    '.cm-tooltip .e-hover-doc-link-anchor:hover': {
+      textDecoration: 'underline',
+      opacity: '0.85',
+    },
+    '.cm-tooltip .e-hover-doc-link-arrow': {
+      fontSize: '11px',
+      color: 'var(--text-tertiary)',
+      opacity: '0.6',
+    },
     // Syntax highlight token classes used in hover card snippets (ht-* = hover token)
     '.e-hover-pre .ht-kw': { color: 'var(--syn-keyword)' },
     '.e-hover-pre .ht-str': { color: 'var(--syn-string)' },
