@@ -4,8 +4,9 @@
   import { api } from '$lib/api/client';
   import { onMount } from 'svelte';
   import { desktopNotifications } from '$lib/notifications/desktop-notifications';
-  import type { ThemeId, CliProvider, PermissionRule, PermissionRulePreset, TerminalCommandPolicy } from '@e/shared';
+  import type { ThemeId, CliProvider, PermissionRule, PermissionRulePreset, TerminalCommandPolicy, AgentProfile, AgentProfileCreateInput } from '@e/shared';
   import { PERMISSION_PRESETS } from '@e/shared';
+  import { profilesStore } from '$lib/stores/profiles.svelte';
   import { MONO_FONTS, SANS_FONTS, findFont } from '$lib/config/fonts';
   import { HYPERTHEMES } from '$lib/config/hyperthemes';
 
@@ -14,9 +15,21 @@
     { id: 'kiro', label: 'Kiro CLI', desc: 'AWS Kiro CLI' },
   ];
 
+  // Check if the profiles tab was requested via localStorage flag
+  function getInitialTab(): 'general' | 'appearance' | 'audio' | 'editor' | 'permissions' | 'security' | 'mcp' | 'keybindings' | 'profiles' {
+    if (typeof localStorage !== 'undefined') {
+      const tab = localStorage.getItem('e-settings-tab');
+      if (tab) {
+        localStorage.removeItem('e-settings-tab');
+        return tab as any;
+      }
+    }
+    return 'general';
+  }
+
   let activeTab = $state<
-    'general' | 'appearance' | 'audio' | 'editor' | 'permissions' | 'security' | 'mcp' | 'keybindings'
-  >('general');
+    'general' | 'appearance' | 'audio' | 'editor' | 'permissions' | 'security' | 'mcp' | 'keybindings' | 'profiles'
+  >(getInitialTab());
 
   // --- BYOK state ---
   let apiKeyStatus = $state<Record<string, boolean>>({});
@@ -275,6 +288,7 @@
     loadBudget();
     loadSandbox();
     loadPermissionRules();
+    profilesStore.load();
   });
 
   const permModes = [
@@ -359,6 +373,86 @@
     }
   }
 
+  // --- Agent Profiles state ---
+  let showProfileForm = $state(false);
+  let editingProfile = $state<AgentProfile | null>(null);
+  let profileFormName = $state('');
+  let profileFormDescription = $state('');
+  let profileFormPermissionMode = $state<'plan' | 'safe' | 'fast' | 'unrestricted'>('unrestricted');
+  let profileFormAllowedTools = $state('');
+  let profileFormDisallowedTools = $state('');
+  let profileFormSystemPrompt = $state('');
+  let profileFormSaving = $state(false);
+
+  function openNewProfileForm() {
+    editingProfile = null;
+    profileFormName = '';
+    profileFormDescription = '';
+    profileFormPermissionMode = 'unrestricted';
+    profileFormAllowedTools = '';
+    profileFormDisallowedTools = '';
+    profileFormSystemPrompt = '';
+    showProfileForm = true;
+  }
+
+  function openEditProfileForm(profile: AgentProfile) {
+    editingProfile = profile;
+    profileFormName = profile.name;
+    profileFormDescription = profile.description ?? '';
+    profileFormPermissionMode = profile.permissionMode as any;
+    profileFormAllowedTools = profile.allowedTools.join(', ');
+    profileFormDisallowedTools = profile.disallowedTools.join(', ');
+    profileFormSystemPrompt = profile.systemPrompt ?? '';
+    showProfileForm = true;
+  }
+
+  function closeProfileForm() {
+    showProfileForm = false;
+    editingProfile = null;
+  }
+
+  function parseToolList(str: string): string[] {
+    return str
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean);
+  }
+
+  async function saveProfile() {
+    if (!profileFormName.trim()) return;
+    profileFormSaving = true;
+    try {
+      const input: AgentProfileCreateInput = {
+        name: profileFormName.trim(),
+        description: profileFormDescription.trim() || undefined,
+        permissionMode: profileFormPermissionMode,
+        allowedTools: parseToolList(profileFormAllowedTools),
+        disallowedTools: parseToolList(profileFormDisallowedTools),
+        systemPrompt: profileFormSystemPrompt.trim() || undefined,
+      };
+      if (editingProfile) {
+        await profilesStore.update(editingProfile.id, input);
+        uiStore.toast('Profile updated', 'success');
+      } else {
+        await profilesStore.create(input);
+        uiStore.toast('Profile created', 'success');
+      }
+      closeProfileForm();
+    } catch {
+      uiStore.toast('Failed to save profile', 'error');
+    }
+    profileFormSaving = false;
+  }
+
+  async function deleteProfile(id: string) {
+    try {
+      await profilesStore.delete(id);
+      uiStore.toast('Profile deleted', 'success');
+    } catch {
+      uiStore.toast('Failed to delete profile', 'error');
+    }
+  }
+
   function close() {
     uiStore.closeModal();
   }
@@ -386,7 +480,7 @@
 
     <div class="modal-body">
       <nav class="settings-tabs">
-        {#each ['general', 'appearance', 'audio', 'editor', 'permissions', 'security', 'mcp', 'keybindings'] as tab}
+        {#each ['general', 'appearance', 'audio', 'editor', 'permissions', 'profiles', 'security', 'mcp', 'keybindings'] as tab}
           <button
             class="settings-tab"
             class:active={activeTab === tab}
@@ -1169,6 +1263,131 @@
             <button class="btn-primary" onclick={() => uiStore.openModal('mcp-manager')}
               >Manage MCP Servers</button
             >
+          </div>
+        {:else if activeTab === 'profiles'}
+          <div class="profiles-section">
+            <div class="profiles-header">
+              <div>
+                <p class="setting-desc">Agent profiles bundle permission mode, allowed/disallowed tools, and an optional system prompt override. Select a profile from the top bar or via <kbd>Ctrl+Shift+,</kbd>.</p>
+              </div>
+              <button class="btn-secondary" onclick={openNewProfileForm}>+ New Profile</button>
+            </div>
+
+            <div class="profiles-list">
+              {#each profilesStore.profiles as profile (profile.id)}
+                <div class="profile-card" class:built-in={profile.isBuiltIn}>
+                  <div class="profile-card-left">
+                    <div class="profile-card-name">
+                      {profile.name}
+                      {#if profile.isBuiltIn}
+                        <span class="built-in-badge">built-in</span>
+                      {/if}
+                    </div>
+                    {#if profile.description}
+                      <div class="profile-card-desc">{profile.description}</div>
+                    {/if}
+                    <div class="profile-card-meta">
+                      <span class="meta-chip mode-{profile.permissionMode}">{profile.permissionMode}</span>
+                      {#if profile.allowedTools.length > 0}
+                        <span class="meta-chip allow-chip">allow: {profile.allowedTools.slice(0,3).join(', ')}{profile.allowedTools.length > 3 ? ' +' + (profile.allowedTools.length - 3) : ''}</span>
+                      {/if}
+                      {#if profile.disallowedTools.length > 0}
+                        <span class="meta-chip deny-chip">deny: {profile.disallowedTools.slice(0,3).join(', ')}{profile.disallowedTools.length > 3 ? ' +' + (profile.disallowedTools.length - 3) : ''}</span>
+                      {/if}
+                    </div>
+                  </div>
+                  <div class="profile-card-actions">
+                    {#if !profile.isBuiltIn}
+                      <button class="btn-secondary" onclick={() => openEditProfileForm(profile)}>Edit</button>
+                      <button class="btn-danger-sm" onclick={() => deleteProfile(profile.id)}>Delete</button>
+                    {/if}
+                  </div>
+                </div>
+              {/each}
+            </div>
+
+            {#if showProfileForm}
+              <div class="profile-form-overlay">
+                <div class="profile-form">
+                  <div class="profile-form-header">
+                    <h3>{editingProfile ? 'Edit Profile' : 'New Profile'}</h3>
+                    <button class="close-btn" onclick={closeProfileForm}>
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M18 6L6 18M6 6l12 12" />
+                      </svg>
+                    </button>
+                  </div>
+
+                  <div class="profile-form-body">
+                    <div class="setting-group">
+                      <label class="setting-label">Name <span class="required">*</span></label>
+                      <input type="text" bind:value={profileFormName} placeholder="My Profile" />
+                    </div>
+
+                    <div class="setting-group">
+                      <label class="setting-label">Description</label>
+                      <input type="text" bind:value={profileFormDescription} placeholder="Short description (optional)" />
+                    </div>
+
+                    <div class="setting-group">
+                      <label class="setting-label">Permission Mode</label>
+                      <div class="perm-options">
+                        {#each permModes as mode}
+                          <button
+                            class="perm-option"
+                            class:active={profileFormPermissionMode === mode.id}
+                            onclick={() => (profileFormPermissionMode = mode.id as any)}
+                          >
+                            <span class="perm-name">{mode.label}</span>
+                            <span class="perm-desc">{mode.desc}</span>
+                          </button>
+                        {/each}
+                      </div>
+                    </div>
+
+                    <div class="setting-group">
+                      <label class="setting-label">Allowed Tools</label>
+                      <input
+                        type="text"
+                        bind:value={profileFormAllowedTools}
+                        placeholder="Read, Glob, Grep (comma-separated, * for all)"
+                      />
+                      <p class="setting-desc">Tools that are always allowed. Use * to allow all tools.</p>
+                    </div>
+
+                    <div class="setting-group">
+                      <label class="setting-label">Disallowed Tools</label>
+                      <input
+                        type="text"
+                        bind:value={profileFormDisallowedTools}
+                        placeholder="Write, Edit, Bash (comma-separated, * for all)"
+                      />
+                      <p class="setting-desc">Tools that are always blocked. Use * to block all tools.</p>
+                    </div>
+
+                    <div class="setting-group">
+                      <label class="setting-label">System Prompt Override</label>
+                      <textarea
+                        bind:value={profileFormSystemPrompt}
+                        placeholder="Optional: override the system prompt when this profile is active"
+                        rows="4"
+                      ></textarea>
+                    </div>
+
+                    <div class="profile-form-footer">
+                      <button class="btn-secondary" onclick={closeProfileForm}>Cancel</button>
+                      <button
+                        class="btn-primary"
+                        onclick={saveProfile}
+                        disabled={profileFormSaving || !profileFormName.trim()}
+                      >
+                        {profileFormSaving ? 'Saving...' : editingProfile ? 'Update Profile' : 'Create Profile'}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            {/if}
           </div>
         {:else if activeTab === 'keybindings'}
           <div class="keybindings-list">
@@ -2170,5 +2389,168 @@
     color: var(--text-tertiary);
     padding: 16px 0;
     text-align: center;
+  }
+
+  /* ── Agent Profiles ── */
+  .profiles-section {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+  .profiles-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 16px;
+  }
+  .profiles-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .profile-card {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 12px 14px;
+    border-radius: var(--radius);
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-secondary);
+    transition: border-color var(--transition);
+  }
+  .profile-card.built-in {
+    border-color: var(--border-primary);
+  }
+  .profile-card:hover {
+    border-color: var(--accent-primary);
+  }
+  .profile-card-left {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .profile-card-name {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-primary);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .built-in-badge {
+    font-size: 10px;
+    font-weight: 600;
+    padding: 2px 7px;
+    border-radius: var(--radius-sm);
+    background: color-mix(in srgb, var(--accent-primary) 15%, transparent);
+    color: var(--accent-primary);
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+  }
+  .profile-card-desc {
+    font-size: 11px;
+    color: var(--text-tertiary);
+  }
+  .profile-card-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin-top: 4px;
+  }
+  .meta-chip {
+    font-size: 10px;
+    font-weight: 600;
+    padding: 2px 7px;
+    border-radius: var(--radius-sm);
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-secondary);
+    color: var(--text-tertiary);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+  .allow-chip {
+    color: var(--accent-success, #4ade80);
+    border-color: color-mix(in srgb, var(--accent-success, #4ade80) 30%, transparent);
+  }
+  .deny-chip {
+    color: var(--accent-danger, #f87171);
+    border-color: color-mix(in srgb, var(--accent-danger, #f87171) 30%, transparent);
+  }
+  .profile-card-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
+  }
+
+  /* Profile form overlay */
+  .profile-form-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 500;
+    background: rgba(0, 0, 0, 0.6);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    backdrop-filter: blur(4px);
+  }
+  .profile-form {
+    width: 540px;
+    max-width: 90vw;
+    max-height: 85vh;
+    overflow-y: auto;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-primary);
+    border-radius: var(--radius-lg, var(--radius));
+    box-shadow: var(--shadow-xl, var(--shadow-lg));
+  }
+  .profile-form-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--border-secondary);
+  }
+  .profile-form-header h3 {
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin: 0;
+  }
+  .profile-form-body {
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+  .profile-form-footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+    margin-top: 8px;
+  }
+  .required {
+    color: var(--accent-danger, #f87171);
+  }
+  .btn-primary {
+    padding: 7px 18px;
+    font-size: 13px;
+    font-weight: 600;
+    border-radius: var(--radius-sm);
+    background: var(--accent-primary);
+    color: var(--text-on-accent, #fff);
+    border: none;
+    cursor: pointer;
+    transition: all var(--transition);
+  }
+  .btn-primary:hover:not(:disabled) {
+    opacity: 0.9;
+  }
+  .btn-primary:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
   }
 </style>

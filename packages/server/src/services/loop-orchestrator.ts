@@ -30,6 +30,25 @@ class LoopOrchestrator {
   private runners = new Map<string, LoopRunner>();
   readonly events = new EventEmitter();
 
+  constructor() {
+    // Clean up finished runners
+    this.events.on('loop_done', (loopId: string) => {
+      this.runners.delete(loopId);
+    });
+
+    // On startup, fix any DB loops stuck as 'running' from a previous server crash
+    try {
+      const db = getDb();
+      const zombies = db.query("SELECT id FROM loops WHERE status = 'running'").all() as any[];
+      for (const z of zombies) {
+        db.query("UPDATE loops SET status = 'failed', completed_at = ? WHERE id = ?").run(Date.now(), z.id);
+        console.log(`[loop] Recovered zombie loop ${z.id} → failed`);
+      }
+    } catch {
+      /* DB may not be ready yet */
+    }
+  }
+
   async startLoop(
     prdId: string | null,
     workspacePath: string,
@@ -82,7 +101,9 @@ class LoopOrchestrator {
     // Start the loop asynchronously
     runner.run().catch((err) => {
       console.error(`[loop:${loopId}] Unhandled error:`, err);
-      this.emitEvent(loopId, 'cancelled', { message: String(err) });
+      this.updateStatus(loopId, 'failed');
+      this.emitEvent(loopId, 'completed', { message: `Loop failed: ${String(err)}` });
+      this.runners.delete(loopId);
     });
 
     this.emitEvent(loopId, 'started', { message: `Loop started for ${label}` });
@@ -92,24 +113,54 @@ class LoopOrchestrator {
 
   async pauseLoop(loopId: string): Promise<void> {
     const runner = this.runners.get(loopId);
-    if (!runner) throw new Error(`Loop ${loopId} not found`);
-    runner.pause();
+    if (!runner) {
+      // No runner in memory — just update DB if it's still running
+      const db = getDb();
+      const row = db.query('SELECT status FROM loops WHERE id = ?').get(loopId) as any;
+      if (!row) throw new Error(`Loop ${loopId} not found`);
+      if (row.status !== 'running') return;
+    } else {
+      runner.pause();
+    }
     this.updateStatus(loopId, 'paused');
     this.emitEvent(loopId, 'paused', { message: 'Loop paused' });
   }
 
   async resumeLoop(loopId: string): Promise<void> {
     const runner = this.runners.get(loopId);
-    if (!runner) throw new Error(`Loop ${loopId} not found`);
-    runner.resume();
+    if (!runner) {
+      const db = getDb();
+      const row = db.query('SELECT status FROM loops WHERE id = ?').get(loopId) as any;
+      if (!row) throw new Error(`Loop ${loopId} not found`);
+      // Can't resume a zombie — it has no runner. Mark it failed.
+      if (row.status === 'paused') {
+        this.updateStatus(loopId, 'failed');
+        this.emitEvent(loopId, 'completed', {
+          message: 'Loop runner not available (server may have restarted). Please start a new loop.',
+        });
+        return;
+      }
+    } else {
+      runner.resume();
+    }
     this.updateStatus(loopId, 'running');
     this.emitEvent(loopId, 'resumed', { message: 'Loop resumed' });
   }
 
   async cancelLoop(loopId: string): Promise<void> {
     const runner = this.runners.get(loopId);
-    if (!runner) throw new Error(`Loop ${loopId} not found`);
-    runner.cancel();
+    if (runner) {
+      runner.cancel();
+      this.runners.delete(loopId);
+    } else {
+      // Runner not in memory (server restart or crash) — just update DB
+      const db = getDb();
+      const row = db.query('SELECT status FROM loops WHERE id = ?').get(loopId) as any;
+      if (!row) throw new Error(`Loop ${loopId} not found`);
+      if (row.status !== 'running' && row.status !== 'paused') {
+        return; // Already terminal
+      }
+    }
     this.updateStatus(loopId, 'cancelled');
     this.emitEvent(loopId, 'cancelled', { message: 'Loop cancelled by user' });
   }
@@ -232,7 +283,6 @@ class LoopRunner {
 
       // Mark story as in_progress
       this.updateStory(story.id, { status: 'in_progress', attempts: story.attempts + 1 });
-      this.emitEvent('story_started', { storyId: story.id, storyTitle: story.title, iteration });
 
       // Pre-generate assistant message ID for snapshot linkage
       const assistantMsgId = nanoid();
@@ -264,6 +314,14 @@ class LoopRunner {
 
       this.updateStory(story.id, { conversationId });
 
+      // Emit story_started AFTER conversation creation so the client can navigate to it
+      this.emitEvent('story_started', {
+        storyId: story.id,
+        storyTitle: story.title,
+        iteration,
+        conversationId,
+      });
+
       // NOTE: Task creation side-effect removed — the story itself is now the
       // canonical work item. Previously created a `tasks` table entry here.
 
@@ -279,6 +337,7 @@ class LoopRunner {
       // Spawn Claude session
       let agentResult = '';
       let agentError: string | null = null;
+      const AGENT_TIMEOUT_MS = 10 * 60 * 1000; // 10 minutes per story
       try {
         const sessionId = await claudeManager.createSession(conversationId, {
           model: this.config.model,
@@ -290,14 +349,32 @@ class LoopRunner {
         this.updateStory(story.id, { agentId: sessionId });
         this.updateLoopDb({ current_agent_id: sessionId });
 
-        // Read the stream to completion
+        // Read the stream to completion with timeout
         const stream = await claudeManager.sendMessage(sessionId, prompt);
         const reader = stream.getReader();
 
+        const timeoutPromise = new Promise<{ done: true; value: undefined }>((resolve) =>
+          setTimeout(() => resolve({ done: true, value: undefined }), AGENT_TIMEOUT_MS),
+        );
+        let timedOut = false;
+
         while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          agentResult += new TextDecoder().decode(value);
+          const result = await Promise.race([reader.read(), timeoutPromise]);
+          if (result.done) {
+            if (!result.value && agentResult.length === 0) {
+              // Timeout likely hit before any data
+              timedOut = true;
+            }
+            break;
+          }
+          agentResult += new TextDecoder().decode(result.value);
+          // Reset timeout awareness — we got data
+        }
+
+        if (timedOut) {
+          agentError = `Agent timed out after ${AGENT_TIMEOUT_MS / 1000}s with no output`;
+          console.error(`[loop:${this.loopId}] Agent timeout for story ${story.id}`);
+          try { reader.cancel(); } catch { /* best effort */ }
         }
       } catch (err) {
         agentError = String(err);
@@ -371,6 +448,7 @@ class LoopRunner {
           storyId: story.id,
           storyTitle: story.title,
           iteration,
+          conversationId,
         });
         this.addLogEntry({
           iteration,
@@ -427,6 +505,7 @@ class LoopRunner {
           storyId: story.id,
           storyTitle: story.title,
           iteration,
+          conversationId,
           message: failReason,
         });
         this.addLogEntry({
@@ -475,7 +554,8 @@ class LoopRunner {
       });
     }
 
-    // Clean up
+    // Clean up — the orchestrator will remove us from the runners Map
+    // via the 'loop_done' event handler
     this.events.emit('loop_done', this.loopId);
   }
 

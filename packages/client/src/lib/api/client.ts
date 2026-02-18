@@ -1394,6 +1394,26 @@ export const api = {
     getProgress: (id: string) => request<{ ok: boolean; data: any }>(`/initiatives/${id}/progress`),
   },
 
+  // --- Agent Profiles ---
+  profiles: {
+    list: () =>
+      request<{ ok: boolean; data: import('@e/shared').AgentProfile[] }>('/profiles'),
+    get: (id: string) =>
+      request<{ ok: boolean; data: import('@e/shared').AgentProfile }>(`/profiles/${id}`),
+    create: (body: import('@e/shared').AgentProfileCreateInput) =>
+      request<{ ok: boolean; data: import('@e/shared').AgentProfile }>('/profiles', {
+        method: 'POST',
+        body: JSON.stringify(body),
+      }),
+    update: (id: string, body: import('@e/shared').AgentProfileUpdateInput) =>
+      request<{ ok: boolean; data: import('@e/shared').AgentProfile }>(`/profiles/${id}`, {
+        method: 'PATCH',
+        body: JSON.stringify(body),
+      }),
+    delete: (id: string) =>
+      request<{ ok: boolean }>(`/profiles/${id}`, { method: 'DELETE' }),
+  },
+
   // --- Daily Digest ---
   digest: {
     today: (workspacePath?: string, date?: string) => {

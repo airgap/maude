@@ -28,6 +28,7 @@ import type {
   UserStory,
 } from '@e/shared';
 import { api, getBaseUrl, getAuthToken } from '../api/client';
+import { conversationStore } from './conversation.svelte';
 
 // --- Helper functions for effort-value matrix computation ---
 
@@ -461,6 +462,10 @@ function createLoopStore() {
         case 'story_started':
           // Update story status in the PRD list
           this.updateStoryInPrds(event.data.storyId!, 'in_progress');
+          // Navigate to the new conversation so the user can watch the agent work
+          if (event.data.conversationId) {
+            this.navigateToLoopConversation(event.data.conversationId, event.data.storyTitle);
+          }
           break;
 
         case 'story_completed':
@@ -518,59 +523,126 @@ function createLoopStore() {
       }));
     },
 
+    /** Fetch and navigate to a conversation created by the loop. */
+    async navigateToLoopConversation(convId: string, storyTitle?: string) {
+      try {
+        const res = await api.conversations.get(convId);
+        if (res.ok && res.data) {
+          const conv = res.data;
+          // Add to the conversation list
+          conversationStore.prependConversation({
+            id: conv.id,
+            title: conv.title,
+            createdAt: conv.createdAt,
+            updatedAt: conv.updatedAt,
+            messageCount: conv.messages?.length ?? 0,
+            model: conv.model,
+          });
+          // Set as active so the chat pane shows the agent's work
+          conversationStore.setActive(conv);
+        }
+      } catch (err) {
+        console.error(`[loop] Failed to navigate to loop conversation ${convId}:`, err);
+      }
+    },
+
     // --- SSE event streaming ---
 
     async connectEvents(loopId: string) {
       this.disconnectEvents();
 
-      const abort = new AbortController();
-      eventAbort = abort;
+      const MAX_RECONNECT_ATTEMPTS = 5;
+      const RECONNECT_DELAY_MS = 3000;
+      let reconnectAttempts = 0;
 
-      try {
-        const headers: Record<string, string> = {};
-        const token = getAuthToken();
-        if (token) headers['Authorization'] = `Bearer ${token}`;
+      const connect = async () => {
+        const abort = new AbortController();
+        eventAbort = abort;
 
-        const res = await fetch(`${getBaseUrl()}/loops/${loopId}/events`, {
-          headers,
-          signal: abort.signal,
-        });
+        try {
+          const headers: Record<string, string> = {};
+          const token = getAuthToken();
+          if (token) headers['Authorization'] = `Bearer ${token}`;
 
-        if (!res.ok || !res.body) return;
+          const res = await fetch(`${getBaseUrl()}/loops/${loopId}/events`, {
+            headers,
+            signal: abort.signal,
+          });
 
-        const reader = res.body.getReader();
-        eventReader = reader;
-        const decoder = new TextDecoder();
-        let buffer = '';
+          if (!res.ok || !res.body) return;
 
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
+          const reader = res.body.getReader();
+          eventReader = reader;
+          const decoder = new TextDecoder();
+          let buffer = '';
+          reconnectAttempts = 0; // Reset on successful connect
 
-          buffer += decoder.decode(value, { stream: true });
-          const lines = buffer.split('\n');
-          buffer = lines.pop() || '';
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
 
-          for (const line of lines) {
-            if (!line.startsWith('data: ')) continue;
-            const json = line.slice(6).trim();
-            if (!json || json === '{"type":"ping"}') continue;
+            buffer += decoder.decode(value, { stream: true });
+            const lines = buffer.split('\n');
+            buffer = lines.pop() || '';
 
-            try {
-              const event = JSON.parse(json) as StreamLoopEvent;
-              if (event.type === 'loop_event') {
-                this.handleLoopEvent(event);
+            for (const line of lines) {
+              if (!line.startsWith('data: ')) continue;
+              const json = line.slice(6).trim();
+              if (!json || json === '{"type":"ping"}') continue;
+
+              try {
+                const event = JSON.parse(json) as StreamLoopEvent;
+                if (event.type === 'loop_event') {
+                  this.handleLoopEvent(event);
+                }
+              } catch {
+                /* non-JSON line */
               }
-            } catch {
-              /* non-JSON line */
+            }
+          }
+
+          // Stream ended normally — check if loop is still active and reconnect
+          if (activeLoop && (activeLoop.status === 'running' || activeLoop.status === 'paused')) {
+            if (reconnectAttempts < MAX_RECONNECT_ATTEMPTS) {
+              reconnectAttempts++;
+              console.log(`[loop] SSE stream ended, reconnecting (attempt ${reconnectAttempts})...`);
+              // Refresh loop state from server before reconnecting
+              try {
+                const loopRes = await api.loops.get(loopId);
+                if (loopRes.ok) {
+                  const serverLoop = loopRes.data;
+                  if (serverLoop.status === 'completed' || serverLoop.status === 'cancelled' || serverLoop.status === 'failed') {
+                    // Server says it's done — update local state
+                    activeLoop = { ...activeLoop, ...serverLoop };
+                    return;
+                  }
+                }
+              } catch { /* proceed with reconnect */ }
+              await new Promise((r) => setTimeout(r, RECONNECT_DELAY_MS));
+              if (eventAbort && !eventAbort.signal.aborted) {
+                await connect();
+              }
+            } else {
+              console.warn('[loop] Max reconnect attempts reached, refreshing loop state from server');
+              await this.loadActiveLoop();
+            }
+          }
+        } catch (err) {
+          if ((err as Error).name !== 'AbortError') {
+            console.error('[loop] Event stream error:', err);
+            // Attempt reconnect on non-abort errors
+            if (activeLoop && (activeLoop.status === 'running' || activeLoop.status === 'paused') && reconnectAttempts < MAX_RECONNECT_ATTEMPTS) {
+              reconnectAttempts++;
+              await new Promise((r) => setTimeout(r, RECONNECT_DELAY_MS));
+              if (eventAbort && !eventAbort.signal.aborted) {
+                await connect();
+              }
             }
           }
         }
-      } catch (err) {
-        if ((err as Error).name !== 'AbortError') {
-          console.error('[loop] Event stream error:', err);
-        }
-      }
+      };
+
+      await connect();
     },
 
     disconnectEvents() {
@@ -617,14 +689,35 @@ function createLoopStore() {
         if (res.ok && res.data.length > 0) {
           activeLoop = res.data[0];
           log = activeLoop!.iterationLog || [];
-          // Connect to events
-          this.connectEvents(activeLoop!.id);
+          // Refresh from the specific loop endpoint to get authoritative state
+          try {
+            const freshRes = await api.loops.get(activeLoop!.id);
+            if (freshRes.ok) {
+              activeLoop = freshRes.data;
+              log = activeLoop!.iterationLog || [];
+            }
+          } catch { /* use cached data */ }
+          // Connect to events if still running
+          if (activeLoop && activeLoop.status === 'running') {
+            this.connectEvents(activeLoop.id);
+          }
         } else {
           // Check for paused loops
           const pausedRes = await api.loops.list('paused');
           if (pausedRes.ok && pausedRes.data.length > 0) {
             activeLoop = pausedRes.data[0];
             log = activeLoop!.iterationLog || [];
+          } else {
+            // Check for recently-failed loops that might have been "running" before
+            const failedRes = await api.loops.list('failed');
+            if (failedRes.ok && failedRes.data.length > 0) {
+              const recent = failedRes.data[0];
+              // If it failed in the last 60 seconds, show it so user sees the transition
+              if (recent.completedAt && Date.now() - recent.completedAt < 60000) {
+                activeLoop = recent;
+                log = recent.iterationLog || [];
+              }
+            }
           }
         }
       } catch {

@@ -4,6 +4,7 @@
   import { settingsStore } from '$lib/stores/settings.svelte';
   import { workspaceListStore } from '$lib/stores/projects.svelte';
   import { editorStore } from '$lib/stores/editor.svelte';
+  import { lspStore } from '$lib/stores/lsp.svelte';
   import { sendAndStream, cancelStream } from '$lib/api/sse';
   import { api } from '$lib/api/client';
   import { executeSlashCommand, type SlashCommandContext } from '$lib/commands/slash-commands';
@@ -11,6 +12,11 @@
   import { workStore } from '$lib/stores/work.svelte';
   import { onMount } from 'svelte';
   import SlashCommandMenu from './SlashCommandMenu.svelte';
+  import MentionMenu from './MentionMenu.svelte';
+  import MentionFilePicker from './MentionFilePicker.svelte';
+  import MentionSymbolPicker from './MentionSymbolPicker.svelte';
+  import MentionRulePicker from './MentionRulePicker.svelte';
+  import MentionThreadPicker from './MentionThreadPicker.svelte';
   import TaskSplitSuggestion from './TaskSplitSuggestion.svelte';
   import VoiceButton from './VoiceButton.svelte';
   import {
@@ -18,6 +24,18 @@
     type DetectedTask,
     type DetectionResult,
   } from '$lib/utils/task-detector';
+
+  // ── @-mention types ──
+  type MentionKind = 'file' | 'symbol' | 'diagnostics' | 'rule' | 'thread';
+
+  interface Mention {
+    id: string;
+    kind: MentionKind;
+    label: string;
+    /** Context text to inject, formatted as XML */
+    context: string;
+    collapsed: boolean;
+  }
 
   let inputText = $state('');
   let textarea: HTMLTextAreaElement;
@@ -39,6 +57,13 @@
   let taskSuggestion = $state<DetectionResult | null>(null);
   let pendingMessage = $state('');
 
+  // ── @-mention state ──
+  let showMentionMenu = $state(false);
+  let mentionQuery = $state('');
+  let mentionAtPos = $state(-1); // position of '@' in inputText
+  let activePicker = $state<MentionKind | null>(null);
+  let mentions = $state<Mention[]>([]);
+
   onMount(() => {
     onFocusChatInput(() => {
       // Small delay to let Svelte finish any pending state updates (e.g. clearing active conversation)
@@ -54,15 +79,165 @@
   }
 
   function buildContextPrefix(): string {
-    if (contextFiles.size === 0) return '';
     const parts: string[] = [];
+
+    // Editor tab context files (existing behaviour)
     for (const tabId of contextFiles) {
       const tab = editorStore.tabs.find((t) => t.id === tabId);
       if (tab) {
         parts.push(`<file path="${tab.filePath}">\n${tab.content}\n</file>`);
       }
     }
+
+    // @-mention context
+    for (const mention of mentions) {
+      parts.push(mention.context);
+    }
+
     return parts.length > 0 ? parts.join('\n') + '\n\n' : '';
+  }
+
+  // ── Mention helpers ──
+
+  function closeMentionMenu() {
+    showMentionMenu = false;
+    activePicker = null;
+    mentionAtPos = -1;
+    mentionQuery = '';
+  }
+
+  function removeMentionToken() {
+    // Remove the @... token from the input text
+    if (mentionAtPos >= 0) {
+      const before = inputText.slice(0, mentionAtPos);
+      // Remove everything from '@' to end of the mention token (up to next space or end)
+      const after = inputText.slice(mentionAtPos);
+      const spaceIdx = after.search(/\s/);
+      const remaining = spaceIdx >= 0 ? after.slice(spaceIdx) : '';
+      inputText = (before + remaining).trimStart();
+      resizeTextarea();
+    }
+    mentionAtPos = -1;
+  }
+
+  function addMention(mention: Omit<Mention, 'id' | 'collapsed'>) {
+    const id = `mention-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    mentions = [...mentions, { ...mention, id, collapsed: false }];
+    removeMentionToken();
+    closeMentionMenu();
+    textarea?.focus();
+  }
+
+  function removeMention(id: string) {
+    mentions = mentions.filter((m) => m.id !== id);
+  }
+
+  function toggleMentionCollapse(id: string) {
+    mentions = mentions.map((m) => m.id === id ? { ...m, collapsed: !m.collapsed } : m);
+  }
+
+  async function handleMentionTypeSelect(type: MentionKind) {
+    showMentionMenu = false;
+    if (type === 'diagnostics') {
+      // @diagnostics: collect all current LSP diagnostics immediately — no secondary picker
+      const diagText = await collectDiagnostics();
+      addMention({
+        kind: 'diagnostics',
+        label: '@diagnostics',
+        context: `<diagnostics>\n${diagText || 'No active LSP diagnostics found.'}\n</diagnostics>`,
+      });
+    } else {
+      activePicker = type;
+    }
+  }
+
+  async function collectDiagnostics(): Promise<string> {
+    // Collect cached diagnostics from open editor tabs via LSP publishDiagnostics
+    // We use a short-lived subscription to gather any pending diagnostics
+    const lines: string[] = [];
+    // Check all open tabs and request diagnostics from the LSP
+    for (const tab of editorStore.tabs) {
+      const ext = tab.fileName.split('.').pop() || '';
+      const langMap: Record<string, string> = {
+        ts: 'typescript', tsx: 'typescript', js: 'javascript', jsx: 'javascript',
+        py: 'python', rs: 'rust', go: 'go', cs: 'csharp', java: 'java',
+      };
+      const language = langMap[ext];
+      if (!language) continue;
+      if (!lspStore.isConnected(language)) continue;
+      // Request document diagnostics
+      try {
+        const result = await lspStore.request(language, 'textDocument/diagnostic', {
+          textDocument: { uri: `file://${tab.filePath}` },
+        });
+        const items = result?.items || result?.diagnostics || [];
+        for (const d of items) {
+          const severity = d.severity === 1 ? 'error' : d.severity === 2 ? 'warning' : 'info';
+          const line = (d.range?.start?.line ?? 0) + 1;
+          lines.push(`[${severity}] ${tab.filePath}:${line} — ${d.message}`);
+        }
+      } catch {
+        // LSP may not support pull diagnostics; skip
+      }
+    }
+    return lines.join('\n');
+  }
+
+  async function handleFileMentionSelect(filePath: string) {
+    try {
+      const res = await api.files.read(filePath);
+      const content = res.data.content;
+      const fileName = filePath.split('/').pop() || filePath;
+      addMention({
+        kind: 'file',
+        label: `@file:${fileName}`,
+        context: `<file path="${filePath}">\n${content}\n</file>`,
+      });
+    } catch {
+      closeMentionMenu();
+      textarea?.focus();
+    }
+  }
+
+  function handleSymbolMentionSelect(sym: { name: string; kind: string; filePath: string; startRow: number; startCol: number }) {
+    addMention({
+      kind: 'symbol',
+      label: `@symbol:${sym.name}`,
+      context: `<symbol name="${sym.name}" kind="${sym.kind}" file="${sym.filePath}" line="${sym.startRow + 1}" />`,
+    });
+  }
+
+  function handleRuleMentionSelect(rule: { name: string; content: string; path: string }) {
+    addMention({
+      kind: 'rule',
+      label: `@rule:${rule.name}`,
+      context: `<rule name="${rule.name}">\n${rule.content}\n</rule>`,
+    });
+  }
+
+  async function handleThreadMentionSelect(conv: { id: string; title: string; messageCount: number }) {
+    // Fetch the conversation messages for a summary
+    try {
+      const res = await api.conversations.get(conv.id);
+      const messages = res.data.messages || [];
+      // Build a brief summary: first user message + last assistant message
+      const userMsgs = messages.filter((m: any) => m.role === 'user');
+      const assistantMsgs = messages.filter((m: any) => m.role === 'assistant');
+      const firstUser = userMsgs[0]?.content?.[0]?.text || '';
+      const lastAssistant = assistantMsgs[assistantMsgs.length - 1]?.content?.[0]?.text || '';
+      const summary = [
+        firstUser ? `User: ${firstUser.slice(0, 200)}` : '',
+        lastAssistant ? `Assistant: ${lastAssistant.slice(0, 200)}` : '',
+      ].filter(Boolean).join('\n');
+      addMention({
+        kind: 'thread',
+        label: `@thread:${conv.title.slice(0, 30)}`,
+        context: `<thread title="${conv.title}" messages="${conv.messageCount}">\n${summary || 'No messages.'}\n</thread>`,
+      });
+    } catch {
+      closeMentionMenu();
+      textarea?.focus();
+    }
   }
 
   async function detectAndParseDiff(text: string) {
@@ -228,6 +403,7 @@
     inputText = '';
     resizeTextarea();
     contextFiles = new Set();
+    mentions = [];
     await sendAndStream(conversationStore.activeId!, diffContext + contextPrefix + text);
   }
 
@@ -350,9 +526,24 @@
       slashQuery = '';
     }
 
+    // @-mention detection
+    if (e.key === '@') {
+      const cursorPos = textarea?.selectionStart ?? inputText.length;
+      // Show mention menu when @ is typed (at any position)
+      showMentionMenu = true;
+      mentionQuery = '';
+      mentionAtPos = cursorPos;
+      // Don't prevent default so @ gets inserted into input
+    }
+
     // Escape: cancel streaming or close menus
     if (e.key === 'Escape') {
-      if (showSlashMenu) {
+      if (activePicker) {
+        activePicker = null;
+        textarea?.focus();
+      } else if (showMentionMenu) {
+        closeMentionMenu();
+      } else if (showSlashMenu) {
         showSlashMenu = false;
       } else if (
         streamStore.isStreaming &&
@@ -360,6 +551,14 @@
         conversationStore.activeId
       ) {
         cancelStream(conversationStore.activeId);
+      }
+    }
+
+    // Backspace: if we just deleted the @, close the mention menu
+    if (e.key === 'Backspace' && showMentionMenu) {
+      const cursorPos = textarea?.selectionStart ?? 0;
+      if (cursorPos <= mentionAtPos) {
+        closeMentionMenu();
       }
     }
   }
@@ -373,6 +572,25 @@
     } else {
       showSlashMenu = false;
     }
+
+    // Update mention menu query as user types after '@'
+    if (showMentionMenu && mentionAtPos >= 0) {
+      const cursorPos = textarea?.selectionStart ?? inputText.length;
+      if (cursorPos > mentionAtPos) {
+        // Extract query text after '@'
+        const textAfterAt = inputText.slice(mentionAtPos + 1, cursorPos);
+        // If there's a space, the mention token ended — close menu
+        if (/\s/.test(textAfterAt)) {
+          closeMentionMenu();
+        } else {
+          mentionQuery = textAfterAt;
+        }
+      } else {
+        // Cursor went back before '@'
+        closeMentionMenu();
+      }
+    }
+
     // Detect if the entire input is a diff/URL and show preview
     if (inputText.trim().length > 10) {
       detectAndParseDiff(inputText.trim());
@@ -423,6 +641,36 @@
       query={slashQuery}
       onSelect={selectSlashCommand}
       onClose={() => (showSlashMenu = false)}
+    />
+  {/if}
+
+  {#if showMentionMenu && !activePicker}
+    <MentionMenu
+      query={mentionQuery}
+      onSelect={handleMentionTypeSelect}
+      onClose={closeMentionMenu}
+    />
+  {/if}
+
+  {#if activePicker === 'file'}
+    <MentionFilePicker
+      onSelect={handleFileMentionSelect}
+      onClose={closeMentionMenu}
+    />
+  {:else if activePicker === 'symbol'}
+    <MentionSymbolPicker
+      onSelect={handleSymbolMentionSelect}
+      onClose={closeMentionMenu}
+    />
+  {:else if activePicker === 'rule'}
+    <MentionRulePicker
+      onSelect={handleRuleMentionSelect}
+      onClose={closeMentionMenu}
+    />
+  {:else if activePicker === 'thread'}
+    <MentionThreadPicker
+      onSelect={handleThreadMentionSelect}
+      onClose={closeMentionMenu}
     />
   {/if}
 
@@ -534,6 +782,33 @@
       </div>
     {/if}
   </div>
+
+  {#if mentions.length > 0}
+    <div class="mention-badges">
+      {#each mentions as mention (mention.id)}
+        <div class="mention-badge" class:collapsed={mention.collapsed}>
+          <button
+            class="mention-badge-label"
+            onclick={() => toggleMentionCollapse(mention.id)}
+            title={mention.collapsed ? 'Expand context' : 'Collapse context'}
+          >
+            <span class="mention-badge-kind">{mention.label}</span>
+            <span class="mention-badge-arrow">{mention.collapsed ? '▶' : '▼'}</span>
+          </button>
+          {#if !mention.collapsed}
+            <div class="mention-badge-preview">
+              <pre class="mention-context-text">{mention.context.slice(0, 300)}{mention.context.length > 300 ? '…' : ''}</pre>
+            </div>
+          {/if}
+          <button
+            class="mention-badge-remove"
+            onclick={() => removeMention(mention.id)}
+            title="Remove mention"
+          >×</button>
+        </div>
+      {/each}
+    </div>
+  {/if}
 
   {#if editorStore.tabs.length > 0}
     <div class="context-chips">
@@ -1010,5 +1285,92 @@
     font-size: 10px;
     color: var(--text-tertiary);
     padding: 1px 6px;
+  }
+
+  /* ── @-mention badges ── */
+  .mention-badges {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    margin-bottom: 6px;
+    padding: 0 4px;
+  }
+
+  .mention-badge {
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-secondary);
+    border-left: 3px solid var(--accent-primary);
+    border-radius: var(--radius-sm);
+    font-size: 12px;
+    overflow: hidden;
+    transition: border-color var(--transition);
+  }
+  .mention-badge:hover {
+    border-color: var(--accent-primary);
+  }
+
+  .mention-badge-label {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    width: 100%;
+    padding: 4px 8px;
+    text-align: left;
+    cursor: pointer;
+    background: transparent;
+  }
+  .mention-badge-label:hover {
+    background: var(--bg-hover);
+  }
+
+  .mention-badge-kind {
+    font-weight: 600;
+    color: var(--accent-primary);
+    font-size: 11px;
+    flex: 1;
+  }
+
+  .mention-badge-arrow {
+    font-size: 9px;
+    color: var(--text-tertiary);
+    flex-shrink: 0;
+  }
+
+  .mention-badge-preview {
+    padding: 4px 8px 6px;
+    border-top: 1px solid var(--border-secondary);
+  }
+
+  .mention-context-text {
+    font-family: var(--font-family-mono, monospace);
+    font-size: 10px;
+    color: var(--text-secondary);
+    white-space: pre-wrap;
+    word-break: break-all;
+    margin: 0;
+    max-height: 80px;
+    overflow: hidden;
+    line-height: 1.4;
+  }
+
+  .mention-badge-remove {
+    position: absolute;
+    top: 3px;
+    right: 4px;
+    color: var(--text-tertiary);
+    font-size: 14px;
+    line-height: 1;
+    padding: 0 3px;
+    opacity: 0;
+    transition: opacity var(--transition);
+  }
+  .mention-badge {
+    position: relative;
+  }
+  .mention-badge:hover .mention-badge-remove {
+    opacity: 1;
+  }
+  .mention-badge-remove:hover {
+    color: var(--accent-error);
   }
 </style>

@@ -101,6 +101,12 @@ export const DEFAULT_SETTINGS: Settings = {
       context: 'global',
       description: 'Command palette (alt)',
     },
+    {
+      keys: 'Ctrl+Shift+,',
+      action: 'cycleProfile',
+      context: 'global',
+      description: 'Cycle agent profile',
+    },
   ],
   mcpServers: [],
   autoMemoryEnabled: true,

@@ -2,6 +2,7 @@
   import { uiStore } from '$lib/stores/ui.svelte';
   import { editorStore } from '$lib/stores/editor.svelte';
   import { terminalStore } from '$lib/stores/terminal.svelte';
+  import { profilesStore } from '$lib/stores/profiles.svelte';
   import { workspaceStore } from '$lib/stores/workspace.svelte';
   import { sidebarLayoutStore } from '$lib/stores/sidebarLayout.svelte';
   import { primaryPaneStore } from '$lib/stores/primaryPane.svelte';
@@ -44,6 +45,7 @@
       workspaceStore.init();
       sidebarLayoutStore.init();
       primaryPaneStore.init();
+      profilesStore.load();
 
       // On mobile, start with sidebar closed
       if (deviceStore.isMobileUI) {
@@ -229,6 +231,15 @@
       e.preventDefault();
       if (workspaceStore.activeWorkspaceId) {
         workspaceStore.closeWorkspace(workspaceStore.activeWorkspaceId);
+      }
+    }
+    // Ctrl+Shift+,: Cycle through agent profiles
+    if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === ',') {
+      e.preventDefault();
+      profilesStore.cycleProfile();
+      const profile = profilesStore.activeProfile;
+      if (profile) {
+        uiStore.toast(`Profile: ${profile.name}`, 'success');
       }
     }
     // Escape: Close modal

@@ -725,6 +725,7 @@ export interface StreamLoopEvent {
     storyId?: string;
     storyTitle?: string;
     iteration?: number;
+    conversationId?: string;
     qualityResult?: QualityCheckResult;
     learning?: string;
     message?: string;

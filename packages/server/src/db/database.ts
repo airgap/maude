@@ -216,6 +216,20 @@ export function initDatabase(): void {
 
     CREATE UNIQUE INDEX IF NOT EXISTS idx_rules_metadata_path ON rules_metadata(workspace_path, file_path);
     CREATE INDEX IF NOT EXISTS idx_rules_metadata_mode ON rules_metadata(workspace_path, mode);
+
+    CREATE TABLE IF NOT EXISTS agent_profiles (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      description TEXT,
+      permission_mode TEXT NOT NULL DEFAULT 'unrestricted',
+      allowed_tools TEXT NOT NULL DEFAULT '[]',
+      disallowed_tools TEXT NOT NULL DEFAULT '[]',
+      system_prompt TEXT,
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_agent_profiles_name ON agent_profiles(name);
   `);
 
   // Migrate: add new conversation columns (safe ALTER TABLE — no-ops if already exist)
@@ -234,6 +248,7 @@ export function initDatabase(): void {
     `ALTER TABLE prd_stories ADD COLUMN dependency_reasons TEXT NOT NULL DEFAULT '{}'`,
     `ALTER TABLE prd_stories ADD COLUMN priority_recommendation TEXT`,
     `ALTER TABLE git_snapshots ADD COLUMN message_id TEXT`,
+    `ALTER TABLE conversations ADD COLUMN profile_id TEXT`,
   ];
   for (const sql of alterColumns) {
     try {

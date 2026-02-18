@@ -47,6 +47,14 @@ export type { TaskStatus, Task, TaskCreateInput, TaskUpdateInput } from './tasks
 export type { AgentType, AgentStatus, Agent, AgentSpawnInput } from './agents.js';
 
 export type {
+  AgentProfile,
+  AgentProfileCreateInput,
+  AgentProfileUpdateInput,
+} from './profiles.js';
+
+export { BUILT_IN_PROFILES } from './profiles.js';
+
+export type {
   MCPTransport,
   MCPScope,
   MCPServer,

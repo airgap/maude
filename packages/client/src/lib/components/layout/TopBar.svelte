@@ -5,6 +5,7 @@
   import { uiStore } from '$lib/stores/ui.svelte';
   import WorkspaceTabBar from './WorkspaceTabBar.svelte';
   import WindowControls from './WindowControls.svelte';
+  import ProfileSwitcher from './ProfileSwitcher.svelte';
 
   const models = [
     { id: 'claude-opus-4-6', label: 'Opus 4.6' },
@@ -51,6 +52,8 @@
     {#if conversationStore.active?.planMode}
       <span class="plan-badge">PLAN MODE</span>
     {/if}
+
+    <ProfileSwitcher />
 
     <button
       class="plan-toggle"
