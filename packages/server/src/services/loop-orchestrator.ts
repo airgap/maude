@@ -442,15 +442,15 @@ class LoopRunner {
         );
 
         if (allCompleted) {
-          this.updateLoopDb({ status: 'completed', completed_at: Date.now() });
+          this.updateLoopDb({ status: 'completed', completed_at: Date.now(), current_story_id: null, current_agent_id: null });
           this.emitEvent('completed', { message: 'All stories completed!' });
           this.events.emit('loop_done', this.loopId);
           return;
         }
 
         // No eligible stories left (all failed/maxed out)
-        this.updateLoopDb({ status: 'failed', completed_at: Date.now() });
-        this.emitEvent('completed', {
+        this.updateLoopDb({ status: 'failed', completed_at: Date.now(), current_story_id: null, current_agent_id: null });
+        this.emitEvent('failed', {
           message: 'No more eligible stories. Some stories could not be completed.',
         });
         this.events.emit('loop_done', this.loopId);
@@ -747,6 +747,9 @@ class LoopRunner {
           }
         }
 
+        // Clear current story/agent so UI doesn't show stale state between iterations
+        this.updateLoopDb({ current_story_id: null, current_agent_id: null });
+
         this.emitEvent('iteration_end', { storyId: story.id, storyTitle: story.title, iteration });
         // === End iteration try block ===
       } catch (iterErr) {
@@ -778,6 +781,9 @@ class LoopRunner {
           /* best effort */
         }
 
+        // Clear current story/agent so UI doesn't show stale state after crash
+        this.updateLoopDb({ current_story_id: null, current_agent_id: null });
+
         this.emitEvent('story_failed', {
           storyId: story.id,
           storyTitle: story.title,
@@ -793,7 +799,7 @@ class LoopRunner {
 
     if (this.cancelled) {
       console.log(`[loop:${this.loopId}] Cancelled after ${iteration} iterations`);
-      this.updateLoopDb({ status: 'cancelled', completed_at: Date.now() });
+      this.updateLoopDb({ status: 'cancelled', completed_at: Date.now(), current_story_id: null, current_agent_id: null });
       this.events.emit('loop_done', this.loopId);
       return;
     }
@@ -806,11 +812,11 @@ class LoopRunner {
     const allDone = finalStories.every((s) => s.status === 'completed' || s.status === 'skipped' || s.researchOnly);
 
     if (allDone) {
-      this.updateLoopDb({ status: 'completed', completed_at: Date.now() });
+      this.updateLoopDb({ status: 'completed', completed_at: Date.now(), current_story_id: null, current_agent_id: null });
       this.emitEvent('completed', { message: 'All stories completed!' });
     } else {
-      this.updateLoopDb({ status: 'failed', completed_at: Date.now() });
-      this.emitEvent('completed', {
+      this.updateLoopDb({ status: 'failed', completed_at: Date.now(), current_story_id: null, current_agent_id: null });
+      this.emitEvent('failed', {
         message: `Max iterations (${this.config.maxIterations}) reached. Some stories remain incomplete.`,
       });
     }
@@ -820,6 +826,24 @@ class LoopRunner {
     this.events.emit('loop_done', this.loopId);
     } finally {
       this.stopHeartbeat();
+      // Safety net: if the loop somehow exits without setting a terminal status,
+      // mark it as failed so it doesn't appear stuck as "running" forever.
+      try {
+        const db = getDb();
+        const row = db.query('SELECT status FROM loops WHERE id = ?').get(this.loopId) as any;
+        if (row && (row.status === 'running' || row.status === 'paused')) {
+          console.warn(`[loop:${this.loopId}] Safety net: loop exited while still "${row.status}", marking failed`);
+          db.query('UPDATE loops SET status = ?, completed_at = ?, current_story_id = NULL, current_agent_id = NULL WHERE id = ?').run(
+            'failed',
+            Date.now(),
+            this.loopId,
+          );
+          this.emitEvent('failed', { message: 'Loop runner exited unexpectedly.' });
+          this.events.emit('loop_done', this.loopId);
+        }
+      } catch {
+        /* best effort */
+      }
     }
   }
 

@@ -722,6 +722,7 @@ export interface StreamLoopEvent {
     | 'paused'
     | 'resumed'
     | 'completed'
+    | 'failed'
     | 'cancelled'
     | 'learning';
   data: {

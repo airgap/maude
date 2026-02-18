@@ -521,10 +521,11 @@ function createLoopStore() {
           break;
 
         case 'completed':
+        case 'failed':
         case 'cancelled':
           activeLoop = {
             ...activeLoop,
-            status: event.event === 'completed' ? 'completed' : 'cancelled',
+            status: event.event === 'cancelled' ? 'cancelled' : event.event === 'failed' ? 'failed' : 'completed',
             completedAt: Date.now(),
             currentStoryId: null,
           };

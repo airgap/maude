@@ -201,50 +201,34 @@
     </div>
   </div>
 
-  <!-- Filter Bar -->
+  <!-- Filter Dropdown -->
   <div class="filter-bar">
-    <button
-      class="filter-btn"
-      class:active={workStore.activeFilter === 'standalone'}
-      onclick={() => workStore.setFilter('standalone')}
+    <select
+      class="filter-select"
+      value={workStore.activeFilter}
+      onchange={(e) => {
+        const val = (e.target as HTMLSelectElement).value;
+        workStore.setFilter(val);
+        if (val !== 'standalone' && val !== 'external' && val !== 'all') {
+          loopStore.loadPrd(val);
+        }
+      }}
     >
-      Standalone
-      {#if workStore.standaloneCount > 0}
-        <span class="filter-count">{workStore.standaloneCount}</span>
+      <option value="standalone">
+        Standalone{workStore.standaloneCount > 0 ? ` (${workStore.standaloneCount})` : ''}
+      </option>
+      {#each loopStore.prds as prd}
+        <option value={prd.id}>
+          {prd.name}{prd.stories?.length > 0 ? ` (${prd.stories.length})` : ''}
+        </option>
+      {/each}
+      {#if workStore.hasExternalStories}
+        <option value="external">
+          External ({workStore.externalCount})
+        </option>
       {/if}
-    </button>
-    {#each loopStore.prds as prd}
-      <button
-        class="filter-btn"
-        class:active={workStore.activeFilter === prd.id}
-        onclick={() => {
-          workStore.setFilter(prd.id);
-          loopStore.loadPrd(prd.id);
-        }}
-      >
-        {prd.name}
-        {#if prd.stories?.length > 0}
-          <span class="filter-count">{prd.stories.length}</span>
-        {/if}
-      </button>
-    {/each}
-    {#if workStore.hasExternalStories}
-      <button
-        class="filter-btn"
-        class:active={workStore.activeFilter === 'external'}
-        onclick={() => workStore.setFilter('external')}
-      >
-        External
-        <span class="filter-count">{workStore.externalCount}</span>
-      </button>
-    {/if}
-    <button
-      class="filter-btn"
-      class:active={workStore.activeFilter === 'all'}
-      onclick={() => workStore.setFilter('all')}
-    >
-      All
-    </button>
+      <option value="all">All</option>
+    </select>
   </div>
 
   <!-- Content based on filter -->
@@ -671,43 +655,24 @@
 
   /* Filter Bar */
   .filter-bar {
-    display: flex;
-    gap: 4px;
-    flex-wrap: wrap;
     padding: 0 4px;
   }
-  .filter-btn {
-    font-size: var(--fs-xxs);
-    padding: 3px 8px;
-    border-radius: 10px;
+  .filter-select {
+    width: 100%;
+    font-size: var(--fs-sm);
+    padding: 5px 8px;
     background: var(--bg-tertiary);
-    color: var(--text-secondary);
-    border: 1px solid var(--border-primary);
-    cursor: pointer;
-    white-space: nowrap;
-    display: flex;
-    align-items: center;
-    gap: 4px;
-    transition: all var(--transition);
-  }
-  .filter-btn:hover {
-    background: var(--bg-hover);
     color: var(--text-primary);
+    border: 1px solid var(--border-primary);
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    font-family: var(--font-family);
   }
-  .filter-btn.active {
-    background: var(--accent-primary);
-    color: var(--text-on-accent);
+  .filter-select:focus {
     border-color: var(--accent-primary);
+    outline: none;
   }
-  .filter-count {
-    font-size: var(--fs-xxs);
-    padding: 0 4px;
-    border-radius: 6px;
-    background: rgba(255, 255, 255, 0.2);
-    min-width: 14px;
-    text-align: center;
-  }
-  .filter-btn:not(.active) .filter-count {
+  .filter-select:hover {
     background: var(--bg-hover);
   }
 
