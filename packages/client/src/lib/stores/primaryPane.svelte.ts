@@ -59,8 +59,12 @@ function evenSizes(n: number): number[] {
   return Array.from({ length: n }, () => each);
 }
 
+function makeEmptyPane(): PrimaryPane {
+  return { id: uuid(), tabs: [], activeTabId: null };
+}
+
 function createPrimaryPaneStore() {
-  let panes = $state<PrimaryPane[]>([makePane()]);
+  let panes = $state<PrimaryPane[]>([makeEmptyPane()]);
   let activePaneId = $state<string>(panes[0].id);
   /** Flex sizes (percentage, sum = 100), one entry per pane. */
   let sizes = $state<number[]>([100]);
@@ -163,21 +167,9 @@ function createPrimaryPaneStore() {
       const idx = pane.tabs.findIndex((t) => t.id === tabId);
       if (idx === -1) return;
 
-      if (pane.tabs.length === 1) {
-        // Keep at least one tab — replace with a blank chat tab
-        const blank: PrimaryTab = {
-          id: uuid(),
-          conversationId: null,
-          title: 'New chat',
-          kind: 'chat',
-        };
-        pane.tabs.splice(0, 1, blank);
-        pane.activeTabId = blank.id;
-      } else {
-        pane.tabs.splice(idx, 1);
-        if (pane.activeTabId === tabId) {
-          pane.activeTabId = pane.tabs[Math.max(0, idx - 1)]?.id ?? pane.tabs[0]?.id ?? null;
-        }
+      pane.tabs.splice(idx, 1);
+      if (pane.activeTabId === tabId) {
+        pane.activeTabId = pane.tabs[Math.max(0, idx - 1)]?.id ?? null;
       }
       persist();
     },

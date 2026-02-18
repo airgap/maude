@@ -221,7 +221,7 @@
 
           <span class="tab-title">{tab.title}</span>
 
-          {#if pane.tabs.length > 1 || tab.kind === 'diff' || tab.kind === 'file'}
+          {#if pane.tabs.length >= 1}
             <Tooltip
               content="Close tab"
               shortcut={isMac ? '⌘W' : 'Ctrl+W'}

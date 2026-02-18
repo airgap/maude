@@ -3,6 +3,7 @@
   import { streamStore } from '$lib/stores/stream.svelte';
   import { workspaceListStore } from '$lib/stores/projects.svelte';
   import { workspaceStore } from '$lib/stores/workspace.svelte';
+  import { primaryPaneStore } from '$lib/stores/primaryPane.svelte';
   import { uiStore } from '$lib/stores/ui.svelte';
   import { api } from '$lib/api/client';
   import { onMount } from 'svelte';
@@ -76,6 +77,8 @@
   async function newConversation() {
     conversationStore.setActive(null);
     conversationStore.createDraft();
+    // Explicitly open a "New chat" tab (the conversation→tab sync no longer auto-creates one)
+    primaryPaneStore.openConversation(null, 'New chat');
     // Only reset if no active stream is running for another conversation
     if (!streamStore.isStreaming) {
       streamStore.reset();

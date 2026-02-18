@@ -63,15 +63,15 @@
   $effect(() => {
     const active = conversationStore.active;
     if (!active) {
-      // Only look at chat tabs (not diff/file tabs) for blank tab matching
+      // Only look at chat tabs (not diff/file tabs) for blank tab matching.
+      // If a blank tab already exists, switch to it. Otherwise do nothing —
+      // we no longer auto-create "New chat" tabs.
       const blankTab = pane?.tabs.find(
         (t) => t.kind !== 'diff' && t.kind !== 'file' && t.conversationId === null,
       );
       if (blankTab && pane && pane.activeTabId !== blankTab.id) {
         primaryPaneStore.setActiveTab(pane.id, blankTab.id);
         lastAppliedTabId = blankTab.id;
-      } else if (!blankTab && pane) {
-        primaryPaneStore.openConversation(null, 'New chat', pane.id);
       }
       return;
     }
