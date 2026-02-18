@@ -14,8 +14,18 @@
       .length,
   );
 
-  let maxIterations = $state(50);
+  // Auto-calculate story count for smart maxIterations default
+  let storyCount = $derived(
+    isStandalone
+      ? standaloneStoryCount
+      : (loopStore.selectedPrd?.stories?.filter(
+          (s: any) => s.status === 'pending' || s.status === 'in_progress',
+        ).length ?? 0),
+  );
+
   let maxAttemptsPerStory = $state(3);
+  // Default maxIterations: storyCount * maxAttemptsPerStory, minimum 10
+  let maxIterations = $state(50);
   let model = $state(settingsStore.model);
   let effort = $state(settingsStore.effort || 'high');
   let autoCommit = $state(true);
@@ -30,6 +40,12 @@
   let newCheckRequired = $state(true);
 
   onMount(() => {
+    // Compute a smart default for maxIterations based on story count
+    const count = storyCount;
+    if (count > 0) {
+      maxIterations = Math.max(10, count * maxAttemptsPerStory);
+    }
+
     // Pre-populate with PRD quality checks or defaults
     const prd = loopStore.selectedPrd;
     if (prd && prd.qualityChecks?.length > 0) {
@@ -192,8 +208,13 @@
 
         <div class="form-row">
           <label>Max iterations</label>
-          <input type="number" bind:value={maxIterations} min="1" max="200" />
+          <input type="number" bind:value={maxIterations} min="1" max="500" />
         </div>
+        {#if storyCount > 0}
+          <div class="form-hint">
+            {storyCount} stories x {maxAttemptsPerStory} attempts = {storyCount * maxAttemptsPerStory} iterations needed
+          </div>
+        {/if}
 
         <div class="form-row">
           <label>Max attempts / story</label>
@@ -396,6 +417,13 @@
     color: var(--text-primary);
     border: 1px solid var(--border-primary);
     border-radius: var(--radius-sm);
+  }
+
+  .form-hint {
+    font-size: var(--fs-xxs);
+    color: var(--text-tertiary);
+    margin: -2px 0 6px;
+    text-align: right;
   }
 
   .toggle-row {

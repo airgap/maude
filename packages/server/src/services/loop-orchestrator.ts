@@ -420,6 +420,27 @@ class LoopRunner {
 
     this.startHeartbeat();
 
+    // Apply maxAttemptsPerStory from loop config to all stories.
+    // Stories have their own max_attempts (default 3), but the loop config
+    // should override this so the user's setting actually takes effect.
+    this.applyMaxAttemptsConfig();
+
+    // Ensure maxIterations is large enough to actually complete all stories.
+    // Each story may need up to maxAttemptsPerStory iterations, so the minimum
+    // is storyCount * maxAttemptsPerStory. If the configured maxIterations is
+    // too low, auto-increase it to prevent premature stopping.
+    const stories = this.getAllStories();
+    const nonTerminalStories = stories.filter(
+      (s) => s.status !== 'completed' && s.status !== 'skipped' && !s.researchOnly,
+    );
+    const minIterationsNeeded = nonTerminalStories.length * (this.config.maxAttemptsPerStory || 3);
+    if (this.config.maxIterations < minIterationsNeeded) {
+      console.log(
+        `[loop:${this.loopId}] Auto-increasing maxIterations from ${this.config.maxIterations} to ${minIterationsNeeded} (${nonTerminalStories.length} stories × ${this.config.maxAttemptsPerStory || 3} max attempts)`,
+      );
+      this.config.maxIterations = minIterationsNeeded;
+    }
+
     try {
     while (iteration < this.config.maxIterations && !this.cancelled) {
       // Check pause gate
@@ -862,6 +883,36 @@ class LoopRunner {
       } catch {
         /* best effort */
       }
+    }
+  }
+
+  // --- Config application ---
+
+  /**
+   * Apply the loop config's maxAttemptsPerStory to all stories that will be
+   * processed in this loop. This ensures the user's retry setting actually
+   * takes effect, overriding the per-story DB default (usually 3).
+   */
+  private applyMaxAttemptsConfig(): void {
+    const configMaxAttempts = this.config.maxAttemptsPerStory;
+    if (!configMaxAttempts || configMaxAttempts < 1) return;
+
+    const db = getDb();
+    let result;
+    if (this.prdId) {
+      result = db.query(
+        "UPDATE prd_stories SET max_attempts = ?, updated_at = ? WHERE prd_id = ? AND status IN ('pending', 'in_progress') AND (research_only = 0 OR research_only IS NULL)",
+      ).run(configMaxAttempts, Date.now(), this.prdId);
+    } else {
+      result = db.query(
+        "UPDATE prd_stories SET max_attempts = ?, updated_at = ? WHERE prd_id IS NULL AND workspace_path = ? AND status IN ('pending', 'in_progress') AND (research_only = 0 OR research_only IS NULL)",
+      ).run(configMaxAttempts, Date.now(), this.workspacePath);
+    }
+
+    if (result.changes > 0) {
+      console.log(
+        `[loop:${this.loopId}] Applied maxAttemptsPerStory=${configMaxAttempts} to ${result.changes} stories`,
+      );
     }
   }
 
