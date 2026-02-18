@@ -164,7 +164,7 @@
           onclick={() => (viewMode = 'list')}
           title="List view"
         >
-          ☰
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M4 12h16M4 18h16" /></svg>
         </button>
         <button
           class="btn-sm dep-btn"
@@ -172,7 +172,7 @@
           onclick={() => (viewMode = 'graph')}
           title="Graph view"
         >
-          ◈
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="5" r="3" /><circle cx="5" cy="19" r="3" /><circle cx="19" cy="19" r="3" /><path d="M12 8v4M7.5 17.2L10 14M16.5 17.2L14 14" /></svg>
         </button>
       </div>
     </div>
@@ -183,7 +183,7 @@
         disabled={loopStore.analyzingDependencies || stories.length < 2}
         title="AI-analyze story content to find dependencies"
       >
-        {loopStore.analyzingDependencies ? '◴ Analyzing...' : '⌕ Analyze'}
+        {#if loopStore.analyzingDependencies}<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="dep-spinner"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83" /></svg> Analyzing...{:else}<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" /></svg> Analyze{/if}
       </button>
       <button
         class="btn-sm dep-btn"
@@ -318,7 +318,7 @@
               <span class="dep-reason" title={edge.reason}>{edge.reason}</span>
             {/if}
             <button class="dep-edit-btn" onclick={() => startEditing(edge)} title="Edit reason"
-              >✎</button
+              ><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.83 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z" /></svg></button
             >
             <button
               class="dep-remove-btn"

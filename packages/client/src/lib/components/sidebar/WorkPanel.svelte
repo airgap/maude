@@ -238,7 +238,7 @@
       {#if workStore.filteredStories.some((s) => s.status === 'pending' || s.status === 'in_progress')}
         <div class="loop-controls">
           {#if !loopStore.isActive}
-            <button class="btn-sm btn-primary" onclick={startStandaloneLoop}> ▶ Loop </button>
+            <button class="btn-sm btn-primary" onclick={startStandaloneLoop}><svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor" stroke="none"><polygon points="5 3 19 12 5 21 5 3" /></svg> Loop </button>
           {/if}
         </div>
       {/if}
@@ -388,7 +388,7 @@
               >
             </div>
           {:else if !loopStore.isActive}
-            <button class="btn-sm btn-primary" onclick={startStandaloneLoop}> ▶ Loop </button>
+            <button class="btn-sm btn-primary" onclick={startStandaloneLoop}><svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor" stroke="none"><polygon points="5 3 19 12 5 21 5 3" /></svg> Loop </button>
           {/if}
         </div>
       {/if}

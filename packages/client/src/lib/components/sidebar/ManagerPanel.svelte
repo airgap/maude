@@ -326,7 +326,7 @@
         <div class="item-list">
           {#each data.completedStories as story (story.id)}
             <div class="story-row" class:failed={story.status === 'failed'}>
-              <span class="story-check">{story.status === 'completed' ? '✅' : '❌'}</span>
+              <span class="story-check">{#if story.status === 'completed'}<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--accent-success, #10b981)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5" /></svg>{:else}<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--accent-error)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>{/if}</span>
               <div class="story-info">
                 <span class="story-title-sm">{story.title}</span>
                 <span class="story-meta">
@@ -343,7 +343,7 @@
 
     {#if data.pendingApprovals.length === 0 && data.inProgressStories.length === 0 && data.completedStories.length === 0}
       <div class="empty-state">
-        <div class="empty-icon">🎯</div>
+        <div class="empty-icon"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10" /><circle cx="12" cy="12" r="6" /><circle cx="12" cy="12" r="2" /></svg></div>
         <div class="empty-text">All quiet. No active agents or pending approvals.</div>
       </div>
     {/if}
@@ -669,9 +669,10 @@
   }
 
   .story-check {
-    font-size: 11px;
     flex-shrink: 0;
     margin-top: 1px;
+    display: flex;
+    align-items: center;
   }
 
   .story-info {
@@ -709,7 +710,10 @@
   }
 
   .empty-icon {
-    font-size: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-tertiary);
   }
 
   .empty-text {

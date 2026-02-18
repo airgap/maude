@@ -732,7 +732,7 @@
     {#if loopStore.sprintWarnings.length > 0 && !loopStore.isActive}
       <div class="sprint-warnings">
         <div class="section-header">
-          <h4>⚠ Sprint Warnings ({loopStore.sprintWarnings.length})</h4>
+          <h4><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" /><line x1="12" y1="9" x2="12" y2="13" /><line x1="12" y1="17" x2="12.01" y2="17" /></svg> Sprint Warnings ({loopStore.sprintWarnings.length})</h4>
         </div>
         <div class="warning-list">
           {#each loopStore.sprintWarnings as warning}
@@ -764,16 +764,16 @@
 
       <div class="control-buttons">
         {#if loopStore.isRunning}
-          <button class="btn-sm btn-warning" onclick={() => loopStore.pauseLoop()}>⏸ Pause</button>
+          <button class="btn-sm btn-warning" onclick={() => loopStore.pauseLoop()}><svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor" stroke="none"><rect x="4" y="3" width="6" height="18" rx="1" /><rect x="14" y="3" width="6" height="18" rx="1" /></svg> Pause</button>
         {:else if loopStore.isPaused}
-          <button class="btn-sm btn-primary" onclick={() => loopStore.resumeLoop()}>▶ Resume</button
+          <button class="btn-sm btn-primary" onclick={() => loopStore.resumeLoop()}><svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor" stroke="none"><polygon points="5 3 19 12 5 21 5 3" /></svg> Resume</button
           >
         {/if}
         <button
           class="btn-sm btn-danger"
           onclick={() => {
             if (confirm('Cancel the autonomous loop?')) loopStore.cancelLoop();
-          }}>⏹ Cancel</button
+          }}><svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor" stroke="none"><rect x="4" y="4" width="16" height="16" rx="2" /></svg> Cancel</button
         >
       </div>
     {:else}
@@ -782,7 +782,7 @@
         disabled={!loopStore.selectedPrdId}
         onclick={openLoopConfig}
       >
-        ▶ Start Loop
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor" stroke="none"><polygon points="5 3 19 12 5 21 5 3" /></svg> Start Loop
       </button>
     {/if}
   </div>

@@ -240,8 +240,8 @@
     { id: 'one-dark', label: 'One Dark' },
     { id: 'everforest', label: 'Everforest' },
     { id: 'goth', label: 'Redrum' },
-    { id: 'sakura-light', label: '🌸 Sakura Light' },
-    { id: 'sakura', label: '🌸 Sakura Dark' },
+    { id: 'sakura-light', label: 'Sakura Light' },
+    { id: 'sakura', label: 'Sakura Dark' },
   ];
 
   const cloudModels = [
@@ -320,7 +320,7 @@
     { id: 'plan', label: 'Plan', desc: 'Read-only, plan before executing' },
     { id: 'safe', label: 'Safe', desc: 'Prompts for all modifications' },
     { id: 'fast', label: 'Fast', desc: 'Auto-approves safe commands' },
-    { id: 'unrestricted', label: 'Yolo 🤙', desc: 'All tools auto-approved — no prompts, ever' },
+    { id: 'unrestricted', label: 'Yolo', desc: 'All tools auto-approved — no prompts, ever' },
   ];
 
   const terminalPolicies: { id: TerminalCommandPolicy; label: string; desc: string }[] = [
@@ -844,6 +844,19 @@
                   <option value="rainbow">Rainbow</option>
                   <option value="accent">Accent</option>
                   <option value="pulse">Pulse</option>
+                  <option value="neon">Neon</option>
+                  <option value="cylon">Cylon</option>
+                  <option value="matrix">Matrix</option>
+                  <option value="plasma">Plasma</option>
+                  <option value="comet">Comet</option>
+                  <option value="helix">Helix</option>
+                  <option value="glitch">Glitch</option>
+                  <option value="aurora">Aurora</option>
+                  <option value="fire">Fire</option>
+                  <option value="ocean">Ocean</option>
+                  <option value="electric">Electric</option>
+                  <option value="candy">Candy</option>
+                  <option value="vapor">Vapor</option>
                   <option value="none">None</option>
                 </select>
               </div>
@@ -889,7 +902,7 @@
               Volume — {settingsStore.soundVolume}%
             </label>
             <div class="volume-row">
-              <span class="volume-icon">🔈</span>
+              <span class="volume-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" /></svg></span>
               <input
                 type="range"
                 min="0"
@@ -902,14 +915,14 @@
                     soundVolume: Number((e.target as HTMLInputElement).value),
                   })}
               />
-              <span class="volume-icon">🔊</span>
+              <span class="volume-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" /><path d="M19.07 4.93a10 10 0 0 1 0 14.14" /><path d="M15.54 8.46a5 5 0 0 1 0 7.07" /></svg></span>
             </div>
           </div>
 
           <div class="setting-group" class:muted={!settingsStore.soundEnabled}>
             <label class="setting-label">Sound style</label>
             <div class="sound-style-row">
-              {#each [{ value: 'melodic', label: 'Melodic', desc: 'Warm additive synthesis — marimba, vibraphone, bells' }, { value: 'classic', label: 'Classic', desc: 'Original oscillator chirps — the vintage E sound' }, { value: 'whimsy', label: 'Whimsy 🍬', desc: 'Music box, toy piano, kalimba & rubber-duck squeaks' }, { value: 'slot-machine', label: 'Slot Machine 🎰', desc: 'Casino coins, reel clicks, lever pulls & jackpot bells' }] as opt}
+              {#each [{ value: 'melodic', label: 'Melodic', desc: 'Warm additive synthesis — marimba, vibraphone, bells' }, { value: 'classic', label: 'Classic', desc: 'Original oscillator chirps — the vintage E sound' }, { value: 'whimsy', label: 'Whimsy', desc: 'Music box, toy piano, kalimba & rubber-duck squeaks' }, { value: 'slot-machine', label: 'Slot Machine', desc: 'Casino coins, reel clicks, lever pulls & jackpot bells' }] as opt}
                 <button
                   class="sound-style-btn"
                   class:active={settingsStore.soundStyle === opt.value}

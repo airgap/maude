@@ -122,7 +122,7 @@
 <!-- svelte-ignore a11y_no_static_element_interactions -->
 <div class="file-picker" onclick={(e) => e.stopPropagation()}>
   <div class="picker-header">
-    <span class="picker-title">📄 Select File</span>
+    <span class="picker-title"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><path d="M14 2v6h6" /></svg> Select File</span>
     <button class="picker-close" onclick={onClose}>×</button>
   </div>
   <div class="search-wrap">
@@ -150,7 +150,7 @@
           onmouseenter={() => (selectedIndex = i)}
           disabled={item.isDir}
         >
-          <span class="item-icon">{item.isDir ? '📁' : '📄'}</span>
+          <span class="item-icon">{#if item.isDir}<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" /></svg>{:else}<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><path d="M14 2v6h6" /></svg>{/if}</span>
           <span class="item-label">{item.label}</span>
         </button>
       {/each}
@@ -186,6 +186,9 @@
     font-size: 12px;
     font-weight: 600;
     color: var(--accent-primary);
+    display: flex;
+    align-items: center;
+    gap: 5px;
   }
 
   .picker-close {
@@ -255,8 +258,10 @@
   }
 
   .item-icon {
-    font-size: 12px;
     flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    color: var(--text-tertiary);
   }
 
   .item-label {

@@ -69,7 +69,7 @@
 
 {#if visible}
   <div class="observer-banner">
-    <span class="observer-icon">👁</span>
+    <span class="observer-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" /><circle cx="12" cy="12" r="3" /></svg></span>
     <span class="observer-text">
       Observing <strong>{hostName ?? 'Host'}</strong>'s session
       {#if observerName}
@@ -108,8 +108,10 @@
   }
 
   .observer-icon {
-    font-size: 13px;
     flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    color: var(--accent-primary);
   }
 
   .observer-text {

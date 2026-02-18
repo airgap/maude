@@ -145,7 +145,7 @@
         <ul class="item-list">
           {#each digest.storiesCompleted as story}
             <li class="item-row">
-              <span class="item-check">✅</span>
+              <span class="item-check"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--accent-success, #10b981)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5" /></svg></span>
               <span class="item-text">{story.title}</span>
             </li>
           {/each}
@@ -368,9 +368,10 @@
   }
 
   .item-check {
-    font-size: 11px;
     flex-shrink: 0;
     margin-top: 1px;
+    display: flex;
+    align-items: center;
   }
 
   .item-text {
