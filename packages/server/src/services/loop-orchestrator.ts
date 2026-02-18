@@ -39,24 +39,129 @@ class LoopOrchestrator {
       this.runners.delete(loopId);
     });
 
-    // On startup, fix any DB state stuck from a previous server crash
-    this.recoverZombieLoops();
+    // On startup, recover or resume any orphaned loops from a previous server crash / hot reload
+    this.recoverOrResumeZombieLoops();
 
     // Periodically check for zombie loops (runner died without updating DB)
     this.zombieCheckInterval = setInterval(() => this.recoverZombieLoops(), 30_000);
   }
 
-  /** Find loops marked running/paused in DB that have no in-memory runner and mark them failed. */
+  /**
+   * On startup (including hot reload), detect orphaned running loops and
+   * automatically resume them instead of marking them failed. This ensures
+   * loops survive Bun --hot reloads transparently.
+   */
+  private recoverOrResumeZombieLoops(): void {
+    try {
+      const db = getDb();
+      const activeLoops = db
+        .query("SELECT * FROM loops WHERE status IN ('running', 'paused')")
+        .all() as any[];
+
+      for (const row of activeLoops) {
+        if (this.runners.has(row.id)) continue; // Already has a runner
+
+        // Check if there are still pending stories to work on
+        let hasPendingWork = false;
+        if (row.prd_id) {
+          const count = db
+            .query(
+              "SELECT COUNT(*) as c FROM prd_stories WHERE prd_id = ? AND status IN ('pending', 'in_progress') AND (research_only = 0 OR research_only IS NULL)",
+            )
+            .get(row.prd_id) as any;
+          hasPendingWork = count && count.c > 0;
+        } else {
+          const count = db
+            .query(
+              "SELECT COUNT(*) as c FROM prd_stories WHERE prd_id IS NULL AND workspace_path = ? AND status IN ('pending', 'in_progress') AND (research_only = 0 OR research_only IS NULL)",
+            )
+            .get(row.workspace_path) as any;
+          hasPendingWork = count && count.c > 0;
+        }
+
+        if (hasPendingWork && row.status === 'running') {
+          // Auto-resume: create a new runner to continue this loop
+          console.log(
+            `[loop] Auto-resuming orphaned loop ${row.id} (hot reload recovery)`,
+          );
+          // Reset any in_progress stories back to pending
+          db.query(
+            "UPDATE prd_stories SET status = 'pending', updated_at = ? WHERE status = 'in_progress'",
+          ).run(Date.now());
+
+          const config: LoopConfig = JSON.parse(row.config || '{}');
+          const runner = new LoopRunner(
+            row.id,
+            row.prd_id || null,
+            row.workspace_path,
+            config,
+            this.events,
+          );
+          this.runners.set(row.id, runner);
+
+          runner.run().catch((err) => {
+            console.error(`[loop:${row.id}] Resumed runner error:`, err);
+            this.updateStatus(row.id, 'failed');
+            this.emitEvent(row.id, 'completed', {
+              message: `Loop failed after resume: ${String(err)}`,
+            });
+            this.events.emit('loop_done', row.id);
+          });
+        } else {
+          // No pending work or paused — just mark as failed/completed
+          const newStatus = hasPendingWork ? 'failed' : 'completed';
+          db.query('UPDATE loops SET status = ?, completed_at = ? WHERE id = ?').run(
+            newStatus,
+            Date.now(),
+            row.id,
+          );
+          console.log(
+            `[loop] Recovered zombie loop ${row.id} → ${newStatus}`,
+          );
+          this.emitEvent(row.id, 'completed', {
+            message:
+              newStatus === 'completed'
+                ? 'All stories completed!'
+                : 'Loop runner lost. Please start a new loop.',
+          });
+          this.events.emit('loop_done', row.id);
+        }
+      }
+    } catch (err) {
+      console.error('[loop] Startup recovery failed:', err);
+    }
+  }
+
+  /** How long a runner can go without a heartbeat before being considered dead. */
+  private static HEARTBEAT_STALE_MS = 90_000; // 90 seconds
+
+  /** Find loops marked running/paused in DB that have no in-memory runner
+   *  (or whose heartbeat is stale) and mark them failed. */
   private recoverZombieLoops(): void {
     try {
       const db = getDb();
       const now = Date.now();
 
       const activeLoops = db
-        .query("SELECT id FROM loops WHERE status IN ('running', 'paused')")
+        .query("SELECT id, last_heartbeat FROM loops WHERE status IN ('running', 'paused')")
         .all() as any[];
 
-      const zombieLoops = activeLoops.filter((z) => !this.runners.has(z.id));
+      const zombieLoops = activeLoops.filter((z) => {
+        // No runner in memory → definitely a zombie
+        if (!this.runners.has(z.id)) return true;
+        // Runner exists but heartbeat is stale → runner is stuck/dead
+        if (
+          z.last_heartbeat &&
+          now - z.last_heartbeat > LoopOrchestrator.HEARTBEAT_STALE_MS
+        ) {
+          console.log(
+            `[loop] Runner for ${z.id} has stale heartbeat (${Math.round((now - z.last_heartbeat) / 1000)}s ago)`,
+          );
+          this.runners.delete(z.id);
+          return true;
+        }
+        return false;
+      });
 
       for (const z of zombieLoops) {
         db.query('UPDATE loops SET status = ?, completed_at = ? WHERE id = ?').run(
@@ -84,8 +189,8 @@ class LoopOrchestrator {
           console.log(`[loop] Reset ${reset.changes} in_progress stories → pending`);
         }
       }
-    } catch {
-      /* DB may not be ready yet */
+    } catch (err) {
+      console.error('[loop] Zombie recovery failed:', err);
     }
   }
 
@@ -131,9 +236,9 @@ class LoopOrchestrator {
 
     // Persist loop to DB
     db.query(
-      `INSERT INTO loops (id, prd_id, workspace_path, status, config, current_iteration, started_at, total_stories_completed, total_stories_failed, total_iterations, iteration_log)
-       VALUES (?, ?, ?, 'running', ?, 0, ?, 0, 0, 0, '[]')`,
-    ).run(loopId, prdId, workspacePath, JSON.stringify(config), now);
+      `INSERT INTO loops (id, prd_id, workspace_path, status, config, current_iteration, started_at, total_stories_completed, total_stories_failed, total_iterations, iteration_log, last_heartbeat)
+       VALUES (?, ?, ?, 'running', ?, 0, ?, 0, 0, 0, '[]', ?)`,
+    ).run(loopId, prdId, workspacePath, JSON.stringify(config), now, now);
 
     const runner = new LoopRunner(loopId, prdId, workspacePath, config, this.events);
     this.runners.set(loopId, runner);
@@ -270,6 +375,7 @@ class LoopOrchestrator {
 class LoopRunner {
   private cancelled = false;
   private pauseGate: { promise: Promise<void>; resolve: () => void } | null = null;
+  private heartbeatInterval: ReturnType<typeof setInterval> | null = null;
 
   constructor(
     private loopId: string,
@@ -278,6 +384,30 @@ class LoopRunner {
     private config: LoopConfig,
     private events: EventEmitter,
   ) {}
+
+  /** Update heartbeat timestamp so zombie recovery knows we're alive. */
+  private sendHeartbeat(): void {
+    try {
+      const db = getDb();
+      db.query('UPDATE loops SET last_heartbeat = ? WHERE id = ?').run(Date.now(), this.loopId);
+    } catch {
+      /* best effort */
+    }
+  }
+
+  /** Start periodic heartbeat (every 15s). */
+  private startHeartbeat(): void {
+    this.sendHeartbeat();
+    this.heartbeatInterval = setInterval(() => this.sendHeartbeat(), 15_000);
+  }
+
+  /** Stop periodic heartbeat. */
+  private stopHeartbeat(): void {
+    if (this.heartbeatInterval) {
+      clearInterval(this.heartbeatInterval);
+      this.heartbeatInterval = null;
+    }
+  }
 
   async run(): Promise<void> {
     const db = getDb();
@@ -288,10 +418,16 @@ class LoopRunner {
       `[loop:${this.loopId}] Starting ${mode} loop (maxIter=${this.config.maxIterations})`,
     );
 
+    this.startHeartbeat();
+
+    try {
     while (iteration < this.config.maxIterations && !this.cancelled) {
       // Check pause gate
       await this.checkPauseGate();
       if (this.cancelled) break;
+
+      // Update heartbeat at the start of each iteration
+      this.sendHeartbeat();
 
       // Select next story
       const story = this.selectNextStory();
@@ -682,6 +818,9 @@ class LoopRunner {
     // Clean up — the orchestrator will remove us from the runners Map
     // via the 'loop_done' event handler
     this.events.emit('loop_done', this.loopId);
+    } finally {
+      this.stopHeartbeat();
+    }
   }
 
   // --- Story selection ---
@@ -1266,6 +1405,7 @@ function loopFromRow(row: any): LoopState {
     totalStoriesFailed: row.total_stories_failed,
     totalIterations: row.total_iterations,
     iterationLog: JSON.parse(row.iteration_log || '[]'),
+    lastHeartbeat: row.last_heartbeat ?? undefined,
   };
 }
 

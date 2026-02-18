@@ -182,6 +182,7 @@ export function initDatabase(): void {
       total_stories_failed INTEGER NOT NULL DEFAULT 0,
       total_iterations INTEGER NOT NULL DEFAULT 0,
       iteration_log TEXT NOT NULL DEFAULT '[]',
+      last_heartbeat INTEGER,
       FOREIGN KEY (prd_id) REFERENCES prds(id) ON DELETE CASCADE
     );
 
@@ -333,6 +334,7 @@ export function initDatabase(): void {
     `ALTER TABLE prd_stories ADD COLUMN external_ref TEXT`,
     `ALTER TABLE prd_stories ADD COLUMN external_status TEXT`,
     `ALTER TABLE prds ADD COLUMN external_ref TEXT`,
+    `ALTER TABLE loops ADD COLUMN last_heartbeat INTEGER`,
   ];
   for (const sql of workPaneColumns) {
     try {

@@ -130,6 +130,10 @@ function loadFromStorage(): SettingsState {
       if (parsed.soundStyle === 'slot-machine') {
         parsed.soundStyle = defaults.soundStyle;
       }
+      // Migrate: candyland theme was removed
+      if (parsed.hypertheme === 'candyland') {
+        parsed.hypertheme = defaults.hypertheme;
+      }
       return parsed;
     }
   } catch {}

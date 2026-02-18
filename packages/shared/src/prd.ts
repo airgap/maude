@@ -199,6 +199,7 @@ export interface LoopState {
   totalStoriesFailed: number;
   totalIterations: number;
   iterationLog: IterationLogEntry[];
+  lastHeartbeat?: number;
 }
 
 export interface IterationLogEntry {
