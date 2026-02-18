@@ -2,7 +2,7 @@
 
 This document tracks feature support across all AI providers in E.
 
-Last Updated: 2026-02-16
+Last Updated: 2026-02-18
 
 ## Feature Comparison
 
@@ -238,10 +238,10 @@ Last Updated: 2026-02-16
 - AWS billing integration
 - Lower latency for AWS infrastructure
 - VPC endpoints
+- Full tool calling and MCP support
 
 **Cons**:
 
-- No tool calling (yet)
 - More setup complexity
 - AWS costs
 
@@ -250,7 +250,7 @@ Last Updated: 2026-02-16
 1. Enable Bedrock model access in AWS console
 2. Configure AWS credentials
 3. Change model to `bedrock:claude-sonnet-3.5`
-4. Note: Tool calling will not work
+4. Tool calling and MCP tools work automatically
 
 ### From Ollama to Claude
 
@@ -280,10 +280,10 @@ Last Updated: 2026-02-16
 - AWS integration
 - Regional deployment
 - Compliance (HIPAA, SOC 2)
+- Full tool calling and MCP support
 
 **Cons**:
 
-- No tool calling
 - More complex setup
 
 **Steps**:

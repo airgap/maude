@@ -164,11 +164,11 @@ Request a quota increase through the AWS Service Quotas console if needed.
 2. **✅ Streaming** - Real-time response streaming
 3. **✅ Conversation History** - Multi-turn conversations
 4. **✅ System Prompts** - Custom system instructions
-5. **✅ Tool Calling** - Full support for built-in tools (**NEW!**)
-6. **✅ Vision/Images** - Base64-encoded image support (**NEW!**)
+5. **✅ Tool Calling** - Full support for built-in tools
+6. **✅ Vision/Images** - Base64-encoded image support
 7. **✅ Multi-turn Tool Sequences** - Automatic tool execution loops
 8. **✅ Tool Approval** - Requires approval for dangerous tools (Write, Bash, Edit)
-9. **❌ MCP Integration** - Not yet supported
+9. **✅ MCP Integration** - Automatic discovery and execution of MCP tools (see [mcp-integration.md](./mcp-integration.md))
 10. **❌ Computer Use** - Not yet supported
 
 ### ✅ Implemented Features
@@ -199,11 +199,11 @@ Request a quota increase through the AWS Service Quotas console if needed.
 
 ### Roadmap - Future Enhancements
 
-**Phase 1: MCP Integration**
+**Phase 1: MCP Integration** ✅ Complete
 
-- [ ] MCP (Model Context Protocol) tool integration
-- [ ] Dynamic tool discovery from MCP servers
-- [ ] MCP tool execution
+- [x] MCP (Model Context Protocol) tool integration
+- [x] Dynamic tool discovery from MCP servers
+- [x] MCP tool execution
 
 **Phase 2: Advanced Features**
 
@@ -231,6 +231,7 @@ Bedrock models may lag behind the direct Anthropic API by a few weeks for new fe
 
 ## Next Steps
 
-- See `bedrock-provider.ts` for implementation details
+- See `bedrock-provider-v2.ts` for implementation details
 - Check `cost-calculator.ts` for pricing calculations
 - Review `stream.ts` for routing logic
+- See [mcp-integration.md](./mcp-integration.md) for MCP server configuration

@@ -1,6 +1,6 @@
 # Full Implementation Summary - Tool Calling, Image Support & MCP Integration
 
-**Date**: February 16, 2026
+**Date**: February 18, 2026
 **Status**: ✅ **COMPLETE**
 
 This document summarizes the complete implementation of tool calling, image support, and MCP (Model Context Protocol) integration across all providers.
@@ -231,17 +231,16 @@ POST /api/stream/conv-789
 const db = getDb();
 db.query(
   `
-  INSERT INTO mcp_servers (id, name, transport, command, args, created_at, updated_at)
-  VALUES (?, ?, ?, ?, ?, ?, ?)
+  INSERT INTO mcp_servers (name, transport, command, args, scope, status)
+  VALUES (?, ?, ?, ?, ?, ?)
 `,
 ).run(
-  nanoid(),
   'filesystem',
   'stdio',
   'npx',
   JSON.stringify(['-y', '@modelcontextprotocol/server-filesystem', '/home/user/documents']),
-  Date.now(),
-  Date.now(),
+  'local',
+  'disconnected',
 );
 ```
 
@@ -377,24 +376,21 @@ All file operations respect:
 
 ### Bedrock
 
-1. **No MCP integration** - Custom tools not yet supported
-2. **No parallel tool execution** - Tools execute sequentially
-3. **Image URLs not supported** - Only base64 encoding works
-4. **No tool result caching** - Each execution is fresh
+1. **No parallel tool execution** - Tools execute sequentially
+2. **Image URLs not supported** - Only base64 encoding works
+3. **No tool result caching** - Each execution is fresh
 
 ### Ollama
 
 1. **Model-dependent features** - Not all models support tools/vision
 2. **No approval flow** - All tools auto-execute (security concern)
 3. **Quality varies** - Local models less reliable than Claude
-4. **No MCP integration** - Custom tools not supported
 
 ### General
 
-1. **WebFetch/WebSearch placeholders** - Not fully integrated yet
-2. **Screenshot tools missing** - No screen capture capability
-3. **Computer use not implemented** - No mouse/keyboard control
-4. **ACP protocol pending** - Kiro images require ACP implementation
+1. **Screenshot tools missing** - No screen capture capability
+2. **Computer use not implemented** - No mouse/keyboard control
+3. **ACP protocol pending** - Kiro images require ACP implementation
 
 ## 📝 Code Quality
 
@@ -418,21 +414,20 @@ All file operations respect:
 
 ## 🔮 Future Enhancements
 
-### Short Term (1-2 weeks)
+### Short Term
 
 1. **Add unit tests** for all new modules
-2. **Integrate WebFetch/WebSearch** properly
-3. **Add image URL support** to Bedrock
-4. **Implement proper approval UI** for Bedrock tools
+2. **Add image URL support** to Bedrock
+3. **Parallel tool execution** for independent tools
 
-### Medium Term (1 month)
+### Medium Term
 
-1. **MCP integration** for custom tools
-2. **Parallel tool execution** for independent tools
-3. **Tool result caching** to avoid redundant execution
-4. **Screenshot capture** integration
+1. **Tool result caching** to avoid redundant execution
+2. **Screenshot capture** integration
+3. **HTTP/SSE MCP transports** for remote MCP servers
+4. **Persistent MCP server processes** with connection pooling
 
-### Long Term (2-3 months)
+### Long Term
 
 1. **Computer use** capabilities (mouse/keyboard)
 2. **ACP protocol** for Kiro CLI

@@ -6,72 +6,29 @@ Rename all "Project" terminology to "Workspace" throughout the codebase. This fr
 
 Memory becomes "Workspace Memory" (workspace-specific), with global memory as a separate future concept.
 
-## Execution Order
+## Status: Functionally Complete
 
-### Phase 1: Database Migration
+The rename is **functionally complete**. All types, APIs, database tables, store methods, and UI behavior use "workspace" terminology. A few source files retain the old "project" filename for backward compatibility, but their exports and internal logic all use the new naming.
 
-Add migration logic in `database.ts` to rename tables and columns:
+### What's Done
 
-- Table: `projects` → `workspaces`
-- Table: `project_memories` → `workspace_memories`
-- Columns across tables: `project_path` → `workspace_path`, `project_id` → `workspace_id`
-- All related indexes
+- **Database**: Tables renamed (`workspaces`, `workspace_memories`), columns renamed (`workspace_path`, `workspace_id`), migrations in place
+- **Shared types**: All types export as `Workspace`, `WorkspaceSettings`, `WorkspaceSummary`, `WorkspaceMemory`, etc.
+- **Server routes**: Registered at `/api/workspaces` and `/api/workspace-memory`
+- **Client API**: Uses `api.workspaces` and `api.workspaceMemory`
+- **Client stores**: Export `workspaceListStore`, `workspaceMemoryStore`, use `workspacePath`/`workspaceId` throughout
+- **UI modals**: Use `'workspace-setup'` modal type
+- **All internal references**: Use workspace terminology
 
-### Phase 2: Shared Types (packages/shared)
+### Remaining (cosmetic file renames only)
 
-1. Rename `projects.ts` → `workspaces.ts`
-   - `Project` → `Workspace`, `ProjectSettings` → `WorkspaceSettings`, `ProjectSummary` → `WorkspaceSummary`
-2. Rename `project-memory.ts` → `workspace-memory.ts`
-   - `ProjectMemory` → `WorkspaceMemory`, `ProjectMemoryCreate` → `WorkspaceMemoryCreate`, `ProjectMemoryUpdate` → `WorkspaceMemoryUpdate`
-   - `projectPath` → `workspacePath` in all interfaces
-3. Update `messages.ts`: `projectPath` → `workspacePath`, `projectId` → `workspaceId` in Conversation/ConversationSummary
-4. Update `api.ts`: `projectPath` → `workspacePath` in CreateConversationRequest
-5. Update `settings.ts`: `projectPath` → `workspacePath`
-6. Update `index.ts` exports
+These files still have old names but all exports/internals use "workspace":
 
-### Phase 3: Server Routes & Services
-
-1. Rename `routes/projects.ts` → `routes/workspaces.ts`, export `workspaceRoutes`
-2. Rename `routes/project-memory.ts` → `routes/workspace-memory.ts`, export `workspaceMemoryRoutes`
-3. Update `index.ts` imports and route registration (`/api/workspaces`, `/api/workspace-memory`)
-4. Update all route files: `projectPath` → `workspacePath`, `projectId` → `workspaceId`
-   - conversations.ts, stream.ts, prd.ts, loop.ts, agents.ts, commands.ts, files.ts, git.ts, memory.ts
-5. Update all services: `projectPath` → `workspacePath`
-   - claude-process.ts, loop-orchestrator.ts, quality-checker.ts, code-verifier.ts
-6. Update middleware/sandbox.ts: `projectPath` → `workspacePath`
-
-### Phase 4: Client API
-
-Update `api/client.ts`:
-
-- `projects` → `workspaces` (object key + all endpoint paths)
-- `projectMemory` → `workspaceMemory` (object key + all endpoint paths)
-- `projectPath` → `workspacePath` in all parameters
-
-### Phase 5: Client Stores
-
-1. Rename `stores/projects.svelte.ts` → `stores/workspaces.svelte.ts`
-   - `projectStore` → `workspaceStore`, all methods and properties
-2. Rename `stores/project-memory.svelte.ts` → `stores/workspace-memory.svelte.ts`
-   - `projectMemoryStore` → `workspaceMemoryStore`, all methods and properties
-3. Update `stores/workspace.svelte.ts`: `projectId` → `workspaceId`, `projectName` → `workspaceName`, `projectPath` → `workspacePath`
-4. Update `stores/settings.svelte.ts`: `projectPath` → `workspacePath`
-5. Update `stores/ui.svelte.ts`: modal type `'project-setup'` → `'workspace-setup'`
-
-### Phase 6: Client Components
-
-1. Rename `ProjectSwitcher.svelte` → `WorkspaceSwitcher.svelte`
-2. Rename `ProjectSetup.svelte` → `WorkspaceSetup.svelte`
-3. Update all components that import/reference project stores and variables
-4. Update UI strings: "Project" → "Workspace" in labels, placeholders, button text
-5. Update CSS classes: `.project-*` → `.workspace-*`
-
-### Phase 7: Tests
-
-Update all test files with renamed types, routes, and parameters.
-
-### Phase 8: Verify
-
-- `npm run check` in client
-- `npx tsc --noEmit` in server
-- Build test
+- `packages/shared/src/projects.ts` → could be `workspaces.ts`
+- `packages/shared/src/project-memory.ts` → could be `workspace-memory.ts`
+- `packages/server/src/routes/projects.ts` → could be `workspaces.ts`
+- `packages/server/src/routes/project-memory.ts` → could be `workspace-memory.ts`
+- `packages/client/src/lib/stores/projects.svelte.ts` → could be `workspaces.svelte.ts`
+- `packages/client/src/lib/stores/project-memory.svelte.ts` → could be `workspace-memory.svelte.ts`
+- `packages/client/src/lib/components/layout/ProjectSwitcher.svelte` → could be `WorkspaceSwitcher.svelte`
+- `packages/client/src/lib/components/settings/ProjectSetup.svelte` → could be `WorkspaceSetup.svelte`

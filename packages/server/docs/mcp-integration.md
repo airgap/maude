@@ -48,15 +48,14 @@ MCP servers are stored in the `mcp_servers` table:
 
 ```sql
 CREATE TABLE mcp_servers (
-  id TEXT PRIMARY KEY,
-  name TEXT NOT NULL UNIQUE,
+  name TEXT PRIMARY KEY,
   transport TEXT NOT NULL,  -- 'stdio', 'sse', or 'http'
   command TEXT,             -- For stdio: executable path
   args TEXT,                -- JSON array of command arguments
   url TEXT,                 -- For sse/http: server URL
   env TEXT,                 -- JSON object of environment variables
-  created_at INTEGER,
-  updated_at INTEGER
+  scope TEXT NOT NULL DEFAULT 'local',
+  status TEXT NOT NULL DEFAULT 'disconnected'
 );
 ```
 
@@ -67,18 +66,17 @@ CREATE TABLE mcp_servers (
 const db = getDb();
 db.query(
   `
-  INSERT INTO mcp_servers (id, name, transport, command, args, env, created_at, updated_at)
-  VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+  INSERT INTO mcp_servers (name, transport, command, args, env, scope, status)
+  VALUES (?, ?, ?, ?, ?, ?, ?)
 `,
 ).run(
-  nanoid(),
   'filesystem',
   'stdio',
   'npx',
   JSON.stringify(['-y', '@modelcontextprotocol/server-filesystem', '/home/user/documents']),
   JSON.stringify({ NODE_ENV: 'production' }),
-  Date.now(),
-  Date.now(),
+  'local',
+  'disconnected',
 );
 
 // Clear the tool cache to pick up new server
