@@ -1,5 +1,5 @@
 import type { StreamEvent, MessageContent } from '@e/shared';
-import { isMcpFileWriteTool } from '@e/shared';
+import { isMcpFileWriteTool, extractEditLineHint } from '@e/shared';
 import { editorStore } from './editor.svelte';
 import { artifactsStore } from './artifacts.svelte';
 import { agentNotesStore } from './agent-notes.svelte';
@@ -334,11 +334,38 @@ function createStreamStore() {
             const isFileWrite =
               builtinFileWriteTools.includes(event.toolName) || isMcpFileWriteTool(event.toolName);
             if (isFileWrite && event.filePath) {
-              editorStore.refreshFile(event.filePath);
               if (editorStore.followAlong) {
-                // Follow Along: open + activate the file (splits if needed)
+                // Follow Along: derive the edit line before refresh so we can use the
+                // pre-edit file content to locate `old_string`.
+                let editLine = event.editLineHint;
+                if (!editLine && event.toolCallId) {
+                  for (let i = contentBlocks.length - 1; i >= 0; i--) {
+                    const block = contentBlocks[i];
+                    if (block.type === 'tool_use' && block.id === event.toolCallId) {
+                      const tab = editorStore.tabs.find(
+                        (t) => t.filePath === event.filePath,
+                      );
+                      editLine = extractEditLineHint(
+                        event.toolName || block.name,
+                        block.input as Record<string, unknown>,
+                        tab?.content,
+                      );
+                      break;
+                    }
+                  }
+                }
+                // Set the follow-along scroll target *before* refreshing so that
+                // the CodeEditor can scroll after the content sync completes.
+                if (editLine) {
+                  editorStore.setFollowAlongTarget({
+                    filePath: event.filePath,
+                    line: editLine,
+                  });
+                }
+                // Open + activate the file (splits if needed)
                 editorStore.openFile(event.filePath);
               }
+              editorStore.refreshFile(event.filePath);
             }
           }
 

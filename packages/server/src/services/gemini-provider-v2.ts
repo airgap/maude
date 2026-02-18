@@ -17,6 +17,7 @@ import { getDb } from '../db/database';
 import { getAllToolsWithMcp, type ToolSchema } from './tool-schemas';
 import { executeTool } from './tool-executor';
 import { loadConversationHistory, getRecommendedOptions } from './chat-compaction';
+import { extractFilePath, extractEditLineHint } from '@e/shared';
 
 const GEMINI_API_BASE = 'https://generativelanguage.googleapis.com/v1beta';
 
@@ -277,13 +278,26 @@ export function createGeminiStreamV2(opts: GeminiStreamOptions): ReadableStream 
               },
             });
 
-            // Emit tool_result event for UI
+            // Emit tool_result event for UI (including Follow Along hints)
+            const gemFilePath = extractFilePath(fc.args) || undefined;
+            let gemEditLine: number | undefined;
+            if (gemFilePath && fc.name) {
+              try {
+                const { readFileSync } = await import('fs');
+                const fContent = readFileSync(gemFilePath, 'utf-8');
+                gemEditLine = extractEditLineHint(fc.name, fc.args, fContent);
+              } catch {
+                gemEditLine = extractEditLineHint(fc.name, fc.args);
+              }
+            }
             controller.enqueue(
               encoder.encode(
                 `data: ${JSON.stringify({
                   type: 'tool_result',
                   toolCallId: fc.callId,
                   toolName: fc.name,
+                  filePath: gemFilePath,
+                  editLineHint: gemEditLine,
                   result: result.content,
                   isError: result.is_error,
                 })}\n\n`,

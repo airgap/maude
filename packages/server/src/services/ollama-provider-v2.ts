@@ -10,6 +10,7 @@ import { getDb } from '../db/database';
 import { getAllToolsWithMcp, toOllamaFunctions } from './tool-schemas';
 import { executeTool } from './tool-executor';
 import { loadConversationHistory, getRecommendedOptions } from './chat-compaction';
+import { extractFilePath, extractEditLineHint } from '@e/shared';
 
 const DEFAULT_OLLAMA_BASE = 'http://localhost:11434';
 
@@ -241,15 +242,29 @@ export function createOllamaStreamV2(opts: OllamaStreamOptions): ReadableStream 
               content: result.content,
             });
 
-            // Emit tool result event
+            // Emit tool result event (use camelCase to match StreamToolResult)
+            const ollamaArgs = toolCall.function.arguments;
+            const ollamaFilePath = extractFilePath(ollamaArgs) || undefined;
+            let ollamaEditLine: number | undefined;
+            if (ollamaFilePath && toolCall.function.name) {
+              try {
+                const { readFileSync } = await import('fs');
+                const fc = readFileSync(ollamaFilePath, 'utf-8');
+                ollamaEditLine = extractEditLineHint(toolCall.function.name, ollamaArgs, fc);
+              } catch {
+                ollamaEditLine = extractEditLineHint(toolCall.function.name, ollamaArgs);
+              }
+            }
             controller.enqueue(
               encoder.encode(
                 `data: ${JSON.stringify({
                   type: 'tool_result',
-                  tool_use_id: toolCall.id || nanoid(),
-                  tool_name: toolCall.function.name,
-                  content: result.content,
-                  is_error: result.is_error,
+                  toolCallId: toolCall.id || nanoid(),
+                  toolName: toolCall.function.name,
+                  filePath: ollamaFilePath,
+                  editLineHint: ollamaEditLine,
+                  result: result.content,
+                  isError: result.is_error,
                 })}\n\n`,
               ),
             );

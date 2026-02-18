@@ -1,4 +1,5 @@
 import type { StreamEvent, MessageContent } from '@e/shared';
+import { extractEditLineHint } from '@e/shared';
 import { editorStore } from './editor.svelte';
 import { changesStore } from './changes.svelte';
 
@@ -258,6 +259,35 @@ function createStreamStore() {
               'Edit',
             ];
             if (fileWriteTools.includes(event.toolName) && event.filePath) {
+              // Follow Along: derive the edit line before refresh so we can use
+              // the pre-edit content to locate `old_string`.
+              if (editorStore.followAlong) {
+                let editLine = event.editLineHint;
+                if (!editLine && event.toolCallId) {
+                  for (let i = state.contentBlocks.length - 1; i >= 0; i--) {
+                    const block = state.contentBlocks[i];
+                    if (block.type === 'tool_use' && block.id === event.toolCallId) {
+                      const tab = editorStore.tabs.find(
+                        (t) => t.filePath === event.filePath,
+                      );
+                      editLine = extractEditLineHint(
+                        event.toolName || block.name,
+                        block.input as Record<string, unknown>,
+                        tab?.content,
+                      );
+                      break;
+                    }
+                  }
+                }
+                if (editLine) {
+                  editorStore.setFollowAlongTarget({
+                    filePath: event.filePath,
+                    line: editLine,
+                  });
+                }
+                editorStore.openFile(event.filePath);
+              }
+
               editorStore.refreshFile(event.filePath);
 
               let reasoning = '';

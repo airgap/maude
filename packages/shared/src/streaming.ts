@@ -100,6 +100,8 @@ export interface StreamToolResult {
   duration?: number;
   toolName?: string;
   filePath?: string;
+  /** Approximate line number where the edit occurred — used by Follow Along to scroll the editor. */
+  editLineHint?: number;
 }
 
 export interface StreamToolApprovalRequest {

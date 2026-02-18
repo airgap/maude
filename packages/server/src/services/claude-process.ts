@@ -10,6 +10,7 @@ import {
   isMcpToolDangerous,
   isMcpFileWriteTool,
   extractFilePath,
+  extractEditLineHint,
 } from '@e/shared';
 import type { PermissionMode } from '@e/shared';
 import { getSandboxConfig } from '../middleware/sandbox';
@@ -957,13 +958,26 @@ class ClaudeProcessManager {
                         // Look up tool name + filePath from accumulated assistant content
                         let toolName: string | undefined;
                         let filePath: string | undefined;
+                        let editLineHint: number | undefined;
                         if (assistantContent) {
                           const toolBlock = assistantContent.find(
                             (b: any) => b.type === 'tool_use' && b.id === block.tool_use_id,
                           );
                           if (toolBlock) {
                             toolName = toolBlock.name;
-                            filePath = extractFilePath(toolBlock.input || {}) || undefined;
+                            const toolInput = toolBlock.input || {};
+                            filePath = extractFilePath(toolInput) || undefined;
+                            // Derive approximate edit line for Follow Along scrolling
+                            if (filePath && toolName) {
+                              try {
+                                const { readFileSync } = await import('fs');
+                                const fileContent = readFileSync(filePath, 'utf-8');
+                                editLineHint = extractEditLineHint(toolName, toolInput, fileContent);
+                              } catch {
+                                // File may have been deleted or unreadable — derive without content
+                                editLineHint = extractEditLineHint(toolName, toolInput);
+                              }
+                            }
                           }
                         }
                         const resultEvent = JSON.stringify({
@@ -971,6 +985,7 @@ class ClaudeProcessManager {
                           toolCallId: block.tool_use_id || '',
                           toolName,
                           filePath,
+                          editLineHint,
                           result:
                             typeof block.content === 'string'
                               ? block.content

@@ -104,6 +104,8 @@ function createEditorStore() {
   let previewTabId = $state<string | null>(null);
   let pendingGoTo = $state<{ line: number; col: number } | null>(null);
   let followAlong = $state(true);
+  /** Set when Follow Along detects a file edit — CodeEditor scrolls to this line after content sync. */
+  let followAlongTarget = $state<{ filePath: string; line: number } | null>(null);
 
   const activeTab = $derived(tabs.find((t) => t.id === activeTabId) ?? null);
   const dirtyTabs = $derived(tabs.filter((t) => t.content !== t.originalContent));
@@ -157,6 +159,19 @@ function createEditorStore() {
     consumePendingGoTo() {
       const val = pendingGoTo;
       pendingGoTo = null;
+      return val;
+    },
+
+    /** Follow Along scroll target — set when an agent edits a file and Follow Along is on. */
+    get followAlongTarget() {
+      return followAlongTarget;
+    },
+    setFollowAlongTarget(target: { filePath: string; line: number } | null) {
+      followAlongTarget = target;
+    },
+    consumeFollowAlongTarget() {
+      const val = followAlongTarget;
+      followAlongTarget = null;
       return val;
     },
 

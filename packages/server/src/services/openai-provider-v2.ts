@@ -10,6 +10,7 @@ import { getDb } from '../db/database';
 import { getAllToolsWithMcp, toOllamaFunctions } from './tool-schemas';
 import { executeTool } from './tool-executor';
 import { loadConversationHistory, getRecommendedOptions } from './chat-compaction';
+import { extractFilePath, extractEditLineHint } from '@e/shared';
 
 const OPENAI_API_BASE = 'https://api.openai.com/v1';
 
@@ -285,13 +286,26 @@ export function createOpenAIStreamV2(opts: OpenAIStreamOptions): ReadableStream 
               content: result.content,
             });
 
-            // Emit tool_result event for UI
+            // Emit tool_result event for UI (including Follow Along hints)
+            const oaiFilePath = extractFilePath(args) || undefined;
+            let oaiEditLine: number | undefined;
+            if (oaiFilePath && tc.name) {
+              try {
+                const { readFileSync } = await import('fs');
+                const fc = readFileSync(oaiFilePath, 'utf-8');
+                oaiEditLine = extractEditLineHint(tc.name, args, fc);
+              } catch {
+                oaiEditLine = extractEditLineHint(tc.name, args);
+              }
+            }
             controller.enqueue(
               encoder.encode(
                 `data: ${JSON.stringify({
                   type: 'tool_result',
                   toolCallId: tc.id || nanoid(),
                   toolName: tc.name,
+                  filePath: oaiFilePath,
+                  editLineHint: oaiEditLine,
                   result: result.content,
                   isError: result.is_error,
                 })}\n\n`,

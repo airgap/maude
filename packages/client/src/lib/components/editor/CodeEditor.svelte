@@ -295,6 +295,30 @@
     }
   });
 
+  // Follow Along: scroll to the edit location when the agent modifies a file.
+  // This is a standalone effect so it fires even when the content hasn't changed
+  // (e.g. a Write that produces identical content, or the tab was just opened).
+  $effect(() => {
+    const faTarget = editorStore.followAlongTarget;
+    if (faTarget && faTarget.filePath === tab.filePath && view && currentTabId === tab.id) {
+      // Use requestAnimationFrame to let any pending content sync settle first
+      requestAnimationFrame(() => {
+        const target = editorStore.consumeFollowAlongTarget();
+        if (target && view) {
+          const lineCount = view.state.doc.lines;
+          const targetLine = Math.min(target.line, lineCount);
+          if (targetLine >= 1) {
+            const docLine = view.state.doc.line(targetLine);
+            view.dispatch({
+              selection: { anchor: docLine.from },
+              scrollIntoView: true,
+            });
+          }
+        }
+      });
+    }
+  });
+
   onMount(() => {
     // Load server info so StatusBar can show install prompts
     lspStore.loadServerInfo();

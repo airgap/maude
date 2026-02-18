@@ -235,3 +235,47 @@ export function extractFilePath(input: Record<string, unknown>): string | null {
   }
   return null;
 }
+
+/**
+ * Attempt to derive the approximate line number of an edit from tool inputs.
+ *
+ * For `Edit`/`str_replace_editor` tools we find where `old_string` starts in the
+ * file content (which is passed as `fileContent`). For `Write`/`write_file` we
+ * return 1 (top of file) since the whole file was replaced.
+ *
+ * If `fileContent` is not supplied we fall back to heuristic extraction from input
+ * fields like `line`, `line_number`, `offset`, etc.
+ *
+ * Returns `undefined` when no reasonable hint can be derived.
+ */
+export function extractEditLineHint(
+  toolName: string,
+  input: Record<string, unknown>,
+  fileContent?: string,
+): number | undefined {
+  // For full-file writes, scroll to top
+  const writeTools = ['write_file', 'create_file', 'Write'];
+  if (writeTools.includes(toolName)) return 1;
+
+  // For edit / str_replace tools, try to find old_string position in file content
+  const editTools = ['edit_file', 'str_replace_editor', 'Edit', 'edit_block'];
+  if (editTools.includes(toolName)) {
+    const oldString = input.old_string ?? input.oldText ?? input.search;
+    if (typeof oldString === 'string' && fileContent) {
+      const idx = fileContent.indexOf(oldString);
+      if (idx >= 0) {
+        // Count newlines before the match to get the line number
+        const lineNum = fileContent.substring(0, idx).split('\n').length;
+        return lineNum;
+      }
+    }
+    // Explicit line number parameters (some tools use these)
+    for (const key of ['line', 'line_number', 'lineNumber', 'start_line']) {
+      const val = input[key];
+      if (typeof val === 'number' && val > 0) return val;
+      if (typeof val === 'string' && /^\d+$/.test(val)) return parseInt(val, 10);
+    }
+  }
+
+  return undefined;
+}

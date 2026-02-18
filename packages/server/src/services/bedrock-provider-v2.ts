@@ -27,6 +27,7 @@ import {
 import { executeTool } from './tool-executor';
 import { loadConversationHistory, getRecommendedOptions } from './chat-compaction';
 import type { PermissionMode, PermissionRule, TerminalCommandPolicy } from '@e/shared';
+import { extractFilePath, extractEditLineHint } from '@e/shared';
 
 const DEFAULT_REGION = 'us-east-1';
 
@@ -409,15 +410,29 @@ export function createBedrockStreamV2(opts: BedrockStreamOptions): ReadableStrea
                 is_error: result.is_error,
               });
 
-              // Emit tool result event
+              // Emit tool result event (use camelCase to match StreamToolResult)
+              const toolInput = content.input || {};
+              const bedrockFilePath = extractFilePath(toolInput) || undefined;
+              let bedrockEditLine: number | undefined;
+              if (bedrockFilePath && content.name) {
+                try {
+                  const { readFileSync } = await import('fs');
+                  const fc = readFileSync(bedrockFilePath, 'utf-8');
+                  bedrockEditLine = extractEditLineHint(content.name, toolInput, fc);
+                } catch {
+                  bedrockEditLine = extractEditLineHint(content.name, toolInput);
+                }
+              }
               controller.enqueue(
                 encoder.encode(
                   `data: ${JSON.stringify({
                     type: 'tool_result',
-                    tool_use_id: content.id,
-                    tool_name: content.name,
-                    content: result.content,
-                    is_error: result.is_error,
+                    toolCallId: content.id,
+                    toolName: content.name,
+                    filePath: bedrockFilePath,
+                    editLineHint: bedrockEditLine,
+                    result: result.content,
+                    isError: result.is_error,
                   })}\n\n`,
                 ),
               );

@@ -71,6 +71,7 @@ export {
   isMcpToolDangerous,
   isMcpFileWriteTool,
   extractFilePath,
+  extractEditLineHint,
 } from './mcp-tools.js';
 export type { ParsedToolName } from './mcp-tools.js';
 
