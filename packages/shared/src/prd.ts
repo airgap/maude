@@ -96,6 +96,7 @@ export interface UserStory {
   learnings: string[]; // accumulated learnings from attempts
   estimate?: StoryEstimate; // AI or manual complexity/effort estimate
   priorityRecommendation?: PriorityRecommendation; // AI-suggested priority with explanation
+  researchOnly: boolean; // if true, story is research/discovery — excluded from implementation loops
   externalRef?: ExternalRef; // link to Jira/Linear/Asana issue
   externalStatus?: string; // raw status string from external tool
   sortOrder: number;
@@ -111,6 +112,7 @@ export interface StandaloneStoryCreateInput {
   acceptanceCriteria?: string[];
   priority?: StoryPriority;
   dependsOn?: string[];
+  researchOnly?: boolean;
 }
 
 export interface PRD {

@@ -364,7 +364,14 @@
                   >
                     {statusIcon(story.status)}
                   </button>
-                  <span class="story-title">{story.title}</span>
+                  {#if story.researchOnly}
+                    <span class="research-badge" title="Research only">
+                      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <circle cx="11" cy="11" r="8" /><path d="m21 21-4.35-4.35" />
+                      </svg>
+                    </span>
+                  {/if}
+                  <span class="story-title" class:research-title={story.researchOnly}>{story.title}</span>
                   {#if story.estimate}
                     <span class="estimate-badge" title="{story.estimate.storyPoints} points">
                       {story.estimate.size?.[0]?.toUpperCase()}{story.estimate.storyPoints}
@@ -432,7 +439,14 @@
                   >
                     {statusIcon(story.status)}
                   </button>
-                  <span class="story-title">{story.title}</span>
+                  {#if story.researchOnly}
+                    <span class="research-badge" title="Research only — excluded from implementation loops">
+                      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <circle cx="11" cy="11" r="8" /><path d="m21 21-4.35-4.35" />
+                      </svg>
+                    </span>
+                  {/if}
+                  <span class="story-title" class:research-title={story.researchOnly}>{story.title}</span>
                   {#if story.estimate}
                     <span class="estimate-badge" title="{story.estimate.storyPoints} points">
                       {story.estimate.size?.[0]?.toUpperCase()}{story.estimate.storyPoints}
@@ -451,6 +465,15 @@
                     <span class="priority-badge">{priorityLabel(story.priority)}</span>
                   {/if}
                   <div class="story-actions">
+                    <button
+                      class="research-toggle-btn"
+                      title={story.researchOnly ? 'Mark as implementation work' : 'Mark as research only'}
+                      onclick={() => workStore.toggleResearchOnly(story.id, story.researchOnly)}
+                    >
+                      <svg width="11" height="11" viewBox="0 0 24 24" fill={story.researchOnly ? 'currentColor' : 'none'} stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <circle cx="11" cy="11" r="8" /><path d="m21 21-4.35-4.35" />
+                      </svg>
+                    </button>
                     <button
                       class="move-btn"
                       title="Move up"
@@ -494,6 +517,13 @@
                   >
                     {statusIcon(story.status)}
                   </button>
+                  {#if story.researchOnly}
+                    <span class="research-badge" title="Research only">
+                      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <circle cx="11" cy="11" r="8" /><path d="m21 21-4.35-4.35" />
+                      </svg>
+                    </span>
+                  {/if}
                   <span class="story-title completed-title">{story.title}</span>
                   {#if story.estimate}
                     <span class="estimate-badge" title="{story.estimate.storyPoints} points">
@@ -847,6 +877,32 @@
   .completed-title {
     text-decoration: line-through;
     color: var(--text-tertiary);
+  }
+
+  /* Research-only styling */
+  .research-badge {
+    flex-shrink: 0;
+    color: var(--accent-info, #6cb4ee);
+    display: flex;
+    align-items: center;
+  }
+  .research-title {
+    font-style: italic;
+    opacity: 0.85;
+  }
+  .research-toggle-btn {
+    font-size: var(--fs-sm);
+    padding: 0 3px;
+    color: var(--text-tertiary);
+    background: none;
+    border: none;
+    cursor: pointer;
+    line-height: 1;
+    display: flex;
+    align-items: center;
+  }
+  .research-toggle-btn:hover {
+    color: var(--accent-info, #6cb4ee);
   }
 
   .estimate-badge {

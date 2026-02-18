@@ -190,6 +190,10 @@ function createWorkStore() {
       return res;
     },
 
+    async toggleResearchOnly(storyId: string, currentValue: boolean) {
+      await this.updateStandaloneStory(storyId, { researchOnly: !currentValue });
+    },
+
     async toggleStoryStatus(storyId: string, currentStatus: string, prdId: string | null) {
       const next =
         currentStatus === 'pending'

@@ -104,7 +104,7 @@ class LoopOrchestrator {
 
       const storyCount = db
         .query(
-          "SELECT COUNT(*) as count FROM prd_stories WHERE prd_id = ? AND status IN ('pending', 'in_progress')",
+          "SELECT COUNT(*) as count FROM prd_stories WHERE prd_id = ? AND status IN ('pending', 'in_progress') AND (research_only = 0 OR research_only IS NULL)",
         )
         .get(prdId) as any;
       if (!storyCount || storyCount.count === 0) {
@@ -117,7 +117,7 @@ class LoopOrchestrator {
       // Standalone mode: validate standalone stories exist in this workspace
       const storyCount = db
         .query(
-          "SELECT COUNT(*) as count FROM prd_stories WHERE prd_id IS NULL AND workspace_path = ? AND status IN ('pending', 'in_progress')",
+          "SELECT COUNT(*) as count FROM prd_stories WHERE prd_id IS NULL AND workspace_path = ? AND status IN ('pending', 'in_progress') AND (research_only = 0 OR research_only IS NULL)",
         )
         .get(workspacePath) as any;
       if (!storyCount || storyCount.count === 0) {
@@ -302,7 +302,7 @@ class LoopRunner {
           `[loop:${this.loopId}] No eligible story. ${stories.length} total stories: ${stories.map((s) => `${s.title}[${s.status}:${s.attempts}/${s.maxAttempts}]`).join(', ')}`,
         );
         const allCompleted = stories.every(
-          (s) => s.status === 'completed' || s.status === 'skipped',
+          (s) => s.status === 'completed' || s.status === 'skipped' || s.researchOnly,
         );
 
         if (allCompleted) {
@@ -667,7 +667,7 @@ class LoopRunner {
     console.log(
       `[loop:${this.loopId}] Loop ended after ${iteration} iterations. Stories: ${finalStories.map((s) => `${s.title}[${s.status}]`).join(', ')}`,
     );
-    const allDone = finalStories.every((s) => s.status === 'completed' || s.status === 'skipped');
+    const allDone = finalStories.every((s) => s.status === 'completed' || s.status === 'skipped' || s.researchOnly);
 
     if (allDone) {
       this.updateLoopDb({ status: 'completed', completed_at: Date.now() });
@@ -693,6 +693,8 @@ class LoopRunner {
     const eligible = stories.filter((s) => {
       if (s.status !== 'pending') return false;
       if (s.attempts >= s.maxAttempts) return false;
+      // Skip research-only stories — they are not picked up by the implementation loop
+      if (s.researchOnly) return false;
       // Check dependencies resolved
       const deps = s.dependsOn || [];
       return deps.every((depId) => completedIds.has(depId));
@@ -1238,6 +1240,7 @@ function storyFromRow(row: any): UserStory {
     attempts: row.attempts,
     maxAttempts: row.max_attempts,
     learnings: JSON.parse(row.learnings || '[]'),
+    researchOnly: !!row.research_only,
     externalRef: row.external_ref ? JSON.parse(row.external_ref) : undefined,
     externalStatus: row.external_status || undefined,
     sortOrder: row.sort_order,

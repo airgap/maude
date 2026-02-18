@@ -234,7 +234,13 @@ app.patch('/stories/:storyId', async (c) => {
     status: 'status',
     sortOrder: 'sort_order',
     externalStatus: 'external_status',
+    researchOnly: 'research_only',
   };
+
+  // Boolean → integer conversion for SQLite
+  if (body.researchOnly !== undefined) {
+    body.researchOnly = body.researchOnly ? 1 : 0;
+  }
 
   for (const [key, col] of Object.entries(fieldMap)) {
     if (body[key] !== undefined) {
@@ -768,7 +774,13 @@ app.patch('/:prdId/stories/:storyId', async (c) => {
     attempts: 'attempts',
     maxAttempts: 'max_attempts',
     sortOrder: 'sort_order',
+    researchOnly: 'research_only',
   };
+
+  // Boolean → integer conversion for SQLite
+  if (body.researchOnly !== undefined) {
+    body.researchOnly = body.researchOnly ? 1 : 0;
+  }
 
   for (const [camel, snake] of Object.entries(fieldMap)) {
     if (body[camel] !== undefined) {
@@ -4657,6 +4669,7 @@ function storyFromRow(row: any) {
     priorityRecommendation: row.priority_recommendation
       ? JSON.parse(row.priority_recommendation)
       : undefined,
+    researchOnly: !!row.research_only,
     externalRef: row.external_ref ? JSON.parse(row.external_ref) : undefined,
     externalStatus: row.external_status || undefined,
     sortOrder: row.sort_order,

@@ -282,6 +282,7 @@ export function initDatabase(): void {
     `ALTER TABLE prd_stories ADD COLUMN estimate TEXT`,
     `ALTER TABLE prd_stories ADD COLUMN dependency_reasons TEXT NOT NULL DEFAULT '{}'`,
     `ALTER TABLE prd_stories ADD COLUMN priority_recommendation TEXT`,
+    `ALTER TABLE prd_stories ADD COLUMN research_only INTEGER NOT NULL DEFAULT 0`,
     `ALTER TABLE git_snapshots ADD COLUMN message_id TEXT`,
     `ALTER TABLE conversations ADD COLUMN profile_id TEXT`,
   ];
