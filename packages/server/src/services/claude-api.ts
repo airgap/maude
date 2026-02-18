@@ -82,10 +82,18 @@ class ClaudeApiClient {
       .query('SELECT role, content FROM messages WHERE conversation_id = ? ORDER BY timestamp ASC')
       .all(session.conversationId) as Array<{ role: string; content: string }>;
 
-    const messages = rows.map((row) => ({
-      role: row.role as 'user' | 'assistant',
-      content: JSON.parse(row.content),
-    }));
+    const messages = rows.map((row) => {
+      const parsed = JSON.parse(row.content);
+      // Normalize nudge content blocks → text for Anthropic API compatibility
+      const content = Array.isArray(parsed)
+        ? parsed.map((block: any) =>
+            block.type === 'nudge'
+              ? { type: 'text', text: `[User nudge]: ${block.text}` }
+              : block,
+          )
+        : parsed;
+      return { role: row.role as 'user' | 'assistant', content };
+    });
 
     // Build request body
     const body: Record<string, unknown> = {

@@ -37,12 +37,19 @@ export interface ImageContent {
   };
 }
 
+/** A mid-stream nudge/feedback injected by the user while the agent is running */
+export interface NudgeContent {
+  type: 'nudge';
+  text: string;
+}
+
 export type MessageContent =
   | TextContent
   | ToolUseContent
   | ToolResultContent
   | ThinkingContent
-  | ImageContent;
+  | ImageContent
+  | NudgeContent;
 
 export interface Message {
   id: string;

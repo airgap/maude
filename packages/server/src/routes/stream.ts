@@ -485,6 +485,41 @@ app.post('/:conversationId/answer', async (c) => {
   return c.json({ ok: true });
 });
 
+// Queue a nudge to be injected into the agent context on its next turn
+// This does NOT stop the current stream.
+app.post('/:conversationId/nudge', async (c) => {
+  const conversationId = c.req.param('conversationId');
+  const sessionId = c.req.header('x-session-id');
+  if (!sessionId) return c.json({ ok: false, error: 'Missing session ID' }, 400);
+
+  const body = await c.req.json();
+  const { content } = body;
+  if (!content || typeof content !== 'string' || !content.trim()) {
+    return c.json({ ok: false, error: 'Missing nudge content' }, 400);
+  }
+
+  const db = getDb();
+  const conv = db.query('SELECT id FROM conversations WHERE id = ?').get(conversationId) as any;
+  if (!conv) return c.json({ ok: false, error: 'Conversation not found' }, 404);
+
+  // Save the nudge as a distinct message in the conversation history
+  const nudgeMsgId = nanoid();
+  db.query(
+    `INSERT INTO messages (id, conversation_id, role, content, timestamp)
+     VALUES (?, ?, 'user', ?, ?)`,
+  ).run(
+    nudgeMsgId,
+    conversationId,
+    JSON.stringify([{ type: 'nudge', text: content.trim() }]),
+    Date.now(),
+  );
+
+  // Queue it for injection on the next agent turn (non-blocking)
+  const queued = claudeManager.queueNudge(sessionId, content.trim());
+
+  return c.json({ ok: true, queued, messageId: nudgeMsgId });
+});
+
 // List active sessions
 app.get('/sessions', (c) => {
   return c.json({ ok: true, data: claudeManager.listSessions() });

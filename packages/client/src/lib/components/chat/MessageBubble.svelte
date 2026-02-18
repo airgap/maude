@@ -33,6 +33,18 @@
       .join('\n\n');
   }
 
+  /** True when this is a mid-stream nudge message (role=user, type=nudge) */
+  let isNudge = $derived(
+    message.role === 'user' &&
+      (message.content as any[]).length > 0 &&
+      (message.content as any[])[0]?.type === 'nudge',
+  );
+
+  /** The nudge text content */
+  let nudgeText = $derived(
+    isNudge ? ((message.content as any[])[0]?.text as string) ?? '' : '',
+  );
+
   function startEdit() {
     editText = getTextContent();
     editing = true;
@@ -410,7 +422,19 @@
   {/if}
 {/snippet}
 
-{#if message.role === 'assistant'}
+{#if isNudge}
+  <!-- Nudge messages rendered distinctly inline -->
+  <div class="nudge-bubble">
+    <span class="nudge-icon">
+      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+      </svg>
+    </span>
+    <span class="nudge-label-tag">Nudge</span>
+    <span class="nudge-text">{nudgeText}</span>
+    <span class="nudge-time">{new Date(message.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+  </div>
+{:else if message.role === 'assistant'}
   <MessageAnimation>
     {#snippet children()}
       <!-- svelte-ignore a11y_no_static_element_interactions -->
@@ -909,5 +933,53 @@
   }
   .prose :global(em) {
     color: var(--text-secondary);
+  }
+
+  /* ── Nudge message bubble ── */
+  .nudge-bubble {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin: 4px 28px;
+    padding: 5px 10px;
+    background: color-mix(in srgb, var(--accent-primary) 6%, transparent);
+    border: 1px solid color-mix(in srgb, var(--accent-primary) 25%, transparent);
+    border-radius: var(--radius-sm);
+    font-size: 12px;
+    color: var(--text-secondary);
+    animation: fadeIn 0.15s linear;
+  }
+
+  .nudge-icon {
+    color: var(--accent-primary);
+    opacity: 0.8;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+  }
+
+  .nudge-label-tag {
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--accent-primary);
+    opacity: 0.75;
+    flex-shrink: 0;
+  }
+
+  .nudge-text {
+    flex: 1;
+    color: var(--text-primary);
+    font-style: italic;
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+
+  .nudge-time {
+    font-size: 10px;
+    color: var(--text-tertiary);
+    flex-shrink: 0;
+    margin-left: 4px;
   }
 </style>

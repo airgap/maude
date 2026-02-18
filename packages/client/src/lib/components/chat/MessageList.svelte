@@ -13,6 +13,7 @@
   import { sendAndStream } from '$lib/api/sse';
   import { api } from '$lib/api/client';
   import { tick } from 'svelte';
+  import NudgeInput from './NudgeInput.svelte';
 
   // Check if the current conversation is a planning conversation with edits enabled
   let isPlanningWithEdits = $derived(
@@ -149,6 +150,7 @@
 
     {#if streamStore.isStreaming && streamStore.conversationId === conversationStore.activeId}
       <StreamingMessage />
+      <NudgeInput />
     {/if}
 
     {#if streamStore.compactBoundary && streamStore.conversationId === conversationStore.activeId}

@@ -216,9 +216,16 @@ export async function summarizeWithLLM(
 
   try {
     // Build the message array: the dropped conversation + the summarization request
+    // Normalize nudge content blocks → text so unknown types don't cause API errors
     const conversationMessages = droppedMessages.map((m: any) => ({
       role: m.role as 'user' | 'assistant',
-      content: Array.isArray(m.content) ? m.content : [{ type: 'text', text: String(m.content) }],
+      content: Array.isArray(m.content)
+        ? m.content.map((block: any) =>
+            block.type === 'nudge'
+              ? { type: 'text', text: `[User nudge]: ${block.text}` }
+              : block,
+          )
+        : [{ type: 'text', text: String(m.content) }],
     }));
 
     // Add the summarization request as the final user message
@@ -654,9 +661,19 @@ export function loadConversationHistory(
   for (const row of rows) {
     try {
       const content = JSON.parse(row.content);
+      // Normalize nudge content blocks → text blocks so they are safe
+      // to send to any provider (Anthropic, OpenAI, Gemini, Bedrock).
+      const normalized = Array.isArray(content)
+        ? content.map((block: any) => {
+            if (block.type === 'nudge') {
+              return { type: 'text', text: `[User nudge]: ${block.text}` };
+            }
+            return block;
+          })
+        : content;
       messages.push({
         role: row.role,
-        content,
+        content: normalized,
       });
     } catch (e) {
       console.warn(`[chat-compaction] Failed to parse message: ${e}`);

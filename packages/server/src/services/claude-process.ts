@@ -211,6 +211,8 @@ interface ClaudeSession {
   eventBuffer: string[];
   /** Whether the stream has finished (events fully read from CLI). */
   streamComplete: boolean;
+  /** Nudges queued mid-stream to be prepended to the next message turn. */
+  pendingNudges: string[];
 }
 
 /**
@@ -425,6 +427,7 @@ class ClaudeProcessManager {
       emitter: new EventEmitter(),
       eventBuffer: [],
       streamComplete: false,
+      pendingNudges: [],
     };
 
     this.sessions.set(sessionId, session);
@@ -437,6 +440,15 @@ class ClaudeProcessManager {
     if (session.status === 'terminated') throw new Error(`Session ${sessionId} is terminated`);
 
     session.status = 'running';
+
+    // Prepend any queued nudges to this turn's content
+    if (session.pendingNudges.length > 0) {
+      const nudgeBlock = session.pendingNudges
+        .map((n) => `[User nudge during previous response]: ${n}`)
+        .join('\n');
+      content = `${nudgeBlock}\n\n${content}`;
+      session.pendingNudges = [];
+    }
 
     // Resolve CLI provider from settings
     let provider: CliProvider = 'claude';
@@ -967,10 +979,19 @@ class ClaudeProcessManager {
                                     'SELECT role, content FROM messages WHERE conversation_id = ? ORDER BY timestamp ASC',
                                   )
                                   .all(session.conversationId) as any[];
-                                const allMessages = rawRows.map((r: any) => ({
-                                  role: r.role,
-                                  content: (() => { try { return JSON.parse(r.content); } catch { return []; } })(),
-                                }));
+                                const allMessages = rawRows.map((r: any) => {
+                                  let parsed: any[];
+                                  try { parsed = JSON.parse(r.content); } catch { parsed = []; }
+                                  // Normalize nudge blocks so they don't confuse downstream APIs
+                                  const content = Array.isArray(parsed)
+                                    ? parsed.map((block: any) =>
+                                        block.type === 'nudge'
+                                          ? { type: 'text', text: `[User nudge]: ${block.text}` }
+                                          : block,
+                                      )
+                                    : parsed;
+                                  return { role: r.role, content };
+                                });
 
                                 if (allMessages.length === 0) return;
 
@@ -1218,6 +1239,18 @@ class ClaudeProcessManager {
       console.error(`[claude:${sessionId}] Failed to write to stdin:`, err);
       return false;
     }
+  }
+
+  /**
+   * Queue a nudge to be injected into the agent context on its next turn.
+   * Nudges are non-blocking — they don't interrupt the current stream.
+   */
+  queueNudge(sessionId: string, nudge: string): boolean {
+    const session = this.sessions.get(sessionId);
+    if (!session) return false;
+    session.pendingNudges.push(nudge);
+    console.log(`[claude:${sessionId}] Nudge queued: ${nudge.slice(0, 80)}`);
+    return true;
   }
 
   cancelGeneration(sessionId: string): void {

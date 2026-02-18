@@ -185,6 +185,15 @@ export const api = {
         headers: { 'X-Session-Id': sessionId },
         body: JSON.stringify({ toolCallId, answers }),
       }),
+    nudge: (conversationId: string, sessionId: string, content: string) =>
+      request<{ ok: boolean; queued: boolean; messageId: string }>(
+        `/stream/${conversationId}/nudge`,
+        {
+          method: 'POST',
+          headers: { 'X-Session-Id': sessionId },
+          body: JSON.stringify({ content }),
+        },
+      ),
   },
 
   // --- Tasks ---
