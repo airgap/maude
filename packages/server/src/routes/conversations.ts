@@ -2,6 +2,7 @@ import { Hono } from 'hono';
 import { nanoid } from 'nanoid';
 import { getDb } from '../db/database';
 import { calculateCost } from '../services/cost-calculator';
+import { summarizeWithLLM } from '../services/chat-compaction';
 
 const app = new Hono();
 
@@ -12,7 +13,7 @@ app.get('/', (c) => {
     .query(
       `
     SELECT id, title, model, workspace_path, workspace_id, plan_mode, total_tokens, permission_mode, effort,
-           created_at, updated_at,
+           created_at, updated_at, compact_summary,
            (SELECT COUNT(*) FROM messages WHERE conversation_id = conversations.id) as message_count
     FROM conversations
     ORDER BY updated_at DESC
@@ -33,6 +34,7 @@ app.get('/', (c) => {
       messageCount: r.message_count,
       createdAt: r.created_at,
       updatedAt: r.updated_at,
+      compactSummary: r.compact_summary || undefined,
     })),
   });
 });
@@ -178,6 +180,72 @@ app.patch('/:id', async (c) => {
 
   db.query(`UPDATE conversations SET ${updates.join(', ')} WHERE id = ?`).run(...values);
   return c.json({ ok: true });
+});
+
+// Get the stored compact summary for a conversation
+app.get('/:id/summary', (c) => {
+  const db = getDb();
+  const conv = db
+    .query('SELECT id, title, model, compact_summary FROM conversations WHERE id = ?')
+    .get(c.req.param('id')) as any;
+  if (!conv) return c.json({ ok: false, error: 'Not found' }, 404);
+
+  return c.json({
+    ok: true,
+    data: {
+      id: conv.id,
+      title: conv.title,
+      summary: conv.compact_summary || null,
+    },
+  });
+});
+
+// Generate and store a compact summary for a conversation
+app.post('/:id/summarize', async (c) => {
+  const db = getDb();
+  const conversationId = c.req.param('id');
+
+  const conv = db
+    .query('SELECT id, title, model, compact_summary FROM conversations WHERE id = ?')
+    .get(conversationId) as any;
+  if (!conv) return c.json({ ok: false, error: 'Not found' }, 404);
+
+  // Return cached summary if it already exists
+  if (conv.compact_summary) {
+    return c.json({ ok: true, data: { summary: conv.compact_summary, cached: true } });
+  }
+
+  // Load messages from DB
+  const rows = db
+    .query('SELECT role, content FROM messages WHERE conversation_id = ? ORDER BY timestamp ASC')
+    .all(conversationId) as any[];
+
+  const messages: any[] = [];
+  for (const row of rows) {
+    try {
+      const content = JSON.parse(row.content as string);
+      messages.push({ role: row.role, content });
+    } catch {
+      // skip unparseable messages
+    }
+  }
+
+  if (messages.length === 0) {
+    return c.json({ ok: true, data: { summary: null, cached: false } });
+  }
+
+  // Generate LLM summary (falls back to rule-based)
+  const result = await summarizeWithLLM(messages, [], conv.model || 'claude-sonnet-4-5-20250929');
+  const summaryText = result.summaryText;
+
+  // Persist the summary
+  db.query('UPDATE conversations SET compact_summary = ?, updated_at = ? WHERE id = ?').run(
+    summaryText,
+    Date.now(),
+    conversationId,
+  );
+
+  return c.json({ ok: true, data: { summary: summaryText, cached: false } });
 });
 
 // Get cost information for a conversation

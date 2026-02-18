@@ -215,24 +215,37 @@
     });
   }
 
-  async function handleThreadMentionSelect(conv: { id: string; title: string; messageCount: number }) {
-    // Fetch the conversation messages for a summary
+  async function handleThreadMentionSelect(conv: { id: string; title: string; messageCount: number; compactSummary?: string }) {
     try {
-      const res = await api.conversations.get(conv.id);
-      const messages = res.data.messages || [];
-      // Build a brief summary: first user message + last assistant message
-      const userMsgs = messages.filter((m: any) => m.role === 'user');
-      const assistantMsgs = messages.filter((m: any) => m.role === 'assistant');
-      const firstUser = userMsgs[0]?.content?.[0]?.text || '';
-      const lastAssistant = assistantMsgs[assistantMsgs.length - 1]?.content?.[0]?.text || '';
-      const summary = [
-        firstUser ? `User: ${firstUser.slice(0, 200)}` : '',
-        lastAssistant ? `Assistant: ${lastAssistant.slice(0, 200)}` : '',
-      ].filter(Boolean).join('\n');
+      let summaryText: string;
+
+      if (conv.compactSummary) {
+        // Use already-loaded summary from conversation list
+        summaryText = conv.compactSummary;
+      } else {
+        // Request on-demand summary generation (LLM-based, falls back to rule-based)
+        const res = await api.conversations.summarize(conv.id);
+        summaryText = res.data?.summary || '';
+      }
+
+      if (!summaryText) {
+        // Final fallback: pull raw messages and excerpt
+        const res = await api.conversations.get(conv.id);
+        const messages = res.data.messages || [];
+        const userMsgs = messages.filter((m: any) => m.role === 'user');
+        const assistantMsgs = messages.filter((m: any) => m.role === 'assistant');
+        const firstUser = userMsgs[0]?.content?.[0]?.text || '';
+        const lastAssistant = assistantMsgs[assistantMsgs.length - 1]?.content?.[0]?.text || '';
+        summaryText = [
+          firstUser ? `User: ${firstUser.slice(0, 300)}` : '',
+          lastAssistant ? `Assistant: ${lastAssistant.slice(0, 300)}` : '',
+        ].filter(Boolean).join('\n');
+      }
+
       addMention({
         kind: 'thread',
         label: `@thread:${conv.title.slice(0, 30)}`,
-        context: `<thread title="${conv.title}" messages="${conv.messageCount}">\n${summary || 'No messages.'}\n</thread>`,
+        context: `<thread title="${conv.title}" messages="${conv.messageCount}" source="prior-conversation">\n${summaryText || 'No content available.'}\n</thread>`,
       });
     } catch {
       closeMentionMenu();

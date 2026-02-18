@@ -1,15 +1,7 @@
 <script lang="ts">
   import { conversationStore } from '$lib/stores/conversation.svelte';
+  import type { ConversationSummary } from '@e/shared';
   import { onMount } from 'svelte';
-
-  interface ConversationSummary {
-    id: string;
-    title: string;
-    createdAt: number;
-    updatedAt: number;
-    messageCount: number;
-    model: string;
-  }
 
   let {
     onSelect,
@@ -33,7 +25,13 @@
 
   let filtered = $derived(
     searchQuery.trim()
-      ? threads.filter((c) => c.title.toLowerCase().includes(searchQuery.toLowerCase()))
+      ? threads.filter((c) => {
+          const q = searchQuery.toLowerCase();
+          return (
+            c.title.toLowerCase().includes(q) ||
+            (c.compactSummary && c.compactSummary.toLowerCase().includes(q))
+          );
+        })
       : threads,
   );
 
@@ -46,6 +44,13 @@
     if (diffDays === 1) return 'yesterday';
     if (diffDays < 7) return `${diffDays}d ago`;
     return d.toLocaleDateString();
+  }
+
+  function getSummarySnippet(conv: ConversationSummary): string | null {
+    if (!conv.compactSummary) return null;
+    // Return first 80 chars of summary as a preview
+    const text = conv.compactSummary.trim();
+    return text.length > 80 ? text.slice(0, 80) + '…' : text;
   }
 
   function handleKeydown(e: KeyboardEvent) {
@@ -77,7 +82,7 @@
       bind:this={searchInput}
       bind:value={searchQuery}
       oninput={() => (selectedIndex = 0)}
-      placeholder="Search conversations..."
+      placeholder="Search conversations…"
       class="search-input"
     />
   </div>
@@ -88,6 +93,7 @@
       </div>
     {:else}
       {#each filtered as conv, i}
+        {@const snippet = getSummarySnippet(conv)}
         <button
           class="picker-item"
           class:selected={i === selectedIndex}
@@ -95,7 +101,12 @@
           onmouseenter={() => (selectedIndex = i)}
         >
           <span class="thread-icon">💬</span>
-          <span class="thread-title">{conv.title || 'Untitled'}</span>
+          <span class="thread-body">
+            <span class="thread-title">{conv.title || 'Untitled'}</span>
+            {#if snippet}
+              <span class="thread-snippet">{snippet}</span>
+            {/if}
+          </span>
           <span class="thread-meta">
             {conv.messageCount} msgs · {formatDate(conv.updatedAt)}
           </span>
@@ -179,7 +190,7 @@
 
   .picker-item {
     display: flex;
-    align-items: center;
+    align-items: flex-start;
     gap: 8px;
     width: 100%;
     padding: 6px 12px;
@@ -198,14 +209,31 @@
   .thread-icon {
     font-size: 12px;
     flex-shrink: 0;
+    margin-top: 1px;
+  }
+
+  .thread-body {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    overflow: hidden;
   }
 
   .thread-title {
-    flex: 1;
     font-weight: 500;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+  }
+
+  .thread-snippet {
+    font-size: 10px;
+    color: var(--text-tertiary);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-style: italic;
   }
 
   .thread-meta {
@@ -213,5 +241,6 @@
     font-size: 10px;
     flex-shrink: 0;
     white-space: nowrap;
+    margin-top: 1px;
   }
 </style>

@@ -120,6 +120,17 @@ export const api = {
         method: 'POST',
         body: JSON.stringify({ messageId }),
       }),
+    /** Get stored compact summary for a conversation (null if not yet generated). */
+    summary: (id: string) =>
+      request<{ ok: boolean; data: { id: string; title: string; summary: string | null } }>(
+        `/conversations/${id}/summary`,
+      ),
+    /** Generate and store a compact summary for a conversation (idempotent). */
+    summarize: (id: string) =>
+      request<{ ok: boolean; data: { summary: string | null; cached: boolean } }>(
+        `/conversations/${id}/summarize`,
+        { method: 'POST' },
+      ),
   },
 
   // --- Streaming ---

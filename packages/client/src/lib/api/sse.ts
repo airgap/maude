@@ -169,6 +169,14 @@ export async function sendAndStream(conversationId: string, content: string): Pr
         workspaceMemoryStore.extractFromConversation(convWorkspacePath, recent).catch(() => {});
       }
     }
+
+    // Auto-generate a compact summary for this conversation (background, fire-and-forget).
+    // Only runs when there are enough messages to warrant a summary (>= 4 messages).
+    // The summarize endpoint is idempotent — if a summary already exists it returns it cached.
+    const msgCount = targetConversation.messages?.length ?? 0;
+    if (msgCount >= 4) {
+      api.conversations.summarize(conversationId).catch(() => {});
+    }
   } catch (err) {
     if ((err as Error).name === 'AbortError') {
       streamStore.handleEvent({ type: 'message_stop' } as any);
