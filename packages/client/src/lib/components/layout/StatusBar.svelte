@@ -35,18 +35,6 @@
     }
   });
 
-  const layoutIcons: Record<string, string> = {
-    'chat-only': 'Chat',
-    'editor-only': 'Editor',
-    'split-horizontal': 'Split H',
-    'split-vertical': 'Split V',
-  };
-
-  function cycleLayout() {
-    const modes = ['chat-only', 'split-horizontal', 'editor-only', 'split-vertical'] as const;
-    const idx = modes.indexOf(editorStore.layoutMode);
-    editorStore.setLayoutMode(modes[(idx + 1) % modes.length]);
-  }
 </script>
 
 <footer class="statusbar">
@@ -152,10 +140,6 @@
         </span>
       {/if}
     {/if}
-
-    <button class="status-item layout-toggle" onclick={cycleLayout} title="Toggle layout (Ctrl+\\)">
-      {layoutIcons[editorStore.layoutMode]}
-    </button>
 
     {#if settingsStore.showBudgetDisplay}
       {#if streamStore.tokenUsage.input || streamStore.tokenUsage.output}
@@ -613,23 +597,6 @@
     color: var(--text-secondary);
   }
 
-  .layout-toggle {
-    font-size: var(--fs-xs);
-    padding: 1px 8px;
-    background: var(--bg-tertiary);
-    border: 1px solid var(--border-secondary);
-    border-radius: var(--radius-sm);
-    color: var(--text-secondary);
-    cursor: pointer;
-    transition: all var(--transition);
-    letter-spacing: var(--ht-label-spacing);
-    text-transform: var(--ht-label-transform);
-    font-weight: 700;
-  }
-  .layout-toggle:hover {
-    color: var(--accent-primary);
-    border-color: var(--accent-primary);
-  }
 
   .tokens {
     font-family: var(--font-family);
@@ -727,7 +694,7 @@
     color: var(--text-primary);
   }
 
-  /* ── Mobile: hide editor-specific clutter, keep stream status + layout toggle ── */
+  /* ── Mobile: hide editor-specific clutter, keep stream status ── */
   :global([data-mobile]) .cursor-pos,
   :global([data-mobile]) .indent-label,
   :global([data-mobile]) .lang-label,
