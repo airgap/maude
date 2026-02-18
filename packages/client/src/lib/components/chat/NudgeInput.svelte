@@ -117,7 +117,7 @@
     align-items: center;
     gap: 5px;
     padding: 4px 10px;
-    font-size: 10px;
+    font-size: var(--fs-xxs);
     font-weight: 700;
     letter-spacing: 0.08em;
     text-transform: uppercase;
@@ -139,7 +139,7 @@
     border: none;
     outline: none;
     padding: 8px 10px;
-    font-size: 13px;
+    font-size: var(--fs-base);
     font-family: var(--font-family-sans);
     color: var(--text-primary);
     resize: none;

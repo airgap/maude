@@ -351,7 +351,7 @@
     border-bottom: 1px solid var(--border-primary);
   }
   .modal-header h2 {
-    font-size: 16px;
+    font-size: var(--fs-lg);
     font-weight: 600;
   }
   .close-btn {
@@ -375,13 +375,13 @@
   }
   .field-label {
     display: block;
-    font-size: 12px;
+    font-size: var(--fs-sm);
     font-weight: 600;
     color: var(--text-secondary);
     margin-bottom: 6px;
   }
   .field-label-inline {
-    font-size: 11px;
+    font-size: var(--fs-xs);
     font-weight: 600;
     color: var(--text-secondary);
   }
@@ -389,7 +389,7 @@
   .form-section textarea {
     width: 100%;
     padding: 8px 10px;
-    font-size: 13px;
+    font-size: var(--fs-base);
     font-family: var(--font-sans, inherit);
     background: var(--bg-tertiary);
     color: var(--text-primary);
@@ -411,7 +411,7 @@
   .form-row input[type='number'] {
     width: 80px;
     padding: 4px 8px;
-    font-size: 12px;
+    font-size: var(--fs-sm);
     background: var(--bg-tertiary);
     color: var(--text-primary);
     border: 1px solid var(--border-primary);
@@ -424,7 +424,7 @@
     border: 1px solid var(--accent-error);
     border-radius: var(--radius-sm);
     color: var(--accent-error);
-    font-size: 12px;
+    font-size: var(--fs-sm);
   }
 
   /* Review phase */
@@ -435,12 +435,12 @@
     margin-bottom: 12px;
   }
   .review-count {
-    font-size: 13px;
+    font-size: var(--fs-base);
     font-weight: 600;
     color: var(--text-secondary);
   }
   .btn-regenerate {
-    font-size: 11px;
+    font-size: var(--fs-xs);
     padding: 4px 12px;
     border-radius: var(--radius-sm);
     background: var(--bg-tertiary);
@@ -476,7 +476,7 @@
     background: var(--bg-tertiary);
   }
   .card-index {
-    font-size: 10px;
+    font-size: var(--fs-xxs);
     font-weight: 700;
     width: 20px;
     height: 20px;
@@ -489,7 +489,7 @@
     flex-shrink: 0;
   }
   .card-title {
-    font-size: 13px;
+    font-size: var(--fs-base);
     font-weight: 600;
     color: var(--text-primary);
     flex: 1;
@@ -498,7 +498,7 @@
     white-space: nowrap;
   }
   .card-priority {
-    font-size: 10px;
+    font-size: var(--fs-xxs);
     font-weight: 700;
     text-transform: uppercase;
     letter-spacing: 0.3px;
@@ -529,7 +529,7 @@
 
   .card-description {
     padding: 6px 12px;
-    font-size: 12px;
+    font-size: var(--fs-sm);
     color: var(--text-secondary);
     line-height: 1.4;
   }
@@ -538,7 +538,7 @@
     padding: 6px 12px 10px;
   }
   .criteria-label {
-    font-size: 10px;
+    font-size: var(--fs-xxs);
     font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 0.5px;
@@ -549,7 +549,7 @@
     padding-left: 16px;
   }
   .card-criteria li {
-    font-size: 11px;
+    font-size: var(--fs-xs);
     color: var(--text-secondary);
     line-height: 1.5;
   }
@@ -563,7 +563,7 @@
   }
   .edit-title {
     padding: 6px 8px;
-    font-size: 13px;
+    font-size: var(--fs-base);
     font-weight: 600;
     background: var(--bg-tertiary);
     color: var(--text-primary);
@@ -573,7 +573,7 @@
   .edit-desc,
   .edit-criteria {
     padding: 6px 8px;
-    font-size: 12px;
+    font-size: var(--fs-sm);
     background: var(--bg-tertiary);
     color: var(--text-primary);
     border: 1px solid var(--border-primary);
@@ -588,7 +588,7 @@
   }
   .edit-priority-row select {
     padding: 3px 8px;
-    font-size: 12px;
+    font-size: var(--fs-sm);
     background: var(--bg-tertiary);
     color: var(--text-primary);
     border: 1px solid var(--border-primary);
@@ -602,7 +602,7 @@
   }
   .btn-save {
     padding: 4px 12px;
-    font-size: 11px;
+    font-size: var(--fs-xs);
     font-weight: 600;
     border-radius: var(--radius-sm);
     background: var(--accent-primary);
@@ -611,7 +611,7 @@
   }
   .btn-cancel-edit {
     padding: 4px 12px;
-    font-size: 11px;
+    font-size: var(--fs-xs);
     border-radius: var(--radius-sm);
     background: var(--bg-tertiary);
     color: var(--text-secondary);
@@ -629,7 +629,7 @@
   }
   .btn-cancel {
     padding: 6px 16px;
-    font-size: 12px;
+    font-size: var(--fs-sm);
     border-radius: var(--radius-sm);
     background: var(--bg-tertiary);
     color: var(--text-secondary);
@@ -642,7 +642,7 @@
   .btn-generate,
   .btn-accept {
     padding: 6px 20px;
-    font-size: 12px;
+    font-size: var(--fs-sm);
     font-weight: 600;
     border-radius: var(--radius-sm);
     background: var(--accent-primary);

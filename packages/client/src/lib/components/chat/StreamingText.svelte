@@ -141,13 +141,13 @@
     border-radius: var(--radius);
     overflow: hidden;
     margin: 8px 0;
-    font-size: 13px;
+    font-size: var(--fs-base);
   }
   .prose :global(.streaming-code-header) {
     padding: 4px 10px;
     background: var(--bg-tertiary);
     border-bottom: 1px solid var(--border-primary);
-    font-size: 11px;
+    font-size: var(--fs-xs);
     font-weight: 700;
     color: var(--accent-primary);
     text-transform: var(--ht-label-transform);
@@ -158,7 +158,7 @@
     margin: 0;
     background: var(--bg-code, var(--bg-secondary));
     font-family: var(--font-family);
-    font-size: 13px;
+    font-size: var(--fs-base);
     line-height: 1.5;
     overflow-x: auto;
     white-space: pre;

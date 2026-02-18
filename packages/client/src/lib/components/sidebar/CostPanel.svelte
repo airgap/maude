@@ -286,7 +286,7 @@
   .period-chip {
     flex: 1;
     padding: 5px 6px;
-    font-size: 10px;
+    font-size: var(--fs-xxs);
     font-weight: 700;
     text-transform: uppercase;
     letter-spacing: 0.4px;
@@ -317,11 +317,11 @@
     padding: 24px 0;
     text-align: center;
     color: var(--text-tertiary);
-    font-size: 12px;
+    font-size: var(--fs-sm);
   }
   .loading-text {
     color: var(--text-tertiary);
-    font-size: 12px;
+    font-size: var(--fs-sm);
     animation: pulse 1.4s ease-in-out infinite;
   }
   .error-state {
@@ -333,11 +333,11 @@
     align-items: center;
   }
   .error-text {
-    font-size: 11px;
+    font-size: var(--fs-xs);
     color: var(--accent-error);
   }
   .retry-btn {
-    font-size: 11px;
+    font-size: var(--fs-xs);
     padding: 4px 12px;
     background: var(--bg-tertiary);
     border: 1px solid var(--border-secondary);
@@ -366,14 +366,14 @@
     gap: 2px;
   }
   .card-label {
-    font-size: 9px;
+    font-size: var(--fs-xxs);
     font-weight: 700;
     text-transform: uppercase;
     letter-spacing: 0.5px;
     color: var(--text-tertiary);
   }
   .card-value {
-    font-size: 16px;
+    font-size: var(--fs-lg);
     font-weight: 700;
     color: var(--text-primary);
     line-height: 1.2;
@@ -383,7 +383,7 @@
     color: var(--accent-primary);
   }
   .card-sub {
-    font-size: 9px;
+    font-size: var(--fs-xxs);
     color: var(--text-tertiary);
     font-family: var(--font-family);
   }
@@ -395,7 +395,7 @@
     gap: 6px;
   }
   .section-label {
-    font-size: 9px;
+    font-size: var(--fs-xxs);
     font-weight: 700;
     text-transform: uppercase;
     letter-spacing: 0.5px;
@@ -413,7 +413,7 @@
     display: flex;
     align-items: center;
     gap: 6px;
-    font-size: 11px;
+    font-size: var(--fs-xs);
   }
   .model-name {
     width: 88px;
@@ -422,7 +422,7 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-    font-size: 10px;
+    font-size: var(--fs-xxs);
   }
   .model-bar-wrap {
     flex: 1;
@@ -441,7 +441,7 @@
     width: 52px;
     flex-shrink: 0;
     text-align: right;
-    font-size: 11px;
+    font-size: var(--fs-xs);
     color: var(--text-primary);
     font-family: var(--font-family);
   }
@@ -449,7 +449,7 @@
     width: 40px;
     flex-shrink: 0;
     text-align: right;
-    font-size: 10px;
+    font-size: var(--fs-xxs);
     color: var(--text-tertiary);
     font-family: var(--font-family);
   }
@@ -495,7 +495,7 @@
     bottom: 0;
     left: 50%;
     transform: translateX(-50%);
-    font-size: 8px;
+    font-size: var(--fs-xxs);
     color: var(--text-tertiary);
     white-space: nowrap;
     font-family: var(--font-family);
@@ -533,7 +533,7 @@
     gap: 2px;
   }
   .conv-title {
-    font-size: 11px;
+    font-size: var(--fs-xs);
     color: var(--text-primary);
     font-weight: 500;
     overflow: hidden;
@@ -546,19 +546,19 @@
     align-items: center;
   }
   .conv-model {
-    font-size: 9px;
+    font-size: var(--fs-xxs);
     color: var(--text-tertiary);
     background: var(--bg-secondary);
     border: 1px solid var(--border-primary);
     padding: 0 4px;
   }
   .conv-tokens {
-    font-size: 9px;
+    font-size: var(--fs-xxs);
     color: var(--text-tertiary);
     font-family: var(--font-family);
   }
   .conv-cost {
-    font-size: 12px;
+    font-size: var(--fs-sm);
     font-weight: 700;
     color: var(--accent-primary);
     flex-shrink: 0;

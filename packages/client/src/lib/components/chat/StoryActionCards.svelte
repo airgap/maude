@@ -194,14 +194,14 @@
     border-bottom: 1px solid var(--border-primary);
   }
   .actions-label {
-    font-size: 10px;
+    font-size: var(--fs-xxs);
     font-weight: 700;
     text-transform: var(--ht-label-transform);
     letter-spacing: var(--ht-label-spacing);
     color: var(--text-tertiary);
   }
   .btn-apply-all {
-    font-size: 10px;
+    font-size: var(--fs-xxs);
     font-weight: 600;
     padding: 2px 10px;
     border-radius: var(--radius-sm);
@@ -234,7 +234,7 @@
   }
 
   .action-badge {
-    font-size: 9px;
+    font-size: var(--fs-xxs);
     font-weight: 700;
     letter-spacing: 0.5px;
     padding: 2px 6px;
@@ -248,7 +248,7 @@
     min-width: 0;
   }
   .action-title {
-    font-size: 12px;
+    font-size: var(--fs-sm);
     font-weight: 600;
     color: var(--text-primary);
     overflow: hidden;
@@ -256,7 +256,7 @@
     white-space: nowrap;
   }
   .action-detail {
-    font-size: 10px;
+    font-size: var(--fs-xxs);
     color: var(--text-tertiary);
     overflow: hidden;
     text-overflow: ellipsis;
@@ -268,7 +268,7 @@
     flex-shrink: 0;
   }
   .btn-apply {
-    font-size: 10px;
+    font-size: var(--fs-xxs);
     font-weight: 600;
     padding: 3px 10px;
     border-radius: var(--radius-sm);
@@ -286,7 +286,7 @@
     cursor: not-allowed;
   }
   .applied-badge {
-    font-size: 10px;
+    font-size: var(--fs-xxs);
     font-weight: 600;
     color: var(--accent-secondary, #22c55e);
     letter-spacing: 0.3px;

@@ -230,13 +230,13 @@
     padding: 4px 4px 8px;
   }
   .tree-header h3 {
-    font-size: 13px;
+    font-size: var(--fs-base);
     font-weight: 600;
     margin: 0;
   }
   .tree-path {
     display: block;
-    font-size: 11px;
+    font-size: var(--fs-xs);
     color: var(--text-tertiary);
     overflow: hidden;
     text-overflow: ellipsis;
@@ -254,7 +254,7 @@
     width: 100%;
     padding: 3px 8px;
     border-radius: var(--radius-sm);
-    font-size: 12px;
+    font-size: var(--fs-sm);
     color: var(--text-secondary);
     text-align: left;
     transition: background var(--transition);
@@ -274,7 +274,7 @@
 
   .git-badge {
     flex-shrink: 0;
-    font-size: 9px;
+    font-size: var(--fs-xxs);
     font-weight: 700;
     width: 14px;
     text-align: center;
@@ -303,7 +303,7 @@
     padding: 20px;
     text-align: center;
     color: var(--text-tertiary);
-    font-size: 12px;
+    font-size: var(--fs-sm);
   }
   .tree-loading {
     padding: 3px 8px;

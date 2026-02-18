@@ -336,12 +336,12 @@
     flex-shrink: 0;
   }
   .section-header h3 {
-    font-size: 13px;
+    font-size: var(--fs-base);
     font-weight: 600;
     color: var(--text-primary);
   }
   .count-badge {
-    font-size: 9px;
+    font-size: var(--fs-xxs);
     padding: 2px 6px;
     background: var(--bg-tertiary);
     border: 1px solid var(--border-primary);
@@ -363,7 +363,7 @@
   .scan-btn {
     width: 100%;
     padding: 7px 12px;
-    font-size: 12px;
+    font-size: var(--fs-sm);
     font-weight: 600;
     background: var(--accent-primary);
     color: var(--text-on-accent);
@@ -403,7 +403,7 @@
   }
 
   .workspace-hint {
-    font-size: 10px;
+    font-size: var(--fs-xxs);
     color: var(--text-tertiary);
     text-align: center;
     margin: 0;
@@ -418,7 +418,7 @@
     flex-shrink: 0;
   }
   .filter-chip {
-    font-size: 9px;
+    font-size: var(--fs-xxs);
     padding: 3px 7px;
     min-height: 22px;
     background: var(--bg-tertiary);
@@ -448,7 +448,7 @@
     cursor: default;
   }
   .chip-count {
-    font-size: 8px;
+    font-size: var(--fs-xxs);
     padding: 0 3px;
     background: var(--bg-hover);
     border-radius: 3px;
@@ -467,7 +467,7 @@
     flex-shrink: 0;
   }
   .toolbar-link {
-    font-size: 10px;
+    font-size: var(--fs-xxs);
     color: var(--text-tertiary);
     background: none;
     border: none;
@@ -483,12 +483,12 @@
     cursor: default;
   }
   .toolbar-sep {
-    font-size: 10px;
+    font-size: var(--fs-xxs);
     color: var(--text-tertiary);
   }
   .selected-count {
     margin-left: auto;
-    font-size: 10px;
+    font-size: var(--fs-xxs);
     color: var(--accent-primary);
     font-weight: 600;
   }
@@ -540,7 +540,7 @@
   }
 
   .type-badge {
-    font-size: 8px;
+    font-size: var(--fs-xxs);
     font-weight: 700;
     padding: 1px 5px;
     border-radius: 3px;
@@ -559,7 +559,7 @@
     gap: 1px;
   }
   .todo-location {
-    font-size: 9px;
+    font-size: var(--fs-xxs);
     color: var(--text-tertiary);
     font-family: var(--font-family);
     white-space: nowrap;
@@ -567,7 +567,7 @@
     text-overflow: ellipsis;
   }
   .todo-text {
-    font-size: 11px;
+    font-size: var(--fs-xs);
     color: var(--text-primary);
     white-space: nowrap;
     overflow: hidden;
@@ -575,7 +575,7 @@
   }
 
   .expand-icon {
-    font-size: 14px;
+    font-size: var(--fs-md);
     color: var(--text-tertiary);
     flex-shrink: 0;
     transition: transform var(--transition);
@@ -595,7 +595,7 @@
     background: var(--bg-primary);
   }
   .detail-label {
-    font-size: 9px;
+    font-size: var(--fs-xxs);
     font-weight: 700;
     text-transform: uppercase;
     letter-spacing: 0.4px;
@@ -606,18 +606,18 @@
     margin-top: 0;
   }
   .detail-title {
-    font-size: 12px;
+    font-size: var(--fs-sm);
     font-weight: 600;
     color: var(--text-primary);
     line-height: 1.4;
   }
   .detail-desc {
-    font-size: 11px;
+    font-size: var(--fs-xs);
     color: var(--text-secondary);
     line-height: 1.4;
   }
   .detail-context {
-    font-size: 10px;
+    font-size: var(--fs-xxs);
     font-family: var(--font-family);
     color: var(--text-secondary);
     background: var(--bg-tertiary);
@@ -636,7 +636,7 @@
     margin-top: 2px;
   }
   .priority-pill {
-    font-size: 9px;
+    font-size: var(--fs-xxs);
     font-weight: 700;
     padding: 1px 6px;
     border-radius: 3px;
@@ -660,7 +660,7 @@
     color: var(--text-tertiary);
   }
   .detail-file {
-    font-size: 9px;
+    font-size: var(--fs-xxs);
     color: var(--text-tertiary);
     font-family: var(--font-family);
     overflow: hidden;
@@ -680,18 +680,18 @@
     gap: 6px;
   }
   .empty-icon {
-    font-size: 24px;
+    font-size: var(--fs-2xl);
     color: var(--text-tertiary);
     margin-bottom: 4px;
   }
   .empty-title {
-    font-size: 13px;
+    font-size: var(--fs-base);
     font-weight: 600;
     color: var(--text-secondary);
     margin: 0;
   }
   .empty-hint {
-    font-size: 11px;
+    font-size: var(--fs-xs);
     color: var(--text-tertiary);
     line-height: 1.5;
     max-width: 220px;
@@ -703,7 +703,7 @@
     border: 1px solid var(--border-primary);
     border-radius: 3px;
     padding: 0 3px;
-    font-size: 10px;
+    font-size: var(--fs-xxs);
     color: var(--text-secondary);
   }
 
@@ -724,14 +724,14 @@
     gap: 8px;
   }
   .import-count {
-    font-size: 11px;
+    font-size: var(--fs-xs);
     font-weight: 600;
     color: var(--accent-primary);
     flex-shrink: 0;
   }
   .prd-select {
     flex: 1;
-    font-size: 11px;
+    font-size: var(--fs-xs);
     padding: 4px 6px;
     background: var(--bg-primary);
     border: 1px solid var(--border-secondary);
@@ -748,7 +748,7 @@
   .import-btn {
     width: 100%;
     padding: 7px 12px;
-    font-size: 12px;
+    font-size: var(--fs-sm);
     font-weight: 600;
     background: var(--accent-primary);
     color: var(--text-on-accent);

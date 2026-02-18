@@ -96,7 +96,7 @@
     padding: 6px 14px;
     background: color-mix(in srgb, var(--accent-primary) 12%, transparent);
     border-bottom: 1px solid color-mix(in srgb, var(--accent-primary) 25%, transparent);
-    font-size: 12px;
+    font-size: var(--fs-sm);
     color: var(--text-primary);
     flex-shrink: 0;
   }
@@ -115,7 +115,7 @@
   }
 
   .observer-text {
-    font-size: 12px;
+    font-size: var(--fs-sm);
     line-height: 1.4;
   }
 
@@ -135,7 +135,7 @@
 
   .observer-disconnect {
     padding: 3px 10px;
-    font-size: 11px;
+    font-size: var(--fs-xs);
     font-weight: 600;
     border-radius: var(--radius-sm);
     border: 1px solid color-mix(in srgb, var(--accent-primary) 40%, transparent);

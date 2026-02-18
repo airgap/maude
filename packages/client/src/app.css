@@ -20,6 +20,37 @@
   --font-size-sans: 14px;
   --font-family: 'Share Tech Mono', 'JetBrains Mono', 'Fira Code', monospace;
   --font-family-sans: 'Rajdhani', 'Segoe UI', 'Roboto Condensed', sans-serif;
+
+  /* ── Accessible font-size scale ──────────────────────────────────────────────
+     Derived from --font-size so all sizes respond to the user's preference.
+     Floor values (max() clamps) enforce WCAG-friendly minimums:
+       --fs-xxs: captions / decorative — minimum 10px
+       --fs-xs:  secondary labels      — minimum 11px
+       --fs-sm:  sidebar / dense UI    — minimum 12px
+       --fs-base: body / primary UI    — minimum 13px
+       --fs-md:  emphasis              — minimum 14px
+       --fs-lg:  sub-headings          — minimum 16px
+       --fs-xl:  headings              — minimum 18px
+       --fs-2xl: display               — minimum 20px                          */
+  --fs-xxs:  max(10px, calc(var(--font-size) * 0.72));
+  --fs-xs:   max(11px, calc(var(--font-size) * 0.79));
+  --fs-sm:   max(12px, calc(var(--font-size) * 0.86));
+  --fs-base: max(13px, calc(var(--font-size) * 0.93));
+  --fs-md:   var(--font-size);
+  --fs-lg:   max(16px, calc(var(--font-size) * 1.14));
+  --fs-xl:   max(18px, calc(var(--font-size) * 1.29));
+  --fs-2xl:  max(20px, calc(var(--font-size) * 1.43));
+
+  /* Sans-serif scale (mirrors mono but uses --font-size-sans) */
+  --fs-sans-xxs:  max(10px, calc(var(--font-size-sans) * 0.72));
+  --fs-sans-xs:   max(11px, calc(var(--font-size-sans) * 0.79));
+  --fs-sans-sm:   max(12px, calc(var(--font-size-sans) * 0.86));
+  --fs-sans-base: max(13px, calc(var(--font-size-sans) * 0.93));
+  --fs-sans-md:   var(--font-size-sans);
+  --fs-sans-lg:   max(16px, calc(var(--font-size-sans) * 1.14));
+  --fs-sans-xl:   max(18px, calc(var(--font-size-sans) * 1.29));
+  --fs-sans-2xl:  max(20px, calc(var(--font-size-sans) * 1.43));
+
   --sidebar-width: 280px;
   --topbar-height: 48px;
   --statusbar-height: 28px;
@@ -1493,7 +1524,7 @@ a:hover {
 
 code {
   font-family: var(--font-family);
-  font-size: calc(var(--font-size) * 0.88);
+  font-size: var(--fs-sm);
   background: var(--bg-code);
   padding: 2px 7px;
   border-radius: var(--radius-sm);

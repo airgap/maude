@@ -145,7 +145,7 @@
     display: flex;
     justify-content: space-between;
     align-items: center;
-    font-size: 12px;
+    font-size: var(--fs-sm);
   }
 
   .tool-label {
@@ -156,7 +156,7 @@
   }
 
   .tool-count {
-    font-size: 13px;
+    font-size: var(--fs-base);
     font-weight: 600;
     color: var(--text-secondary);
   }
@@ -187,7 +187,7 @@
   }
 
   .progress-text {
-    font-size: 9px;
+    font-size: var(--fs-xxs);
     font-weight: 700;
     color: var(--text-on-accent);
     opacity: 0.8;
@@ -208,11 +208,11 @@
     padding: 6px 10px;
     background: var(--bg-primary);
     border-radius: var(--radius-sm);
-    font-size: 12px;
+    font-size: var(--fs-sm);
   }
 
   .stat-icon {
-    font-size: 14px;
+    font-size: var(--fs-md);
     font-weight: 700;
   }
 
@@ -253,7 +253,7 @@
     padding: 6px 8px;
     background: var(--bg-primary);
     border-radius: var(--radius-sm);
-    font-size: 12px;
+    font-size: var(--fs-sm);
     transition: all 0.3s ease;
   }
 
@@ -273,7 +273,7 @@
     width: 16px;
     height: 16px;
     font-weight: 700;
-    font-size: 12px;
+    font-size: var(--fs-sm);
     flex-shrink: 0;
   }
 
@@ -307,7 +307,7 @@
 
   .tool-duration {
     color: var(--text-tertiary);
-    font-size: 11px;
+    font-size: var(--fs-xs);
     font-family: var(--font-family);
   }
 

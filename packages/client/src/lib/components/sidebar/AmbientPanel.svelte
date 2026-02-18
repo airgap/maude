@@ -154,16 +154,7 @@
     return `${Math.floor(diff / 86400)}d ago`;
   }
 
-  function severityIcon(severity: Severity): string {
-    switch (severity) {
-      case 'error':
-        return '✗';
-      case 'warning':
-        return '⚠';
-      case 'info':
-        return 'ℹ';
-    }
-  }
+  // severityIcon is now rendered inline as SVGs in the template
 
   function severityColor(severity: Severity): string {
     switch (severity) {
@@ -243,7 +234,7 @@
     <div class="empty">Enable watching to monitor workspace activity</div>
   {:else if watching && notifications.length === 0}
     <div class="empty all-clear">
-      <span class="all-clear-icon">✓</span>
+      <span class="all-clear-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12" /></svg></span>
       All clear — no issues detected
     </div>
   {:else}
@@ -268,7 +259,7 @@
           <!-- Top row: icon + title + type tag -->
           <div class="notif-top">
             <span class="severity-icon" style:color={severityColor(n.severity)}>
-              {severityIcon(n.severity)}
+              {#if n.severity === 'error'}<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>{:else if n.severity === 'warning'}<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" /><line x1="12" y1="9" x2="12" y2="13" /><line x1="12" y1="17" x2="12.01" y2="17" /></svg>{:else}<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10" /><line x1="12" y1="16" x2="12" y2="12" /><line x1="12" y1="8" x2="12.01" y2="8" /></svg>{/if}
             </span>
             <span class="notif-title">{n.title}</span>
             <span class="type-tag">{typeLabel(n.type)}</span>
@@ -335,7 +326,7 @@
     gap: 8px;
   }
   .panel-title {
-    font-size: 12px;
+    font-size: var(--fs-sm);
     font-weight: 700;
     color: var(--text-primary);
     text-transform: uppercase;
@@ -404,7 +395,7 @@
 
   /* Status bar */
   .status-bar {
-    font-size: 10px;
+    font-size: var(--fs-xxs);
     padding: 4px 8px;
     background: var(--bg-tertiary);
     border: 1px solid var(--border-primary);
@@ -424,7 +415,7 @@
     font-style: italic;
   }
   .notif-count {
-    font-size: 9px;
+    font-size: var(--fs-xxs);
     font-weight: 700;
     padding: 1px 5px;
     background: var(--accent-primary);
@@ -438,7 +429,7 @@
     padding: 24px 8px;
     text-align: center;
     color: var(--text-tertiary);
-    font-size: 12px;
+    font-size: var(--fs-sm);
     line-height: 1.5;
     flex: 1;
   }
@@ -453,8 +444,9 @@
     gap: 6px;
   }
   .all-clear-icon {
-    font-size: 20px;
-    font-weight: 700;
+    display: flex;
+    align-items: center;
+    color: var(--accent-success, #10b981);
   }
 
   /* Notification list */
@@ -490,7 +482,7 @@
     right: 5px;
     width: 20px;
     height: 20px;
-    font-size: 13px;
+    font-size: var(--fs-base);
     font-weight: 700;
     line-height: 1;
     display: flex;
@@ -523,14 +515,14 @@
     margin-bottom: 3px;
   }
   .severity-icon {
-    font-size: 11px;
-    font-weight: 700;
+    display: flex;
+    align-items: center;
     flex-shrink: 0;
     width: 12px;
     text-align: center;
   }
   .notif-title {
-    font-size: 12px;
+    font-size: var(--fs-sm);
     font-weight: 700;
     color: var(--text-primary);
     flex: 1;
@@ -539,7 +531,7 @@
     white-space: nowrap;
   }
   .type-tag {
-    font-size: 8px;
+    font-size: var(--fs-xxs);
     font-weight: 700;
     letter-spacing: 0.5px;
     padding: 1px 5px;
@@ -552,7 +544,7 @@
 
   /* Message */
   .notif-message {
-    font-size: 11px;
+    font-size: var(--fs-xs);
     color: var(--text-secondary);
     line-height: 1.4;
     margin-left: 18px;
@@ -564,7 +556,7 @@
 
   /* File reference */
   .notif-file {
-    font-size: 10px;
+    font-size: var(--fs-xxs);
     font-family: monospace;
     color: var(--text-tertiary);
     margin-left: 18px;
@@ -583,7 +575,7 @@
     margin-top: 5px;
   }
   .suggestion-btn {
-    font-size: 9px;
+    font-size: var(--fs-xxs);
     font-weight: 600;
     padding: 2px 7px;
     background: var(--bg-secondary);
@@ -595,7 +587,7 @@
     letter-spacing: 0.3px;
   }
   .notif-time {
-    font-size: 9px;
+    font-size: var(--fs-xxs);
     color: var(--text-tertiary);
     flex-shrink: 0;
     font-family: var(--font-family);
@@ -609,7 +601,7 @@
   .clear-btn {
     width: 100%;
     padding: 6px 10px;
-    font-size: 10px;
+    font-size: var(--fs-xxs);
     font-weight: 700;
     text-transform: uppercase;
     letter-spacing: 0.4px;

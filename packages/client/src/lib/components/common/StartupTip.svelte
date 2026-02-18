@@ -187,7 +187,7 @@
   }
 
   .tip-category {
-    font-size: 11px;
+    font-size: var(--fs-xs);
     font-weight: 700;
     text-transform: var(--ht-label-transform, uppercase);
     letter-spacing: var(--ht-label-spacing, 0.08em);
@@ -198,7 +198,7 @@
   }
 
   .tip-counter {
-    font-size: 11px;
+    font-size: var(--fs-xs);
     color: var(--text-tertiary);
     margin-left: auto;
     font-weight: 600;
@@ -222,7 +222,7 @@
   }
 
   .tip-text {
-    font-size: 13px;
+    font-size: var(--fs-base);
     line-height: 1.55;
     color: var(--text-primary);
     margin: 0;
@@ -237,7 +237,7 @@
     border: 1px solid var(--border-primary);
     border-radius: var(--radius-sm);
     padding: 2px 10px;
-    font-size: 12px;
+    font-size: var(--fs-sm);
     font-family: var(--font-family);
     color: var(--accent-primary);
     font-weight: 600;
@@ -251,7 +251,7 @@
   }
 
   .tip-action-btn {
-    font-size: 12px;
+    font-size: var(--fs-sm);
     padding: 5px 14px;
     border-radius: var(--radius-sm);
     font-weight: 700;
@@ -281,7 +281,7 @@
   }
 
   .tip-disable-btn {
-    font-size: 11px;
+    font-size: var(--fs-xs);
     color: var(--text-tertiary);
     margin-left: auto;
     cursor: pointer;

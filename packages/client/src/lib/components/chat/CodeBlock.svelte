@@ -437,7 +437,7 @@
     border-radius: var(--radius);
     border: 1px solid var(--border-primary);
     overflow: hidden;
-    font-size: 13px;
+    font-size: var(--fs-base);
     position: relative;
   }
 
@@ -469,7 +469,7 @@
   }
 
   .language-label {
-    font-size: 11px;
+    font-size: var(--fs-xs);
     font-weight: 700;
     color: var(--text-primary);
     text-transform: var(--ht-label-transform);
@@ -478,7 +478,7 @@
   }
 
   .code-meta {
-    font-size: 10px;
+    font-size: var(--fs-xxs);
     color: var(--text-tertiary);
     opacity: 0.65;
     white-space: nowrap;
@@ -496,7 +496,7 @@
     display: flex;
     align-items: center;
     gap: 4px;
-    font-size: 11px;
+    font-size: var(--fs-xs);
     font-weight: 500;
     color: var(--text-tertiary);
     padding: 2px 7px;
@@ -545,7 +545,7 @@
 
   .line-num {
     font-family: var(--font-family);
-    font-size: 11px;
+    font-size: var(--fs-xs);
     line-height: 1.5;
     color: var(--text-tertiary);
     padding: 0 10px 0 8px;
@@ -581,7 +581,7 @@
 
   .code-inner {
     font-family: var(--font-family);
-    font-size: 13px;
+    font-size: var(--fs-base);
     line-height: 1.5;
     background: none;
     padding: 0;

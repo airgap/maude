@@ -209,7 +209,7 @@
   }
 
   .panel-title {
-    font-size: 12px;
+    font-size: var(--fs-sm);
     font-weight: 700;
     text-transform: uppercase;
     letter-spacing: 0.08em;
@@ -217,7 +217,7 @@
   }
 
   .panel-count {
-    font-size: 11px;
+    font-size: var(--fs-xs);
     font-weight: 600;
     color: var(--text-tertiary);
     background: var(--bg-tertiary);
@@ -238,7 +238,7 @@
   }
 
   .filter-tab {
-    font-size: 11px;
+    font-size: var(--fs-xs);
     font-weight: 600;
     padding: 3px 8px;
     border-radius: var(--radius-sm);
@@ -272,7 +272,7 @@
 
   .empty-state {
     color: var(--text-tertiary);
-    font-size: 12px;
+    font-size: var(--fs-sm);
     text-align: center;
     padding: 24px 16px;
     line-height: 1.6;
@@ -280,7 +280,7 @@
 
   .empty-state code {
     font-family: var(--font-family-mono, monospace);
-    font-size: 11px;
+    font-size: var(--fs-xs);
     background: var(--bg-tertiary);
     padding: 1px 4px;
     border-radius: 3px;
@@ -329,7 +329,7 @@
   }
 
   .artifact-type-badge {
-    font-size: 9px;
+    font-size: var(--fs-xxs);
     font-weight: 700;
     letter-spacing: 0.06em;
     text-transform: uppercase;
@@ -342,7 +342,7 @@
   }
 
   .artifact-name {
-    font-size: 12px;
+    font-size: var(--fs-sm);
     font-weight: 600;
     color: var(--text-primary);
     flex: 1;
@@ -409,12 +409,12 @@
   }
 
   .artifact-date {
-    font-size: 10px;
+    font-size: var(--fs-xxs);
     color: var(--text-tertiary);
   }
 
   .artifact-pinned-badge {
-    font-size: 10px;
+    font-size: var(--fs-xxs);
     color: var(--accent-primary);
     font-weight: 600;
     display: flex;
@@ -430,7 +430,7 @@
 
   .artifact-diff {
     font-family: var(--font-family-mono, monospace);
-    font-size: 11px;
+    font-size: var(--fs-xs);
     line-height: 1.5;
     color: var(--text-primary);
     white-space: pre-wrap;
@@ -443,7 +443,7 @@
 
   .artifact-raw {
     font-family: var(--font-family-mono, monospace);
-    font-size: 11px;
+    font-size: var(--fs-xs);
     line-height: 1.5;
     color: var(--text-primary);
     white-space: pre-wrap;

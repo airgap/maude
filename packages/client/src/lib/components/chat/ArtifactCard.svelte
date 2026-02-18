@@ -148,7 +148,7 @@
   }
 
   .artifact-type-badge {
-    font-size: 10px;
+    font-size: var(--fs-xxs);
     font-weight: 700;
     letter-spacing: 0.06em;
     text-transform: uppercase;
@@ -161,7 +161,7 @@
   }
 
   .artifact-title {
-    font-size: 13px;
+    font-size: var(--fs-base);
     font-weight: 600;
     color: var(--text-primary);
     flex: 1;
@@ -219,7 +219,7 @@
 
   .artifact-diff {
     font-family: var(--font-family-mono, monospace);
-    font-size: 12px;
+    font-size: var(--fs-sm);
     line-height: 1.5;
     color: var(--text-primary);
     white-space: pre-wrap;
@@ -229,7 +229,7 @@
 
   .artifact-raw {
     font-family: var(--font-family-mono, monospace);
-    font-size: 12px;
+    font-size: var(--fs-sm);
     line-height: 1.5;
     color: var(--text-primary);
     white-space: pre-wrap;
@@ -239,7 +239,7 @@
 
   .artifact-prose {
     font-family: var(--font-family-sans);
-    font-size: 13px;
+    font-size: var(--fs-base);
     line-height: 1.7;
     color: var(--text-primary);
   }
@@ -268,7 +268,7 @@
   }
   .artifact-prose :global(code) {
     font-family: var(--font-family-mono, monospace);
-    font-size: 11px;
+    font-size: var(--fs-xs);
     background: var(--bg-secondary);
     padding: 1px 4px;
     border-radius: 3px;

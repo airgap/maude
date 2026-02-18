@@ -127,7 +127,7 @@
     padding: 8px 12px;
     background: var(--bg-tertiary);
     color: var(--accent-warning);
-    font-size: 13px;
+    font-size: var(--fs-base);
     font-weight: 600;
   }
   .high-risk .approval-header {
@@ -135,7 +135,7 @@
   }
 
   .rule-indicator {
-    font-size: 9px;
+    font-size: var(--fs-xxs);
     font-weight: 700;
     padding: 1px 5px;
     border-radius: 3px;
@@ -158,7 +158,7 @@
   }
 
   .tool-badge {
-    font-size: 12px;
+    font-size: var(--fs-sm);
     font-weight: 600;
     padding: 2px 8px;
     border-radius: 3px;
@@ -167,7 +167,7 @@
   }
 
   .mcp-server-badge {
-    font-size: 9px;
+    font-size: var(--fs-xxs);
     padding: 1px 5px;
     background: var(--bg-secondary);
     border: 1px solid var(--border-secondary);
@@ -177,12 +177,12 @@
   }
 
   .tool-desc {
-    font-size: 12px;
+    font-size: var(--fs-sm);
     color: var(--text-secondary);
   }
 
   .tool-preview {
-    font-size: 12px;
+    font-size: var(--fs-sm);
     line-height: 1.4;
     padding: 8px;
     background: var(--bg-code);
@@ -204,7 +204,7 @@
   .btn {
     padding: 6px 16px;
     border-radius: var(--radius-sm);
-    font-size: 13px;
+    font-size: var(--fs-base);
     font-weight: 600;
     transition: all var(--transition);
   }

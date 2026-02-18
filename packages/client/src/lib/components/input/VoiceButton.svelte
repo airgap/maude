@@ -205,7 +205,7 @@
     border: 1px solid var(--border, rgba(255, 255, 255, 0.1));
     border-radius: 8px;
     padding: 6px 10px;
-    font-size: 12px;
+    font-size: var(--fs-sm);
     color: var(--text-secondary);
     white-space: nowrap;
     max-width: 280px;

@@ -177,7 +177,7 @@
     {:else if streamStore.contextWarning && !streamStore.contextWarning.autocompacted && streamStore.conversationId === conversationStore.activeId}
       {@const w = streamStore.contextWarning}
       <div class="context-warning">
-        <span class="context-warning-icon">⚠</span>
+        <span class="context-warning-icon"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" /><line x1="12" y1="9" x2="12" y2="13" /><line x1="12" y1="17" x2="12.01" y2="17" /></svg></span>
         <span class="context-warning-text">
           Context window is {w.usagePercent}% full ({w.inputTokens.toLocaleString()} / {w.contextLimit.toLocaleString()}
           tokens). Auto-compact will trigger soon.
@@ -236,7 +236,7 @@
     animation: fadeIn 0.5s linear;
   }
   .empty-state p {
-    font-size: 15px;
+    font-size: var(--fs-md);
     max-width: 420px;
     color: var(--text-secondary);
     line-height: 1.6;
@@ -250,7 +250,7 @@
   .shortcuts {
     display: flex;
     gap: 20px;
-    font-size: 12px;
+    font-size: var(--fs-sm);
     margin-top: 12px;
     color: var(--text-secondary);
     letter-spacing: var(--ht-label-spacing);
@@ -260,7 +260,7 @@
     background: var(--bg-tertiary);
     padding: 2px 8px;
     border-radius: var(--radius-sm);
-    font-size: 11px;
+    font-size: var(--fs-xs);
     font-family: var(--font-family);
     margin-right: 5px;
     border: 1px solid var(--border-primary);
@@ -283,7 +283,7 @@
     display: flex;
     align-items: center;
     gap: 6px;
-    font-size: 11px;
+    font-size: var(--fs-xs);
     font-weight: 600;
     letter-spacing: var(--ht-label-spacing, 0.06em);
     white-space: nowrap;
@@ -296,7 +296,7 @@
     padding: 8px 14px;
     background: rgba(255, 170, 0, 0.07);
     border-left: 2px solid rgba(255, 170, 0, 0.5);
-    font-size: 12px;
+    font-size: var(--fs-sm);
     color: var(--text-secondary);
     display: flex;
     align-items: center;
@@ -304,7 +304,8 @@
     border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
   }
   .context-warning-icon {
-    font-size: 13px;
+    display: flex;
+    align-items: center;
     flex-shrink: 0;
   }
   .context-warning-text {
@@ -316,14 +317,14 @@
     padding: 12px 16px;
     background: rgba(255, 50, 50, 0.08);
     border-left: 2px solid var(--error, #ff3232);
-    font-size: 13px;
+    font-size: var(--fs-base);
     color: var(--text-primary);
     display: flex;
     align-items: baseline;
     gap: 10px;
   }
   .error-label {
-    font-size: 11px;
+    font-size: var(--fs-xs);
     font-weight: 700;
     letter-spacing: 1px;
     color: var(--error, #ff3232);

@@ -187,7 +187,7 @@
     font-weight: 700;
     text-transform: var(--ht-label-transform);
     letter-spacing: var(--ht-label-spacing);
-    font-size: 12px;
+    font-size: var(--fs-sm);
   }
   .prose :global(hr) {
     border: none;
@@ -247,7 +247,7 @@
     border: 1px solid var(--border-primary);
     border-radius: var(--radius-sm);
     padding: 3px 8px;
-    font-size: 11px;
+    font-size: var(--fs-xs);
     color: var(--text-secondary);
     white-space: nowrap;
     pointer-events: none;

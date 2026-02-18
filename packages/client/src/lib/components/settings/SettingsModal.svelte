@@ -709,7 +709,7 @@
             <label class="setting-label">Font size: {settingsStore.fontSize}px</label>
             <input
               type="range"
-              min="10"
+              min="12"
               max="24"
               value={settingsStore.fontSize}
               oninput={(e) =>
@@ -1292,7 +1292,7 @@
             </div>
             {#if sandboxEnabled}
               <div class="sandbox-paths">
-                <label class="setting-label" style="font-size: 12px;">Allowed Paths</label>
+                <label class="setting-label" style="font-size: var(--fs-sm);">Allowed Paths</label>
                 {#each sandboxPaths as path}
                   <div class="sandbox-path-row">
                     <code class="sandbox-path">{path}</code>
@@ -1543,7 +1543,7 @@
     border-bottom: 1px solid var(--border-primary);
   }
   .modal-header h2 {
-    font-size: 16px;
+    font-size: var(--fs-lg);
     font-weight: 700;
   }
   .close-btn {
@@ -1572,7 +1572,7 @@
   .settings-tab {
     padding: 8px 12px;
     border-radius: var(--radius-sm);
-    font-size: 13px;
+    font-size: var(--fs-base);
     text-align: left;
     color: var(--text-secondary);
     transition: all var(--transition);
@@ -1598,7 +1598,7 @@
   }
   .setting-label {
     display: block;
-    font-size: 13px;
+    font-size: var(--fs-base);
     font-weight: 600;
     margin-bottom: 8px;
     color: var(--text-primary);
@@ -1673,17 +1673,17 @@
     background: var(--bg-active);
   }
   .ht-icon {
-    font-size: 20px;
+    font-size: var(--fs-2xl);
     line-height: 1;
   }
   .ht-label {
-    font-size: 11px;
+    font-size: var(--fs-xs);
     font-weight: 700;
     letter-spacing: var(--ht-label-spacing);
     color: var(--text-primary);
   }
   .ht-desc {
-    font-size: 9px;
+    font-size: var(--fs-xxs);
     color: var(--text-tertiary);
     line-height: 1.2;
   }
@@ -1703,7 +1703,7 @@
     border: 2px solid var(--border-secondary);
     border-radius: var(--radius);
     transition: all var(--transition);
-    font-size: 11px;
+    font-size: var(--fs-xs);
   }
   .theme-option:hover {
     border-color: var(--border-primary);
@@ -1759,11 +1759,11 @@
     background: var(--bg-active);
   }
   .provider-name {
-    font-size: 13px;
+    font-size: var(--fs-base);
     font-weight: 600;
   }
   .provider-desc {
-    font-size: 11px;
+    font-size: var(--fs-xs);
     color: var(--text-tertiary);
   }
 
@@ -1790,17 +1790,17 @@
     background: var(--bg-active);
   }
   .perm-name {
-    font-size: 13px;
+    font-size: var(--fs-base);
     font-weight: 600;
   }
   .perm-desc {
-    font-size: 11px;
+    font-size: var(--fs-xs);
     color: var(--text-tertiary);
   }
 
   /* MCP */
   .mcp-info {
-    font-size: 13px;
+    font-size: var(--fs-base);
     color: var(--text-secondary);
     margin-bottom: 12px;
   }
@@ -1809,7 +1809,7 @@
     background: var(--accent-primary);
     color: var(--text-on-accent);
     border-radius: var(--radius-sm);
-    font-size: 13px;
+    font-size: var(--fs-base);
     font-weight: 600;
   }
 
@@ -1827,11 +1827,11 @@
     border-bottom: 1px solid var(--border-secondary);
   }
   .kb-action {
-    font-size: 13px;
+    font-size: var(--fs-base);
     color: var(--text-primary);
   }
   .kb-keys {
-    font-size: 12px;
+    font-size: var(--fs-sm);
     padding: 2px 8px;
     background: var(--bg-tertiary);
     border-radius: var(--radius-sm);
@@ -1840,7 +1840,7 @@
 
   /* Snippets */
   .setting-desc {
-    font-size: 12px;
+    font-size: var(--fs-sm);
     color: var(--text-tertiary);
     margin-bottom: 10px;
   }
@@ -1852,7 +1852,7 @@
   .snippet-import-row select {
     flex: 1;
     padding: 6px 8px;
-    font-size: 13px;
+    font-size: var(--fs-base);
     background: var(--bg-input);
     border: 1px solid var(--border-secondary);
     border-radius: var(--radius-sm);
@@ -1872,14 +1872,14 @@
     border-radius: var(--radius-sm);
   }
   .snippet-lang {
-    font-size: 13px;
+    font-size: var(--fs-base);
     font-weight: 600;
     text-transform: var(--ht-label-transform);
     color: var(--text-primary);
     min-width: 90px;
   }
   .snippet-count {
-    font-size: 12px;
+    font-size: var(--fs-sm);
     color: var(--text-secondary);
     flex: 1;
   }
@@ -1889,7 +1889,7 @@
     border: 1px solid var(--border-secondary);
     color: var(--text-primary);
     border-radius: var(--radius-sm);
-    font-size: 12px;
+    font-size: var(--fs-sm);
     font-weight: 600;
     cursor: pointer;
     transition: all var(--transition);
@@ -1904,7 +1904,7 @@
     border: 1px solid var(--accent-error);
     color: var(--accent-error);
     border-radius: var(--radius-sm);
-    font-size: 11px;
+    font-size: var(--fs-xs);
     font-weight: 600;
     cursor: pointer;
   }
@@ -1930,7 +1930,7 @@
     right: 4px;
     width: 24px;
     height: 24px;
-    font-size: 11px;
+    font-size: var(--fs-xs);
     line-height: 24px;
     text-align: center;
     padding: 0;
@@ -1972,16 +1972,16 @@
     margin-bottom: 8px;
   }
   .api-key-name {
-    font-size: 13px;
+    font-size: var(--fs-base);
     font-weight: 600;
     color: var(--text-primary);
   }
   .api-key-desc {
-    font-size: 11px;
+    font-size: var(--fs-xs);
     color: var(--text-tertiary);
   }
   .api-key-badge {
-    font-size: 10px;
+    font-size: var(--fs-xxs);
     font-weight: 700;
     padding: 1px 8px;
     border-radius: var(--radius-sm);
@@ -2004,7 +2004,7 @@
   .api-key-input {
     flex: 1;
     padding: 6px 10px;
-    font-size: 12px;
+    font-size: var(--fs-sm);
     background: var(--bg-input);
     border: 1px solid var(--border-secondary);
     border-radius: var(--radius-sm);
@@ -2023,14 +2023,14 @@
     gap: 6px;
   }
   .budget-prefix {
-    font-size: 14px;
+    font-size: var(--fs-md);
     font-weight: 700;
     color: var(--text-secondary);
   }
   .budget-input {
     width: 120px;
     padding: 6px 10px;
-    font-size: 13px;
+    font-size: var(--fs-base);
     background: var(--bg-input);
     border: 1px solid var(--border-secondary);
     border-radius: var(--radius-sm);
@@ -2050,7 +2050,7 @@
     margin-bottom: 12px;
   }
   .sandbox-status {
-    font-size: 12px;
+    font-size: var(--fs-sm);
     color: var(--text-secondary);
     font-weight: 600;
   }
@@ -2070,7 +2070,7 @@
   }
   .sandbox-path {
     flex: 1;
-    font-size: 12px;
+    font-size: var(--fs-sm);
     color: var(--text-primary);
     overflow: hidden;
     text-overflow: ellipsis;
@@ -2083,7 +2083,7 @@
   .sandbox-path-input {
     flex: 1;
     padding: 6px 10px;
-    font-size: 12px;
+    font-size: var(--fs-sm);
     background: var(--bg-input);
     border: 1px solid var(--border-secondary);
     border-radius: var(--radius-sm);
@@ -2111,14 +2111,14 @@
     border-radius: var(--radius-sm);
   }
   .streaming-option-label {
-    font-size: 12px;
+    font-size: var(--fs-sm);
     font-weight: 600;
     color: var(--text-secondary);
   }
   .streaming-option-row select {
     width: 130px;
     padding: 4px 8px;
-    font-size: 12px;
+    font-size: var(--fs-sm);
     background: var(--bg-input);
     border: 1px solid var(--border-secondary);
     border-radius: var(--radius-sm);
@@ -2133,7 +2133,7 @@
   .font-select {
     width: 100%;
     padding: 8px 10px;
-    font-size: 13px;
+    font-size: var(--fs-base);
     background: var(--bg-input);
     border: 1px solid var(--border-secondary);
     border-radius: var(--radius-sm);
@@ -2151,11 +2151,11 @@
     border: 1px solid var(--border-secondary);
     border-radius: var(--radius-sm);
     color: var(--text-secondary);
-    font-size: 14px;
+    font-size: var(--fs-md);
     line-height: 1.5;
   }
   .font-preview.mono {
-    font-size: 13px;
+    font-size: var(--fs-base);
     letter-spacing: 0.3px;
   }
 
@@ -2167,7 +2167,7 @@
     margin-bottom: 6px;
   }
   .audio-toggle-label {
-    font-size: 12px;
+    font-size: var(--fs-sm);
     font-weight: 600;
     color: var(--text-secondary);
   }
@@ -2223,7 +2223,7 @@
     cursor: not-allowed;
   }
   .sound-style-name {
-    font-size: 12px;
+    font-size: var(--fs-sm);
     font-weight: 700;
     color: var(--text-primary);
     font-family: var(--font-family-sans);
@@ -2232,7 +2232,7 @@
     color: var(--accent-primary);
   }
   .sound-style-desc {
-    font-size: 11px;
+    font-size: var(--fs-xs);
     color: var(--text-secondary);
     line-height: 1.4;
   }
@@ -2258,21 +2258,21 @@
     background: var(--bg-tertiary);
   }
   .chirp-event {
-    font-size: 12px;
+    font-size: var(--fs-sm);
     font-weight: 600;
     color: var(--accent-primary);
     min-width: 130px;
     flex-shrink: 0;
   }
   .chirp-desc {
-    font-size: 11px;
+    font-size: var(--fs-xs);
     color: var(--text-tertiary);
     line-height: 1.4;
   }
 
   /* Desktop notifications */
   .notify-status {
-    font-size: 11px;
+    font-size: var(--fs-xs);
     font-weight: 600;
     margin-left: 4px;
   }
@@ -2285,7 +2285,7 @@
   .notify-request-btn {
     margin-left: 4px;
     padding: 2px 10px;
-    font-size: 11px;
+    font-size: var(--fs-xs);
   }
   .notify-options {
     display: flex;
@@ -2309,7 +2309,7 @@
     background: var(--bg-tertiary);
   }
   .notify-option-label {
-    font-size: 12px;
+    font-size: var(--fs-sm);
     font-weight: 600;
     color: var(--text-secondary);
   }
@@ -2336,7 +2336,7 @@
   .perm-scope-btn {
     flex: 1;
     padding: 5px 10px;
-    font-size: 12px;
+    font-size: var(--fs-sm);
     font-weight: 600;
     color: var(--text-secondary);
     border-radius: var(--radius-sm);
@@ -2362,7 +2362,7 @@
     flex-wrap: wrap;
   }
   .perm-presets-label {
-    font-size: 11px;
+    font-size: var(--fs-xs);
     font-weight: 600;
     color: var(--text-tertiary);
     text-transform: uppercase;
@@ -2370,7 +2370,7 @@
   }
   .perm-preset-btn {
     padding: 3px 10px;
-    font-size: 11px;
+    font-size: var(--fs-xs);
     font-weight: 600;
     background: var(--bg-tertiary);
     border: 1px solid var(--border-secondary);
@@ -2394,7 +2394,7 @@
   }
   .perm-rule-select {
     padding: 5px 8px;
-    font-size: 12px;
+    font-size: var(--fs-sm);
     background: var(--bg-input);
     border: 1px solid var(--border-secondary);
     border-radius: var(--radius-sm);
@@ -2407,7 +2407,7 @@
   .perm-pattern-input {
     flex: 1;
     padding: 5px 8px;
-    font-size: 12px;
+    font-size: var(--fs-sm);
     background: var(--bg-input);
     border: 1px solid var(--border-secondary);
     border-radius: var(--radius-sm);
@@ -2421,7 +2421,7 @@
   }
   .perm-add-btn {
     padding: 5px 12px;
-    font-size: 12px;
+    font-size: var(--fs-sm);
     white-space: nowrap;
   }
 
@@ -2440,7 +2440,7 @@
     gap: 8px;
     padding: 6px 10px;
     border-bottom: 1px solid var(--border-secondary);
-    font-size: 12px;
+    font-size: var(--fs-sm);
   }
   .perm-rule-row:last-child {
     border-bottom: none;
@@ -2449,7 +2449,7 @@
     background: var(--bg-tertiary);
   }
   .perm-rule-type {
-    font-size: 10px;
+    font-size: var(--fs-xxs);
     font-weight: 700;
     padding: 1px 6px;
     border-radius: 3px;
@@ -2477,14 +2477,14 @@
   .perm-rule-pattern {
     font-family: var(--font-family);
     color: var(--text-secondary);
-    font-size: 11px;
+    font-size: var(--fs-xs);
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
     flex: 1;
   }
   .perm-rule-scope-badge {
-    font-size: 9px;
+    font-size: var(--fs-xxs);
     font-weight: 700;
     padding: 1px 5px;
     border-radius: 3px;
@@ -2501,7 +2501,7 @@
   }
   .perm-rules-loading,
   .perm-rules-empty {
-    font-size: 12px;
+    font-size: var(--fs-sm);
     color: var(--text-tertiary);
     padding: 16px 0;
     text-align: center;
@@ -2549,7 +2549,7 @@
     gap: 4px;
   }
   .profile-card-name {
-    font-size: 13px;
+    font-size: var(--fs-base);
     font-weight: 600;
     color: var(--text-primary);
     display: flex;
@@ -2557,7 +2557,7 @@
     gap: 8px;
   }
   .built-in-badge {
-    font-size: 10px;
+    font-size: var(--fs-xxs);
     font-weight: 600;
     padding: 2px 7px;
     border-radius: var(--radius-sm);
@@ -2567,7 +2567,7 @@
     text-transform: uppercase;
   }
   .profile-card-desc {
-    font-size: 11px;
+    font-size: var(--fs-xs);
     color: var(--text-tertiary);
   }
   .profile-card-meta {
@@ -2577,7 +2577,7 @@
     margin-top: 4px;
   }
   .meta-chip {
-    font-size: 10px;
+    font-size: var(--fs-xxs);
     font-weight: 600;
     padding: 2px 7px;
     border-radius: var(--radius-sm);
@@ -2631,7 +2631,7 @@
     border-bottom: 1px solid var(--border-secondary);
   }
   .profile-form-header h3 {
-    font-size: 15px;
+    font-size: var(--fs-md);
     font-weight: 600;
     color: var(--text-primary);
     margin: 0;
@@ -2653,7 +2653,7 @@
   }
   .btn-primary {
     padding: 7px 18px;
-    font-size: 13px;
+    font-size: var(--fs-base);
     font-weight: 600;
     border-radius: var(--radius-sm);
     background: var(--accent-primary);

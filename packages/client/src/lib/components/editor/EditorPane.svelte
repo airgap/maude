@@ -122,13 +122,13 @@
   }
 
   .empty-text {
-    font-size: 14px;
+    font-size: var(--fs-md);
     font-weight: 600;
     letter-spacing: 0.5px;
   }
 
   .empty-hint {
-    font-size: 12px;
+    font-size: var(--fs-sm);
     opacity: 0.6;
   }
 </style>

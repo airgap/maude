@@ -182,7 +182,7 @@
 
   .search-input {
     flex: 1;
-    font-size: 13px;
+    font-size: var(--fs-base);
     font-weight: 600;
     padding: 7px 10px;
     border-radius: var(--radius-sm);
@@ -314,7 +314,7 @@
   }
 
   .conv-title {
-    font-size: 14px;
+    font-size: var(--fs-md);
     font-weight: 600;
     color: var(--text-primary);
     margin-bottom: 3px;
@@ -330,7 +330,7 @@
   .conv-meta {
     display: flex;
     gap: 8px;
-    font-size: 11px;
+    font-size: var(--fs-xs);
     color: var(--text-tertiary);
     letter-spacing: var(--ht-label-spacing);
     font-weight: 600;
@@ -364,7 +364,7 @@
     padding: 30px 20px;
     text-align: center;
     color: var(--text-tertiary);
-    font-size: 14px;
+    font-size: var(--fs-md);
     letter-spacing: var(--ht-label-spacing);
     font-weight: 600;
     text-transform: var(--ht-label-transform);

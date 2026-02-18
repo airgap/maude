@@ -92,13 +92,13 @@
   .cmd-name {
     font-weight: 600;
     color: var(--accent-primary);
-    font-size: 13px;
+    font-size: var(--fs-base);
     white-space: nowrap;
   }
 
   .cmd-desc {
     color: var(--text-tertiary);
-    font-size: 12px;
+    font-size: var(--fs-sm);
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -107,7 +107,7 @@
   .no-results {
     padding: 12px;
     color: var(--text-tertiary);
-    font-size: 13px;
+    font-size: var(--fs-base);
     text-align: center;
   }
 </style>

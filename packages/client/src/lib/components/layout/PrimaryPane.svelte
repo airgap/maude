@@ -313,7 +313,7 @@
   }
 
   .split-placeholder p {
-    font-size: 13px;
+    font-size: var(--fs-base);
     margin: 0;
     opacity: 0.7;
   }

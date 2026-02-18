@@ -47,7 +47,7 @@
     align-items: center;
     gap: 4px;
     padding: 4px 12px;
-    font-size: 12px;
+    font-size: var(--fs-sm);
     color: var(--text-secondary);
     background: var(--bg-secondary);
     border-bottom: 1px solid var(--border-secondary);

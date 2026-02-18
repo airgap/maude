@@ -84,13 +84,13 @@
     padding: 4px 4px 8px;
   }
   .outline-header h3 {
-    font-size: 13px;
+    font-size: var(--fs-base);
     font-weight: 600;
     margin: 0;
   }
   .outline-file {
     display: block;
-    font-size: 11px;
+    font-size: var(--fs-xs);
     color: var(--text-tertiary);
     overflow: hidden;
     text-overflow: ellipsis;
@@ -101,7 +101,7 @@
     padding: 20px;
     text-align: center;
     color: var(--text-tertiary);
-    font-size: 12px;
+    font-size: var(--fs-sm);
   }
 
   .outline-tree {
@@ -115,7 +115,7 @@
     width: 100%;
     padding: 3px 8px;
     border-radius: var(--radius-sm);
-    font-size: 12px;
+    font-size: var(--fs-sm);
     color: var(--text-secondary);
     text-align: left;
     transition: background var(--transition);
@@ -128,7 +128,7 @@
   .symbol-kind {
     font-family: var(--font-family);
     font-weight: 700;
-    font-size: 11px;
+    font-size: var(--fs-xs);
     width: 16px;
     text-align: center;
     flex-shrink: 0;
@@ -144,7 +144,7 @@
 
   .symbol-line {
     font-family: var(--font-family);
-    font-size: 10px;
+    font-size: var(--fs-xxs);
     color: var(--text-tertiary);
     flex-shrink: 0;
   }

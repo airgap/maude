@@ -201,7 +201,7 @@
 
   /* Main sparkle — pulses and slowly rotates at cursor point */
   .star-main {
-    font-size: 20px;
+    font-size: var(--fs-2xl);
     color: var(--accent-primary);
     text-shadow:
       0 0 8px var(--accent-primary),

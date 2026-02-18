@@ -162,7 +162,7 @@
     align-items: center;
     gap: 6px;
     padding: 4px 10px;
-    font-size: 13px;
+    font-size: var(--fs-base);
     color: var(--text-secondary);
     border-radius: var(--radius-sm);
     transition: all var(--transition);
@@ -202,7 +202,7 @@
     text-align: left;
     padding: 8px 12px;
     border-radius: var(--radius-sm);
-    font-size: 13px;
+    font-size: var(--fs-base);
     color: var(--text-secondary);
     transition: all var(--transition);
   }
@@ -219,7 +219,7 @@
     font-weight: 600;
   }
   .item-path {
-    font-size: 11px;
+    font-size: var(--fs-xs);
     color: var(--text-tertiary);
     overflow: hidden;
     text-overflow: ellipsis;
@@ -252,7 +252,7 @@
     margin-bottom: 4px;
   }
   .browse-path {
-    font-size: 11px;
+    font-size: var(--fs-xs);
     color: var(--text-tertiary);
     overflow: hidden;
     text-overflow: ellipsis;

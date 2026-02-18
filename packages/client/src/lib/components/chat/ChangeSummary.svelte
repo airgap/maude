@@ -177,7 +177,7 @@
     gap: 12px;
   }
   .title-text {
-    font-size: 12px;
+    font-size: var(--fs-sm);
     font-weight: 700;
     text-transform: uppercase;
     letter-spacing: 1px;
@@ -186,7 +186,7 @@
   .summary-stats {
     display: flex;
     gap: 8px;
-    font-size: 11px;
+    font-size: var(--fs-xs);
     font-family: var(--font-family);
   }
   .stat.files {
@@ -203,7 +203,7 @@
     gap: 6px;
   }
   .action-btn {
-    font-size: 10px;
+    font-size: var(--fs-xxs);
     padding: 3px 10px;
     font-weight: 700;
     text-transform: uppercase;
@@ -246,7 +246,7 @@
     align-items: center;
   }
   .file-path {
-    font-size: 12px;
+    font-size: var(--fs-sm);
     font-weight: 600;
     color: var(--text-primary);
     background: none;
@@ -260,7 +260,7 @@
   }
   .full-path {
     display: block;
-    font-size: 10px;
+    font-size: var(--fs-xxs);
     font-weight: 400;
     color: var(--text-tertiary);
     font-family: var(--font-family);
@@ -268,7 +268,7 @@
   .group-stats {
     display: flex;
     gap: 6px;
-    font-size: 10px;
+    font-size: var(--fs-xxs);
     font-family: var(--font-family);
     align-items: center;
   }
@@ -282,7 +282,7 @@
     flex-wrap: wrap;
   }
   .tool-badge {
-    font-size: 9px;
+    font-size: var(--fs-xxs);
     padding: 1px 6px;
     background: var(--bg-primary);
     border: 1px solid var(--border-secondary);
@@ -296,7 +296,7 @@
     margin-top: 6px;
   }
   .verdict-btn {
-    font-size: 10px;
+    font-size: var(--fs-xxs);
     padding: 2px 10px;
     font-weight: 700;
     text-transform: uppercase;
@@ -323,7 +323,7 @@
     color: var(--bg-primary);
   }
   .verdict-label {
-    font-size: 10px;
+    font-size: var(--fs-xxs);
     text-transform: uppercase;
     letter-spacing: 1px;
     font-weight: 700;
@@ -340,14 +340,14 @@
     padding: 4px 8px;
     background: var(--bg-primary);
     border-left: 2px solid var(--accent-primary);
-    font-size: 11px;
+    font-size: var(--fs-xs);
     line-height: 1.4;
   }
   .reasoning-label {
     font-weight: 700;
     color: var(--accent-primary);
     margin-right: 4px;
-    font-size: 10px;
+    font-size: var(--fs-xxs);
     text-transform: uppercase;
     letter-spacing: 0.5px;
   }
@@ -355,7 +355,7 @@
     color: var(--text-secondary);
   }
   .verify-badge {
-    font-size: 9px;
+    font-size: var(--fs-xxs);
     padding: 1px 6px;
     font-weight: 700;
     text-transform: uppercase;
@@ -372,7 +372,7 @@
   }
   .review-complete {
     padding: 8px 12px;
-    font-size: 11px;
+    font-size: var(--fs-xs);
     color: var(--text-secondary);
     text-align: center;
     background: var(--bg-tertiary);

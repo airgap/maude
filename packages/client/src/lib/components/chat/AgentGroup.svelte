@@ -107,7 +107,7 @@
     border: 1px solid var(--border-secondary);
     border-radius: var(--radius-sm);
     overflow: hidden;
-    font-size: 13px;
+    font-size: var(--fs-base);
     border-left: 2px solid var(--accent-secondary);
   }
 
@@ -131,7 +131,7 @@
 
   .agent-label {
     font-weight: 700;
-    font-size: 12px;
+    font-size: var(--fs-sm);
     letter-spacing: 0.5px;
     text-transform: uppercase;
     color: var(--accent-secondary);
@@ -139,14 +139,14 @@
 
   .agent-desc {
     color: var(--text-tertiary);
-    font-size: 12px;
+    font-size: var(--fs-sm);
     flex: 1;
     min-width: 0;
     text-align: left;
   }
 
   .agent-count {
-    font-size: 10px;
+    font-size: var(--fs-xxs);
     color: var(--text-tertiary);
     padding: 1px 6px;
     background: var(--bg-primary);

@@ -143,7 +143,7 @@
     padding: 8px 12px;
     background: var(--bg-tertiary);
     color: var(--accent-primary);
-    font-size: 13px;
+    font-size: var(--fs-base);
     font-weight: 600;
   }
 
@@ -157,7 +157,7 @@
 
   .question-badge {
     display: inline-block;
-    font-size: 9px;
+    font-size: var(--fs-xxs);
     font-weight: 700;
     text-transform: uppercase;
     letter-spacing: 0.5px;
@@ -170,7 +170,7 @@
   }
 
   .question-text {
-    font-size: 13px;
+    font-size: var(--fs-base);
     line-height: 1.5;
     color: var(--text-primary);
     font-weight: 500;
@@ -211,7 +211,7 @@
 
   .option-radio {
     flex-shrink: 0;
-    font-size: 12px;
+    font-size: var(--fs-sm);
     line-height: 18px;
     color: var(--text-tertiary);
     display: flex;
@@ -231,7 +231,7 @@
   }
 
   .option-label {
-    font-size: 12px;
+    font-size: var(--fs-sm);
     font-weight: 600;
     color: var(--text-primary);
   }
@@ -240,7 +240,7 @@
   }
 
   .option-desc {
-    font-size: 11px;
+    font-size: var(--fs-xs);
     line-height: 1.4;
     color: var(--text-tertiary);
   }
@@ -256,7 +256,7 @@
   .btn {
     padding: 6px 20px;
     border-radius: var(--radius-sm);
-    font-size: 13px;
+    font-size: var(--fs-base);
     font-weight: 600;
     transition: all var(--transition);
   }

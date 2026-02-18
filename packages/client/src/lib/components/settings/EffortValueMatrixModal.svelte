@@ -74,20 +74,7 @@
     }
   }
 
-  function statusIcon(status: string): string {
-    switch (status) {
-      case 'completed':
-        return '✓';
-      case 'in_progress':
-        return '●';
-      case 'failed':
-        return '✗';
-      case 'skipped':
-        return '⊘';
-      default:
-        return '○';
-    }
-  }
+  // statusIcon is now rendered inline as SVGs in the template
 
   function statusColor(status: string): string {
     switch (status) {
@@ -274,7 +261,7 @@
                 }}
               >
                 <span class="story-status-icon" style:color={statusColor(story.status)}>
-                  {statusIcon(story.status)}
+                  {#if story.status === 'completed'}<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12" /></svg>{:else if story.status === 'in_progress'}<svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor" stroke="none"><circle cx="12" cy="12" r="6" /></svg>{:else if story.status === 'failed'}<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>{:else if story.status === 'skipped'}<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10" /><line x1="4.93" y1="4.93" x2="19.07" y2="19.07" /></svg>{:else}<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10" /></svg>{/if}
                 </span>
                 <span class="story-name">{story.title}</span>
                 <span class="story-priority-badge" style:color={priorityColor(story.priority)}>
@@ -382,7 +369,7 @@
     border-bottom: 1px solid var(--border-primary);
   }
   .modal-header h2 {
-    font-size: 16px;
+    font-size: var(--fs-lg);
     font-weight: 600;
   }
   .header-actions {
@@ -394,7 +381,7 @@
     padding: 4px 8px;
     border-radius: 4px;
     color: var(--text-tertiary);
-    font-size: 16px;
+    font-size: var(--fs-lg);
     background: none;
     border: none;
     cursor: pointer;
@@ -431,7 +418,7 @@
     gap: 4px;
     padding: 4px 10px;
     border-radius: 12px;
-    font-size: 11px;
+    font-size: var(--fs-xs);
     background: var(--chip-bg);
     border: 1px solid var(--chip-border);
     color: var(--text-secondary);
@@ -447,11 +434,11 @@
     color: var(--text-primary);
   }
   .chip-icon {
-    font-size: 12px;
+    font-size: var(--fs-sm);
   }
   .chip-count {
     font-weight: 700;
-    font-size: 10px;
+    font-size: var(--fs-xxs);
     opacity: 0.7;
   }
 
@@ -471,7 +458,7 @@
     justify-content: center;
     writing-mode: vertical-lr;
     transform: rotate(180deg);
-    font-size: 10px;
+    font-size: var(--fs-xxs);
     color: var(--text-tertiary);
     font-weight: 600;
     letter-spacing: 0.5px;
@@ -483,7 +470,7 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 10px;
+    font-size: var(--fs-xxs);
     color: var(--text-tertiary);
     font-weight: 600;
     letter-spacing: 0.5px;
@@ -535,7 +522,7 @@
     height: 50%;
   }
   .quadrant-label {
-    font-size: 10px;
+    font-size: var(--fs-xxs);
     font-weight: 600;
     color: var(--text-tertiary);
     opacity: 0.8;
@@ -603,7 +590,7 @@
     top: -18px;
     left: 50%;
     transform: translateX(-50%);
-    font-size: 9px;
+    font-size: var(--fs-xxs);
     color: var(--text-secondary);
     white-space: nowrap;
     background: var(--bg-primary);
@@ -625,7 +612,7 @@
     margin-bottom: 16px;
   }
   .section-label {
-    font-size: 12px;
+    font-size: var(--fs-sm);
     font-weight: 600;
     color: var(--text-secondary);
     margin-bottom: 8px;
@@ -652,7 +639,7 @@
     background: var(--bg-secondary);
     border: 1px solid var(--border-primary);
     border-radius: var(--radius-sm);
-    font-size: 11px;
+    font-size: var(--fs-xs);
     transition: background 0.15s;
   }
   .story-list-item.hovered {
@@ -660,7 +647,8 @@
     border-color: var(--accent-primary);
   }
   .story-status-icon {
-    font-size: 11px;
+    display: flex;
+    align-items: center;
     flex-shrink: 0;
     width: 14px;
     text-align: center;
@@ -673,20 +661,20 @@
     color: var(--text-primary);
   }
   .story-priority-badge {
-    font-size: 9px;
+    font-size: var(--fs-xxs);
     font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 0.3px;
     flex-shrink: 0;
   }
   .story-points {
-    font-size: 10px;
+    font-size: var(--fs-xxs);
     font-weight: 600;
     color: var(--accent-primary);
     flex-shrink: 0;
   }
   .story-quadrant-tag {
-    font-size: 9px;
+    font-size: var(--fs-xxs);
     padding: 1px 6px;
     border-radius: 8px;
     border: 1px solid;
@@ -694,7 +682,7 @@
     white-space: nowrap;
   }
   .reset-btn {
-    font-size: 12px;
+    font-size: var(--fs-sm);
     padding: 0 4px;
     color: var(--text-tertiary);
     background: none;
@@ -730,7 +718,7 @@
     border-radius: var(--radius-sm);
   }
   .excluded-title {
-    font-size: 11px;
+    font-size: var(--fs-xs);
     color: var(--text-secondary);
     overflow: hidden;
     text-overflow: ellipsis;
@@ -738,13 +726,13 @@
     flex: 1;
   }
   .excluded-reason {
-    font-size: 10px;
+    font-size: var(--fs-xxs);
     color: var(--text-tertiary);
     font-style: italic;
     flex-shrink: 0;
   }
   .excluded-hint {
-    font-size: 10px;
+    font-size: var(--fs-xxs);
     color: var(--text-tertiary);
     margin-top: 6px;
   }
@@ -754,11 +742,11 @@
     text-align: center;
     padding: 40px 20px;
     color: var(--text-secondary);
-    font-size: 13px;
+    font-size: var(--fs-base);
     line-height: 1.6;
   }
   .empty-hint {
-    font-size: 11px;
+    font-size: var(--fs-xs);
     color: var(--text-tertiary);
     margin-top: 8px;
   }
@@ -773,7 +761,7 @@
   }
   .btn-close {
     padding: 6px 16px;
-    font-size: 12px;
+    font-size: var(--fs-sm);
     border-radius: var(--radius-sm);
     background: var(--bg-tertiary);
     color: var(--text-secondary);

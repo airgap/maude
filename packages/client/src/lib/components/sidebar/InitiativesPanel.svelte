@@ -572,7 +572,7 @@
   }
 
   .panel-title {
-    font-size: 11px;
+    font-size: var(--fs-xs);
     font-weight: 700;
     color: var(--text-secondary);
     text-transform: uppercase;
@@ -587,7 +587,7 @@
     background: transparent;
     color: var(--text-secondary);
     cursor: pointer;
-    font-size: 14px;
+    font-size: var(--fs-md);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -606,7 +606,7 @@
     padding: 8px 14px;
     background: color-mix(in srgb, var(--accent-error) 12%, transparent);
     border-bottom: 1px solid color-mix(in srgb, var(--accent-error) 25%, transparent);
-    font-size: 12px;
+    font-size: var(--fs-sm);
     color: var(--accent-error);
     flex-shrink: 0;
   }
@@ -616,7 +616,7 @@
     border: none;
     color: var(--accent-error);
     cursor: pointer;
-    font-size: 12px;
+    font-size: var(--fs-sm);
     padding: 0 2px;
   }
 
@@ -634,7 +634,7 @@
   }
 
   .form-title {
-    font-size: 12px;
+    font-size: var(--fs-sm);
     font-weight: 700;
     color: var(--text-primary);
   }
@@ -643,7 +643,7 @@
     display: flex;
     flex-direction: column;
     gap: 4px;
-    font-size: 11px;
+    font-size: var(--fs-xs);
     font-weight: 600;
     color: var(--text-tertiary);
     text-transform: uppercase;
@@ -656,7 +656,7 @@
     border: 1px solid var(--border-primary);
     border-radius: var(--radius-sm);
     color: var(--text-primary);
-    font-size: 12px;
+    font-size: var(--fs-sm);
     font-family: var(--font-family-sans);
     padding: 6px 8px;
     outline: none;
@@ -703,7 +703,7 @@
 
   .btn-primary {
     padding: 5px 14px;
-    font-size: 12px;
+    font-size: var(--fs-sm);
     font-weight: 600;
     border-radius: var(--radius-sm);
     border: 1px solid var(--accent-primary);
@@ -725,7 +725,7 @@
 
   .btn-secondary {
     padding: 5px 14px;
-    font-size: 12px;
+    font-size: var(--fs-sm);
     font-weight: 600;
     border-radius: var(--radius-sm);
     border: 1px solid var(--border-primary);
@@ -743,7 +743,7 @@
 
   .btn-xs {
     padding: 3px 10px;
-    font-size: 11px;
+    font-size: var(--fs-xs);
     font-weight: 600;
     border-radius: var(--radius-sm);
     border: 1px solid var(--border-primary);
@@ -772,7 +772,7 @@
     gap: 10px;
     padding: 24px;
     color: var(--text-tertiary);
-    font-size: 13px;
+    font-size: var(--fs-base);
   }
 
   .spinner {
@@ -796,12 +796,12 @@
   }
 
   .empty-icon {
-    font-size: 28px;
+    font-size: var(--fs-2xl);
     opacity: 0.5;
   }
 
   .empty-text {
-    font-size: 13px;
+    font-size: var(--fs-base);
   }
 
   /* Initiatives list */
@@ -862,7 +862,7 @@
   }
 
   .initiative-name {
-    font-size: 13px;
+    font-size: var(--fs-base);
     font-weight: 700;
     color: var(--text-primary);
     white-space: nowrap;
@@ -871,7 +871,7 @@
   }
 
   .status-badge {
-    font-size: 9px;
+    font-size: var(--fs-xxs);
     font-weight: 700;
     text-transform: uppercase;
     letter-spacing: 0.08em;
@@ -912,7 +912,7 @@
     background: transparent;
     color: var(--text-tertiary);
     cursor: pointer;
-    font-size: 11px;
+    font-size: var(--fs-xs);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -937,7 +937,7 @@
   }
 
   .initiative-description {
-    font-size: 12px;
+    font-size: var(--fs-sm);
     color: var(--text-secondary);
     line-height: 1.5;
     margin-bottom: 6px;
@@ -956,7 +956,7 @@
   }
 
   .stat-chip {
-    font-size: 10px;
+    font-size: var(--fs-xxs);
     font-weight: 600;
     color: var(--text-tertiary);
     background: var(--bg-tertiary);
@@ -988,7 +988,7 @@
   }
 
   .progress-stat {
-    font-size: 10px;
+    font-size: var(--fs-xxs);
     color: var(--text-tertiary);
   }
 
@@ -1006,7 +1006,7 @@
   }
 
   .progress-loading {
-    font-size: 11px;
+    font-size: var(--fs-xs);
     color: var(--text-tertiary);
     font-style: italic;
     margin-bottom: 4px;
@@ -1039,7 +1039,7 @@
   }
 
   .expanded-subsection-title {
-    font-size: 10px;
+    font-size: var(--fs-xxs);
     font-weight: 700;
     text-transform: uppercase;
     letter-spacing: 0.07em;
@@ -1047,7 +1047,7 @@
   }
 
   .expanded-empty {
-    font-size: 11px;
+    font-size: var(--fs-xs);
     color: var(--text-tertiary);
     font-style: italic;
   }
@@ -1073,7 +1073,7 @@
   }
 
   .link-label {
-    font-size: 11px;
+    font-size: var(--fs-xs);
     color: var(--text-secondary);
     overflow: hidden;
     text-overflow: ellipsis;
@@ -1087,7 +1087,7 @@
     border: none;
     color: var(--text-tertiary);
     cursor: pointer;
-    font-size: 10px;
+    font-size: var(--fs-xxs);
     padding: 0 2px;
     flex-shrink: 0;
     transition: color var(--transition);
@@ -1106,7 +1106,7 @@
   .add-select {
     flex: 1;
     min-width: 0;
-    font-size: 11px;
+    font-size: var(--fs-xs);
   }
 
   @keyframes spin {

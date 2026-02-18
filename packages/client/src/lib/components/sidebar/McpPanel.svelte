@@ -462,7 +462,7 @@
     padding: 4px 8px;
   }
   .panel-header h3 {
-    font-size: 11px;
+    font-size: var(--fs-xs);
     font-weight: 700;
     text-transform: uppercase;
     letter-spacing: 1px;
@@ -475,7 +475,7 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 16px;
+    font-size: var(--fs-lg);
     font-weight: 700;
     color: var(--text-tertiary);
     background: var(--bg-tertiary);
@@ -489,7 +489,7 @@
   .empty {
     padding: 16px;
     text-align: center;
-    font-size: 12px;
+    font-size: var(--fs-sm);
     color: var(--text-tertiary);
   }
   .server-list {
@@ -511,12 +511,12 @@
     align-items: center;
   }
   .server-name {
-    font-size: 12px;
+    font-size: var(--fs-sm);
     font-weight: 600;
     color: var(--text-primary);
   }
   .server-transport {
-    font-size: 9px;
+    font-size: var(--fs-xxs);
     text-transform: uppercase;
     letter-spacing: 0.5px;
     color: var(--text-tertiary);
@@ -528,7 +528,7 @@
     margin-top: 2px;
   }
   .server-cmd {
-    font-size: 10px;
+    font-size: var(--fs-xxs);
     color: var(--text-tertiary);
     font-family: var(--font-family);
     word-break: break-all;
@@ -551,7 +551,7 @@
     box-shadow: 0 0 4px var(--accent-secondary);
   }
   .remove-btn {
-    font-size: 14px;
+    font-size: var(--fs-md);
     color: var(--text-tertiary);
     background: none;
     border: none;
@@ -576,7 +576,7 @@
     border: 1px solid var(--border-primary);
   }
   .form-input {
-    font-size: 12px;
+    font-size: var(--fs-sm);
     padding: 4px 8px;
     background: var(--bg-primary);
     border: 1px solid var(--border-secondary);
@@ -588,7 +588,7 @@
     outline: none;
   }
   .save-btn {
-    font-size: 11px;
+    font-size: var(--fs-xs);
     padding: 4px 12px;
     background: var(--accent-primary);
     color: var(--bg-primary);
@@ -611,7 +611,7 @@
     margin-top: 8px;
   }
   .section-title {
-    font-size: 10px;
+    font-size: var(--fs-xxs);
     font-weight: 700;
     text-transform: uppercase;
     letter-spacing: 1px;
@@ -625,7 +625,7 @@
     gap: 6px;
     width: 100%;
     padding: 8px 12px;
-    font-size: 11px;
+    font-size: var(--fs-xs);
     font-weight: 600;
     color: var(--text-secondary);
     background: var(--bg-tertiary);
@@ -667,12 +667,12 @@
     margin-bottom: 2px;
   }
   .source-label {
-    font-size: 11px;
+    font-size: var(--fs-xs);
     font-weight: 700;
     color: var(--accent-primary);
   }
   .select-all-btn {
-    font-size: 9px;
+    font-size: var(--fs-xxs);
     padding: 1px 6px;
     background: none;
     border: 1px solid var(--border-secondary);
@@ -687,7 +687,7 @@
   }
   .source-path {
     display: block;
-    font-size: 9px;
+    font-size: var(--fs-xxs);
     color: var(--text-tertiary);
     font-family: var(--font-family);
     word-break: break-all;
@@ -699,7 +699,7 @@
     gap: 6px;
     padding: 4px 6px;
     cursor: pointer;
-    font-size: 11px;
+    font-size: var(--fs-xs);
     transition: background var(--transition);
   }
   .import-item:hover:not(.disabled) {
@@ -719,7 +719,7 @@
     flex: 1;
   }
   .import-transport {
-    font-size: 9px;
+    font-size: var(--fs-xxs);
     text-transform: uppercase;
     letter-spacing: 0.5px;
     color: var(--text-tertiary);
@@ -733,7 +733,7 @@
     margin-top: 8px;
   }
   .cancel-btn {
-    font-size: 11px;
+    font-size: var(--fs-xs);
     padding: 4px 12px;
     background: var(--bg-tertiary);
     color: var(--text-secondary);
@@ -773,19 +773,19 @@
     cursor: default;
   }
   .preset-name {
-    font-size: 11px;
+    font-size: var(--fs-xs);
     font-weight: 600;
     color: var(--text-primary);
   }
   .preset-desc {
-    font-size: 10px;
+    font-size: var(--fs-xxs);
     color: var(--text-tertiary);
   }
   .preset-installed {
     position: absolute;
     top: 6px;
     right: 8px;
-    font-size: 9px;
+    font-size: var(--fs-xxs);
     color: var(--accent-secondary);
     text-transform: uppercase;
     letter-spacing: 0.5px;
@@ -799,7 +799,7 @@
     position: absolute;
     top: 6px;
     right: 8px;
-    font-size: 9px;
+    font-size: var(--fs-xxs);
     color: var(--text-tertiary);
     text-transform: uppercase;
     letter-spacing: 0.5px;

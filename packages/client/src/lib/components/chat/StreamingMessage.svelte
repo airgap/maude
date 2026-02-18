@@ -199,12 +199,12 @@
     align-items: center;
     gap: 10px;
     margin-bottom: 10px;
-    font-size: 12px;
+    font-size: var(--fs-sm);
   }
 
   .role-label {
     font-weight: 700;
-    font-size: 13px;
+    font-size: var(--fs-base);
     letter-spacing: var(--ht-label-spacing);
     text-transform: var(--ht-label-transform);
     color: var(--accent-secondary);

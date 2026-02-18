@@ -170,7 +170,7 @@
   }
 
   .picker-title {
-    font-size: 12px;
+    font-size: var(--fs-sm);
     font-weight: 600;
     color: var(--accent-primary);
     display: flex;
@@ -180,7 +180,7 @@
 
   .picker-close {
     color: var(--text-tertiary);
-    font-size: 18px;
+    font-size: var(--fs-xl);
     line-height: 1;
     padding: 0 4px;
   }
@@ -195,7 +195,7 @@
 
   .search-input {
     width: 100%;
-    font-size: 12px;
+    font-size: var(--fs-sm);
     padding: 5px 10px;
     background: var(--bg-input);
     border: 1px solid var(--border-secondary);
@@ -216,7 +216,7 @@
   .picker-empty {
     padding: 12px;
     color: var(--text-tertiary);
-    font-size: 12px;
+    font-size: var(--fs-sm);
     text-align: center;
   }
 
@@ -228,7 +228,7 @@
     padding: 6px 12px;
     border-radius: var(--radius-sm);
     text-align: left;
-    font-size: 12px;
+    font-size: var(--fs-sm);
     transition: background var(--transition);
     color: var(--text-secondary);
   }
@@ -240,7 +240,7 @@
 
   .sym-kind {
     font-family: var(--font-family-mono, monospace);
-    font-size: 11px;
+    font-size: var(--fs-xs);
     font-weight: 700;
     width: 16px;
     text-align: center;
@@ -258,7 +258,7 @@
 
   .sym-file {
     color: var(--text-tertiary);
-    font-size: 11px;
+    font-size: var(--fs-xs);
     flex-shrink: 0;
     font-family: var(--font-family-mono, monospace);
   }

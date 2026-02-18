@@ -392,7 +392,7 @@
     border-bottom: 1px solid var(--border-primary);
   }
   .modal-header h2 {
-    font-size: 16px;
+    font-size: var(--fs-lg);
     font-weight: 600;
   }
   .close-btn {
@@ -419,13 +419,13 @@
     gap: 12px;
   }
   .loading-state p {
-    font-size: 13px;
+    font-size: var(--fs-base);
     color: var(--text-secondary);
   }
   .loading-sub {
     font-style: italic;
     color: var(--text-tertiary) !important;
-    font-size: 12px !important;
+    font-size: var(--fs-sm) !important;
   }
   .spinner-large {
     width: 24px;
@@ -439,13 +439,13 @@
     padding: 40px 20px;
     text-align: center;
     color: var(--text-tertiary);
-    font-size: 13px;
+    font-size: var(--fs-base);
   }
   .no-recommendation {
     text-align: center;
     padding: 20px;
     color: var(--text-tertiary);
-    font-size: 13px;
+    font-size: var(--fs-base);
   }
 
   /* Story info */
@@ -455,12 +455,12 @@
     border-bottom: 1px solid var(--border-primary);
   }
   .story-title-text {
-    font-size: 14px;
+    font-size: var(--fs-md);
     font-weight: 600;
     color: var(--text-primary);
   }
   .story-desc {
-    font-size: 12px;
+    font-size: var(--fs-sm);
     color: var(--text-secondary);
     margin-top: 6px;
     line-height: 1.4;
@@ -489,18 +489,18 @@
     background: rgba(59, 130, 246, 0.04);
   }
   .card-label {
-    font-size: 10px;
+    font-size: var(--fs-xxs);
     font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 0.5px;
     color: var(--text-tertiary);
   }
   .card-value {
-    font-size: 16px;
+    font-size: var(--fs-lg);
     font-weight: 700;
   }
   .confidence-score {
-    font-size: 10px;
+    font-size: var(--fs-xxs);
     color: var(--text-tertiary);
   }
   .priority-arrow {
@@ -512,18 +512,18 @@
     height: 28px;
   }
   .arrow-icon {
-    font-size: 18px;
+    font-size: var(--fs-xl);
     color: var(--accent-primary);
     font-weight: 700;
   }
   .check-icon {
-    font-size: 16px;
+    font-size: var(--fs-lg);
     color: var(--accent-secondary);
     font-weight: 700;
   }
   .no-change-badge {
     text-align: center;
-    font-size: 11px;
+    font-size: var(--fs-xs);
     color: var(--accent-secondary);
     padding: 6px 10px;
     background: rgba(34, 197, 94, 0.08);
@@ -533,7 +533,7 @@
   }
   .manual-badge {
     margin-bottom: 16px;
-    font-size: 10px;
+    font-size: var(--fs-xxs);
     font-weight: 600;
     color: var(--text-tertiary);
     text-align: center;
@@ -548,13 +548,13 @@
     margin-bottom: 16px;
   }
   .section-label {
-    font-size: 12px;
+    font-size: var(--fs-sm);
     font-weight: 600;
     color: var(--text-secondary);
     margin-bottom: 6px;
   }
   .explanation-text {
-    font-size: 12px;
+    font-size: var(--fs-sm);
     color: var(--text-primary);
     line-height: 1.5;
     margin: 0;
@@ -583,26 +583,26 @@
     border-radius: var(--radius-sm);
   }
   .factor-category {
-    font-size: 13px;
+    font-size: var(--fs-base);
     flex-shrink: 0;
     width: 20px;
     text-align: center;
   }
   .factor-impact {
-    font-size: 14px;
+    font-size: var(--fs-md);
     font-weight: 700;
     flex-shrink: 0;
     width: 16px;
     text-align: center;
   }
   .factor-text {
-    font-size: 11px;
+    font-size: var(--fs-xs);
     color: var(--text-primary);
     flex: 1;
     line-height: 1.4;
   }
   .factor-weight {
-    font-size: 9px;
+    font-size: var(--fs-xxs);
     font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 0.3px;
@@ -650,10 +650,10 @@
     background: rgba(59, 130, 246, 0.06);
   }
   .opt-icon {
-    font-size: 16px;
+    font-size: var(--fs-lg);
   }
   .opt-label {
-    font-size: 10px;
+    font-size: var(--fs-xxs);
     font-weight: 600;
     color: var(--text-secondary);
     text-transform: uppercase;
@@ -666,7 +666,7 @@
     margin-top: 4px;
   }
   .btn-save {
-    font-size: 11px;
+    font-size: var(--fs-xs);
     padding: 5px 14px;
     border-radius: var(--radius-sm);
     background: var(--accent-primary);
@@ -678,7 +678,7 @@
     opacity: 0.9;
   }
   .btn-cancel-override {
-    font-size: 11px;
+    font-size: var(--fs-xs);
     padding: 5px 14px;
     border-radius: var(--radius-sm);
     background: transparent;
@@ -698,7 +698,7 @@
     border: 1px solid var(--accent-error);
     border-radius: var(--radius-sm);
     color: var(--accent-error);
-    font-size: 12px;
+    font-size: var(--fs-sm);
     margin-top: 12px;
   }
 
@@ -712,7 +712,7 @@
   }
   .btn-close {
     padding: 6px 16px;
-    font-size: 12px;
+    font-size: var(--fs-sm);
     border-radius: var(--radius-sm);
     background: var(--bg-tertiary);
     color: var(--text-secondary);
@@ -724,7 +724,7 @@
   }
   .btn-analyze {
     padding: 6px 16px;
-    font-size: 12px;
+    font-size: var(--fs-sm);
     border-radius: var(--radius-sm);
     background: var(--accent-primary);
     color: var(--text-on-accent);
@@ -736,7 +736,7 @@
   }
   .btn-accept {
     padding: 6px 16px;
-    font-size: 12px;
+    font-size: var(--fs-sm);
     border-radius: var(--radius-sm);
     background: var(--accent-secondary);
     color: var(--text-on-accent, white);
@@ -748,7 +748,7 @@
   }
   .btn-override {
     padding: 6px 16px;
-    font-size: 12px;
+    font-size: var(--fs-sm);
     border-radius: var(--radius-sm);
     background: var(--bg-tertiary);
     color: var(--text-secondary);

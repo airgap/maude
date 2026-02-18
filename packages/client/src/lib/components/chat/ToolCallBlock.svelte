@@ -606,7 +606,7 @@
     border: 1px solid var(--border-secondary);
     border-radius: var(--radius-sm);
     overflow: hidden;
-    font-size: 13px;
+    font-size: var(--fs-base);
   }
 
   .tool-header {
@@ -625,11 +625,11 @@
   .tool-name {
     font-weight: 600;
     color: var(--text-primary);
-    font-size: 12px;
+    font-size: var(--fs-sm);
   }
 
   .mcp-badge {
-    font-size: 9px;
+    font-size: var(--fs-xxs);
     padding: 1px 5px;
     background: var(--bg-secondary);
     border: 1px solid var(--border-secondary);
@@ -642,7 +642,7 @@
 
   .tool-summary {
     color: var(--text-tertiary);
-    font-size: 12px;
+    font-size: var(--fs-sm);
     flex: 1;
     min-width: 0;
     font-family: var(--font-family);
@@ -669,7 +669,7 @@
   }
 
   .error-badge {
-    font-size: 10px;
+    font-size: var(--fs-xxs);
     font-weight: 700;
     padding: 1px 6px;
     border-radius: 3px;
@@ -678,7 +678,7 @@
   }
 
   .success-badge {
-    font-size: 12px;
+    font-size: var(--fs-sm);
     font-weight: 700;
     color: var(--accent-secondary, #00ff88);
     opacity: 0.7;
@@ -689,7 +689,7 @@
     transition: border-color 0.3s ease;
   }
   .tool-block.compact .error-badge {
-    font-size: 10px;
+    font-size: var(--fs-xxs);
     background: transparent;
     color: var(--accent-error);
     padding: 0;
@@ -708,7 +708,7 @@
   }
 
   .detail-label {
-    font-size: 10px;
+    font-size: var(--fs-xxs);
     text-transform: var(--ht-label-transform);
     letter-spacing: var(--ht-label-spacing);
     color: var(--text-tertiary);
@@ -717,7 +717,7 @@
   }
 
   .detail-content {
-    font-size: 12px;
+    font-size: var(--fs-sm);
     line-height: 1.4;
     white-space: pre-wrap;
     word-break: break-word;
@@ -739,7 +739,7 @@
   /* ── Diff view (Edit tool) ── */
   .diff-view {
     font-family: var(--font-family);
-    font-size: 12px;
+    font-size: var(--fs-sm);
     line-height: 1.5;
     border-radius: 2px;
     overflow: hidden;
@@ -768,7 +768,7 @@
     color: var(--accent-info);
     font-weight: 600;
     opacity: 0.7;
-    font-size: 11px;
+    font-size: var(--fs-xs);
     padding: 2px 8px;
   }
   .diff-removed {
@@ -794,7 +794,7 @@
   .edit-flag {
     display: inline-block;
     margin-top: 4px;
-    font-size: 9px;
+    font-size: var(--fs-xxs);
     padding: 1px 6px;
     background: var(--bg-tertiary);
     border: 1px solid var(--border-secondary);
@@ -836,7 +836,7 @@
     align-items: baseline;
   }
   .write-meta {
-    font-size: 10px;
+    font-size: var(--fs-xxs);
     color: var(--text-tertiary);
     font-family: var(--font-family);
   }
@@ -874,7 +874,7 @@
   /* ── Truncation ── */
   .truncated-indicator {
     display: block;
-    font-size: 10px;
+    font-size: var(--fs-xxs);
     color: var(--text-tertiary);
     font-style: italic;
     margin-top: 4px;
@@ -885,7 +885,7 @@
   .read-range {
     display: inline-block;
     margin-top: 2px;
-    font-size: 10px;
+    font-size: var(--fs-xxs);
     color: var(--text-tertiary);
     font-family: var(--font-family);
   }
@@ -898,7 +898,7 @@
   .bash-desc {
     display: block;
     margin-top: 4px;
-    font-size: 10px;
+    font-size: var(--fs-xxs);
     color: var(--text-tertiary);
     font-style: italic;
   }
@@ -909,7 +909,7 @@
     flex-wrap: wrap;
     gap: 6px;
     align-items: baseline;
-    font-size: 12px;
+    font-size: var(--fs-sm);
   }
   .grep-pattern {
     font-family: var(--font-family);
@@ -917,12 +917,12 @@
     font-weight: 600;
   }
   .grep-path {
-    font-size: 11px;
+    font-size: var(--fs-xs);
     color: var(--text-tertiary);
     font-family: var(--font-family);
   }
   .grep-flag {
-    font-size: 10px;
+    font-size: var(--fs-xxs);
     padding: 1px 5px;
     background: var(--bg-tertiary);
     border: 1px solid var(--border-secondary);
@@ -936,7 +936,7 @@
   }
   .ask-header {
     display: inline-block;
-    font-size: 9px;
+    font-size: var(--fs-xxs);
     font-weight: 700;
     text-transform: uppercase;
     letter-spacing: 0.5px;
@@ -948,7 +948,7 @@
     margin-bottom: 6px;
   }
   .ask-question-text {
-    font-size: 13px;
+    font-size: var(--fs-base);
     line-height: 1.5;
     color: var(--text-primary);
     font-weight: 500;
@@ -975,7 +975,7 @@
   }
   .ask-option-indicator {
     flex-shrink: 0;
-    font-size: 10px;
+    font-size: var(--fs-xxs);
     line-height: 18px;
     color: var(--text-tertiary);
     display: flex;
@@ -996,7 +996,7 @@
     min-width: 0;
   }
   .ask-option-label {
-    font-size: 12px;
+    font-size: var(--fs-sm);
     font-weight: 600;
     color: var(--text-primary);
   }
@@ -1004,14 +1004,14 @@
     color: var(--accent-secondary);
   }
   .ask-option-desc {
-    font-size: 11px;
+    font-size: var(--fs-xs);
     line-height: 1.4;
     color: var(--text-tertiary);
   }
   .ask-waiting {
     display: block;
     margin-top: 6px;
-    font-size: 11px;
+    font-size: var(--fs-xs);
     color: var(--text-tertiary);
     font-style: italic;
     animation: hudPulse 1.2s infinite linear;

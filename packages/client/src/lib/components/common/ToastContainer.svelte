@@ -45,7 +45,7 @@
     border: var(--ht-card-border-width) var(--ht-card-border-style) var(--border-primary);
     border-radius: var(--radius);
     box-shadow: var(--shadow-lg);
-    font-size: 13px;
+    font-size: var(--fs-base);
     color: var(--text-primary);
     animation: toastSlideTech var(--ht-transition-speed) ease;
   }

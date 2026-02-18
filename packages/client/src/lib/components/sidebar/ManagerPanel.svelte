@@ -369,7 +369,7 @@
   }
 
   .panel-title {
-    font-size: 13px;
+    font-size: var(--fs-base);
     font-weight: 600;
     color: var(--text-primary);
     margin: 0;
@@ -382,7 +382,7 @@
   }
 
   .last-refresh {
-    font-size: 10px;
+    font-size: var(--fs-xxs);
     color: var(--text-tertiary);
   }
 
@@ -415,7 +415,7 @@
   }
 
   .error-msg {
-    font-size: 12px;
+    font-size: var(--fs-sm);
     color: var(--accent-error);
     background: var(--bg-secondary);
     border-radius: var(--radius-sm);
@@ -446,14 +446,14 @@
 
   .stat-num {
     display: block;
-    font-size: 16px;
+    font-size: var(--fs-lg);
     font-weight: 700;
     color: var(--text-primary);
     line-height: 1.2;
   }
   .stat-lbl {
     display: block;
-    font-size: 9px;
+    font-size: var(--fs-xxs);
     color: var(--text-tertiary);
     text-transform: uppercase;
     letter-spacing: 0.05em;
@@ -477,7 +477,7 @@
     display: flex;
     align-items: center;
     gap: 5px;
-    font-size: 11px;
+    font-size: var(--fs-xs);
     font-weight: 600;
     color: var(--text-tertiary);
     text-transform: uppercase;
@@ -505,7 +505,7 @@
   }
 
   .badge {
-    font-size: 9px;
+    font-size: var(--fs-xxs);
     font-weight: 700;
     background: var(--bg-tertiary);
     color: var(--text-secondary);
@@ -523,7 +523,7 @@
     color: var(--accent-success, #10b981);
   }
   .badge.sm {
-    font-size: 8px;
+    font-size: var(--fs-xxs);
     padding: 1px 4px;
   }
 
@@ -562,7 +562,7 @@
   }
 
   .tool-badge {
-    font-size: 10px;
+    font-size: var(--fs-xxs);
     font-weight: 600;
     font-family: var(--font-family-mono, monospace);
     background: var(--bg-tertiary);
@@ -572,7 +572,7 @@
   }
 
   .ws-chip {
-    font-size: 10px;
+    font-size: var(--fs-xxs);
     color: var(--text-tertiary);
     background: var(--bg-tertiary);
     padding: 1px 5px;
@@ -580,7 +580,7 @@
   }
 
   .inbox-item-desc {
-    font-size: 11px;
+    font-size: var(--fs-xs);
     color: var(--text-primary);
     line-height: 1.4;
     overflow: hidden;
@@ -589,7 +589,7 @@
   }
 
   .inbox-item-sub {
-    font-size: 10px;
+    font-size: var(--fs-xxs);
     color: var(--text-tertiary);
     overflow: hidden;
     text-overflow: ellipsis;
@@ -597,7 +597,7 @@
   }
 
   .story-title {
-    font-size: 12px;
+    font-size: var(--fs-sm);
     color: var(--text-primary);
     overflow: hidden;
     text-overflow: ellipsis;
@@ -635,7 +635,7 @@
 
   .ws-name {
     display: block;
-    font-size: 12px;
+    font-size: var(--fs-sm);
     font-weight: 600;
     color: var(--text-primary);
     overflow: hidden;
@@ -647,7 +647,7 @@
     display: flex;
     align-items: center;
     gap: 3px;
-    font-size: 10px;
+    font-size: var(--fs-xxs);
     color: var(--text-tertiary);
   }
 
@@ -684,7 +684,7 @@
   }
 
   .story-title-sm {
-    font-size: 11px;
+    font-size: var(--fs-xs);
     color: var(--text-primary);
     overflow: hidden;
     text-overflow: ellipsis;
@@ -692,7 +692,7 @@
   }
 
   .story-meta {
-    font-size: 10px;
+    font-size: var(--fs-xxs);
     color: var(--text-tertiary);
     overflow: hidden;
     text-overflow: ellipsis;
@@ -717,20 +717,20 @@
   }
 
   .empty-text {
-    font-size: 12px;
+    font-size: var(--fs-sm);
     text-align: center;
     line-height: 1.5;
   }
 
   .empty {
-    font-size: 11px;
+    font-size: var(--fs-xs);
     color: var(--text-tertiary);
     padding: 8px;
     text-align: center;
   }
 
   .loading {
-    font-size: 12px;
+    font-size: var(--fs-sm);
     color: var(--text-tertiary);
     padding: 20px;
     text-align: center;

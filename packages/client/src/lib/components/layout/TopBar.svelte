@@ -212,7 +212,7 @@
 
   .conv-title {
     color: var(--text-secondary);
-    font-size: 13px;
+    font-size: var(--fs-base);
     font-weight: 600;
     letter-spacing: var(--ht-label-spacing);
     text-transform: var(--ht-label-transform);
@@ -243,7 +243,7 @@
 
   .model-select {
     padding: 5px 10px;
-    font-size: 12px;
+    font-size: var(--fs-sm);
     font-weight: 600;
     letter-spacing: var(--ht-label-spacing);
     border-radius: var(--radius-sm);
@@ -260,7 +260,7 @@
   }
 
   .plan-badge {
-    font-size: 10px;
+    font-size: var(--fs-xxs);
     font-weight: 700;
     padding: 3px 10px;
     border-radius: var(--radius);
@@ -322,7 +322,7 @@
   }
   /* Model select: larger tap target */
   :global([data-mobile]) .model-select {
-    font-size: 11px;
+    font-size: var(--fs-xs);
     padding: 6px 8px;
     min-height: 36px;
   }

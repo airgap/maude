@@ -370,19 +370,19 @@
   }
 
   .header-icon {
-    font-size: 20px;
+    font-size: var(--fs-2xl);
     color: var(--accent-primary);
   }
 
   .header-title {
-    font-size: 15px;
+    font-size: var(--fs-md);
     font-weight: 700;
     color: var(--text-primary);
     letter-spacing: var(--ht-label-spacing);
   }
 
   .header-sub {
-    font-size: 11px;
+    font-size: var(--fs-xs);
     color: var(--text-tertiary);
     text-transform: uppercase;
     letter-spacing: 0.08em;
@@ -396,7 +396,7 @@
     background: transparent;
     color: var(--text-secondary);
     cursor: pointer;
-    font-size: 14px;
+    font-size: var(--fs-md);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -417,7 +417,7 @@
     gap: 12px;
     padding: 60px 24px;
     color: var(--text-secondary);
-    font-size: 14px;
+    font-size: var(--fs-md);
   }
 
   .spinner {
@@ -431,7 +431,7 @@
 
   .error-icon {
     color: var(--accent-error);
-    font-size: 18px;
+    font-size: var(--fs-xl);
   }
 
   /* Body layout */
@@ -469,7 +469,7 @@
     background: var(--bg-secondary);
     color: var(--text-primary);
     cursor: pointer;
-    font-size: 15px;
+    font-size: var(--fs-md);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -520,7 +520,7 @@
   }
 
   .progress-label {
-    font-size: 11px;
+    font-size: var(--fs-xs);
     color: var(--text-tertiary);
     font-family: var(--font-family);
   }
@@ -533,7 +533,7 @@
   }
 
   .speed-label {
-    font-size: 11px;
+    font-size: var(--fs-xs);
     color: var(--text-tertiary);
   }
 
@@ -542,7 +542,7 @@
     border: 1px solid var(--border-primary);
     border-radius: var(--radius-sm);
     color: var(--text-primary);
-    font-size: 12px;
+    font-size: var(--fs-sm);
     padding: 3px 6px;
     cursor: pointer;
   }
@@ -594,7 +594,7 @@
   }
 
   .event-type-label {
-    font-size: 11px;
+    font-size: var(--fs-xs);
     font-weight: 700;
     color: var(--text-secondary);
     text-transform: uppercase;
@@ -602,7 +602,7 @@
   }
 
   .tool-name-badge {
-    font-size: 11px;
+    font-size: var(--fs-xs);
     font-weight: 600;
     color: var(--accent-primary);
     background: color-mix(in srgb, var(--accent-primary) 15%, transparent);
@@ -614,7 +614,7 @@
 
   .event-role-badge {
     margin-left: auto;
-    font-size: 10px;
+    font-size: var(--fs-xxs);
     font-weight: 600;
     padding: 1px 7px;
     border-radius: var(--radius-sm);
@@ -635,7 +635,7 @@
   }
 
   .event-text {
-    font-size: 13px;
+    font-size: var(--fs-base);
     line-height: 1.65;
     color: var(--text-primary);
     font-family: var(--font-family-sans);
@@ -649,7 +649,7 @@
     justify-content: center;
     height: 120px;
     color: var(--text-tertiary);
-    font-size: 13px;
+    font-size: var(--fs-base);
   }
 
   /* Changes section */
@@ -661,7 +661,7 @@
   }
 
   .changes-title {
-    font-size: 11px;
+    font-size: var(--fs-xs);
     font-weight: 700;
     color: var(--text-secondary);
     text-transform: uppercase;
@@ -680,7 +680,7 @@
     display: flex;
     align-items: flex-start;
     gap: 8px;
-    font-size: 12px;
+    font-size: var(--fs-sm);
     color: var(--text-secondary);
   }
 
@@ -691,7 +691,7 @@
 
   .commit-text {
     font-family: var(--font-family);
-    font-size: 11px;
+    font-size: var(--fs-xs);
     word-break: break-all;
   }
 
@@ -705,7 +705,7 @@
     display: flex;
     align-items: center;
     gap: 8px;
-    font-size: 12px;
+    font-size: var(--fs-sm);
     padding: 3px 6px;
     border-radius: var(--radius-sm);
   }
@@ -724,7 +724,7 @@
 
   .file-op {
     font-weight: 700;
-    font-size: 14px;
+    font-size: var(--fs-md);
     width: 14px;
     text-align: center;
     flex-shrink: 0;
@@ -732,7 +732,7 @@
 
   .file-path {
     font-family: var(--font-family);
-    font-size: 11px;
+    font-size: var(--fs-xs);
     word-break: break-all;
   }
 
@@ -744,7 +744,7 @@
   }
 
   .event-list-title {
-    font-size: 11px;
+    font-size: var(--fs-xs);
     font-weight: 700;
     color: var(--text-tertiary);
     text-transform: uppercase;
@@ -799,7 +799,7 @@
   }
 
   .event-list-type {
-    font-size: 10px;
+    font-size: var(--fs-xxs);
     font-weight: 700;
     color: var(--text-tertiary);
     text-transform: uppercase;
@@ -807,7 +807,7 @@
   }
 
   .event-list-text {
-    font-size: 11px;
+    font-size: var(--fs-xs);
     color: var(--text-secondary);
     white-space: nowrap;
     overflow: hidden;
@@ -818,7 +818,7 @@
   /* Utility button */
   .btn-secondary {
     padding: 6px 14px;
-    font-size: 12px;
+    font-size: var(--fs-sm);
     font-weight: 600;
     border-radius: var(--radius-sm);
     border: 1px solid var(--border-primary);

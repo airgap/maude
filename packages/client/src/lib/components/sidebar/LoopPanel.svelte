@@ -825,11 +825,11 @@
     padding: 4px 4px 4px;
   }
   .section-header h3 {
-    font-size: 13px;
+    font-size: var(--fs-base);
     font-weight: 600;
   }
   .section-header h4 {
-    font-size: 12px;
+    font-size: var(--fs-sm);
     font-weight: 600;
     color: var(--text-secondary);
   }
@@ -866,7 +866,7 @@
     gap: 6px;
     width: 100%;
     padding: 5px 12px;
-    font-size: 11px;
+    font-size: var(--fs-xs);
     font-weight: 500;
     color: var(--text-secondary);
     background: none;
@@ -899,7 +899,7 @@
   }
 
   .loop-badge {
-    font-size: 10px;
+    font-size: var(--fs-xxs);
     padding: 1px 6px;
     border-radius: 3px;
     font-weight: 600;
@@ -917,7 +917,7 @@
   .prd-section select {
     width: 100%;
     padding: 6px 8px;
-    font-size: 12px;
+    font-size: var(--fs-sm);
     background: var(--bg-tertiary);
     color: var(--text-primary);
     border: 1px solid var(--border-primary);
@@ -934,7 +934,7 @@
 
   .icon-btn {
     padding: 4px 8px;
-    font-size: 14px;
+    font-size: var(--fs-md);
     border-radius: var(--radius-sm);
     background: var(--bg-tertiary);
     color: var(--text-secondary);
@@ -960,7 +960,7 @@
   .add-story-form input {
     width: 100%;
     padding: 6px 8px;
-    font-size: 11px;
+    font-size: var(--fs-xs);
     font-family: var(--font-mono);
     background: var(--bg-tertiary);
     color: var(--text-primary);
@@ -984,7 +984,7 @@
     text-align: center;
   }
   .empty-hint {
-    font-size: 11px;
+    font-size: var(--fs-xs);
     color: var(--text-tertiary);
   }
 
@@ -1005,13 +1005,13 @@
     gap: 6px;
   }
   .story-status {
-    font-size: 12px;
+    font-size: var(--fs-sm);
     flex-shrink: 0;
     width: 14px;
     text-align: center;
   }
   .story-title {
-    font-size: 11px;
+    font-size: var(--fs-xs);
     color: var(--text-primary);
     flex: 1;
     overflow: hidden;
@@ -1019,7 +1019,7 @@
     white-space: nowrap;
   }
   .priority-badge {
-    font-size: 9px;
+    font-size: var(--fs-xxs);
     color: var(--accent-warning, #e6a817);
     font-weight: bold;
   }
@@ -1028,7 +1028,7 @@
   .estimate-btn,
   .priority-btn,
   .delete-btn {
-    font-size: 12px;
+    font-size: var(--fs-sm);
     padding: 0 4px;
     color: var(--text-tertiary);
     opacity: 0;
@@ -1066,7 +1066,7 @@
   }
 
   .estimate-badge {
-    font-size: 8px;
+    font-size: var(--fs-xxs);
     padding: 0 4px;
     border-radius: 2px;
     color: #fff;
@@ -1077,7 +1077,7 @@
 
   .total-points {
     font-weight: 400;
-    font-size: 11px;
+    font-size: var(--fs-xs);
     color: var(--accent-primary);
   }
 
@@ -1092,7 +1092,7 @@
   }
 
   .priority-rec-badge {
-    font-size: 8px;
+    font-size: var(--fs-xxs);
     padding: 0 3px;
     border-radius: 2px;
     background: rgba(59, 130, 246, 0.15);
@@ -1102,7 +1102,7 @@
   }
 
   .dep-badge {
-    font-size: 8px;
+    font-size: var(--fs-xxs);
     padding: 0 3px;
     border-radius: 2px;
     background: rgba(239, 68, 68, 0.15);
@@ -1118,7 +1118,7 @@
   }
 
   .attempts-badge {
-    font-size: 9px;
+    font-size: var(--fs-xxs);
     color: var(--text-tertiary);
     margin-left: 20px;
   }
@@ -1137,7 +1137,7 @@
   }
   .sprint-warning-item {
     padding: 4px 6px;
-    font-size: 10px;
+    font-size: var(--fs-xxs);
     color: var(--text-secondary);
     border-radius: var(--radius-sm);
     background: rgba(230, 168, 23, 0.08);
@@ -1177,7 +1177,7 @@
     transition: width 0.3s ease;
   }
   .progress-text {
-    font-size: 10px;
+    font-size: var(--fs-xxs);
     color: var(--text-tertiary);
   }
 
@@ -1188,7 +1188,7 @@
 
   .btn-sm {
     padding: 4px 10px;
-    font-size: 11px;
+    font-size: var(--fs-xs);
     border-radius: var(--radius-sm);
     font-weight: 600;
     cursor: pointer;
@@ -1228,7 +1228,7 @@
     flex-direction: column;
   }
   .log-count {
-    font-size: 10px;
+    font-size: var(--fs-xxs);
     color: var(--text-tertiary);
   }
   .log-list {
@@ -1242,7 +1242,7 @@
     align-items: baseline;
     gap: 6px;
     padding: 2px 4px;
-    font-size: 10px;
+    font-size: var(--fs-xxs);
   }
   .log-time {
     color: var(--text-tertiary);
@@ -1300,11 +1300,11 @@
     background: var(--bg-hover);
   }
   .lock-icon {
-    font-size: 12px;
+    font-size: var(--fs-sm);
     flex-shrink: 0;
   }
   .lock-label {
-    font-size: 10px;
+    font-size: var(--fs-xxs);
     color: var(--text-tertiary);
     font-weight: 600;
     letter-spacing: 0.3px;

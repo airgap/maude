@@ -41,7 +41,7 @@
     border-radius: var(--radius-sm);
     box-shadow: var(--shadow-lg), var(--shadow-glow-sm);
     color: var(--accent-primary);
-    font-size: 11px;
+    font-size: var(--fs-xs);
     font-weight: 600;
     white-space: nowrap;
     pointer-events: none;

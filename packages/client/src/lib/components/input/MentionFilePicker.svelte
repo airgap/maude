@@ -183,7 +183,7 @@
   }
 
   .picker-title {
-    font-size: 12px;
+    font-size: var(--fs-sm);
     font-weight: 600;
     color: var(--accent-primary);
     display: flex;
@@ -193,7 +193,7 @@
 
   .picker-close {
     color: var(--text-tertiary);
-    font-size: 18px;
+    font-size: var(--fs-xl);
     line-height: 1;
     padding: 0 4px;
   }
@@ -208,7 +208,7 @@
 
   .search-input {
     width: 100%;
-    font-size: 12px;
+    font-size: var(--fs-sm);
     padding: 5px 10px;
     background: var(--bg-input);
     border: 1px solid var(--border-secondary);
@@ -230,7 +230,7 @@
   .picker-empty {
     padding: 12px;
     color: var(--text-tertiary);
-    font-size: 12px;
+    font-size: var(--fs-sm);
     text-align: center;
   }
 
@@ -242,7 +242,7 @@
     padding: 5px 12px;
     border-radius: var(--radius-sm);
     text-align: left;
-    font-size: 12px;
+    font-size: var(--fs-sm);
     transition: background var(--transition);
     color: var(--text-secondary);
   }

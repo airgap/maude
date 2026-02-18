@@ -91,7 +91,7 @@
     border: 1px solid var(--border-primary);
     border-left: 3px solid var(--accent-primary);
     border-radius: var(--radius-sm);
-    font-size: 12px;
+    font-size: var(--fs-sm);
   }
   .task-split-header {
     display: flex;
@@ -100,7 +100,7 @@
     margin-bottom: 6px;
   }
   .task-badge {
-    font-size: 9px;
+    font-size: var(--fs-xxs);
     font-weight: 700;
     text-transform: uppercase;
     letter-spacing: 0.5px;
@@ -110,7 +110,7 @@
     border-radius: var(--radius-sm);
   }
   .task-count {
-    font-size: 11px;
+    font-size: var(--fs-xs);
     color: var(--text-secondary);
     flex: 1;
   }
@@ -120,7 +120,7 @@
     gap: 4px;
   }
   .btn-create {
-    font-size: 10px;
+    font-size: var(--fs-xxs);
     font-weight: 600;
     padding: 2px 10px;
     border-radius: var(--radius-sm);
@@ -137,7 +137,7 @@
     cursor: not-allowed;
   }
   .btn-loop {
-    font-size: 10px;
+    font-size: var(--fs-xxs);
     font-weight: 600;
     padding: 2px 10px;
     border-radius: var(--radius-sm);
@@ -156,7 +156,7 @@
   }
   .btn-dismiss {
     color: var(--text-tertiary);
-    font-size: 16px;
+    font-size: var(--fs-lg);
     padding: 0 4px;
     margin-left: 4px;
     cursor: pointer;
@@ -196,7 +196,7 @@
   .task-text {
     flex: 1;
     color: var(--text-primary);
-    font-size: 11px;
+    font-size: var(--fs-xs);
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -204,7 +204,7 @@
   }
   .task-edit-input {
     flex: 1;
-    font-size: 11px;
+    font-size: var(--fs-xs);
     padding: 1px 4px;
     border: 1px solid var(--accent-primary);
     border-radius: var(--radius-sm);

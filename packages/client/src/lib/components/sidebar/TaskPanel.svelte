@@ -164,11 +164,11 @@
     padding: 4px 4px 8px;
   }
   .task-header h3 {
-    font-size: 13px;
+    font-size: var(--fs-base);
     font-weight: 600;
   }
   .task-count {
-    font-size: 11px;
+    font-size: var(--fs-xs);
     padding: 1px 6px;
     background: var(--bg-tertiary);
     border-radius: 10px;
@@ -180,12 +180,12 @@
   }
   .add-task input {
     width: 100%;
-    font-size: 12px;
+    font-size: var(--fs-sm);
     padding: 6px 8px;
   }
 
   .section-label {
-    font-size: 10px;
+    font-size: var(--fs-xxs);
     text-transform: uppercase;
     letter-spacing: 0.5px;
     color: var(--text-tertiary);
@@ -198,7 +198,7 @@
     gap: 6px;
     padding: 4px 4px;
     border-radius: var(--radius-sm);
-    font-size: 12px;
+    font-size: var(--fs-sm);
   }
   .task-item:hover {
     background: var(--bg-hover);
@@ -217,7 +217,7 @@
   }
 
   .task-active {
-    font-size: 10px;
+    font-size: var(--fs-xxs);
     color: var(--accent-primary);
     animation: pulse 2s infinite;
   }
@@ -249,7 +249,7 @@
     display: none;
     width: 24px;
     height: 24px;
-    font-size: 10px;
+    font-size: var(--fs-xxs);
     align-items: center;
     justify-content: center;
     color: var(--text-tertiary);

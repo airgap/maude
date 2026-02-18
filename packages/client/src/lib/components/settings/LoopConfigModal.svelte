@@ -330,7 +330,7 @@
     border-bottom: 1px solid var(--border-primary);
   }
   .modal-header h2 {
-    font-size: 16px;
+    font-size: var(--fs-lg);
     font-weight: 600;
   }
   .close-btn {
@@ -357,10 +357,10 @@
     background: var(--bg-tertiary);
     border-radius: var(--radius-sm);
     margin-bottom: 16px;
-    font-size: 13px;
+    font-size: var(--fs-base);
   }
   .prd-stories {
-    font-size: 11px;
+    font-size: var(--fs-xs);
     color: var(--text-tertiary);
     margin-left: auto;
   }
@@ -369,7 +369,7 @@
     margin-bottom: 16px;
   }
   .form-section h3 {
-    font-size: 12px;
+    font-size: var(--fs-sm);
     font-weight: 600;
     text-transform: uppercase;
     color: var(--text-tertiary);
@@ -384,14 +384,14 @@
     margin-bottom: 6px;
   }
   .form-row label {
-    font-size: 12px;
+    font-size: var(--fs-sm);
     color: var(--text-secondary);
   }
   .form-row select,
   .form-row input[type='number'] {
     width: 160px;
     padding: 4px 8px;
-    font-size: 12px;
+    font-size: var(--fs-sm);
     background: var(--bg-tertiary);
     color: var(--text-primary);
     border: 1px solid var(--border-primary);
@@ -403,7 +403,7 @@
     align-items: center;
     gap: 8px;
     padding: 4px 0;
-    font-size: 12px;
+    font-size: var(--fs-sm);
     color: var(--text-secondary);
     cursor: pointer;
   }
@@ -417,7 +417,7 @@
     justify-content: space-between;
   }
   .add-btn {
-    font-size: 11px;
+    font-size: var(--fs-xs);
     padding: 2px 8px;
     border-radius: var(--radius-sm);
     background: var(--bg-tertiary);
@@ -440,7 +440,7 @@
   .add-check-form input,
   .add-check-form select {
     padding: 4px 8px;
-    font-size: 12px;
+    font-size: var(--fs-sm);
     background: var(--bg-primary);
     color: var(--text-primary);
     border: 1px solid var(--border-primary);
@@ -455,7 +455,7 @@
     display: flex;
     align-items: center;
     gap: 4px;
-    font-size: 11px;
+    font-size: var(--fs-xs);
     color: var(--text-secondary);
     cursor: pointer;
   }
@@ -480,7 +480,7 @@
     min-width: 0;
   }
   .check-name {
-    font-size: 12px;
+    font-size: var(--fs-sm);
     font-weight: 500;
     color: var(--text-primary);
     display: flex;
@@ -491,7 +491,7 @@
     opacity: 0.5;
   }
   .required-badge {
-    font-size: 9px;
+    font-size: var(--fs-xxs);
     padding: 0 4px;
     border-radius: 2px;
     background: var(--accent-primary);
@@ -499,12 +499,12 @@
     font-weight: 600;
   }
   .check-cmd {
-    font-size: 10px;
+    font-size: var(--fs-xxs);
     font-family: var(--font-mono);
     color: var(--text-tertiary);
   }
   .remove-btn {
-    font-size: 14px;
+    font-size: var(--fs-md);
     padding: 0 4px;
     color: var(--text-tertiary);
   }
@@ -514,7 +514,7 @@
   .empty-checks {
     text-align: center;
     padding: 12px;
-    font-size: 11px;
+    font-size: var(--fs-xs);
     color: var(--text-tertiary);
   }
 
@@ -527,7 +527,7 @@
   }
   .btn-cancel {
     padding: 6px 16px;
-    font-size: 12px;
+    font-size: var(--fs-sm);
     border-radius: var(--radius-sm);
     background: var(--bg-tertiary);
     color: var(--text-secondary);
@@ -538,7 +538,7 @@
   }
   .btn-start {
     padding: 6px 20px;
-    font-size: 12px;
+    font-size: var(--fs-sm);
     font-weight: 600;
     border-radius: var(--radius-sm);
     background: var(--accent-primary);
@@ -549,7 +549,7 @@
   }
   .btn-sm {
     padding: 4px 10px;
-    font-size: 11px;
+    font-size: var(--fs-xs);
     border-radius: var(--radius-sm);
     background: var(--accent-primary);
     color: var(--text-on-accent);
@@ -570,10 +570,10 @@
     margin-bottom: 8px;
   }
   .dep-warnings-icon {
-    font-size: 14px;
+    font-size: var(--fs-md);
   }
   .dep-warnings-title {
-    font-size: 12px;
+    font-size: var(--fs-sm);
     font-weight: 600;
     color: var(--accent-warning, #e6a817);
   }
@@ -591,12 +591,12 @@
     border-left: 2px solid var(--accent-warning, #e6a817);
   }
   .dep-warning-msg {
-    font-size: 11px;
+    font-size: var(--fs-xs);
     color: var(--text-secondary);
     line-height: 1.3;
   }
   .dep-warnings-note {
-    font-size: 10px;
+    font-size: var(--fs-xxs);
     color: var(--text-tertiary);
     margin-top: 8px;
     margin-bottom: 0;

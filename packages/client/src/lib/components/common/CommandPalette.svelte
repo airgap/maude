@@ -253,7 +253,7 @@
     border: none;
     border-bottom: 1px solid var(--border-primary);
     background: transparent;
-    font-size: 15px;
+    font-size: var(--fs-md);
     outline: none;
     color: var(--text-primary);
   }
@@ -279,7 +279,7 @@
   }
 
   .cmd-category {
-    font-size: 10px;
+    font-size: var(--fs-xxs);
     padding: 1px 6px;
     border-radius: 3px;
     background: var(--bg-tertiary);
@@ -289,11 +289,11 @@
   }
   .cmd-label {
     flex: 1;
-    font-size: 13px;
+    font-size: var(--fs-base);
     color: var(--text-primary);
   }
   .cmd-shortcut {
-    font-size: 11px;
+    font-size: var(--fs-xs);
     padding: 2px 6px;
     background: var(--bg-tertiary);
     border-radius: 3px;
@@ -304,6 +304,6 @@
     padding: 16px;
     text-align: center;
     color: var(--text-tertiary);
-    font-size: 13px;
+    font-size: var(--fs-base);
   }
 </style>

@@ -246,7 +246,7 @@
   }
 
   .digest-title {
-    font-size: 13px;
+    font-size: var(--fs-base);
     font-weight: 600;
     color: var(--text-primary);
     margin: 0;
@@ -259,7 +259,7 @@
   }
 
   .date-picker {
-    font-size: 11px;
+    font-size: var(--fs-xs);
     color: var(--text-secondary);
     background: var(--bg-secondary);
     border: 1px solid var(--border-primary);
@@ -288,14 +288,14 @@
   }
 
   .digest-loading {
-    font-size: 12px;
+    font-size: var(--fs-sm);
     color: var(--text-tertiary);
     padding: 16px 0;
     text-align: center;
   }
 
   .digest-error {
-    font-size: 12px;
+    font-size: var(--fs-sm);
     color: var(--accent-error);
     padding: 8px 12px;
     background: var(--bg-secondary);
@@ -316,14 +316,14 @@
   }
 
   .stat-value {
-    font-size: 18px;
+    font-size: var(--fs-xl);
     font-weight: 700;
     color: var(--text-primary);
     line-height: 1.2;
   }
 
   .stat-label {
-    font-size: 10px;
+    font-size: var(--fs-xxs);
     color: var(--text-tertiary);
     text-transform: uppercase;
     letter-spacing: 0.05em;
@@ -337,7 +337,7 @@
   }
 
   .section-title {
-    font-size: 11px;
+    font-size: var(--fs-xs);
     font-weight: 600;
     color: var(--text-tertiary);
     text-transform: uppercase;
@@ -363,7 +363,7 @@
     display: flex;
     align-items: flex-start;
     gap: 6px;
-    font-size: 12px;
+    font-size: var(--fs-sm);
     color: var(--text-secondary);
   }
 
@@ -381,7 +381,7 @@
 
   .commit-hash {
     font-family: var(--font-family-mono, monospace);
-    font-size: 10px;
+    font-size: var(--fs-xxs);
     color: var(--accent-primary);
     background: var(--bg-secondary);
     padding: 1px 4px;
@@ -402,13 +402,13 @@
   }
 
   .conv-meta {
-    font-size: 10px;
+    font-size: var(--fs-xxs);
     color: var(--text-tertiary);
     flex-shrink: 0;
   }
 
   .btn-copy {
-    font-size: 10px;
+    font-size: var(--fs-xxs);
     font-weight: 600;
     padding: 2px 8px;
     border-radius: var(--radius-sm);
@@ -429,7 +429,7 @@
 
   .summary-text {
     font-family: var(--font-family-sans);
-    font-size: 11px;
+    font-size: var(--fs-xs);
     color: var(--text-secondary);
     background: var(--bg-secondary);
     border-radius: var(--radius);
@@ -449,7 +449,7 @@
   }
 
   .btn-week-toggle {
-    font-size: 12px;
+    font-size: var(--fs-sm);
     font-weight: 600;
     color: var(--accent-primary);
     padding: 4px 0;
@@ -482,19 +482,19 @@
   }
 
   .week-day-date {
-    font-size: 11px;
+    font-size: var(--fs-xs);
     font-weight: 600;
     color: var(--text-primary);
   }
 
   .week-day-stats {
-    font-size: 10px;
+    font-size: var(--fs-xxs);
     color: var(--text-tertiary);
   }
 
   .week-summary-text {
     font-family: var(--font-family-sans);
-    font-size: 10px;
+    font-size: var(--fs-xxs);
     color: var(--text-secondary);
     white-space: pre-wrap;
     word-break: break-word;
@@ -503,7 +503,7 @@
   }
 
   .week-day-empty {
-    font-size: 11px;
+    font-size: var(--fs-xs);
     color: var(--text-tertiary);
     font-style: italic;
   }

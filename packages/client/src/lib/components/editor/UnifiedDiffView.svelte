@@ -107,7 +107,7 @@
     overflow: hidden;
     background: var(--bg-code);
     font-family: var(--font-mono, 'Menlo', 'Monaco', 'Courier New', monospace);
-    font-size: 13px;
+    font-size: var(--fs-base);
   }
 
   /* Stats bar */
@@ -119,7 +119,7 @@
     background: var(--bg-secondary);
     border-bottom: 1px solid var(--border-primary);
     flex-shrink: 0;
-    font-size: 12px;
+    font-size: var(--fs-sm);
   }
 
   .file-label {
@@ -160,7 +160,7 @@
 
   .empty-diff p {
     font-family: var(--font-sans, sans-serif);
-    font-size: 13px;
+    font-size: var(--fs-base);
     margin: 0;
   }
 
@@ -178,7 +178,7 @@
     background: rgba(96, 165, 250, 0.06);
     border-top: 1px solid rgba(96, 165, 250, 0.12);
     border-bottom: 1px solid rgba(96, 165, 250, 0.12);
-    font-size: 12px;
+    font-size: var(--fs-sm);
     white-space: pre;
     user-select: none;
   }
@@ -211,7 +211,7 @@
   .diff-meta {
     color: var(--text-tertiary);
     opacity: 0.55;
-    font-size: 11px;
+    font-size: var(--fs-xs);
   }
 
   /* Gutter */

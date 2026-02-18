@@ -525,7 +525,7 @@
     padding: 0 16px;
     background: var(--bg-secondary);
     border-top: var(--ht-separator);
-    font-size: 12px;
+    font-size: var(--fs-sm);
     font-weight: 600;
     color: var(--text-tertiary);
     flex-shrink: 0;
@@ -585,7 +585,7 @@
   }
 
   .git-branch {
-    font-size: 11px;
+    font-size: var(--fs-xs);
     color: var(--text-secondary);
     text-transform: none;
   }
@@ -598,23 +598,23 @@
 
   .cursor-pos {
     font-family: var(--font-family);
-    font-size: 11px;
+    font-size: var(--fs-xs);
     color: var(--text-secondary);
   }
 
   .indent-label {
-    font-size: 11px;
+    font-size: var(--fs-xs);
     color: var(--text-secondary);
   }
 
   .lang-label {
-    font-size: 11px;
+    font-size: var(--fs-xs);
     text-transform: uppercase;
     color: var(--text-secondary);
   }
 
   .layout-toggle {
-    font-size: 11px;
+    font-size: var(--fs-xs);
     padding: 1px 8px;
     background: var(--bg-tertiary);
     border: 1px solid var(--border-secondary);
@@ -633,7 +633,7 @@
 
   .tokens {
     font-family: var(--font-family);
-    font-size: 11px;
+    font-size: var(--fs-xs);
     letter-spacing: 0.5px;
     color: var(--accent-primary);
   }
@@ -643,12 +643,12 @@
     border: 1px solid var(--border-primary);
     border-radius: var(--radius-sm);
     font-weight: 700;
-    font-size: 10px;
+    font-size: var(--fs-xxs);
     margin-left: 4px;
   }
   .session-cost {
     font-family: var(--font-family);
-    font-size: 11px;
+    font-size: var(--fs-xs);
     letter-spacing: 0.5px;
     color: var(--accent-secondary);
     font-weight: 700;
@@ -668,13 +668,13 @@
     background: var(--bg-tertiary);
     border: 1px solid var(--border-secondary);
     border-radius: var(--radius-sm);
-    font-size: 11px;
+    font-size: var(--fs-xs);
     font-weight: 700;
     color: var(--text-secondary);
   }
 
   .lsp-status {
-    font-size: 11px;
+    font-size: var(--fs-xs);
     color: var(--text-secondary);
     text-transform: uppercase;
   }
@@ -697,7 +697,7 @@
   }
 
   .lsp-install {
-    font-size: 11px;
+    font-size: var(--fs-xs);
     padding: 1px 8px;
     background: var(--bg-tertiary);
     border: 1px solid var(--accent-primary);
@@ -715,7 +715,7 @@
   }
 
   .lsp-dismiss {
-    font-size: 12px;
+    font-size: var(--fs-sm);
     padding: 0 4px;
     background: none;
     border: none;

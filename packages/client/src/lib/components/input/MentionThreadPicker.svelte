@@ -136,7 +136,7 @@
   }
 
   .picker-title {
-    font-size: 12px;
+    font-size: var(--fs-sm);
     font-weight: 600;
     color: var(--accent-primary);
     display: flex;
@@ -146,7 +146,7 @@
 
   .picker-close {
     color: var(--text-tertiary);
-    font-size: 18px;
+    font-size: var(--fs-xl);
     line-height: 1;
     padding: 0 4px;
   }
@@ -161,7 +161,7 @@
 
   .search-input {
     width: 100%;
-    font-size: 12px;
+    font-size: var(--fs-sm);
     padding: 5px 10px;
     background: var(--bg-input);
     border: 1px solid var(--border-secondary);
@@ -182,7 +182,7 @@
   .picker-empty {
     padding: 12px;
     color: var(--text-tertiary);
-    font-size: 12px;
+    font-size: var(--fs-sm);
     text-align: center;
   }
 
@@ -194,7 +194,7 @@
     padding: 6px 12px;
     border-radius: var(--radius-sm);
     text-align: left;
-    font-size: 12px;
+    font-size: var(--fs-sm);
     transition: background var(--transition);
     color: var(--text-secondary);
   }
@@ -228,7 +228,7 @@
   }
 
   .thread-snippet {
-    font-size: 10px;
+    font-size: var(--fs-xxs);
     color: var(--text-tertiary);
     overflow: hidden;
     text-overflow: ellipsis;
@@ -238,7 +238,7 @@
 
   .thread-meta {
     color: var(--text-tertiary);
-    font-size: 10px;
+    font-size: var(--fs-xxs);
     flex-shrink: 0;
     white-space: nowrap;
     margin-top: 1px;

@@ -658,12 +658,12 @@
     align-items: center;
     gap: 10px;
     margin-bottom: 10px;
-    font-size: 12px;
+    font-size: var(--fs-sm);
   }
 
   .role-label {
     font-weight: 700;
-    font-size: 13px;
+    font-size: var(--fs-base);
     letter-spacing: var(--ht-label-spacing);
     text-transform: var(--ht-label-transform);
   }
@@ -678,7 +678,7 @@
 
   .model-label {
     color: var(--text-tertiary);
-    font-size: 10px;
+    font-size: var(--fs-xxs);
     font-weight: 600;
     letter-spacing: var(--ht-label-spacing);
     padding: 1px 8px;
@@ -691,7 +691,7 @@
   .timestamp {
     color: var(--text-tertiary);
     margin-left: auto;
-    font-size: 10px;
+    font-size: var(--fs-xxs);
     font-family: var(--font-family);
     opacity: 0;
     transition: opacity var(--transition);
@@ -760,7 +760,7 @@
     cursor: pointer;
     transition: all var(--transition);
     padding: 0;
-    font-size: 12px;
+    font-size: var(--fs-sm);
   }
   .btn-icon:hover {
     color: var(--accent-primary);
@@ -804,7 +804,7 @@
   }
   .edit-btn {
     padding: 4px 14px;
-    font-size: 12px;
+    font-size: var(--fs-sm);
     font-weight: 600;
     border-radius: var(--radius-sm);
     cursor: pointer;
@@ -860,7 +860,7 @@
     background: color-mix(in srgb, var(--accent-primary) 6%, transparent);
     border: 1px solid color-mix(in srgb, var(--accent-primary) 25%, transparent);
     border-radius: var(--radius-sm);
-    font-size: 12px;
+    font-size: var(--fs-sm);
     color: var(--text-secondary);
     animation: fadeIn 0.15s linear;
   }
@@ -874,7 +874,7 @@
   }
 
   .nudge-label-tag {
-    font-size: 10px;
+    font-size: var(--fs-xxs);
     font-weight: 700;
     letter-spacing: 0.08em;
     text-transform: uppercase;
@@ -892,7 +892,7 @@
   }
 
   .nudge-time {
-    font-size: 10px;
+    font-size: var(--fs-xxs);
     color: var(--text-tertiary);
     flex-shrink: 0;
     margin-left: 4px;

@@ -338,7 +338,7 @@
 
   .title-label {
     flex: 1;
-    font-size: 11px;
+    font-size: var(--fs-xs);
     font-weight: 600;
     color: var(--text-primary);
     white-space: nowrap;

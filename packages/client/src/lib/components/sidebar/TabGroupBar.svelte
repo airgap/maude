@@ -936,7 +936,7 @@
 
   .menu-header {
     padding: 4px 12px 2px;
-    font-size: 10px;
+    font-size: var(--fs-xxs);
     font-weight: 600;
     letter-spacing: 0.06em;
     text-transform: uppercase;
@@ -946,7 +946,7 @@
 
   .menu-hint {
     padding: 4px 12px 6px;
-    font-size: 10px;
+    font-size: var(--fs-xxs);
     color: var(--text-tertiary);
     font-style: italic;
     border-top: 1px solid var(--border-primary);
@@ -961,7 +961,7 @@
     width: 100%;
     padding: 6px 10px 6px 12px;
     min-height: 28px;
-    font-size: 12px;
+    font-size: var(--fs-sm);
     font-weight: 500;
     color: var(--text-secondary);
     background: none;
@@ -1001,7 +1001,7 @@
 
   .menu-item-badge {
     flex-shrink: 0;
-    font-size: 9px;
+    font-size: var(--fs-xxs);
     font-weight: 600;
     letter-spacing: 0.04em;
     text-transform: uppercase;
@@ -1028,7 +1028,7 @@
 
   .menu-empty {
     padding: 8px 12px;
-    font-size: 12px;
+    font-size: var(--fs-sm);
     color: var(--text-tertiary);
     font-style: italic;
   }

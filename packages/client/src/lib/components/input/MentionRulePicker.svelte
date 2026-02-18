@@ -131,7 +131,7 @@
   }
 
   .picker-title {
-    font-size: 12px;
+    font-size: var(--fs-sm);
     font-weight: 600;
     color: var(--accent-primary);
     display: flex;
@@ -141,7 +141,7 @@
 
   .picker-close {
     color: var(--text-tertiary);
-    font-size: 18px;
+    font-size: var(--fs-xl);
     line-height: 1;
     padding: 0 4px;
   }
@@ -156,7 +156,7 @@
 
   .search-input {
     width: 100%;
-    font-size: 12px;
+    font-size: var(--fs-sm);
     padding: 5px 10px;
     background: var(--bg-input);
     border: 1px solid var(--border-secondary);
@@ -178,7 +178,7 @@
   .picker-empty {
     padding: 12px;
     color: var(--text-tertiary);
-    font-size: 12px;
+    font-size: var(--fs-sm);
     text-align: center;
   }
 
@@ -190,7 +190,7 @@
     padding: 6px 12px;
     border-radius: var(--radius-sm);
     text-align: left;
-    font-size: 12px;
+    font-size: var(--fs-sm);
     transition: background var(--transition);
     color: var(--text-secondary);
   }
@@ -216,7 +216,7 @@
   }
 
   .rule-mode {
-    font-size: 10px;
+    font-size: var(--fs-xxs);
     padding: 1px 6px;
     border-radius: var(--radius-sm);
     background: var(--bg-active);

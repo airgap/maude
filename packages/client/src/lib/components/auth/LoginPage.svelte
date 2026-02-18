@@ -110,7 +110,7 @@
     filter: drop-shadow(0 0 8px var(--accent-primary));
   }
   .tagline {
-    font-size: 11px;
+    font-size: var(--fs-xs);
     color: var(--text-tertiary);
     text-transform: uppercase;
     letter-spacing: 2px;
@@ -129,7 +129,7 @@
   .tab-btn {
     flex: 1;
     padding: 8px;
-    font-size: 11px;
+    font-size: var(--fs-xs);
     font-weight: 700;
     text-transform: uppercase;
     letter-spacing: 1px;
@@ -145,7 +145,7 @@
   }
   .form-input {
     padding: 10px 12px;
-    font-size: 13px;
+    font-size: var(--fs-base);
     background: var(--bg-primary);
     border: 1px solid var(--border-secondary);
     color: var(--text-primary);
@@ -157,7 +157,7 @@
     outline: none;
   }
   .error {
-    font-size: 12px;
+    font-size: var(--fs-sm);
     color: var(--accent-error);
     padding: 8px;
     background: rgba(255, 51, 68, 0.1);
@@ -165,7 +165,7 @@
   }
   .submit-btn {
     padding: 10px;
-    font-size: 12px;
+    font-size: var(--fs-sm);
     font-weight: 700;
     text-transform: uppercase;
     letter-spacing: 1px;

@@ -389,7 +389,7 @@
   }
 
   .dep-title-row h4 {
-    font-size: 12px;
+    font-size: var(--fs-sm);
     font-weight: 600;
     color: var(--text-secondary);
     margin: 0;
@@ -407,7 +407,7 @@
 
   .btn-sm {
     padding: 3px 8px;
-    font-size: 10px;
+    font-size: var(--fs-xxs);
     border-radius: var(--radius-sm);
     font-weight: 600;
     cursor: pointer;
@@ -473,7 +473,7 @@
   }
 
   .dep-field label {
-    font-size: 9px;
+    font-size: var(--fs-xxs);
     color: var(--text-tertiary);
     text-transform: uppercase;
     letter-spacing: 0.5px;
@@ -482,7 +482,7 @@
   .dep-field select {
     width: 100%;
     padding: 4px 6px;
-    font-size: 11px;
+    font-size: var(--fs-xs);
     background: var(--bg-secondary, var(--bg-primary));
     color: var(--text-primary);
     border: 1px solid var(--border-primary);
@@ -492,7 +492,7 @@
   .dep-reason-input {
     width: 100%;
     padding: 4px 6px;
-    font-size: 11px;
+    font-size: var(--fs-xs);
     background: var(--bg-secondary, var(--bg-primary));
     color: var(--text-primary);
     border: 1px solid var(--border-primary);
@@ -503,7 +503,7 @@
   }
 
   .dep-arrow {
-    font-size: 10px;
+    font-size: var(--fs-xxs);
     color: var(--text-tertiary);
     text-align: center;
     padding: 2px 0;
@@ -532,19 +532,19 @@
   }
 
   .warning-icon {
-    font-size: 11px;
+    font-size: var(--fs-xs);
     flex-shrink: 0;
   }
 
   .warning-text {
-    font-size: 10px;
+    font-size: var(--fs-xxs);
     color: var(--text-secondary);
     line-height: 1.3;
   }
 
   .dep-loading,
   .dep-error {
-    font-size: 11px;
+    font-size: var(--fs-xs);
     color: var(--text-tertiary);
     padding: 8px;
     text-align: center;
@@ -563,7 +563,7 @@
   }
 
   .empty-hint {
-    font-size: 10px;
+    font-size: var(--fs-xxs);
     color: var(--text-tertiary);
   }
 
@@ -618,7 +618,7 @@
   }
 
   .dep-story-name {
-    font-size: 10px;
+    font-size: var(--fs-xxs);
     color: var(--text-primary);
     overflow: hidden;
     text-overflow: ellipsis;
@@ -627,13 +627,13 @@
   }
 
   .dep-arrow-inline {
-    font-size: 9px;
+    font-size: var(--fs-xxs);
     color: var(--text-tertiary);
     flex-shrink: 0;
   }
 
   .dep-reason {
-    font-size: 9px;
+    font-size: var(--fs-xxs);
     color: var(--text-tertiary);
     font-style: italic;
     overflow: hidden;
@@ -644,7 +644,7 @@
 
   .dep-edit-btn,
   .dep-remove-btn {
-    font-size: 12px;
+    font-size: var(--fs-sm);
     padding: 0 4px;
     color: var(--text-tertiary);
     opacity: 0;
@@ -659,7 +659,7 @@
     opacity: 1;
   }
   .dep-edit-btn {
-    font-size: 11px;
+    font-size: var(--fs-xs);
   }
   .dep-edit-btn:hover {
     color: var(--accent-primary);
@@ -685,7 +685,7 @@
   }
 
   .dep-layer-label {
-    font-size: 9px;
+    font-size: var(--fs-xxs);
     color: var(--text-tertiary);
     text-transform: uppercase;
     letter-spacing: 0.5px;
@@ -719,12 +719,12 @@
   }
 
   .node-status {
-    font-size: 10px;
+    font-size: var(--fs-xxs);
     flex-shrink: 0;
   }
 
   .node-title {
-    font-size: 10px;
+    font-size: var(--fs-xxs);
     color: var(--text-primary);
     overflow: hidden;
     text-overflow: ellipsis;
@@ -739,7 +739,7 @@
   }
 
   .node-badge {
-    font-size: 8px;
+    font-size: var(--fs-xxs);
     padding: 1px 3px;
     border-radius: 2px;
     font-weight: 700;

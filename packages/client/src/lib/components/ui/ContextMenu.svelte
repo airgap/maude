@@ -237,7 +237,7 @@
   /* Section header */
   .ctx-header {
     padding: 4px 10px 2px;
-    font-size: 10px;
+    font-size: var(--fs-xxs);
     font-weight: 700;
     letter-spacing: 0.08em;
     text-transform: uppercase;
@@ -330,7 +330,7 @@
   }
 
   .ctx-shortcut {
-    font-size: 11px;
+    font-size: var(--fs-xs);
     font-family: var(--font-family);
     color: var(--text-tertiary);
     opacity: 0.75;
@@ -343,7 +343,7 @@
   }
 
   .ctx-submenu-arrow {
-    font-size: 9px;
+    font-size: var(--fs-xxs);
     color: var(--text-tertiary);
     margin-left: 2px;
   }

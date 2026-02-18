@@ -174,7 +174,7 @@
     border-bottom: 1px solid var(--border-primary);
   }
   .modal-header h2 {
-    font-size: 16px;
+    font-size: var(--fs-lg);
     font-weight: 700;
   }
   .close-btn {
@@ -191,7 +191,7 @@
     overflow-y: auto;
   }
   .snapshot-desc {
-    font-size: 12px;
+    font-size: var(--fs-sm);
     color: var(--text-secondary);
     margin-bottom: 14px;
   }
@@ -200,7 +200,7 @@
     background: rgba(255, 50, 50, 0.1);
     border: 1px solid var(--accent-error);
     color: var(--accent-error);
-    font-size: 12px;
+    font-size: var(--fs-sm);
     margin-bottom: 12px;
     border-radius: var(--radius-sm);
   }
@@ -209,7 +209,7 @@
     padding: 24px;
     text-align: center;
     color: var(--text-tertiary);
-    font-size: 13px;
+    font-size: var(--fs-base);
   }
   .snapshot-list {
     display: flex;
@@ -239,12 +239,12 @@
     margin-bottom: 4px;
   }
   .snapshot-reason {
-    font-size: 13px;
+    font-size: var(--fs-base);
     font-weight: 600;
     color: var(--text-primary);
   }
   .snapshot-time {
-    font-size: 11px;
+    font-size: var(--fs-xs);
     color: var(--text-tertiary);
   }
   .snapshot-details {
@@ -253,12 +253,12 @@
     gap: 8px;
   }
   .snapshot-sha {
-    font-size: 11px;
+    font-size: var(--fs-xs);
     color: var(--accent-primary);
     font-family: var(--font-family);
   }
   .snapshot-badge {
-    font-size: 10px;
+    font-size: var(--fs-xxs);
     padding: 1px 6px;
     border-radius: var(--radius-sm);
     text-transform: uppercase;
@@ -279,7 +279,7 @@
   }
   .restore-btn {
     padding: 5px 14px;
-    font-size: 12px;
+    font-size: var(--fs-sm);
     font-weight: 600;
     background: var(--bg-primary);
     border: 1px solid var(--accent-warning);

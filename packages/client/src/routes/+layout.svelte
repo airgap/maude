@@ -36,7 +36,8 @@
 
   $effect(() => {
     const root = document.documentElement;
-    const basePx = settingsStore.fontSize;
+    // Enforce accessibility minimum (12px) even for persisted legacy values
+    const basePx = Math.max(12, settingsStore.fontSize);
 
     // Apply mono font
     const monoFont = findFont(settingsStore.fontFamily);

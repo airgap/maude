@@ -468,12 +468,12 @@
     padding: 0 4px;
   }
   .section-header h3 {
-    font-size: 13px;
+    font-size: var(--fs-base);
     font-weight: 600;
   }
 
   .loop-badge {
-    font-size: 10px;
+    font-size: var(--fs-xxs);
     padding: 1px 6px;
     border-radius: 3px;
     font-weight: 600;
@@ -496,7 +496,7 @@
     padding: 0 4px;
   }
   .filter-btn {
-    font-size: 10px;
+    font-size: var(--fs-xxs);
     padding: 3px 8px;
     border-radius: 10px;
     background: var(--bg-tertiary);
@@ -519,7 +519,7 @@
     border-color: var(--accent-primary);
   }
   .filter-count {
-    font-size: 9px;
+    font-size: var(--fs-xxs);
     padding: 0 4px;
     border-radius: 6px;
     background: rgba(255, 255, 255, 0.2);
@@ -544,7 +544,7 @@
   }
   .add-story input {
     width: 100%;
-    font-size: 12px;
+    font-size: var(--fs-sm);
     padding: 6px 8px;
     background: var(--bg-tertiary);
     color: var(--text-primary);
@@ -558,7 +558,7 @@
   }
 
   .section-label {
-    font-size: 10px;
+    font-size: var(--fs-xxs);
     text-transform: uppercase;
     letter-spacing: 0.5px;
     color: var(--text-tertiary);
@@ -587,7 +587,7 @@
   }
 
   .story-status {
-    font-size: 12px;
+    font-size: var(--fs-sm);
     flex-shrink: 0;
     width: 14px;
     text-align: center;
@@ -610,7 +610,7 @@
   }
 
   .story-title {
-    font-size: 11px;
+    font-size: var(--fs-xs);
     color: var(--text-primary);
     flex: 1;
     overflow: hidden;
@@ -623,7 +623,7 @@
   }
 
   .estimate-badge {
-    font-size: 9px;
+    font-size: var(--fs-xxs);
     padding: 1px 4px;
     border-radius: 3px;
     background: var(--bg-hover);
@@ -633,14 +633,14 @@
   }
 
   .priority-badge {
-    font-size: 9px;
+    font-size: var(--fs-xxs);
     color: var(--accent-warning, #e6a817);
     font-weight: bold;
   }
 
   .estimate-btn,
   .delete-btn {
-    font-size: 12px;
+    font-size: var(--fs-sm);
     padding: 0 4px;
     color: var(--text-tertiary);
     opacity: 0;
@@ -665,7 +665,7 @@
     text-align: center;
   }
   .empty-hint {
-    font-size: 11px;
+    font-size: var(--fs-xs);
     color: var(--text-tertiary);
   }
 
@@ -696,7 +696,7 @@
     transition: width 0.3s ease;
   }
   .progress-text {
-    font-size: 10px;
+    font-size: var(--fs-xxs);
     color: var(--text-tertiary);
     white-space: nowrap;
   }
@@ -715,7 +715,7 @@
     margin-bottom: 8px;
   }
   .group-label {
-    font-size: 10px;
+    font-size: var(--fs-xxs);
     text-transform: uppercase;
     letter-spacing: 0.5px;
     color: var(--text-tertiary);
@@ -725,7 +725,7 @@
 
   /* Shared buttons */
   .btn-sm {
-    font-size: 11px;
+    font-size: var(--fs-xs);
     padding: 4px 10px;
     border-radius: var(--radius-sm);
     border: 1px solid var(--border-primary);
@@ -760,7 +760,7 @@
     gap: 6px;
   }
   .header-btn {
-    font-size: 14px;
+    font-size: var(--fs-md);
     width: 22px;
     height: 22px;
     display: flex;
@@ -786,7 +786,7 @@
     padding: 0 4px;
   }
   .external-badge {
-    font-size: 9px;
+    font-size: var(--fs-xxs);
     font-weight: 700;
     width: 16px;
     height: 16px;
@@ -799,7 +799,7 @@
     flex-shrink: 0;
   }
   .external-link {
-    font-size: 12px;
+    font-size: var(--fs-sm);
     color: var(--text-tertiary);
     text-decoration: none;
     opacity: 0;
@@ -819,7 +819,7 @@
     padding: 2px 0 0 20px;
   }
   .external-status {
-    font-size: 9px;
+    font-size: var(--fs-xxs);
     padding: 1px 5px;
     border-radius: 3px;
     background: var(--bg-hover);
@@ -827,7 +827,7 @@
     text-transform: capitalize;
   }
   .synced-at {
-    font-size: 9px;
+    font-size: var(--fs-xxs);
     color: var(--text-tertiary);
   }
 

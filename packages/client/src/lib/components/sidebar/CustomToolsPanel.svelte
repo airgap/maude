@@ -495,7 +495,7 @@
   }
 
   .panel-title {
-    font-size: 11px;
+    font-size: var(--fs-xs);
     font-weight: 700;
     color: var(--text-secondary);
     text-transform: uppercase;
@@ -510,7 +510,7 @@
     background: transparent;
     color: var(--text-secondary);
     cursor: pointer;
-    font-size: 14px;
+    font-size: var(--fs-md);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -529,7 +529,7 @@
     padding: 8px 14px;
     background: color-mix(in srgb, var(--accent-error) 12%, transparent);
     border-bottom: 1px solid color-mix(in srgb, var(--accent-error) 25%, transparent);
-    font-size: 12px;
+    font-size: var(--fs-sm);
     color: var(--accent-error);
     flex-shrink: 0;
   }
@@ -539,7 +539,7 @@
     border: none;
     color: var(--accent-error);
     cursor: pointer;
-    font-size: 12px;
+    font-size: var(--fs-sm);
     padding: 0 2px;
   }
 
@@ -557,7 +557,7 @@
   }
 
   .form-title {
-    font-size: 12px;
+    font-size: var(--fs-sm);
     font-weight: 700;
     color: var(--text-primary);
     margin-bottom: 2px;
@@ -578,7 +578,7 @@
     display: flex;
     flex-direction: column;
     gap: 4px;
-    font-size: 11px;
+    font-size: var(--fs-xs);
     font-weight: 600;
     color: var(--text-tertiary);
     text-transform: uppercase;
@@ -586,7 +586,7 @@
   }
 
   .field-hint {
-    font-size: 10px;
+    font-size: var(--fs-xxs);
     font-weight: 400;
     color: var(--text-tertiary);
     text-transform: none;
@@ -599,7 +599,7 @@
     border: 1px solid var(--border-primary);
     border-radius: var(--radius-sm);
     color: var(--text-primary);
-    font-size: 12px;
+    font-size: var(--fs-sm);
     font-family: var(--font-family-sans);
     padding: 6px 8px;
     outline: none;
@@ -614,7 +614,7 @@
 
   .field-mono {
     font-family: var(--font-family);
-    font-size: 11px;
+    font-size: var(--fs-xs);
   }
 
   .field-readonly {
@@ -623,7 +623,7 @@
   }
 
   .field-error {
-    font-size: 11px;
+    font-size: var(--fs-xs);
     color: var(--accent-error);
     font-weight: 500;
     text-transform: none;
@@ -639,7 +639,7 @@
   .btn-xs {
     align-self: flex-end;
     padding: 2px 8px;
-    font-size: 10px;
+    font-size: var(--fs-xxs);
     font-weight: 600;
     border-radius: var(--radius-sm);
     border: 1px solid var(--border-primary);
@@ -662,7 +662,7 @@
 
   .btn-primary {
     padding: 5px 14px;
-    font-size: 12px;
+    font-size: var(--fs-sm);
     font-weight: 600;
     border-radius: var(--radius-sm);
     border: 1px solid var(--accent-primary);
@@ -684,7 +684,7 @@
 
   .btn-secondary {
     padding: 5px 14px;
-    font-size: 12px;
+    font-size: var(--fs-sm);
     font-weight: 600;
     border-radius: var(--radius-sm);
     border: 1px solid var(--border-primary);
@@ -707,7 +707,7 @@
     gap: 10px;
     padding: 24px;
     color: var(--text-tertiary);
-    font-size: 13px;
+    font-size: var(--fs-base);
   }
 
   .spinner {
@@ -739,7 +739,7 @@
   }
 
   .empty-text {
-    font-size: 13px;
+    font-size: var(--fs-base);
   }
 
   /* Tools list */
@@ -784,7 +784,7 @@
   }
 
   .tool-name {
-    font-size: 13px;
+    font-size: var(--fs-base);
     font-weight: 700;
     color: var(--text-primary);
     font-family: var(--font-family);
@@ -794,7 +794,7 @@
   }
 
   .tool-handler-type {
-    font-size: 10px;
+    font-size: var(--fs-xxs);
     font-weight: 600;
     color: var(--text-tertiary);
     background: var(--bg-tertiary);
@@ -816,7 +816,7 @@
     background: transparent;
     border: none;
     cursor: pointer;
-    font-size: 14px;
+    font-size: var(--fs-md);
     color: var(--text-tertiary);
     padding: 0 2px;
     transition: color var(--transition);
@@ -838,7 +838,7 @@
     background: transparent;
     color: var(--text-tertiary);
     cursor: pointer;
-    font-size: 12px;
+    font-size: var(--fs-sm);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -863,7 +863,7 @@
   }
 
   .tool-description {
-    font-size: 12px;
+    font-size: var(--fs-sm);
     color: var(--text-secondary);
     line-height: 1.5;
     margin-bottom: 5px;
@@ -874,7 +874,7 @@
   }
 
   .tool-command {
-    font-size: 11px;
+    font-size: var(--fs-xs);
     color: var(--text-tertiary);
     overflow: hidden;
     text-overflow: ellipsis;
@@ -887,7 +887,7 @@
 
   /* Test result */
   .test-error {
-    font-size: 12px;
+    font-size: var(--fs-sm);
     color: var(--accent-error);
     padding: 6px 8px;
     background: color-mix(in srgb, var(--accent-error) 10%, transparent);
@@ -905,7 +905,7 @@
     display: flex;
     align-items: center;
     gap: 10px;
-    font-size: 11px;
+    font-size: var(--fs-xs);
   }
 
   .test-exit-code {
@@ -923,7 +923,7 @@
   }
 
   .test-output {
-    font-size: 11px;
+    font-size: var(--fs-xs);
     font-family: var(--font-family);
     background: var(--bg-tertiary);
     border: 1px solid var(--border-secondary);

@@ -254,7 +254,7 @@
     align-items: center;
     gap: 6px;
     padding: 4px 8px;
-    font-size: 12px;
+    font-size: var(--fs-sm);
     font-weight: 500;
     color: var(--text-tertiary);
     border-radius: var(--radius-sm);
@@ -404,7 +404,7 @@
     text-align: left;
     padding: 8px 12px;
     border-radius: var(--radius-sm);
-    font-size: 13px;
+    font-size: var(--fs-base);
     color: var(--text-secondary);
     transition: all var(--transition);
   }
@@ -424,14 +424,14 @@
     font-weight: 600;
   }
   .item-path {
-    font-size: 11px;
+    font-size: var(--fs-xs);
     color: var(--text-tertiary);
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
   }
   .item-badge {
-    font-size: 10px;
+    font-size: var(--fs-xxs);
     color: var(--text-tertiary);
     font-style: italic;
   }
@@ -456,7 +456,7 @@
     margin-bottom: 4px;
   }
   .browse-path {
-    font-size: 11px;
+    font-size: var(--fs-xs);
     color: var(--text-tertiary);
     overflow: hidden;
     text-overflow: ellipsis;

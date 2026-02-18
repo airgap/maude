@@ -405,7 +405,7 @@
     border-bottom: 1px solid var(--border-primary);
   }
   .modal-header h2 {
-    font-size: 15px;
+    font-size: var(--fs-md);
     font-weight: 600;
     color: var(--text-primary);
   }
@@ -416,7 +416,7 @@
     align-items: center;
     justify-content: center;
     border-radius: var(--radius-sm);
-    font-size: 14px;
+    font-size: var(--fs-md);
     color: var(--text-tertiary);
   }
   .close-btn:hover {
@@ -431,7 +431,7 @@
   .provider-tab {
     flex: 1;
     padding: 10px;
-    font-size: 13px;
+    font-size: var(--fs-base);
     font-weight: 500;
     text-align: center;
     color: var(--text-secondary);
@@ -464,13 +464,13 @@
     gap: 4px;
   }
   .field span {
-    font-size: 12px;
+    font-size: var(--fs-sm);
     font-weight: 500;
     color: var(--text-secondary);
   }
   .field input {
     padding: 8px 10px;
-    font-size: 13px;
+    font-size: var(--fs-base);
     border: 1px solid var(--border-primary);
     border-radius: var(--radius-sm);
     background: var(--bg-primary);
@@ -490,7 +490,7 @@
   .btn-primary,
   .btn-secondary {
     padding: 8px 16px;
-    font-size: 13px;
+    font-size: var(--fs-base);
     border-radius: var(--radius-sm);
     font-weight: 500;
     cursor: pointer;
@@ -517,7 +517,7 @@
   .status {
     padding: 8px 12px;
     border-radius: var(--radius-sm);
-    font-size: 12px;
+    font-size: var(--fs-sm);
     margin-top: 8px;
   }
   .status.success {
@@ -535,7 +535,7 @@
     gap: 4px;
   }
   .project-list h3 {
-    font-size: 13px;
+    font-size: var(--fs-base);
     font-weight: 600;
     margin-bottom: 8px;
     color: var(--text-primary);
@@ -547,7 +547,7 @@
     padding: 8px 12px;
     border-radius: var(--radius-sm);
     text-align: left;
-    font-size: 13px;
+    font-size: var(--fs-base);
     color: var(--text-primary);
     transition: background var(--transition);
   }
@@ -562,7 +562,7 @@
     flex: 1;
   }
   .project-key {
-    font-size: 11px;
+    font-size: var(--fs-xs);
     padding: 1px 6px;
     background: var(--bg-tertiary);
     border-radius: 3px;
@@ -570,7 +570,7 @@
     font-family: var(--font-mono, monospace);
   }
   .project-count {
-    font-size: 11px;
+    font-size: var(--fs-xs);
     color: var(--text-tertiary);
   }
 
@@ -590,12 +590,12 @@
     display: flex;
     align-items: center;
     gap: 6px;
-    font-size: 12px;
+    font-size: var(--fs-sm);
     color: var(--text-secondary);
     cursor: pointer;
   }
   .selected-count {
-    font-size: 11px;
+    font-size: var(--fs-xs);
     color: var(--text-tertiary);
   }
 
@@ -612,14 +612,14 @@
     gap: 8px;
     padding: 6px 4px;
     border-radius: var(--radius-sm);
-    font-size: 12px;
+    font-size: var(--fs-sm);
     cursor: pointer;
   }
   .issue-item:hover {
     background: var(--bg-hover);
   }
   .issue-id {
-    font-size: 11px;
+    font-size: var(--fs-xs);
     color: var(--text-tertiary);
     font-family: var(--font-mono, monospace);
     min-width: 70px;
@@ -632,7 +632,7 @@
     white-space: nowrap;
   }
   .issue-status {
-    font-size: 10px;
+    font-size: var(--fs-xxs);
     padding: 1px 6px;
     border-radius: 3px;
   }
@@ -649,7 +649,7 @@
     color: var(--accent-secondary);
   }
   .issue-priority {
-    font-size: 10px;
+    font-size: var(--fs-xxs);
     color: var(--text-tertiary);
     min-width: 40px;
     text-align: right;
@@ -663,6 +663,6 @@
     padding: 16px;
     text-align: center;
     color: var(--text-tertiary);
-    font-size: 13px;
+    font-size: var(--fs-base);
   }
 </style>

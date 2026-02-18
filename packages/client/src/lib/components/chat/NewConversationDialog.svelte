@@ -218,7 +218,7 @@
 
   h2 {
     margin: 0 0 20px;
-    font-size: 16px;
+    font-size: var(--fs-lg);
     font-weight: 600;
     color: var(--text-primary);
     letter-spacing: 0.5px;
@@ -238,7 +238,7 @@
 
   label {
     display: block;
-    font-size: 12px;
+    font-size: var(--fs-sm);
     font-weight: 600;
     color: var(--text-secondary);
     margin-bottom: 4px;
@@ -254,7 +254,7 @@
     border-radius: var(--radius-sm);
     background: var(--bg-input);
     color: var(--text-primary);
-    font-size: 13px;
+    font-size: var(--fs-base);
     font-family: inherit;
   }
   input:focus,
@@ -278,7 +278,7 @@
     border-radius: var(--radius-sm);
     background: var(--bg-hover);
     color: var(--text-secondary);
-    font-size: 12px;
+    font-size: var(--fs-sm);
     cursor: pointer;
     white-space: nowrap;
   }
@@ -303,7 +303,7 @@
     border-bottom: 1px solid var(--border-primary);
   }
   .browse-path {
-    font-size: 12px;
+    font-size: var(--fs-sm);
     color: var(--text-secondary);
     font-family: var(--font-family-mono, monospace);
   }
@@ -316,7 +316,7 @@
     width: 100%;
     text-align: left;
     padding: 6px 10px;
-    font-size: 13px;
+    font-size: var(--fs-base);
     color: var(--text-primary);
     cursor: pointer;
     border: none;
@@ -346,7 +346,7 @@
     border-radius: var(--radius-sm);
     background: transparent;
     color: var(--text-secondary);
-    font-size: 13px;
+    font-size: var(--fs-base);
     cursor: pointer;
   }
   .btn-cancel:hover {
@@ -359,7 +359,7 @@
     border-radius: var(--radius-sm);
     background: var(--accent-primary);
     color: var(--text-on-accent, #000);
-    font-size: 13px;
+    font-size: var(--fs-base);
     font-weight: 600;
     cursor: pointer;
   }

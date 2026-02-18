@@ -85,11 +85,11 @@
     padding: 4px 4px 8px;
   }
   .agent-header h3 {
-    font-size: 13px;
+    font-size: var(--fs-base);
     font-weight: 600;
   }
   .agent-count {
-    font-size: 11px;
+    font-size: var(--fs-xs);
     color: var(--text-tertiary);
   }
 
@@ -118,23 +118,23 @@
     flex-shrink: 0;
   }
   .agent-type {
-    font-size: 12px;
+    font-size: var(--fs-sm);
     font-weight: 600;
     color: var(--text-primary);
   }
   .agent-status-label {
-    font-size: 10px;
+    font-size: var(--fs-xxs);
     color: var(--text-tertiary);
     margin-left: auto;
   }
   .agent-desc {
-    font-size: 11px;
+    font-size: var(--fs-xs);
     color: var(--text-secondary);
   }
   .empty {
     padding: 20px;
     text-align: center;
     color: var(--text-tertiary);
-    font-size: 12px;
+    font-size: var(--fs-sm);
   }
 </style>

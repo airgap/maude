@@ -290,7 +290,7 @@
     flex-direction: column;
     height: 100%;
     overflow: hidden;
-    font-size: 12px;
+    font-size: var(--fs-sm);
   }
 
   /* ── Header ── */
@@ -401,7 +401,7 @@
 
   .empty-state p {
     margin: 0;
-    font-size: 12px;
+    font-size: var(--fs-sm);
     line-height: 1.5;
   }
 
@@ -417,7 +417,7 @@
     align-items: center;
     justify-content: space-between;
     padding: 5px 10px 4px;
-    font-size: 10px;
+    font-size: var(--fs-xxs);
     font-weight: 700;
     letter-spacing: 0.06em;
     text-transform: uppercase;
@@ -434,7 +434,7 @@
     color: var(--text-muted);
     border-radius: 10px;
     padding: 1px 6px;
-    font-size: 10px;
+    font-size: var(--fs-xxs);
     font-weight: 600;
   }
 
@@ -475,7 +475,7 @@
     width: 16px;
     height: 16px;
     border-radius: 3px;
-    font-size: 10px;
+    font-size: var(--fs-xxs);
     font-weight: 700;
     flex-shrink: 0;
     font-family: monospace;
@@ -515,7 +515,7 @@
     text-overflow: ellipsis;
     max-width: 80px;
     flex-shrink: 1;
-    font-size: 10px;
+    font-size: var(--fs-xxs);
   }
 
   /* ── Open icon / spinner ── */

@@ -279,7 +279,7 @@
     align-items: center;
     gap: 5px;
     padding: 0 10px 0 8px;
-    font-size: 13px;
+    font-size: var(--fs-base);
     color: var(--text-secondary);
     border-right: 1px solid var(--border-secondary);
     background: transparent;

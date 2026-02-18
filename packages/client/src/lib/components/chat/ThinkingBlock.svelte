@@ -45,7 +45,7 @@
     gap: 6px;
     width: 100%;
     padding: 6px 10px;
-    font-size: 12px;
+    font-size: var(--fs-sm);
     color: var(--text-tertiary);
     background: var(--bg-tertiary);
     transition: background var(--transition);
@@ -67,7 +67,7 @@
 
   .thinking-content {
     padding: 10px;
-    font-size: 12px;
+    font-size: var(--fs-sm);
     color: var(--text-secondary);
     max-height: 300px;
     overflow-y: auto;
@@ -77,7 +77,7 @@
   .thinking-content pre {
     white-space: pre-wrap;
     word-break: break-word;
-    font-size: 12px;
+    font-size: var(--fs-sm);
     line-height: 1.5;
     background: none;
     padding: 0;

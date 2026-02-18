@@ -150,7 +150,7 @@
     border-bottom: 1px solid var(--border-primary);
   }
   .modal-header h2 {
-    font-size: 16px;
+    font-size: var(--fs-lg);
     font-weight: 700;
     margin: 0;
   }
@@ -179,7 +179,7 @@
     gap: 6px;
   }
   .field-label {
-    font-size: 12px;
+    font-size: var(--fs-sm);
     font-weight: 600;
     color: var(--text-secondary);
     text-transform: uppercase;
@@ -202,7 +202,7 @@
     border: 1px solid var(--border-primary);
     border-radius: var(--radius-sm);
     color: var(--text-secondary);
-    font-size: 13px;
+    font-size: var(--fs-base);
     transition: all var(--transition);
   }
   .browse-btn:hover {
@@ -220,7 +220,7 @@
   }
   .dir-picker-path {
     padding: 6px 10px;
-    font-size: 11px;
+    font-size: var(--fs-xs);
     color: var(--text-tertiary);
     border-bottom: 1px solid var(--border-secondary);
     margin-bottom: 4px;
@@ -233,7 +233,7 @@
     width: 100%;
     text-align: left;
     padding: 6px 10px;
-    font-size: 12px;
+    font-size: var(--fs-sm);
     color: var(--text-secondary);
     border-radius: var(--radius-sm);
     transition: all var(--transition);
@@ -249,7 +249,7 @@
 
   .error {
     color: var(--accent-error);
-    font-size: 12px;
+    font-size: var(--fs-sm);
     padding: 8px;
     background: rgba(255, 51, 68, 0.05);
     border: 1px solid rgba(255, 51, 68, 0.2);
@@ -265,7 +265,7 @@
   }
   .btn-cancel {
     padding: 8px 16px;
-    font-size: 13px;
+    font-size: var(--fs-base);
     color: var(--text-secondary);
     border-radius: var(--radius-sm);
     transition: all var(--transition);
@@ -276,7 +276,7 @@
   }
   .btn-create {
     padding: 8px 20px;
-    font-size: 13px;
+    font-size: var(--fs-base);
     background: var(--accent-primary);
     color: var(--text-on-accent);
     border-radius: var(--radius-sm);

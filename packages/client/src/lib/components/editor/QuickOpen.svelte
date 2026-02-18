@@ -195,7 +195,7 @@
   .quick-open-input {
     width: 100%;
     padding: 12px 16px;
-    font-size: 15px;
+    font-size: var(--fs-md);
     font-family: var(--font-family);
     background: var(--bg-input);
     border: none;
@@ -219,7 +219,7 @@
     gap: 8px;
     width: 100%;
     padding: 8px 12px;
-    font-size: 13px;
+    font-size: var(--fs-base);
     color: var(--text-secondary);
     text-align: left;
     border-radius: var(--radius-sm);
@@ -239,7 +239,7 @@
 
   .result-path {
     flex: 1;
-    font-size: 11px;
+    font-size: var(--fs-xs);
     color: var(--text-tertiary);
     overflow: hidden;
     text-overflow: ellipsis;
@@ -251,6 +251,6 @@
     padding: 20px;
     text-align: center;
     color: var(--text-tertiary);
-    font-size: 13px;
+    font-size: var(--fs-base);
   }
 </style>

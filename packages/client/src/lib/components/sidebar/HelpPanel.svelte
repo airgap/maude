@@ -840,7 +840,7 @@
     height: 100%;
     overflow: hidden;
     color: var(--text-primary);
-    font-size: 13px;
+    font-size: var(--fs-base);
   }
 
   /* ── Header ── */
@@ -857,7 +857,7 @@
     display: flex;
     align-items: center;
     gap: 6px;
-    font-size: 11px;
+    font-size: var(--fs-xs);
     font-weight: 700;
     letter-spacing: 0.08em;
     text-transform: uppercase;
@@ -871,7 +871,7 @@
     border: 1px solid var(--border-primary);
     border-radius: var(--radius-sm);
     color: var(--text-primary);
-    font-size: 12px;
+    font-size: var(--fs-sm);
     transition: border-color var(--transition);
     box-sizing: border-box;
   }
@@ -907,7 +907,7 @@
     gap: 4px;
     width: 100%;
     padding: 8px 6px;
-    font-size: 10px;
+    font-size: var(--fs-xxs);
     font-weight: 600;
     letter-spacing: 0.04em;
     color: var(--text-tertiary);
@@ -937,7 +937,7 @@
   }
 
   .section-heading {
-    font-size: 10px;
+    font-size: var(--fs-xxs);
     font-weight: 700;
     letter-spacing: 0.08em;
     text-transform: uppercase;
@@ -967,7 +967,7 @@
 
   .article-card-title {
     flex: 1;
-    font-size: 12px;
+    font-size: var(--fs-sm);
     font-weight: 500;
     color: var(--text-primary);
     line-height: 1.4;
@@ -992,7 +992,7 @@
     display: inline-flex;
     align-items: center;
     gap: 5px;
-    font-size: 11px;
+    font-size: var(--fs-xs);
     color: var(--text-secondary);
     padding: 4px 8px;
     border-radius: var(--radius-sm);
@@ -1014,7 +1014,7 @@
   }
 
   .article-title {
-    font-size: 15px;
+    font-size: var(--fs-md);
     font-weight: 700;
     color: var(--text-primary);
     margin: 0;
@@ -1023,7 +1023,7 @@
 
   /* article body HTML styles */
   .article-body :global(h3) {
-    font-size: 12px;
+    font-size: var(--fs-sm);
     font-weight: 700;
     letter-spacing: 0.06em;
     text-transform: uppercase;
@@ -1053,7 +1053,7 @@
   }
   .article-body :global(code) {
     font-family: var(--font-mono, monospace);
-    font-size: 11px;
+    font-size: var(--fs-xs);
     background: var(--bg-tertiary);
     border: 1px solid var(--border-secondary);
     border-radius: 3px;
@@ -1062,7 +1062,7 @@
   }
   .article-body :global(kbd) {
     font-family: var(--font-mono, monospace);
-    font-size: 10px;
+    font-size: var(--fs-xxs);
     background: var(--bg-secondary);
     border: 1px solid var(--border-primary);
     border-bottom-width: 2px;
@@ -1076,13 +1076,13 @@
   .article-body :global(.kbd-table) {
     width: 100%;
     border-collapse: collapse;
-    font-size: 12px;
+    font-size: var(--fs-sm);
     margin-bottom: 8px;
   }
   .article-body :global(.kbd-table th) {
     text-align: left;
     padding: 6px 8px;
-    font-size: 10px;
+    font-size: var(--fs-xxs);
     font-weight: 700;
     letter-spacing: 0.06em;
     text-transform: uppercase;
@@ -1105,7 +1105,7 @@
   /* Inline badges in article body */
   .article-body :global(.badge-inline) {
     display: inline-block;
-    font-size: 10px;
+    font-size: var(--fs-xxs);
     font-weight: 700;
     padding: 1px 6px;
     border-radius: 10px;
@@ -1135,7 +1135,7 @@
 
   /* ── Badges ── */
   .badge {
-    font-size: 9px;
+    font-size: var(--fs-xxs);
     font-weight: 700;
     padding: 2px 7px;
     border-radius: 10px;
@@ -1149,7 +1149,7 @@
     border: 1px solid color-mix(in srgb, var(--accent-primary) 30%, transparent);
   }
   .badge.sm {
-    font-size: 8px;
+    font-size: var(--fs-xxs);
     padding: 1px 5px;
   }
 
@@ -1164,7 +1164,7 @@
   }
 
   .results-label {
-    font-size: 11px;
+    font-size: var(--fs-xs);
     color: var(--text-tertiary);
     margin: 0 0 4px;
   }
@@ -1188,7 +1188,7 @@
   }
 
   .result-section {
-    font-size: 10px;
+    font-size: var(--fs-xxs);
     font-weight: 600;
     color: var(--accent-primary);
     text-transform: uppercase;
@@ -1196,14 +1196,14 @@
   }
 
   .result-title {
-    font-size: 12px;
+    font-size: var(--fs-sm);
     color: var(--text-primary);
     font-weight: 500;
   }
 
   .empty-state {
     color: var(--text-tertiary);
-    font-size: 12px;
+    font-size: var(--fs-sm);
     text-align: center;
     padding: 24px;
   }
@@ -1223,7 +1223,7 @@
     display: flex;
     align-items: center;
     gap: 4px;
-    font-size: 11px;
+    font-size: var(--fs-xs);
     color: var(--text-tertiary);
     padding: 4px 8px;
     border-radius: var(--radius-sm);
@@ -1249,7 +1249,7 @@
 
   .version-label {
     margin-left: auto;
-    font-size: 10px;
+    font-size: var(--fs-xxs);
     color: var(--text-tertiary);
     font-weight: 600;
     letter-spacing: 0.06em;

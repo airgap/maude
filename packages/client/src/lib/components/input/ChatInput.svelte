@@ -813,7 +813,7 @@
             title={mention.collapsed ? 'Expand context' : 'Collapse context'}
           >
             <span class="mention-badge-kind">{mention.label}</span>
-            <span class="mention-badge-arrow">{mention.collapsed ? '▶' : '▼'}</span>
+            <span class="mention-badge-arrow"><svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" style="transform: rotate({mention.collapsed ? '0deg' : '90deg'}); transition: transform 0.15s ease"><polyline points="9 18 15 12 9 6" /></svg></span>
           </button>
           {#if !mention.collapsed}
             <div class="mention-badge-preview">
@@ -953,7 +953,7 @@
     display: flex;
     align-items: center;
     gap: 2px;
-    font-size: 12px;
+    font-size: var(--fs-sm);
     color: var(--text-tertiary);
     padding: 4px 8px;
     overflow-x: auto;
@@ -964,7 +964,7 @@
   }
   .breadcrumb {
     color: var(--text-tertiary);
-    font-size: 12px;
+    font-size: var(--fs-sm);
     padding: 1px 4px;
     border-radius: var(--radius-sm);
     white-space: nowrap;
@@ -994,7 +994,7 @@
   }
   .dir-path-input {
     flex: 1;
-    font-size: 12px;
+    font-size: var(--fs-sm);
     font-family: var(--font-family-mono, monospace);
     color: var(--text-primary);
     background: var(--bg-input);
@@ -1024,7 +1024,7 @@
     width: 100%;
     text-align: left;
     padding: 6px 10px;
-    font-size: 12px;
+    font-size: var(--fs-sm);
     color: var(--text-secondary);
     border-radius: var(--radius-sm);
     transition: all var(--transition);
@@ -1046,7 +1046,7 @@
     padding: 0 4px;
   }
   .context-chip {
-    font-size: 11px;
+    font-size: var(--fs-xs);
     padding: 2px 10px;
     border-radius: 999px;
     border: 1px solid var(--border-secondary);
@@ -1159,7 +1159,7 @@
   }
 
   .plan-indicator {
-    font-size: 10px;
+    font-size: var(--fs-xxs);
     font-weight: 700;
     padding: 2px 10px;
     border-radius: var(--radius-sm);
@@ -1170,7 +1170,7 @@
   }
 
   .teach-indicator {
-    font-size: 10px;
+    font-size: var(--fs-xxs);
     font-weight: 700;
     padding: 2px 10px;
     border-radius: var(--radius-sm);
@@ -1180,7 +1180,7 @@
     text-transform: var(--ht-label-transform);
   }
   .btn-icon-sm {
-    font-size: 14px;
+    font-size: var(--fs-md);
     width: 28px;
     height: 28px;
     display: flex;
@@ -1232,7 +1232,7 @@
   }
 
   .diff-detecting {
-    font-size: 11px;
+    font-size: var(--fs-xs);
     color: var(--text-tertiary);
     padding: 4px 8px;
     animation: pulse 1s infinite;
@@ -1244,7 +1244,7 @@
     border: 1px solid var(--border-primary);
     border-left: 3px solid var(--accent-primary);
     border-radius: var(--radius-sm);
-    font-size: 12px;
+    font-size: var(--fs-sm);
   }
   .diff-preview-header {
     display: flex;
@@ -1253,7 +1253,7 @@
     margin-bottom: 4px;
   }
   .diff-type-badge {
-    font-size: 9px;
+    font-size: var(--fs-xxs);
     font-weight: 700;
     text-transform: uppercase;
     padding: 1px 6px;
@@ -1271,7 +1271,7 @@
   }
   .diff-stats {
     color: var(--text-tertiary);
-    font-size: 11px;
+    font-size: var(--fs-xs);
     margin-left: auto;
     display: flex;
     gap: 6px;
@@ -1284,7 +1284,7 @@
   }
   .diff-dismiss {
     color: var(--text-tertiary);
-    font-size: 16px;
+    font-size: var(--fs-lg);
     padding: 0 4px;
     margin-left: 4px;
   }
@@ -1297,7 +1297,7 @@
     gap: 4px;
   }
   .diff-file {
-    font-size: 10px;
+    font-size: var(--fs-xxs);
     font-family: var(--font-family);
     color: var(--text-secondary);
     background: var(--bg-hover);
@@ -1305,7 +1305,7 @@
     border-radius: var(--radius-sm);
   }
   .diff-more {
-    font-size: 10px;
+    font-size: var(--fs-xxs);
     color: var(--text-tertiary);
     padding: 1px 6px;
   }
@@ -1324,7 +1324,7 @@
     border: 1px solid var(--border-secondary);
     border-left: 3px solid var(--accent-primary);
     border-radius: var(--radius-sm);
-    font-size: 12px;
+    font-size: var(--fs-sm);
     overflow: hidden;
     transition: border-color var(--transition);
   }
@@ -1349,12 +1349,13 @@
   .mention-badge-kind {
     font-weight: 600;
     color: var(--accent-primary);
-    font-size: 11px;
+    font-size: var(--fs-xs);
     flex: 1;
   }
 
   .mention-badge-arrow {
-    font-size: 9px;
+    display: flex;
+    align-items: center;
     color: var(--text-tertiary);
     flex-shrink: 0;
   }
@@ -1366,7 +1367,7 @@
 
   .mention-context-text {
     font-family: var(--font-family-mono, monospace);
-    font-size: 10px;
+    font-size: var(--fs-xxs);
     color: var(--text-secondary);
     white-space: pre-wrap;
     word-break: break-all;
@@ -1381,7 +1382,7 @@
     top: 3px;
     right: 4px;
     color: var(--text-tertiary);
-    font-size: 14px;
+    font-size: var(--fs-md);
     line-height: 1;
     padding: 0 3px;
     opacity: 0;

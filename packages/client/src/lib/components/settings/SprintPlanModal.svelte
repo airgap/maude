@@ -351,7 +351,7 @@
     border-bottom: 1px solid var(--border-primary);
   }
   .modal-header h2 {
-    font-size: 16px;
+    font-size: var(--fs-lg);
     font-weight: 600;
   }
   .close-btn {
@@ -376,7 +376,7 @@
     border-bottom: 1px solid var(--border-primary);
   }
   .section-label {
-    font-size: 12px;
+    font-size: var(--fs-sm);
     font-weight: 600;
     color: var(--text-secondary);
     margin-bottom: 8px;
@@ -394,7 +394,7 @@
   .capacity-input {
     width: 80px;
     padding: 6px 8px;
-    font-size: 13px;
+    font-size: var(--fs-base);
     background: var(--bg-tertiary);
     color: var(--text-primary);
     border: 1px solid var(--border-primary);
@@ -407,7 +407,7 @@
   }
   .capacity-mode-select {
     padding: 6px 8px;
-    font-size: 12px;
+    font-size: var(--fs-sm);
     background: var(--bg-tertiary);
     color: var(--text-primary);
     border: 1px solid var(--border-primary);
@@ -419,7 +419,7 @@
   }
   .btn-generate {
     padding: 6px 16px;
-    font-size: 12px;
+    font-size: var(--fs-sm);
     border-radius: var(--radius-sm);
     background: var(--accent-primary);
     color: var(--text-on-accent);
@@ -447,13 +447,13 @@
     gap: 12px;
   }
   .loading-state p {
-    font-size: 13px;
+    font-size: var(--fs-base);
     color: var(--text-secondary);
   }
   .loading-sub {
     font-style: italic;
     color: var(--text-tertiary) !important;
-    font-size: 12px !important;
+    font-size: var(--fs-sm) !important;
   }
   .spinner-large {
     width: 24px;
@@ -494,14 +494,14 @@
     gap: 4px;
   }
   .card-label {
-    font-size: 10px;
+    font-size: var(--fs-xxs);
     font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 0.5px;
     color: var(--text-tertiary);
   }
   .card-value {
-    font-size: 20px;
+    font-size: var(--fs-2xl);
     font-weight: 700;
     color: var(--text-primary);
   }
@@ -509,7 +509,7 @@
     color: var(--accent-primary);
   }
   .summary-text {
-    font-size: 12px;
+    font-size: var(--fs-sm);
     color: var(--text-secondary);
     line-height: 1.5;
     padding: 8px 10px;
@@ -546,13 +546,13 @@
     margin-bottom: 4px;
   }
   .sprint-title {
-    font-size: 13px;
+    font-size: var(--fs-base);
     font-weight: 700;
     color: var(--text-primary);
     margin: 0;
   }
   .sprint-meta {
-    font-size: 10px;
+    font-size: var(--fs-xxs);
     color: var(--text-tertiary);
     font-weight: 600;
   }
@@ -569,7 +569,7 @@
     transition: width 0.3s ease;
   }
   .rationale-toggle {
-    font-size: 10px;
+    font-size: var(--fs-xxs);
     color: var(--text-tertiary);
     cursor: pointer;
     background: none;
@@ -582,7 +582,7 @@
     background: var(--bg-hover);
   }
   .sprint-rationale {
-    font-size: 11px;
+    font-size: var(--fs-xs);
     color: var(--text-secondary);
     padding: 6px 8px;
     background: var(--bg-primary);
@@ -616,14 +616,14 @@
     cursor: grabbing;
   }
   .story-priority {
-    font-size: 10px;
+    font-size: var(--fs-xxs);
     font-weight: 700;
     width: 16px;
     text-align: center;
     flex-shrink: 0;
   }
   .story-name {
-    font-size: 11px;
+    font-size: var(--fs-xs);
     color: var(--text-primary);
     flex: 1;
     overflow: hidden;
@@ -631,7 +631,7 @@
     white-space: nowrap;
   }
   .story-pts {
-    font-size: 10px;
+    font-size: var(--fs-xxs);
     font-weight: 600;
     color: var(--accent-primary);
     flex-shrink: 0;
@@ -641,7 +641,7 @@
     flex-direction: column;
   }
   .story-reason-btn {
-    font-size: 10px;
+    font-size: var(--fs-xxs);
     color: var(--text-tertiary);
     cursor: pointer;
     flex-shrink: 0;
@@ -657,7 +657,7 @@
     background: var(--bg-hover);
   }
   .story-reason-detail {
-    font-size: 10px;
+    font-size: var(--fs-xxs);
     color: var(--text-secondary);
     padding: 4px 8px 4px 28px;
     line-height: 1.4;
@@ -692,7 +692,7 @@
     border-radius: var(--radius-sm);
   }
   .unassigned-title {
-    font-size: 11px;
+    font-size: var(--fs-xs);
     color: var(--text-secondary);
     overflow: hidden;
     text-overflow: ellipsis;
@@ -700,7 +700,7 @@
     flex: 1;
   }
   .unassigned-reason {
-    font-size: 10px;
+    font-size: var(--fs-xxs);
     color: var(--text-tertiary);
     font-style: italic;
     flex-shrink: 0;
@@ -713,7 +713,7 @@
     border: 1px solid var(--accent-error);
     border-radius: var(--radius-sm);
     color: var(--accent-error);
-    font-size: 12px;
+    font-size: var(--fs-sm);
     margin-top: 12px;
   }
 
@@ -722,11 +722,11 @@
     text-align: center;
     padding: 30px 20px;
     color: var(--text-secondary);
-    font-size: 13px;
+    font-size: var(--fs-base);
     line-height: 1.6;
   }
   .initial-hint {
-    font-size: 11px;
+    font-size: var(--fs-xs);
     color: var(--text-tertiary);
     margin-top: 8px;
   }
@@ -741,7 +741,7 @@
   }
   .btn-save {
     padding: 6px 16px;
-    font-size: 12px;
+    font-size: var(--fs-sm);
     border-radius: var(--radius-sm);
     background: var(--accent-primary);
     color: var(--text-on-accent);
@@ -761,7 +761,7 @@
   }
   .btn-close {
     padding: 6px 16px;
-    font-size: 12px;
+    font-size: var(--fs-sm);
     border-radius: var(--radius-sm);
     background: var(--bg-tertiary);
     color: var(--text-secondary);

@@ -297,7 +297,7 @@
     border-bottom: 1px solid var(--border-primary);
   }
   .modal-header h2 {
-    font-size: 16px;
+    font-size: var(--fs-lg);
     font-weight: 600;
   }
   .close-btn {
@@ -324,13 +324,13 @@
     gap: 12px;
   }
   .loading-state p {
-    font-size: 13px;
+    font-size: var(--fs-base);
     color: var(--text-secondary);
   }
   .loading-sub {
     font-style: italic;
     color: var(--text-tertiary) !important;
-    font-size: 12px !important;
+    font-size: var(--fs-sm) !important;
   }
   .spinner-large {
     width: 24px;
@@ -345,7 +345,7 @@
     padding: 40px 20px;
     text-align: center;
     color: var(--text-tertiary);
-    font-size: 13px;
+    font-size: var(--fs-base);
   }
 
   /* Story info */
@@ -361,12 +361,12 @@
     gap: 8px;
   }
   .story-title {
-    font-size: 14px;
+    font-size: var(--fs-md);
     font-weight: 600;
     color: var(--text-primary);
   }
   .round-badge {
-    font-size: 10px;
+    font-size: var(--fs-xxs);
     padding: 2px 8px;
     border-radius: 10px;
     background: var(--bg-tertiary);
@@ -374,7 +374,7 @@
     font-weight: 600;
   }
   .story-desc {
-    font-size: 12px;
+    font-size: var(--fs-sm);
     color: var(--text-secondary);
     margin-top: 6px;
     line-height: 1.4;
@@ -395,7 +395,7 @@
     margin-bottom: 8px;
   }
   .quality-label {
-    font-size: 12px;
+    font-size: var(--fs-sm);
     font-weight: 600;
     color: var(--text-secondary);
   }
@@ -405,11 +405,11 @@
     gap: 8px;
   }
   .quality-score {
-    font-size: 16px;
+    font-size: var(--fs-lg);
     font-weight: 700;
   }
   .quality-tag {
-    font-size: 9px;
+    font-size: var(--fs-xxs);
     font-weight: 700;
     text-transform: uppercase;
     letter-spacing: 0.5px;
@@ -430,7 +430,7 @@
     transition: width 0.5s ease;
   }
   .quality-explanation {
-    font-size: 12px;
+    font-size: var(--fs-sm);
     color: var(--text-secondary);
     line-height: 1.4;
     margin: 0;
@@ -441,7 +441,7 @@
     margin-bottom: 16px;
   }
   .section-label {
-    font-size: 12px;
+    font-size: var(--fs-sm);
     font-weight: 600;
     color: var(--text-secondary);
     margin-bottom: 8px;
@@ -451,7 +451,7 @@
     margin: 0;
   }
   .improvements-list li {
-    font-size: 12px;
+    font-size: var(--fs-sm);
     color: var(--accent-secondary);
     line-height: 1.5;
   }
@@ -468,7 +468,7 @@
   }
   .updated-field {
     margin-bottom: 6px;
-    font-size: 12px;
+    font-size: var(--fs-sm);
     color: var(--text-primary);
     line-height: 1.4;
   }
@@ -478,14 +478,14 @@
   .field-label {
     font-weight: 600;
     color: var(--text-secondary);
-    font-size: 11px;
+    font-size: var(--fs-xs);
   }
   .updated-card ul {
     padding-left: 16px;
     margin: 4px 0 0;
   }
   .updated-card li {
-    font-size: 11px;
+    font-size: var(--fs-xs);
     color: var(--text-secondary);
     line-height: 1.5;
   }
@@ -506,13 +506,13 @@
     background: var(--bg-secondary);
   }
   .question-text {
-    font-size: 13px;
+    font-size: var(--fs-base);
     font-weight: 600;
     color: var(--text-primary);
     margin-bottom: 4px;
   }
   .question-context {
-    font-size: 11px;
+    font-size: var(--fs-xs);
     color: var(--text-tertiary);
     margin-bottom: 8px;
     font-style: italic;
@@ -522,7 +522,7 @@
     margin-bottom: 6px;
   }
   .suggestions-label {
-    font-size: 10px;
+    font-size: var(--fs-xxs);
     font-weight: 600;
     color: var(--text-tertiary);
     text-transform: uppercase;
@@ -535,7 +535,7 @@
     margin-top: 4px;
   }
   .suggestion-chip {
-    font-size: 11px;
+    font-size: var(--fs-xs);
     padding: 3px 8px;
     border-radius: 12px;
     background: var(--bg-tertiary);
@@ -557,7 +557,7 @@
   .answer-input {
     width: 100%;
     padding: 6px 8px;
-    font-size: 12px;
+    font-size: var(--fs-sm);
     font-family: var(--font-sans, inherit);
     background: var(--bg-tertiary);
     color: var(--text-primary);
@@ -589,11 +589,11 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 20px;
+    font-size: var(--fs-2xl);
     font-weight: 700;
   }
   .threshold-met p {
-    font-size: 13px;
+    font-size: var(--fs-base);
     color: var(--text-secondary);
     margin: 0;
   }
@@ -605,7 +605,7 @@
     border: 1px solid var(--accent-error);
     border-radius: var(--radius-sm);
     color: var(--accent-error);
-    font-size: 12px;
+    font-size: var(--fs-sm);
     margin-top: 12px;
   }
 
@@ -619,7 +619,7 @@
   }
   .btn-cancel {
     padding: 6px 16px;
-    font-size: 12px;
+    font-size: var(--fs-sm);
     border-radius: var(--radius-sm);
     background: var(--bg-tertiary);
     color: var(--text-secondary);
@@ -631,7 +631,7 @@
   }
   .btn-submit {
     padding: 6px 20px;
-    font-size: 12px;
+    font-size: var(--fs-sm);
     font-weight: 600;
     border-radius: var(--radius-sm);
     background: var(--accent-primary);
@@ -647,7 +647,7 @@
   }
   .btn-refine-again {
     padding: 6px 16px;
-    font-size: 12px;
+    font-size: var(--fs-sm);
     border-radius: var(--radius-sm);
     background: var(--bg-tertiary);
     color: var(--text-secondary);

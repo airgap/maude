@@ -178,7 +178,7 @@
     align-items: center;
     gap: 4px;
     padding: 3px 8px;
-    font-size: 12px;
+    font-size: var(--fs-sm);
     font-weight: 600;
     border-radius: var(--radius-sm);
     border: 1px solid var(--border-primary);
@@ -206,12 +206,12 @@
   }
 
   .pair-icon {
-    font-size: 13px;
+    font-size: var(--fs-base);
     line-height: 1;
   }
 
   .pair-label {
-    font-size: 11px;
+    font-size: var(--fs-xs);
     letter-spacing: 0.04em;
   }
 
@@ -222,7 +222,7 @@
     border-radius: 8px;
     background: var(--accent-primary);
     color: var(--bg-primary);
-    font-size: 10px;
+    font-size: var(--fs-xxs);
     font-weight: 700;
     display: flex;
     align-items: center;
@@ -254,7 +254,7 @@
   }
 
   .pair-panel-title {
-    font-size: 12px;
+    font-size: var(--fs-sm);
     font-weight: 700;
     color: var(--text-primary);
   }
@@ -264,7 +264,7 @@
     border: none;
     color: var(--text-tertiary);
     cursor: pointer;
-    font-size: 12px;
+    font-size: var(--fs-sm);
     padding: 0;
     line-height: 1;
   }
@@ -275,7 +275,7 @@
 
   .pair-error {
     padding: 8px 14px;
-    font-size: 12px;
+    font-size: var(--fs-sm);
     color: var(--accent-error);
     background: color-mix(in srgb, var(--accent-error) 10%, transparent);
     border-bottom: 1px solid color-mix(in srgb, var(--accent-error) 20%, transparent);
@@ -287,7 +287,7 @@
   }
 
   .pair-section-label {
-    font-size: 10px;
+    font-size: var(--fs-xxs);
     font-weight: 700;
     text-transform: uppercase;
     letter-spacing: 0.08em;
@@ -305,7 +305,7 @@
     border-radius: 8px;
     background: var(--bg-tertiary);
     border: 1px solid var(--border-secondary);
-    font-size: 10px;
+    font-size: var(--fs-xxs);
     font-weight: 700;
     color: var(--text-secondary);
     display: inline-flex;
@@ -317,7 +317,7 @@
 
   .pair-room-id {
     font-family: var(--font-family);
-    font-size: 12px;
+    font-size: var(--fs-sm);
     color: var(--accent-primary);
     background: var(--bg-tertiary);
     padding: 4px 8px;
@@ -335,7 +335,7 @@
   .pair-url-input {
     flex: 1;
     min-width: 0;
-    font-size: 11px;
+    font-size: var(--fs-xs);
     font-family: var(--font-family);
     background: var(--bg-input);
     border: 1px solid var(--border-primary);
@@ -350,7 +350,7 @@
 
   .pair-copy-btn {
     padding: 4px 10px;
-    font-size: 11px;
+    font-size: var(--fs-xs);
     font-weight: 600;
     border-radius: var(--radius-sm);
     border: 1px solid var(--accent-primary);
@@ -367,7 +367,7 @@
   }
 
   .pair-no-observers {
-    font-size: 12px;
+    font-size: var(--fs-sm);
     color: var(--text-tertiary);
     font-style: italic;
   }
@@ -380,7 +380,7 @@
 
   .pair-stop-btn {
     padding: 5px 14px;
-    font-size: 12px;
+    font-size: var(--fs-sm);
     font-weight: 600;
     border-radius: var(--radius-sm);
     border: 1px solid var(--accent-error);

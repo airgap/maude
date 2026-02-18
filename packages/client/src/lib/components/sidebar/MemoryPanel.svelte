@@ -620,7 +620,7 @@
   .view-tab {
     flex: 1;
     padding: 6px 8px;
-    font-size: 10px;
+    font-size: var(--fs-xxs);
     font-weight: 700;
     text-transform: var(--ht-label-transform);
     letter-spacing: var(--ht-label-spacing);
@@ -642,7 +642,7 @@
     background: var(--bg-primary);
   }
   .count {
-    font-size: 9px;
+    font-size: var(--fs-xxs);
     padding: 0 4px;
     background: var(--bg-secondary);
     border: 1px solid var(--border-secondary);
@@ -668,7 +668,7 @@
     flex: 1;
   }
   .filter-chip {
-    font-size: 9px;
+    font-size: var(--fs-xxs);
     padding: 4px 8px;
     min-height: 24px;
     background: var(--bg-tertiary);
@@ -694,7 +694,7 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 16px;
+    font-size: var(--fs-lg);
     font-weight: 700;
     color: var(--text-tertiary);
     background: var(--bg-tertiary);
@@ -717,7 +717,7 @@
     margin-bottom: 8px;
   }
   .form-input {
-    font-size: 12px;
+    font-size: var(--fs-sm);
     padding: 4px 8px;
     background: var(--bg-primary);
     border: 1px solid var(--border-secondary);
@@ -729,7 +729,7 @@
     outline: none;
   }
   .form-textarea {
-    font-size: 12px;
+    font-size: var(--fs-sm);
     padding: 4px 8px;
     background: var(--bg-primary);
     border: 1px solid var(--border-secondary);
@@ -742,7 +742,7 @@
     outline: none;
   }
   .save-btn {
-    font-size: 11px;
+    font-size: var(--fs-xs);
     padding: 4px 12px;
     background: var(--accent-primary);
     color: var(--bg-primary);
@@ -780,7 +780,7 @@
     margin-bottom: 2px;
   }
   .pm-category {
-    font-size: 9px;
+    font-size: var(--fs-xxs);
     font-weight: 700;
     text-transform: var(--ht-label-transform);
     letter-spacing: var(--ht-label-spacing);
@@ -791,7 +791,7 @@
     align-items: center;
   }
   .pm-source {
-    font-size: 8px;
+    font-size: var(--fs-xxs);
     padding: 0 4px;
     background: var(--bg-active);
     border: 1px solid var(--border-primary);
@@ -800,23 +800,23 @@
     letter-spacing: var(--ht-label-spacing);
   }
   .pm-confidence {
-    font-size: 9px;
+    font-size: var(--fs-xxs);
     color: var(--text-tertiary);
     font-family: var(--font-family);
   }
   .pm-seen {
-    font-size: 9px;
+    font-size: var(--fs-xxs);
     color: var(--text-tertiary);
     font-family: var(--font-family);
   }
   .pm-key {
-    font-size: 12px;
+    font-size: var(--fs-sm);
     font-weight: 600;
     color: var(--text-primary);
     margin-bottom: 2px;
   }
   .pm-content {
-    font-size: 11px;
+    font-size: var(--fs-xs);
     color: var(--text-secondary);
     line-height: 1.4;
   }
@@ -833,7 +833,7 @@
     opacity: 1;
   }
   .action-icon {
-    font-size: 10px;
+    font-size: var(--fs-xxs);
     width: 24px;
     height: 24px;
     display: flex;
@@ -880,18 +880,18 @@
     margin-bottom: 2px;
   }
   .type-badge {
-    font-size: 10px;
+    font-size: var(--fs-xxs);
     padding: 1px 6px;
     background: var(--bg-tertiary);
     color: var(--text-tertiary);
     flex-shrink: 0;
   }
   .file-name {
-    font-size: 12px;
+    font-size: var(--fs-sm);
     color: var(--text-primary);
   }
   .memory-preview {
-    font-size: 11px;
+    font-size: var(--fs-xs);
     color: var(--text-tertiary);
   }
 
@@ -908,7 +908,7 @@
     gap: 8px;
   }
   .edit-file {
-    font-size: 12px;
+    font-size: var(--fs-sm);
     font-weight: 600;
   }
   .edit-actions {
@@ -918,7 +918,7 @@
   .edit-textarea {
     flex: 1;
     font-family: var(--font-family);
-    font-size: 12px;
+    font-size: var(--fs-sm);
     line-height: 1.5;
     resize: none;
     padding: 8px;
@@ -928,7 +928,7 @@
   }
 
   .btn-sm {
-    font-size: 11px;
+    font-size: var(--fs-xs);
     padding: 4px 10px;
     background: var(--bg-tertiary);
     color: var(--text-primary);
@@ -952,7 +952,7 @@
     padding: 20px;
     text-align: center;
     color: var(--text-tertiary);
-    font-size: 12px;
+    font-size: var(--fs-sm);
   }
 
   /* Rules view */
@@ -970,7 +970,7 @@
     margin-bottom: 8px;
   }
   .rules-label {
-    font-size: 10px;
+    font-size: var(--fs-xxs);
     color: var(--text-tertiary);
     font-style: italic;
   }
@@ -1001,7 +1001,7 @@
     flex: 1;
   }
   .rule-type-badge {
-    font-size: 9px;
+    font-size: var(--fs-xxs);
     padding: 1px 5px;
     background: var(--bg-secondary);
     color: var(--text-tertiary);
@@ -1010,7 +1010,7 @@
     letter-spacing: var(--ht-label-spacing);
   }
   .rule-name {
-    font-size: 12px;
+    font-size: var(--fs-sm);
     font-weight: 600;
     color: var(--text-primary);
   }
@@ -1018,7 +1018,7 @@
     flex-shrink: 0;
   }
   .mode-toggle {
-    font-size: 9px;
+    font-size: var(--fs-xxs);
     padding: 2px 8px;
     border: 1px solid var(--border-secondary);
     cursor: pointer;
@@ -1055,7 +1055,7 @@
     color: var(--text-primary);
   }
   .rule-preview {
-    font-size: 11px;
+    font-size: var(--fs-xs);
     color: var(--text-tertiary);
     line-height: 1.4;
     transition: color var(--transition);
@@ -1075,7 +1075,7 @@
     padding: 4px 2px 8px;
   }
   .registry-title {
-    font-size: 11px;
+    font-size: var(--fs-xs);
     font-weight: 600;
     color: var(--text-tertiary);
     text-transform: uppercase;
@@ -1085,7 +1085,7 @@
   .registry-error {
     padding: 20px;
     text-align: center;
-    font-size: 12px;
+    font-size: var(--fs-sm);
     color: var(--text-tertiary);
   }
   .registry-error {
@@ -1116,13 +1116,13 @@
     gap: 6px;
   }
   .skill-name {
-    font-size: 12px;
+    font-size: var(--fs-sm);
     font-weight: 600;
     color: var(--text-primary);
     font-family: var(--font-mono);
   }
   .installed-badge {
-    font-size: 9px;
+    font-size: var(--fs-xxs);
     padding: 1px 5px;
     background: var(--accent-secondary);
     color: var(--bg-primary);
@@ -1131,13 +1131,13 @@
     font-weight: 700;
   }
   .skill-desc {
-    font-size: 11px;
+    font-size: var(--fs-xs);
     color: var(--text-secondary);
     margin: 0;
     line-height: 1.4;
   }
   .skill-compat {
-    font-size: 10px;
+    font-size: var(--fs-xxs);
     color: var(--text-tertiary);
     margin: 0;
     font-style: italic;

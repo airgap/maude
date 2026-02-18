@@ -540,7 +540,7 @@
     gap: 8px;
   }
   .modal-header h2 {
-    font-size: 16px;
+    font-size: var(--fs-lg);
     font-weight: 600;
   }
   .back-btn {
@@ -578,7 +578,7 @@
     gap: 12px;
   }
   .loading-state p {
-    font-size: 13px;
+    font-size: var(--fs-base);
     color: var(--text-secondary);
   }
   .spinner-large {
@@ -593,7 +593,7 @@
     padding: 40px 20px;
     text-align: center;
     color: var(--text-tertiary);
-    font-size: 13px;
+    font-size: var(--fs-base);
   }
 
   /* Filter bar */
@@ -605,7 +605,7 @@
   }
   .filter-chip {
     padding: 4px 12px;
-    font-size: 11px;
+    font-size: var(--fs-xs);
     border-radius: 12px;
     background: var(--bg-tertiary);
     color: var(--text-secondary);
@@ -627,7 +627,7 @@
   }
   .chip-icon {
     font-weight: 700;
-    font-size: 12px;
+    font-size: var(--fs-sm);
   }
 
   /* Template grid */
@@ -658,7 +658,7 @@
     margin-bottom: 6px;
   }
   .card-category {
-    font-size: 9px;
+    font-size: var(--fs-xxs);
     font-weight: 700;
     text-transform: uppercase;
     letter-spacing: 0.5px;
@@ -689,7 +689,7 @@
   }
 
   .built-in-badge {
-    font-size: 8px;
+    font-size: var(--fs-xxs);
     padding: 1px 5px;
     border-radius: 3px;
     background: var(--bg-tertiary);
@@ -699,7 +699,7 @@
     letter-spacing: 0.3px;
   }
   .card-delete {
-    font-size: 12px;
+    font-size: var(--fs-sm);
     padding: 0 4px;
     color: var(--text-tertiary);
     opacity: 0;
@@ -715,13 +715,13 @@
     color: var(--accent-error);
   }
   .card-title {
-    font-size: 13px;
+    font-size: var(--fs-base);
     font-weight: 600;
     color: var(--text-primary);
     margin-bottom: 4px;
   }
   .card-desc {
-    font-size: 11px;
+    font-size: var(--fs-xs);
     color: var(--text-secondary);
     line-height: 1.4;
     flex: 1;
@@ -733,12 +733,12 @@
     gap: 8px;
   }
   .criteria-count {
-    font-size: 10px;
+    font-size: var(--fs-xxs);
     color: var(--text-tertiary);
     font-weight: 600;
   }
   .priority-tag {
-    font-size: 9px;
+    font-size: var(--fs-xxs);
     font-weight: 600;
     padding: 1px 5px;
     border-radius: 3px;
@@ -774,13 +774,13 @@
     gap: 8px;
   }
   .preview-name {
-    font-size: 16px;
+    font-size: var(--fs-lg);
     font-weight: 600;
     color: var(--text-primary);
     margin: 0;
   }
   .preview-desc {
-    font-size: 12px;
+    font-size: var(--fs-sm);
     color: var(--text-secondary);
     line-height: 1.4;
     margin: 0;
@@ -791,14 +791,14 @@
     gap: 4px;
   }
   .preview-field label {
-    font-size: 10px;
+    font-size: var(--fs-xxs);
     font-weight: 600;
     color: var(--text-tertiary);
     text-transform: uppercase;
     letter-spacing: 0.3px;
   }
   .preview-value {
-    font-size: 12px;
+    font-size: var(--fs-sm);
     color: var(--text-primary);
     padding: 8px 10px;
     background: var(--bg-secondary);
@@ -821,7 +821,7 @@
     gap: 4px;
   }
   .ac-list li {
-    font-size: 12px;
+    font-size: var(--fs-sm);
     color: var(--text-primary);
     padding: 6px 10px;
     background: var(--bg-secondary);
@@ -840,7 +840,7 @@
     flex-wrap: wrap;
   }
   .tag {
-    font-size: 10px;
+    font-size: var(--fs-xxs);
     padding: 2px 8px;
     border-radius: 10px;
     background: var(--bg-tertiary);
@@ -855,7 +855,7 @@
     gap: 16px;
   }
   .use-intro {
-    font-size: 12px;
+    font-size: var(--fs-sm);
     color: var(--text-secondary);
     line-height: 1.4;
     margin: 0;
@@ -871,13 +871,13 @@
     gap: 3px;
   }
   .var-field label {
-    font-size: 11px;
+    font-size: var(--fs-xs);
     font-weight: 600;
     color: var(--text-secondary);
   }
   .var-field input {
     padding: 6px 10px;
-    font-size: 12px;
+    font-size: var(--fs-sm);
     background: var(--bg-tertiary);
     color: var(--text-primary);
     border: 1px solid var(--border-primary);
@@ -888,7 +888,7 @@
     outline: none;
   }
   .no-vars-hint {
-    font-size: 12px;
+    font-size: var(--fs-sm);
     color: var(--text-tertiary);
     font-style: italic;
   }
@@ -900,7 +900,7 @@
     gap: 8px;
   }
   .live-preview h4 {
-    font-size: 12px;
+    font-size: var(--fs-sm);
     font-weight: 600;
     color: var(--text-secondary);
     margin: 0;
@@ -926,7 +926,7 @@
     flex: 0 0 160px;
   }
   .form-field label {
-    font-size: 11px;
+    font-size: var(--fs-xs);
     font-weight: 600;
     color: var(--text-secondary);
   }
@@ -934,7 +934,7 @@
   .form-field select,
   .form-field textarea {
     padding: 6px 10px;
-    font-size: 12px;
+    font-size: var(--fs-sm);
     background: var(--bg-tertiary);
     color: var(--text-primary);
     border: 1px solid var(--border-primary);
@@ -944,7 +944,7 @@
   .form-field textarea {
     resize: vertical;
     font-family: var(--font-mono);
-    font-size: 11px;
+    font-size: var(--fs-xs);
     line-height: 1.5;
   }
   .form-field input:focus,
@@ -954,7 +954,7 @@
     outline: none;
   }
   .field-hint {
-    font-size: 10px;
+    font-size: var(--fs-xxs);
     color: var(--text-tertiary);
     font-style: italic;
   }
@@ -966,7 +966,7 @@
     border: 1px solid var(--accent-error);
     border-radius: var(--radius-sm);
     color: var(--accent-error);
-    font-size: 12px;
+    font-size: var(--fs-sm);
     margin-top: 12px;
   }
 
@@ -983,7 +983,7 @@
   }
   .btn-cancel {
     padding: 6px 16px;
-    font-size: 12px;
+    font-size: var(--fs-sm);
     border-radius: var(--radius-sm);
     background: var(--bg-tertiary);
     color: var(--text-secondary);
@@ -995,7 +995,7 @@
   }
   .btn-primary {
     padding: 6px 20px;
-    font-size: 12px;
+    font-size: var(--fs-sm);
     font-weight: 600;
     border-radius: var(--radius-sm);
     background: var(--accent-primary);
@@ -1011,7 +1011,7 @@
   }
   .btn-create-new {
     padding: 6px 16px;
-    font-size: 12px;
+    font-size: var(--fs-sm);
     font-weight: 600;
     border-radius: var(--radius-sm);
     background: var(--bg-secondary);
@@ -1023,7 +1023,7 @@
     background: var(--bg-active);
   }
   .no-prd-hint {
-    font-size: 11px;
+    font-size: var(--fs-xs);
     color: var(--text-tertiary);
     font-style: italic;
   }

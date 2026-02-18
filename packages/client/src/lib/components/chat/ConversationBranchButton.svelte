@@ -85,7 +85,7 @@
     background: transparent;
     color: var(--text-tertiary);
     cursor: pointer;
-    font-size: 14px;
+    font-size: var(--fs-md);
     line-height: 1;
     opacity: 0;
     transition:
@@ -116,7 +116,7 @@
     padding: 0 6px;
     opacity: 1;
     color: var(--text-secondary);
-    font-size: 11px;
+    font-size: var(--fs-xs);
   }
 
   .branch-btn.success {
@@ -124,7 +124,7 @@
     padding: 0 6px;
     opacity: 1;
     color: var(--accent, #4a9eff);
-    font-size: 11px;
+    font-size: var(--fs-xs);
   }
 
   .branch-label {

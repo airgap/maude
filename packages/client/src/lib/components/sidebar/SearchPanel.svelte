@@ -187,7 +187,7 @@
     padding: 4px 4px 8px;
   }
   .search-header h3 {
-    font-size: 13px;
+    font-size: var(--fs-base);
     font-weight: 600;
     margin: 0;
   }
@@ -199,7 +199,7 @@
   }
   .search-input {
     flex: 1;
-    font-size: 12px;
+    font-size: var(--fs-sm);
     padding: 6px 8px;
     background: var(--bg-input);
     border: 1px solid var(--border-primary);
@@ -212,7 +212,7 @@
   }
 
   .regex-toggle {
-    font-size: 11px;
+    font-size: var(--fs-xs);
     font-family: var(--font-family-mono, monospace);
     padding: 4px 8px;
     border: 1px solid var(--border-secondary);
@@ -234,7 +234,7 @@
 
   .search-status {
     padding: 12px 8px;
-    font-size: 12px;
+    font-size: var(--fs-sm);
     color: var(--text-tertiary);
     text-align: center;
   }
@@ -243,7 +243,7 @@
   }
 
   .search-summary {
-    font-size: 11px;
+    font-size: var(--fs-xs);
     color: var(--text-tertiary);
     padding: 2px 4px 6px;
   }
@@ -264,7 +264,7 @@
     gap: 6px;
     width: 100%;
     padding: 4px 6px;
-    font-size: 12px;
+    font-size: var(--fs-sm);
     font-weight: 600;
     color: var(--text-primary);
     text-align: left;
@@ -281,7 +281,7 @@
     white-space: nowrap;
   }
   .match-count {
-    font-size: 10px;
+    font-size: var(--fs-xxs);
     font-weight: 700;
     padding: 1px 6px;
     border-radius: 999px;
@@ -298,7 +298,7 @@
     gap: 8px;
     width: 100%;
     padding: 2px 6px;
-    font-size: 11px;
+    font-size: var(--fs-xs);
     text-align: left;
     color: var(--text-secondary);
     border-radius: var(--radius-sm);

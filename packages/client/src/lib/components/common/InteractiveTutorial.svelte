@@ -313,7 +313,7 @@
   }
 
   .step-number {
-    font-size: 11px;
+    font-size: var(--fs-xs);
     font-weight: 700;
     letter-spacing: 0.08em;
     text-transform: uppercase;
@@ -393,7 +393,7 @@
   }
 
   .step-title {
-    font-size: 20px;
+    font-size: var(--fs-2xl);
     font-weight: 700;
     color: var(--text-primary);
     margin: 0 0 4px;
@@ -401,19 +401,19 @@
   }
 
   .step-description {
-    font-size: 13px;
+    font-size: var(--fs-base);
     color: var(--text-secondary);
     margin: 0 0 14px;
     font-weight: 500;
   }
 
   .step-body {
-    font-size: 13px;
+    font-size: var(--fs-base);
     line-height: 1.6;
   }
 
   .step-body :global(h3) {
-    font-size: 11px;
+    font-size: var(--fs-xs);
     font-weight: 700;
     letter-spacing: 0.08em;
     text-transform: uppercase;
@@ -443,7 +443,7 @@
   }
   .step-body :global(code) {
     font-family: var(--font-mono, monospace);
-    font-size: 11px;
+    font-size: var(--fs-xs);
     background: var(--bg-tertiary);
     border: 1px solid var(--border-secondary);
     border-radius: 3px;
@@ -452,7 +452,7 @@
   }
   .step-body :global(kbd) {
     font-family: var(--font-mono, monospace);
-    font-size: 10px;
+    font-size: var(--fs-xxs);
     background: var(--bg-secondary);
     border: 1px solid var(--border-primary);
     border-bottom-width: 2px;
@@ -491,7 +491,7 @@
     align-items: center;
     gap: 6px;
     padding: 6px 12px;
-    font-size: 12px;
+    font-size: var(--fs-sm);
     font-weight: 600;
     color: var(--accent-primary);
     background: color-mix(in srgb, var(--accent-primary) 10%, transparent);
@@ -511,7 +511,7 @@
     align-items: center;
     gap: 6px;
     padding: 7px 14px;
-    font-size: 12px;
+    font-size: var(--fs-sm);
     font-weight: 600;
     border-radius: var(--radius-sm);
     transition: all var(--transition);
@@ -540,7 +540,7 @@
   }
 
   .skip-btn {
-    font-size: 11px;
+    font-size: var(--fs-xs);
     color: var(--text-tertiary);
     padding: 6px 10px;
     border-radius: var(--radius-sm);

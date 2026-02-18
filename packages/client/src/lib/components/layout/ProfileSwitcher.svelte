@@ -153,7 +153,7 @@
     align-items: center;
     gap: 5px;
     padding: 5px 10px;
-    font-size: 12px;
+    font-size: var(--fs-sm);
     font-weight: 600;
     letter-spacing: var(--ht-label-spacing);
     border-radius: var(--radius-sm);
@@ -215,7 +215,7 @@
   }
 
   .dropdown-header {
-    font-size: 10px;
+    font-size: var(--fs-xxs);
     font-weight: 700;
     letter-spacing: 0.1em;
     text-transform: uppercase;
@@ -260,12 +260,12 @@
   }
 
   .option-name {
-    font-size: 13px;
+    font-size: var(--fs-base);
     font-weight: 600;
   }
 
   .option-desc {
-    font-size: 11px;
+    font-size: var(--fs-xs);
     color: var(--text-tertiary);
     overflow: hidden;
     text-overflow: ellipsis;
@@ -295,7 +295,7 @@
     cursor: pointer;
     transition: background var(--transition);
     color: var(--text-secondary);
-    font-size: 12px;
+    font-size: var(--fs-sm);
     font-weight: 500;
     margin-bottom: 4px;
   }

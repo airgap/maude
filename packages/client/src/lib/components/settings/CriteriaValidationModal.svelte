@@ -111,18 +111,7 @@
     }
   }
 
-  function severityIcon(severity: string): string {
-    switch (severity) {
-      case 'error':
-        return '✗';
-      case 'warning':
-        return '⚠';
-      case 'info':
-        return 'ℹ';
-      default:
-        return '•';
-    }
-  }
+  // severityIcon is now rendered inline as SVGs in the template
 
   function categoryLabel(category: string): string {
     switch (category) {
@@ -284,9 +273,7 @@
                       ? 'var(--accent-secondary)'
                       : severityColor(criterion.issues[0]?.severity || 'warning')}
                   >
-                    {criterion.isValid
-                      ? '✓'
-                      : severityIcon(criterion.issues[0]?.severity || 'warning')}
+                    {#if criterion.isValid}<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12" /></svg>{:else}{@const sev = criterion.issues[0]?.severity || 'warning'}{#if sev === 'error'}<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>{:else if sev === 'warning'}<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" /><line x1="12" y1="9" x2="12" y2="13" /><line x1="12" y1="17" x2="12.01" y2="17" /></svg>{:else}<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10" /><line x1="12" y1="16" x2="12" y2="12" /><line x1="12" y1="8" x2="12.01" y2="8" /></svg>{/if}{/if}
                   </span>
                   <span class="criterion-text">{criterion.text}</span>
                 </div>
@@ -301,7 +288,7 @@
                       >
                         <div class="issue-header-row">
                           <span class="issue-severity" style:color={severityColor(issue.severity)}>
-                            {severityIcon(issue.severity)}
+                            {#if issue.severity === 'error'}<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>{:else if issue.severity === 'warning'}<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" /><line x1="12" y1="9" x2="12" y2="13" /><line x1="12" y1="17" x2="12.01" y2="17" /></svg>{:else}<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10" /><line x1="12" y1="16" x2="12" y2="12" /><line x1="12" y1="8" x2="12.01" y2="8" /></svg>{/if}
                           </span>
                           <span class="issue-category">{categoryLabel(issue.category)}</span>
                         </div>
@@ -324,7 +311,7 @@
                         class:active={acceptedSuggestions.has(criterion.index)}
                         onclick={() => toggleAcceptSuggestion(criterion.index)}
                       >
-                        {acceptedSuggestions.has(criterion.index) ? '✓ Accepted' : 'Accept'}
+                        {#if acceptedSuggestions.has(criterion.index)}<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" style="display:inline-block;vertical-align:middle;margin-right:3px"><polyline points="20 6 9 17 4 12" /></svg>Accepted{:else}Accept{/if}
                       </button>
                       {#if !criterion.isValid}
                         <button class="btn-override" onclick={() => startOverride(criterion.index)}>
@@ -435,7 +422,7 @@
     border-bottom: 1px solid var(--border-primary);
   }
   .modal-header h2 {
-    font-size: 16px;
+    font-size: var(--fs-lg);
     font-weight: 600;
   }
   .close-btn {
@@ -462,13 +449,13 @@
     gap: 12px;
   }
   .loading-state p {
-    font-size: 13px;
+    font-size: var(--fs-base);
     color: var(--text-secondary);
   }
   .loading-sub {
     font-style: italic;
     color: var(--text-tertiary) !important;
-    font-size: 12px !important;
+    font-size: var(--fs-sm) !important;
   }
   .spinner-large {
     width: 24px;
@@ -482,7 +469,7 @@
     padding: 40px 20px;
     text-align: center;
     color: var(--text-tertiary);
-    font-size: 13px;
+    font-size: var(--fs-base);
   }
 
   /* Story info */
@@ -492,12 +479,12 @@
     border-bottom: 1px solid var(--border-primary);
   }
   .story-title {
-    font-size: 14px;
+    font-size: var(--fs-md);
     font-weight: 600;
     color: var(--text-primary);
   }
   .story-desc {
-    font-size: 12px;
+    font-size: var(--fs-sm);
     color: var(--text-secondary);
     margin-top: 6px;
     line-height: 1.4;
@@ -518,7 +505,7 @@
     margin-bottom: 8px;
   }
   .score-label {
-    font-size: 12px;
+    font-size: var(--fs-sm);
     font-weight: 600;
     color: var(--text-secondary);
   }
@@ -528,11 +515,11 @@
     gap: 8px;
   }
   .score-value {
-    font-size: 16px;
+    font-size: var(--fs-lg);
     font-weight: 700;
   }
   .score-tag {
-    font-size: 9px;
+    font-size: var(--fs-xxs);
     font-weight: 700;
     text-transform: uppercase;
     letter-spacing: 0.5px;
@@ -553,7 +540,7 @@
     transition: width 0.5s ease;
   }
   .score-summary {
-    font-size: 12px;
+    font-size: var(--fs-sm);
     color: var(--text-secondary);
     line-height: 1.4;
     margin: 0;
@@ -564,7 +551,7 @@
     border-top: 1px solid var(--border-primary);
   }
   .issue-count {
-    font-size: 11px;
+    font-size: var(--fs-xs);
     font-weight: 600;
     color: var(--accent-warning, #e6a817);
   }
@@ -574,7 +561,7 @@
     margin-bottom: 12px;
   }
   .section-label {
-    font-size: 12px;
+    font-size: var(--fs-sm);
     font-weight: 600;
     color: var(--text-secondary);
     margin-bottom: 8px;
@@ -614,7 +601,7 @@
     margin-bottom: 4px;
   }
   .criterion-index {
-    font-size: 9px;
+    font-size: var(--fs-xxs);
     font-weight: 700;
     width: 18px;
     height: 18px;
@@ -627,12 +614,13 @@
     flex-shrink: 0;
   }
   .criterion-status-icon {
-    font-size: 12px;
+    display: flex;
+    align-items: center;
     flex-shrink: 0;
     margin-top: 1px;
   }
   .criterion-text {
-    font-size: 12px;
+    font-size: var(--fs-sm);
     color: var(--text-primary);
     line-height: 1.4;
     flex: 1;
@@ -658,11 +646,11 @@
     margin-bottom: 2px;
   }
   .issue-severity {
-    font-size: 11px;
-    font-weight: 700;
+    display: flex;
+    align-items: center;
   }
   .issue-category {
-    font-size: 9px;
+    font-size: var(--fs-xxs);
     font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 0.5px;
@@ -672,7 +660,7 @@
     border-radius: 2px;
   }
   .issue-message {
-    font-size: 11px;
+    font-size: var(--fs-xs);
     color: var(--text-secondary);
     line-height: 1.4;
     margin: 0;
@@ -690,14 +678,14 @@
     margin-bottom: 4px;
   }
   .suggestion-label {
-    font-size: 10px;
+    font-size: var(--fs-xxs);
     font-weight: 600;
     color: var(--accent-primary);
     text-transform: uppercase;
     letter-spacing: 0.3px;
   }
   .suggestion-text {
-    font-size: 12px;
+    font-size: var(--fs-sm);
     color: var(--text-primary);
     line-height: 1.4;
     font-style: italic;
@@ -708,7 +696,7 @@
     gap: 6px;
   }
   .btn-accept-suggestion {
-    font-size: 10px;
+    font-size: var(--fs-xxs);
     padding: 3px 10px;
     border-radius: 3px;
     background: var(--bg-tertiary);
@@ -729,7 +717,7 @@
     border-color: var(--accent-primary);
   }
   .btn-override {
-    font-size: 10px;
+    font-size: var(--fs-xxs);
     padding: 3px 10px;
     border-radius: 3px;
     background: transparent;
@@ -751,7 +739,7 @@
     border-radius: var(--radius-sm);
   }
   .override-label {
-    font-size: 11px;
+    font-size: var(--fs-xs);
     font-weight: 600;
     color: var(--text-secondary);
     display: block;
@@ -760,7 +748,7 @@
   .override-textarea {
     width: 100%;
     padding: 6px 8px;
-    font-size: 11px;
+    font-size: var(--fs-xs);
     font-family: var(--font-sans, inherit);
     background: var(--bg-primary);
     color: var(--text-primary);
@@ -780,7 +768,7 @@
     margin-top: 6px;
   }
   .btn-confirm-override {
-    font-size: 10px;
+    font-size: var(--fs-xxs);
     padding: 3px 10px;
     border-radius: 3px;
     background: var(--bg-secondary);
@@ -793,7 +781,7 @@
     background: var(--bg-hover);
   }
   .btn-cancel-override {
-    font-size: 10px;
+    font-size: var(--fs-xxs);
     padding: 3px 10px;
     border-radius: 3px;
     background: transparent;
@@ -808,10 +796,10 @@
     display: flex;
     align-items: center;
     gap: 8px;
-    font-size: 11px;
+    font-size: var(--fs-xs);
   }
   .override-badge {
-    font-size: 9px;
+    font-size: var(--fs-xxs);
     font-weight: 700;
     text-transform: uppercase;
     letter-spacing: 0.5px;
@@ -833,7 +821,7 @@
     border: 1px solid var(--accent-error);
     border-radius: var(--radius-sm);
     color: var(--accent-error);
-    font-size: 12px;
+    font-size: var(--fs-sm);
     margin-top: 12px;
   }
 
@@ -847,7 +835,7 @@
   }
   .btn-cancel {
     padding: 6px 16px;
-    font-size: 12px;
+    font-size: var(--fs-sm);
     border-radius: var(--radius-sm);
     background: var(--bg-tertiary);
     color: var(--text-secondary);
@@ -859,7 +847,7 @@
   }
   .btn-revalidate {
     padding: 6px 16px;
-    font-size: 12px;
+    font-size: var(--fs-sm);
     border-radius: var(--radius-sm);
     background: var(--bg-tertiary);
     color: var(--text-secondary);
@@ -873,7 +861,7 @@
   }
   .btn-apply {
     padding: 6px 20px;
-    font-size: 12px;
+    font-size: var(--fs-sm);
     font-weight: 600;
     border-radius: var(--radius-sm);
     background: var(--accent-primary);
