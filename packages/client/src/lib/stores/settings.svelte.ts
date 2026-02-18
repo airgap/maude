@@ -49,7 +49,7 @@ interface SettingsState {
   sendWithEnter: boolean;
   soundEnabled: boolean;
   soundVolume: number;
-  soundStyle: 'classic' | 'melodic' | 'whimsy' | 'slot-machine' | 'forest';
+  soundStyle: 'classic' | 'melodic' | 'whimsy' | 'slot-machine' | 'forest' | 'wind-chime';
   // Desktop notification settings
   notifyOnCompletion: boolean;
   notifyOnFailure: boolean;

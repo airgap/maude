@@ -926,14 +926,14 @@
           <div class="setting-group" class:muted={!settingsStore.soundEnabled}>
             <label class="setting-label">Sound style</label>
             <div class="sound-style-row">
-              {#each [{ value: 'melodic', label: 'Melodic', desc: 'Warm additive synthesis — marimba, vibraphone, bells' }, { value: 'classic', label: 'Classic', desc: 'Original oscillator chirps — the vintage E sound' }, { value: 'whimsy', label: 'Whimsy', desc: 'Music box, toy piano, kalimba & rubber-duck squeaks' }, { value: 'slot-machine', label: 'Slot Machine', desc: 'Casino coins, reel clicks, lever pulls & jackpot bells' }, { value: 'forest', label: 'Forest', desc: 'Wind chimes, wooden flutes, owl hoots & fairy sparkles' }] as opt}
+              {#each [{ value: 'melodic', label: 'Melodic', desc: 'Warm additive synthesis — marimba, vibraphone, bells' }, { value: 'classic', label: 'Classic', desc: 'Original oscillator chirps — the vintage E sound' }, { value: 'whimsy', label: 'Whimsy', desc: 'Music box, toy piano, kalimba & rubber-duck squeaks' }, { value: 'slot-machine', label: 'Slot Machine', desc: 'Casino coins, reel clicks, lever pulls & jackpot bells' }, { value: 'forest', label: 'Forest', desc: 'Woodland flutes, owl hoots, raindrops & fairy sparkles' }, { value: 'wind-chime', label: 'Wind Chime', desc: 'Shimmering tubes, crystal tinkles, bamboo knocks & bell chimes' }] as opt}
                 <button
                   class="sound-style-btn"
                   class:active={settingsStore.soundStyle === opt.value}
                   disabled={!settingsStore.soundEnabled}
                   onclick={() =>
                     settingsStore.update({
-                      soundStyle: opt.value as 'classic' | 'melodic' | 'whimsy' | 'slot-machine' | 'forest',
+                      soundStyle: opt.value as 'classic' | 'melodic' | 'whimsy' | 'slot-machine' | 'forest' | 'wind-chime',
                     })}
                 >
                   <span class="sound-style-name">{opt.label}</span>
