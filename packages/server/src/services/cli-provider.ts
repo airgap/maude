@@ -50,6 +50,14 @@ function resolveBinary(name: string): string {
  *   kiro-cli acp
  *   Communicates via JSON-RPC 2.0 over stdin/stdout for reliable structured output.
  *
+ * Gemini CLI (headless mode with stream-json output):
+ *   gemini -p <msg> --output-format stream-json --sandbox=off [flags...]
+ *   Uses Google's open-source Gemini CLI in headless/non-interactive mode.
+ *
+ * GitHub Copilot CLI (non-interactive mode):
+ *   copilot -p <msg> --format json --no-interactive [flags...]
+ *   Uses GitHub's Copilot CLI in programmatic non-interactive mode.
+ *
  * Bedrock & Ollama:
  *   No CLI — handled via direct API calls in bedrock-provider.ts and ollama-provider.ts
  */
@@ -57,6 +65,10 @@ export function buildCliCommand(provider: CliProvider, opts: CliSessionOpts): Cl
   switch (provider) {
     case 'kiro':
       return buildKiroCommand(opts);
+    case 'gemini-cli':
+      return buildGeminiCliCommand(opts);
+    case 'copilot':
+      return buildCopilotCommand(opts);
     case 'bedrock':
     case 'ollama':
       // Bedrock and Ollama use direct API calls, not CLI processes
@@ -123,4 +135,103 @@ function buildKiroCommand(opts: CliSessionOpts): CliCommand {
   }
 
   return { binary: resolveBinary('kiro-cli'), args };
+}
+
+/**
+ * Build the CLI command for Google Gemini CLI.
+ *
+ * Gemini CLI supports headless/non-interactive mode with structured JSON output.
+ * In headless mode, it runs without a TUI, accepting a prompt via -p flag
+ * and streaming results as newline-delimited JSON events.
+ *
+ * Docs: https://geminicli.com/docs/cli/headless/
+ *
+ * Flags:
+ *   -p <prompt>              Non-interactive prompt (headless mode trigger)
+ *   --output-format stream-json   Stream JSONL events (messages, tool calls, results)
+ *   --sandbox=off            Disable sandbox for full tool access (we manage our own)
+ *   --model <model>          Override the default model
+ *   --system-prompt <text>   Set a system instruction
+ *   --yolo                   Skip all confirmation prompts (auto-approve tools)
+ *   --mcp-config <path>      MCP server configuration file
+ *   -r <session>             Resume a previous session
+ */
+function buildGeminiCliCommand(opts: CliSessionOpts): CliCommand {
+  const args = ['--output-format', 'stream-json', '-p', opts.content];
+
+  // Disable Gemini's built-in sandbox — E manages its own sandboxing
+  args.push('--sandbox=off');
+
+  // Auto-approve all tool usage — E handles permission checks upstream
+  args.push('--yolo');
+
+  if (opts.resumeSessionId) args.push('-r', opts.resumeSessionId);
+  if (opts.model) args.push('--model', opts.model);
+  if (opts.systemPrompt) args.push('--system-prompt', opts.systemPrompt);
+  if (opts.mcpConfigPath) args.push('--mcp-config', opts.mcpConfigPath);
+
+  // Gemini CLI doesn't natively support these flags — they're handled
+  // through Gemini's settings.json or extensions instead.
+  if (opts.effort || opts.maxTurns != null || opts.maxBudgetUsd != null) {
+    console.warn(
+      '[gemini-cli] Options --effort, --max-turns, and --max-budget-usd are not natively supported by Gemini CLI. Configure these via Gemini settings.json or ignore.',
+    );
+  }
+
+  if (opts.allowedTools?.length || opts.disallowedTools?.length) {
+    console.warn(
+      '[gemini-cli] Tool allow/disallow lists are not natively supported by Gemini CLI. Tool permissions are managed by E.',
+    );
+  }
+
+  return { binary: resolveBinary('gemini'), args };
+}
+
+/**
+ * Build the CLI command for GitHub Copilot CLI.
+ *
+ * Copilot CLI supports non-interactive programmatic mode via -p/--prompt flag
+ * with JSON-formatted output for machine consumption.
+ *
+ * Docs: https://docs.github.com/en/copilot/how-tos/copilot-cli/use-copilot-cli
+ *
+ * Flags:
+ *   -p <prompt>           Non-interactive prompt
+ *   --format json         JSON output format
+ *   --no-interactive      Explicitly disable interactive mode
+ *   --model <model>       Override the default model (e.g. claude-sonnet-4.5, gpt-5)
+ *   --system-prompt <text>  Set a system instruction
+ *   --accept-all          Auto-approve all tool executions
+ *   --additional-mcp-config <path>  Additional MCP server configuration
+ *   -r <session>          Resume a previous session
+ */
+function buildCopilotCommand(opts: CliSessionOpts): CliCommand {
+  const args = ['--format', 'json', '--no-interactive', '-p', opts.content];
+
+  // Auto-approve all tool usage — E handles permission checks upstream
+  args.push('--accept-all');
+
+  if (opts.resumeSessionId) args.push('-r', opts.resumeSessionId);
+  if (opts.model) args.push('--model', opts.model);
+  if (opts.systemPrompt) args.push('--system-prompt', opts.systemPrompt);
+  if (opts.mcpConfigPath) args.push('--additional-mcp-config', opts.mcpConfigPath);
+
+  // Copilot CLI doesn't natively support budget/effort/turn limits.
+  if (opts.effort || opts.maxBudgetUsd != null) {
+    console.warn(
+      '[copilot] Options --effort and --max-budget-usd are not natively supported by Copilot CLI.',
+    );
+  }
+
+  if (opts.maxTurns != null) {
+    args.push('--max-turns', String(opts.maxTurns));
+  }
+
+  if (opts.allowedTools?.length || opts.disallowedTools?.length) {
+    console.warn(
+      '[copilot] Tool allow/disallow lists are not natively supported by Copilot CLI. Tool permissions are managed by E.',
+    );
+  }
+
+  return { binary: resolveBinary('copilot'), args };
 }

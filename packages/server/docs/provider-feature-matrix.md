@@ -6,24 +6,24 @@ Last Updated: 2026-02-18
 
 ## Feature Comparison
 
-| Feature                  | Claude CLI | Claude API | Kiro CLI | Bedrock | Ollama    |
-| ------------------------ | ---------- | ---------- | -------- | ------- | --------- |
-| **Text Generation**      | ✅         | ✅         | ✅       | ✅      | ✅        |
-| **Streaming**            | ✅         | ✅         | ✅       | ✅      | ✅        |
-| **Conversation History** | ✅         | ✅         | ✅       | ✅      | ✅        |
-| **System Prompts**       | ✅         | ✅         | ✅       | ✅      | ✅        |
-| **Tool Calling**         | ✅         | ✅         | ✅       | ✅      | ✅        |
-| **Tool Approval**        | ✅         | ❌         | ✅       | ✅      | ❌        |
-| **MCP Integration**      | ✅         | ❌         | ✅       | ✅      | ✅        |
-| **Vision/Images**        | ✅         | ✅         | ✅ (ACP) | ✅      | ✅        |
-| **Computer Use**         | ✅         | ❌         | ❌       | ❌      | ❌        |
-| **Session Resume**       | ✅         | ❌         | ✅       | ❌      | ❌        |
-| **Token Counting**       | ✅         | ✅         | ❌       | ✅      | ✅        |
-| **Cost Tracking**        | ✅         | ✅         | ❌       | ✅      | ✅ (Free) |
-| **Plan Mode**            | ✅         | ✅         | ✅       | ✅      | ✅        |
-| **Max Turns Limit**      | ✅         | ❌         | ❌       | ❌      | ❌        |
-| **Budget Limit**         | ✅         | ❌         | ❌       | ❌      | ❌        |
-| **Effort Settings**      | ✅         | ❌         | ❌       | ❌      | ❌        |
+| Feature                  | Claude CLI | Claude API | Kiro CLI | Gemini CLI | Copilot CLI | Bedrock | Ollama    |
+| ------------------------ | ---------- | ---------- | -------- | ---------- | ----------- | ------- | --------- |
+| **Text Generation**      | ✅         | ✅         | ✅       | ✅         | ✅          | ✅      | ✅        |
+| **Streaming**            | ✅         | ✅         | ✅       | ✅         | ✅          | ✅      | ✅        |
+| **Conversation History** | ✅         | ✅         | ✅       | ✅         | ✅          | ✅      | ✅        |
+| **System Prompts**       | ✅         | ✅         | ✅       | ✅         | ✅          | ✅      | ✅        |
+| **Tool Calling**         | ✅         | ✅         | ✅       | ✅         | ✅          | ✅      | ✅        |
+| **Tool Approval**        | ✅         | ❌         | ✅       | ❌         | ❌          | ✅      | ❌        |
+| **MCP Integration**      | ✅         | ❌         | ✅       | ✅         | ⚠️          | ✅      | ✅        |
+| **Vision/Images**        | ✅         | ✅         | ✅ (ACP) | ✅         | ✅          | ✅      | ✅        |
+| **Computer Use**         | ✅         | ❌         | ❌       | ❌         | ❌          | ❌      | ❌        |
+| **Session Resume**       | ✅         | ❌         | ✅       | ✅         | ✅          | ❌      | ❌        |
+| **Token Counting**       | ✅         | ✅         | ❌       | ✅         | ✅          | ✅      | ✅        |
+| **Cost Tracking**        | ✅         | ✅         | ❌       | ✅ (Free)  | ✅          | ✅      | ✅ (Free) |
+| **Plan Mode**            | ✅         | ✅         | ✅       | ✅         | ✅          | ✅      | ✅        |
+| **Max Turns Limit**      | ✅         | ❌         | ❌       | ❌         | ✅          | ❌      | ❌        |
+| **Budget Limit**         | ✅         | ❌         | ❌       | ❌         | ❌          | ❌      | ❌        |
+| **Effort Settings**      | ✅         | ❌         | ❌       | ❌         | ❌          | ❌      | ❌        |
 
 **Legend:**
 
@@ -59,6 +59,32 @@ Last Updated: 2026-02-18
 - **Vision/Images**: Yes - via ACP protocol (`promptCapabilities.image: true`)
 - **Authentication**: Kiro credentials
 
+### Gemini CLI
+
+- **Pros**: Free generous usage (60 req/min, 1000/day), open-source, extensions system, stream-json output
+- **Cons**: Requires Google account, newer ecosystem
+- **Best For**: Cost-conscious developers, Google ecosystem users, rapid prototyping
+- **Tool Calling**: ✅ Native tool support with extensions
+- **MCP Integration**: ✅ Via `--mcp-config` flag and Gemini extensions
+- **Vision/Images**: ✅ Multimodal support (Gemini 2.x models)
+- **Session Resume**: ✅ Via `-r` session flag
+- **Output Format**: stream-json (JSONL events: messages, tool calls, results)
+- **Authentication**: Google account (free tier) or API key
+- **Headless Mode**: `--output-format stream-json -p <prompt> --sandbox=off --yolo`
+
+### GitHub Copilot CLI
+
+- **Pros**: GitHub integration, multi-model support (Claude, GPT-5), custom agents, PR workflows
+- **Cons**: Requires Copilot subscription, MCP limited in non-interactive mode
+- **Best For**: GitHub-centric workflows, multi-model flexibility, PR/issue automation
+- **Tool Calling**: ✅ Agent mode with file editing and command execution
+- **MCP Integration**: ⚠️ Via `--additional-mcp-config` (limited in non-interactive mode)
+- **Vision/Images**: ✅ Multi-modal support
+- **Session Resume**: ✅ Via `-r` session flag
+- **Output Format**: `--format json --no-interactive`
+- **Authentication**: GitHub Copilot subscription (Individual, Business, or Enterprise)
+- **Models Available**: Claude Sonnet 4.5, Claude Sonnet 4, GPT-5, and more via `/model` command
+
 ### AWS Bedrock
 
 - **Pros**: AWS integration, enterprise compliance, regional deployment, tool calling, vision, MCP support
@@ -92,6 +118,17 @@ Last Updated: 2026-02-18
 ✅ MCP tools integration
 ✅ Tool approval flow
 ✅ Sandbox restrictions
+
+### CLI Providers (Gemini CLI, Copilot CLI)
+
+✅ Stream JSON / JSON output parsing
+✅ Non-interactive / headless mode
+✅ System prompt injection
+✅ Model selection
+✅ MCP configuration passthrough
+✅ Session resume
+⚠️ Tool approval flow (handled by E, not the CLI)
+⚠️ Budget/effort limits (not natively supported by all CLIs)
 
 ### Partially Implemented (Claude API)
 
@@ -132,6 +169,19 @@ Last Updated: 2026-02-18
 - ✅ Supports visual development workflows
 - ⚠️ Full implementation pending in E (ACP protocol integration needed)
 
+### Gemini CLI
+
+- ✅ Multi-modal support via Gemini 2.x models
+- ✅ Base64-encoded images in prompts
+- ✅ Vision/image analysis in headless mode
+- ✅ Extensions can provide additional image processing
+
+### GitHub Copilot CLI
+
+- ✅ Multi-modal support
+- ✅ Image analysis in non-interactive mode
+- ✅ Works with vision-capable models (GPT-5, Claude)
+
 ### Fully Implemented (Bedrock)
 
 - ✅ Base64-encoded images in messages
@@ -165,6 +215,22 @@ Last Updated: 2026-02-18
 - Configured per agent
 - Supports Claude models
 
+### Gemini CLI
+
+- gemini-2.5-pro (default, free tier)
+- gemini-2.5-flash
+- gemini-2.0-flash
+- gemini-2.0-flash-lite
+- All Gemini models accessible with Google account
+
+### GitHub Copilot CLI
+
+- claude-sonnet-4.5 (default)
+- claude-sonnet-4
+- gpt-5
+- Additional models via `/model` command
+- Model availability tied to Copilot subscription tier
+
 ### AWS Bedrock
 
 - anthropic.claude-3-opus-20240229-v1:0
@@ -180,23 +246,26 @@ Last Updated: 2026-02-18
 
 ## Performance Characteristics
 
-| Provider   | Latency    | Throughput | Cost     | Reliability |
-| ---------- | ---------- | ---------- | -------- | ----------- |
-| Claude CLI | Medium     | Medium     | API      | High        |
-| Claude API | Low        | High       | API      | Very High   |
-| Kiro CLI   | Medium     | Medium     | Variable | High        |
-| Bedrock    | Low-Medium | High       | AWS      | Very High   |
-| Ollama     | Low        | Variable   | Free     | Medium      |
+| Provider    | Latency    | Throughput | Cost        | Reliability |
+| ----------- | ---------- | ---------- | ----------- | ----------- |
+| Claude CLI  | Medium     | Medium     | API         | High        |
+| Claude API  | Low        | High       | API         | Very High   |
+| Kiro CLI    | Medium     | Medium     | Variable    | High        |
+| Gemini CLI  | Low        | High       | Free/API    | High        |
+| Copilot CLI | Low-Medium | Medium     | Subscription| High        |
+| Bedrock     | Low-Medium | High       | AWS         | Very High   |
+| Ollama      | Low        | Variable   | Free        | Medium      |
 
 ## Use Case Recommendations
 
 ### Development & Debugging
 
-**Recommended**: Claude CLI, Kiro CLI
+**Recommended**: Claude CLI, Kiro CLI, Copilot CLI
 
 - Full tool calling support
 - MCP integration
 - Local file access
+- Copilot CLI adds GitHub workflow integration
 
 ### Production API
 
@@ -224,12 +293,64 @@ Last Updated: 2026-02-18
 
 ### Cost-Conscious
 
-**Recommended**: Ollama (free) or Haiku models
+**Recommended**: Gemini CLI (free) or Ollama (free) or Haiku models
 
+- Gemini CLI: Free, generous usage limits (60 req/min, 1000/day) with Gemini 2.5 Pro
 - Ollama: Free, unlimited local usage
 - Claude Haiku: Cheapest API option ($0.25/$1.25 per M tokens)
 
+### GitHub-Centric Workflows
+
+**Recommended**: Copilot CLI
+
+- Native GitHub integration (PRs, issues, branches)
+- Multi-model flexibility
+- Custom agents and task delegation
+- Seamless `gh` CLI integration
+
 ## Migration Guide
+
+### From Claude CLI to Gemini CLI
+
+**Pros**:
+
+- Free generous usage (no API costs for personal accounts)
+- Open-source with extensions ecosystem
+- Similar CLI interface (stream-json output, -p flag)
+
+**Cons**:
+
+- Different model capabilities
+- Some flags not directly mapped
+- Newer, evolving ecosystem
+
+**Steps**:
+
+1. Install Gemini CLI: `npm install -g @anthropic-ai/gemini-cli` or via `brew`
+2. Authenticate with Google account
+3. Change CLI provider to `Gemini CLI` in Settings → General
+4. Tools and MCP config are passed through automatically
+
+### From Claude CLI to Copilot CLI
+
+**Pros**:
+
+- Multi-model support (Claude + GPT-5 in one CLI)
+- Deep GitHub integration for PR workflows
+- Custom agent support
+
+**Cons**:
+
+- Requires Copilot subscription
+- MCP support limited in non-interactive mode
+- Different output format (JSON vs stream-json)
+
+**Steps**:
+
+1. Install Copilot CLI: `gh extension install github/copilot-cli`
+2. Ensure active Copilot subscription
+3. Change CLI provider to `Copilot CLI` in Settings → General
+4. E handles format translation automatically
 
 ### From Claude CLI to Bedrock
 
@@ -303,6 +424,8 @@ Last Updated: 2026-02-18
 - [x] Ollama tool calling (model-dependent)
 - [x] Vision support for Bedrock and Ollama
 - [x] MCP integration for Bedrock and Ollama
+- [x] Gemini CLI integration (headless mode, stream-json)
+- [x] GitHub Copilot CLI integration (non-interactive, JSON output)
 
 ### Q2 2026
 
@@ -311,12 +434,16 @@ Last Updated: 2026-02-18
 - [ ] Persistent MCP server processes
 - [ ] MCP bidirectional communication
 - [ ] Image URLs (currently base64 only)
+- [ ] Full Gemini CLI extensions integration
+- [ ] Copilot CLI custom agents passthrough
 
 ### Q3 2026
 
 - [ ] Vertex AI integration
 - [ ] Azure OpenAI integration
 - [ ] Custom model endpoints
+- [ ] Aider CLI integration
+- [ ] OpenCode CLI integration
 
 ## Contributing
 
@@ -327,8 +454,10 @@ To add a new provider:
 3. Add routing in `src/routes/stream.ts`
 4. Add pricing in `src/services/cost-calculator.ts`
 5. Add to `CliProvider` type in `shared/settings.ts`
-6. Update documentation
-7. Add tests
+6. Add command builder in `src/services/cli-provider.ts`
+7. Add to UI in `SettingsModal.svelte`
+8. Update documentation
+9. Add tests
 
 See existing providers for reference implementations.
 
@@ -337,5 +466,9 @@ See existing providers for reference implementations.
 - [Claude API Documentation](https://docs.anthropic.com/claude/reference)
 - [AWS Bedrock Documentation](https://docs.aws.amazon.com/bedrock/)
 - [Kiro CLI Documentation](https://kiro.dev/docs/cli/)
+- [Gemini CLI Documentation](https://geminicli.com/docs/)
+- [Gemini CLI GitHub](https://github.com/google-gemini/gemini-cli)
+- [GitHub Copilot CLI](https://github.com/github/copilot-cli)
+- [GitHub Copilot CLI Docs](https://docs.github.com/en/copilot/how-tos/copilot-cli/use-copilot-cli)
 - [Ollama Documentation](https://ollama.com/docs)
 - [MCP Specification](https://modelcontextprotocol.io/)

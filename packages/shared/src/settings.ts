@@ -28,7 +28,7 @@ export type ThemeId =
   | 'goth'
   | (string & {});
 
-export type CliProvider = 'claude' | 'kiro' | 'ollama' | 'bedrock';
+export type CliProvider = 'claude' | 'kiro' | 'gemini-cli' | 'copilot' | 'ollama' | 'bedrock';
 
 export interface Settings {
   theme: ThemeId;

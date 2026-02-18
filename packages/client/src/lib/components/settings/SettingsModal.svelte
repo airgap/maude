@@ -18,9 +18,11 @@
   import { MONO_FONTS, SANS_FONTS, findFont } from '$lib/config/fonts';
   import { HYPERTHEMES } from '$lib/config/hyperthemes';
 
-  const cliProviders: { id: CliProvider; label: string; desc: string }[] = [
-    { id: 'claude', label: 'Claude Code', desc: 'Anthropic Claude CLI' },
-    { id: 'kiro', label: 'Kiro CLI', desc: 'AWS Kiro CLI' },
+  const cliProviders: { id: CliProvider; label: string; desc: string; icon: string }[] = [
+    { id: 'claude', label: 'Claude Code', desc: 'Anthropic Claude CLI', icon: '⚡' },
+    { id: 'kiro', label: 'Kiro CLI', desc: 'AWS Kiro CLI', icon: '☁️' },
+    { id: 'gemini-cli', label: 'Gemini CLI', desc: 'Google Gemini CLI', icon: '💎' },
+    { id: 'copilot', label: 'Copilot CLI', desc: 'GitHub Copilot CLI', icon: '🐙' },
   ];
 
   // Check if the profiles tab was requested via localStorage flag
@@ -531,13 +533,15 @@
         {#if activeTab === 'general'}
           <div class="setting-group">
             <label class="setting-label">CLI Provider</label>
-            <div class="provider-options">
+            <p class="setting-hint">Choose which coding agent CLI powers your sessions</p>
+            <div class="provider-grid">
               {#each cliProviders as p}
                 <button
                   class="provider-option"
                   class:active={settingsStore.cliProvider === p.id}
                   onclick={() => settingsStore.update({ cliProvider: p.id })}
                 >
+                  <span class="provider-icon">{p.icon}</span>
                   <span class="provider-name">{p.label}</span>
                   <span class="provider-desc">{p.desc}</span>
                 </button>
@@ -1737,26 +1741,34 @@
   }
 
   /* CLI Provider */
-  .provider-options {
-    display: flex;
+  .provider-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
     gap: 8px;
   }
   .provider-option {
-    flex: 1;
     display: flex;
     flex-direction: column;
+    align-items: flex-start;
     padding: 10px 12px;
     border: 1px solid var(--border-secondary);
     border-radius: var(--radius-sm);
     text-align: left;
     transition: all var(--transition);
+    cursor: pointer;
+    background: var(--bg-primary);
   }
   .provider-option:hover {
     border-color: var(--border-primary);
+    background: var(--bg-hover);
   }
   .provider-option.active {
     border-color: var(--accent-primary);
     background: var(--bg-active);
+  }
+  .provider-icon {
+    font-size: var(--fs-lg);
+    margin-bottom: 2px;
   }
   .provider-name {
     font-size: var(--fs-base);
@@ -1765,6 +1777,11 @@
   .provider-desc {
     font-size: var(--fs-xs);
     color: var(--text-tertiary);
+  }
+  .setting-hint {
+    font-size: var(--fs-xs);
+    color: var(--text-tertiary);
+    margin: 0 0 8px 0;
   }
 
   /* Permission modes */

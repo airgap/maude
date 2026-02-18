@@ -134,9 +134,165 @@ describe('buildCliCommand - kiro', () => {
   });
 });
 
+describe('buildCliCommand - gemini-cli', () => {
+  test('builds minimal gemini command', () => {
+    const { binary, args } = buildCliCommand('gemini-cli', { content: 'hello' });
+    expect(binary.endsWith('gemini')).toBe(true);
+    expect(args).toContain('--output-format');
+    expect(args).toContain('stream-json');
+    expect(args).toContain('-p');
+    expect(args).toContain('hello');
+    expect(args).toContain('--sandbox=off');
+    expect(args).toContain('--yolo');
+  });
+
+  test('includes model flag', () => {
+    const { args } = buildCliCommand('gemini-cli', {
+      content: 'hi',
+      model: 'gemini-2.5-pro',
+    });
+    expect(args).toContain('--model');
+    expect(args).toContain('gemini-2.5-pro');
+  });
+
+  test('includes system prompt', () => {
+    const { args } = buildCliCommand('gemini-cli', {
+      content: 'hi',
+      systemPrompt: 'be concise',
+    });
+    expect(args).toContain('--system-prompt');
+    expect(args).toContain('be concise');
+  });
+
+  test('includes resume session flag', () => {
+    const { args } = buildCliCommand('gemini-cli', {
+      content: 'hi',
+      resumeSessionId: 'sess-456',
+    });
+    expect(args).toContain('-r');
+    expect(args).toContain('sess-456');
+  });
+
+  test('includes mcp config path', () => {
+    const { args } = buildCliCommand('gemini-cli', {
+      content: 'hi',
+      mcpConfigPath: '/tmp/mcp.json',
+    });
+    expect(args).toContain('--mcp-config');
+    expect(args).toContain('/tmp/mcp.json');
+  });
+
+  test('does not include claude-specific flags', () => {
+    const { args } = buildCliCommand('gemini-cli', { content: 'test' });
+    expect(args).not.toContain('--verbose');
+    expect(args).not.toContain('--dangerously-skip-permissions');
+    expect(args).not.toContain('--allowedTools');
+    expect(args).not.toContain('--disallowedTools');
+  });
+
+  test('omits optional flags when not set', () => {
+    const { args } = buildCliCommand('gemini-cli', { content: 'test' });
+    expect(args).not.toContain('-r');
+    expect(args).not.toContain('--model');
+    expect(args).not.toContain('--system-prompt');
+    expect(args).not.toContain('--mcp-config');
+  });
+});
+
+describe('buildCliCommand - copilot', () => {
+  test('builds minimal copilot command', () => {
+    const { binary, args } = buildCliCommand('copilot', { content: 'hello' });
+    expect(binary.endsWith('copilot')).toBe(true);
+    expect(args).toContain('--format');
+    expect(args).toContain('json');
+    expect(args).toContain('--no-interactive');
+    expect(args).toContain('-p');
+    expect(args).toContain('hello');
+    expect(args).toContain('--accept-all');
+  });
+
+  test('includes model flag', () => {
+    const { args } = buildCliCommand('copilot', {
+      content: 'hi',
+      model: 'gpt-5',
+    });
+    expect(args).toContain('--model');
+    expect(args).toContain('gpt-5');
+  });
+
+  test('includes system prompt', () => {
+    const { args } = buildCliCommand('copilot', {
+      content: 'hi',
+      systemPrompt: 'be concise',
+    });
+    expect(args).toContain('--system-prompt');
+    expect(args).toContain('be concise');
+  });
+
+  test('includes resume session flag', () => {
+    const { args } = buildCliCommand('copilot', {
+      content: 'hi',
+      resumeSessionId: 'sess-789',
+    });
+    expect(args).toContain('-r');
+    expect(args).toContain('sess-789');
+  });
+
+  test('includes mcp config path via --additional-mcp-config', () => {
+    const { args } = buildCliCommand('copilot', {
+      content: 'hi',
+      mcpConfigPath: '/tmp/mcp.json',
+    });
+    expect(args).toContain('--additional-mcp-config');
+    expect(args).toContain('/tmp/mcp.json');
+  });
+
+  test('includes max turns', () => {
+    const { args } = buildCliCommand('copilot', {
+      content: 'hi',
+      maxTurns: 15,
+    });
+    expect(args).toContain('--max-turns');
+    expect(args).toContain('15');
+  });
+
+  test('does not include claude-specific flags', () => {
+    const { args } = buildCliCommand('copilot', { content: 'test' });
+    expect(args).not.toContain('--verbose');
+    expect(args).not.toContain('--dangerously-skip-permissions');
+    expect(args).not.toContain('--output-format');
+    expect(args).not.toContain('stream-json');
+    expect(args).not.toContain('--allowedTools');
+    expect(args).not.toContain('--disallowedTools');
+  });
+
+  test('omits optional flags when not set', () => {
+    const { args } = buildCliCommand('copilot', { content: 'test' });
+    expect(args).not.toContain('-r');
+    expect(args).not.toContain('--model');
+    expect(args).not.toContain('--system-prompt');
+    expect(args).not.toContain('--additional-mcp-config');
+    expect(args).not.toContain('--max-turns');
+  });
+});
+
 describe('buildCliCommand - default provider', () => {
   test('unknown provider falls back to claude', () => {
     const { binary } = buildCliCommand('claude', { content: 'test' });
     expect(binary.endsWith('claude')).toBe(true);
+  });
+});
+
+describe('buildCliCommand - API-only providers', () => {
+  test('bedrock throws error', () => {
+    expect(() => buildCliCommand('bedrock', { content: 'test' })).toThrow(
+      'bedrock provider does not use CLI commands',
+    );
+  });
+
+  test('ollama throws error', () => {
+    expect(() => buildCliCommand('ollama', { content: 'test' })).toThrow(
+      'ollama provider does not use CLI commands',
+    );
   });
 });
