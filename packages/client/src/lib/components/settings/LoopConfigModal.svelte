@@ -296,7 +296,7 @@
     <div class="modal-footer">
       <button class="btn-cancel" onclick={close}>Cancel</button>
       <button class="btn-start" onclick={startLoop}>
-        {depWarnings.length > 0 ? '▶ Start Loop (with warnings)' : '▶ Start Loop'}
+        {#if depWarnings.length > 0}<svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor" stroke="none"><polygon points="5 3 19 12 5 21 5 3" /></svg> Start Loop (with warnings){:else}<svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor" stroke="none"><polygon points="5 3 19 12 5 21 5 3" /></svg> Start Loop{/if}
       </button>
     </div>
   </div>

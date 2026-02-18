@@ -181,12 +181,12 @@
             <p>Share your Claude session with teammates — they can observe your conversation in real time (read-only) with a shareable URL.</p>
             <h3>Starting a pair session</h3>
             <ol>
-              <li>Click the <strong>👥</strong> Pair button in the chat input bar</li>
+              <li>Click the <strong>Pair</strong> button in the chat input bar</li>
               <li>A share URL is generated and copied to clipboard</li>
               <li>Send the URL to your teammate</li>
             </ol>
             <h3>Joining as an observer</h3>
-            <p>Open the shared URL in any E instance. A purple <strong>"👁 Observing [Name]'s session"</strong> banner appears — you'll see all messages stream in real time.</p>
+            <p>Open the shared URL in any E instance. A purple <strong>"Observing [Name]'s session"</strong> banner appears — you'll see all messages stream in real time.</p>
             <h3>Ending the session</h3>
             <p>Click <strong>Stop Sharing</strong> in the Pair button to close the room. All observers are disconnected.</p>
           `,
@@ -225,7 +225,7 @@
             <h3>Stories</h3>
             <p>Each PRD contains user stories. Stories have statuses: <code>backlog → in-progress → completed</code>. Stories from code comments can be auto-imported via the TODOs panel.</p>
             <h3>Loop integration</h3>
-            <p>The <strong>Loop</strong> feature runs Claude in an autonomous loop to implement stories one by one. Configure it with the ⚙ Loop Config modal.</p>
+            <p>The <strong>Loop</strong> feature runs Claude in an autonomous loop to implement stories one by one. Configure it with the Loop Config modal.</p>
           `,
         },
         {
@@ -308,9 +308,9 @@
             </ol>
             <h3>Contents</h3>
             <ul>
-              <li>📊 Stats — conversations, stories completed, commits, loops run</li>
-              <li>📝 Git Commits — message + author for the day</li>
-              <li>📄 Summary — pre-formatted markdown narrative</li>
+              <li><strong>Stats</strong> — conversations, stories completed, commits, loops run</li>
+              <li><strong>Git Commits</strong> — message + author for the day</li>
+              <li><strong>Summary</strong> — pre-formatted markdown narrative</li>
             </ul>
             <p>Click <strong>Copy</strong> to paste the digest into a standup, PR description, or daily notes.</p>
           `,
@@ -551,9 +551,9 @@
                 <tr><td>New line in message</td><td><kbd>Shift+Enter</kbd></td></tr>
                 <tr><td>Edit last message</td><td><kbd>↑</kbd> (when input empty)</td></tr>
                 <tr><td>Slash command menu</td><td><code>/</code> at start of input</td></tr>
-                <tr><td>Voice input</td><td>Click 🎤 button</td></tr>
-                <tr><td>Toggle Teach Mode</td><td>Click 🎓 button</td></tr>
-                <tr><td>Toggle Pair Mode</td><td>Click 👥 button</td></tr>
+                <tr><td>Voice input</td><td>Click microphone button</td></tr>
+                <tr><td>Toggle Teach Mode</td><td>Click graduation cap button</td></tr>
+                <tr><td>Toggle Pair Mode</td><td>Click pair button</td></tr>
               </tbody>
             </table>
           `,
@@ -584,7 +584,7 @@
           id: 'settings-overview',
           title: 'Settings Overview',
           body: `
-            <p>Open Settings with <kbd>Ctrl+,</kbd> or the ⚙ icon in the top-right corner. Settings are organized into tabs:</p>
+            <p>Open Settings with <kbd>Ctrl+,</kbd> or the gear icon in the top-right corner. Settings are organized into tabs:</p>
             <ul>
               <li><strong>General</strong> — Default model, workspace path, theme (hypertheme)</li>
               <li><strong>Claude</strong> — API key, custom system prompt, permission defaults</li>

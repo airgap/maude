@@ -103,6 +103,8 @@ function computeQuadrant(effortScore: number, valueScore: number): MatrixQuadran
   return 'low_priority'; // Low value, high effort
 }
 
+const SELECTED_PRD_KEY = 'e-selected-prd-id';
+
 function createLoopStore() {
   let activeLoop = $state<LoopState | null>(null);
   let prds = $state<PRD[]>([]);
@@ -425,6 +427,15 @@ function createLoopStore() {
     },
     setSelectedPrdId(id: string | null) {
       selectedPrdId = id;
+      try {
+        if (id) {
+          localStorage.setItem(SELECTED_PRD_KEY, id);
+        } else {
+          localStorage.removeItem(SELECTED_PRD_KEY);
+        }
+      } catch {
+        /* localStorage unavailable */
+      }
     },
     setLoading(v: boolean) {
       loading = v;
@@ -704,6 +715,33 @@ function createLoopStore() {
         const res = await api.prds.list(workspacePath);
         if (res.ok) {
           prds = res.data;
+          // Restore previously selected PRD from localStorage
+          if (!selectedPrdId) {
+            try {
+              const saved = localStorage.getItem(SELECTED_PRD_KEY);
+              if (saved) {
+                if (prds.some((p) => p.id === saved)) {
+                  selectedPrdId = saved;
+                  // Load the full PRD data
+                  this.loadPrd(saved);
+                  // Sync work panel filter (lazy import to avoid circular dep)
+                  import('../stores/work.svelte').then(({ workStore }) => {
+                    if (
+                      workStore.activeFilter === 'standalone' ||
+                      workStore.activeFilter === 'all'
+                    ) {
+                      workStore.setFilter(saved);
+                    }
+                  });
+                } else {
+                  // Saved PRD no longer exists — clean up
+                  localStorage.removeItem(SELECTED_PRD_KEY);
+                }
+              }
+            } catch {
+              /* localStorage unavailable */
+            }
+          }
         }
       } finally {
         loading = false;

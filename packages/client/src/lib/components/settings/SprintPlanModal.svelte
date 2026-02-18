@@ -233,7 +233,7 @@
                   ></div>
                 </div>
                 <button class="rationale-toggle" onclick={() => toggleRationale(sprintIdx)}>
-                  {showRationale === sprintIdx ? '▼' : '▶'} Rationale
+                  <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor" stroke="none" style="transform: rotate({showRationale === sprintIdx ? '90deg' : '0deg'}); transition: transform 0.15s ease"><polygon points="5 3 19 12 5 21 5 3" /></svg> Rationale
                 </button>
               </div>
 

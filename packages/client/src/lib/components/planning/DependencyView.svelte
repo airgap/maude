@@ -754,4 +754,11 @@
     background: rgba(239, 68, 68, 0.15);
     color: var(--accent-error);
   }
+
+  @keyframes dep-spin {
+    to { transform: rotate(360deg); }
+  }
+  .dep-spinner {
+    animation: dep-spin 0.8s linear infinite;
+  }
 </style>

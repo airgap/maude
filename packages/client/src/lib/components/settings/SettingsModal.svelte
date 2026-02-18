@@ -2180,8 +2180,9 @@
     flex: 1;
   }
   .volume-icon {
-    font-size: 14px;
-    line-height: 1;
+    display: flex;
+    align-items: center;
+    color: var(--text-tertiary);
     user-select: none;
   }
   .muted {
