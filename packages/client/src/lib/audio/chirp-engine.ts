@@ -654,29 +654,29 @@ const FOREST_TOOL_NOTES: Record<ToolFamily, ForestToolNotes> = {
 // ---------------------------------------------------------------------------
 
 /**
- * Tubular Chime — long resonant wind chime tube with warm sustain.
- * Bright fundamental with shimmering close-detuned partials that
- * create a beautiful beating/chorus effect, like a large wind chime.
+ * Tubular Chime — resonant wind chime tube with clear, open sustain.
+ * Bright fundamental with a gentle detuned shimmer that blooms then
+ * fades cleanly, like a struck tube ringing in open air.
  */
 const TUBULAR_CHIME: Overtone[] = [
-  { ratio: 1, gain: 1.0, decay: 3.2 },
-  { ratio: 1.06, gain: 0.65, decay: 2.8 },  // close detuning = slow shimmer
-  { ratio: 2.41, gain: 0.3, decay: 1.6 },
-  { ratio: 4.02, gain: 0.12, decay: 0.9 },
-  { ratio: 6.35, gain: 0.05, decay: 0.4 },
+  { ratio: 1, gain: 1.0, decay: 1.6 },
+  { ratio: 1.003, gain: 0.45, decay: 1.3 },  // very slight detuning = gentle shimmer
+  { ratio: 2.41, gain: 0.25, decay: 0.7 },
+  { ratio: 4.02, gain: 0.1, decay: 0.35 },
+  { ratio: 6.35, gain: 0.04, decay: 0.15 },
 ];
 
 /**
- * Crystal Chime — bright, thin, glass-like wind chime.
- * Higher partials dominate with rapid sparkling decay,
- * like tiny crystal prisms catching light and tinkling.
+ * Crystal Chime — bright, clear, glass-like wind chime.
+ * Clean fundamental with airy upper partials that sparkle
+ * and fade quickly, like a crystal prism catching sunlight.
  */
 const CRYSTAL_CHIME: Overtone[] = [
-  { ratio: 1, gain: 1.0, decay: 1.8 },
-  { ratio: 1.12, gain: 0.8, decay: 1.5 },   // close beating = fast sparkle
-  { ratio: 2.67, gain: 0.45, decay: 0.9 },
-  { ratio: 4.19, gain: 0.25, decay: 0.5 },
-  { ratio: 7.03, gain: 0.1, decay: 0.2 },
+  { ratio: 1, gain: 1.0, decay: 1.0 },
+  { ratio: 2.0, gain: 0.5, decay: 0.7 },     // pure octave = open, clean
+  { ratio: 3.0, gain: 0.3, decay: 0.45 },     // fifth above octave = bright
+  { ratio: 5.04, gain: 0.15, decay: 0.2 },
+  { ratio: 8.0, gain: 0.06, decay: 0.08 },
 ];
 
 /**
@@ -685,35 +685,35 @@ const CRYSTAL_CHIME: Overtone[] = [
  * creating a softer, warmer, more grounded tone. Like bamboo knocking.
  */
 const BAMBOO_CHIME: Overtone[] = [
-  { ratio: 1, gain: 1.0, decay: 0.9 },
-  { ratio: 1.04, gain: 0.5, decay: 0.7 },   // close detuning = woody beat
-  { ratio: 2.0, gain: 0.2, decay: 0.35 },
-  { ratio: 3.1, gain: 0.06, decay: 0.12 },
+  { ratio: 1, gain: 1.0, decay: 0.6 },
+  { ratio: 2.0, gain: 0.3, decay: 0.35 },    // clean octave = open woody ring
+  { ratio: 3.0, gain: 0.1, decay: 0.15 },
+  { ratio: 4.7, gain: 0.03, decay: 0.06 },
 ];
 
 /**
- * Bell Chime — rich bell-like wind chime with inharmonic partials.
- * Creates that characteristic struck-bell quality with long
- * sustain and complex beating patterns between close partials.
+ * Bell Chime — clear bell-like wind chime with gentle inharmonics.
+ * A clean struck-bell quality that rings openly then fades,
+ * with just enough harmonic complexity for warmth.
  */
 const BELL_CHIME: Overtone[] = [
-  { ratio: 1, gain: 1.0, decay: 3.6 },
-  { ratio: 1.18, gain: 0.6, decay: 3.0 },   // wide beat = bell wobble
-  { ratio: 2.0, gain: 0.4, decay: 2.0 },
-  { ratio: 2.83, gain: 0.25, decay: 1.2 },   // minor third partial = bell character
-  { ratio: 5.17, gain: 0.08, decay: 0.5 },
+  { ratio: 1, gain: 1.0, decay: 1.8 },
+  { ratio: 2.0, gain: 0.45, decay: 1.2 },    // clean octave = open bell ring
+  { ratio: 3.0, gain: 0.25, decay: 0.7 },     // twelfth = bright bell character
+  { ratio: 4.24, gain: 0.12, decay: 0.35 },   // mild inharmonic = bell colour
+  { ratio: 6.0, gain: 0.05, decay: 0.15 },
 ];
 
 /**
  * Tinkle Chime — very small, high, delicate chime.
- * Rapid decay with bright, thin partials. Like the tiniest
- * metal tubes barely kissing in a gentle breeze.
+ * Quick, clean attack with airy upper partials that vanish fast.
+ * Like a tiny glass bead tapped in a breeze.
  */
 const TINKLE_CHIME: Overtone[] = [
-  { ratio: 1, gain: 1.0, decay: 0.5 },
-  { ratio: 1.1, gain: 0.7, decay: 0.4 },
-  { ratio: 2.52, gain: 0.3, decay: 0.15 },
-  { ratio: 4.88, gain: 0.1, decay: 0.06 },
+  { ratio: 1, gain: 1.0, decay: 0.35 },
+  { ratio: 2.0, gain: 0.5, decay: 0.2 },      // clean octave
+  { ratio: 4.0, gain: 0.2, decay: 0.08 },
+  { ratio: 7.0, gain: 0.06, decay: 0.03 },
 ];
 
 // Wind Chime scale — F Lydian (bright, dreamy, floating, ethereal)
@@ -752,13 +752,13 @@ const CHIME_NOTES = {
 
 // Event → wind chime note specs
 const WIND_CHIME_EVENT_NOTES: Record<ChirpEvent, NoteSpec | NoteSpec[]> = {
-  // Tubular chime greeting — F5, warm resonant hello
+  // Tubular chime greeting — F5, clear open hello
   message_start: {
     freq: CHIME_NOTES.F5,
     partials: TUBULAR_CHIME,
-    attack: 0.006,
-    release: 0.2,
-    gain: 0.28,
+    attack: 0.005,
+    release: 0.12,
+    gain: 0.26,
   },
 
   // Crystal tinkle — A5, bright sparkle
@@ -779,13 +779,13 @@ const WIND_CHIME_EVENT_NOTES: Record<ChirpEvent, NoteSpec | NoteSpec[]> = {
     gain: 0.0,
   },
 
-  // Deep bell chime contemplation — F2, resonant and thoughtful
+  // Bell chime contemplation — F3, warm and open
   thinking_start: {
-    freq: CHIME_NOTES.F2,
+    freq: CHIME_NOTES.F3,
     partials: BELL_CHIME,
-    attack: 0.04,
-    release: 0.7,
-    gain: 0.26,
+    attack: 0.03,
+    release: 0.35,
+    gain: 0.24,
   },
 
   // Bamboo knock — C4, purposeful wooden tap
@@ -797,27 +797,27 @@ const WIND_CHIME_EVENT_NOTES: Record<ChirpEvent, NoteSpec | NoteSpec[]> = {
     gain: 0.22,
   },
 
-  // Twin crystal chimes — A4 + F5 (lydian bright sixth)
+  // Twin crystal chimes — A4 + F5 (open sixth)
   tool_result_ok: [
-    { freq: CHIME_NOTES.A4, partials: CRYSTAL_CHIME, attack: 0.004, release: 0.16, gain: 0.24 },
-    { freq: CHIME_NOTES.F5, partials: CRYSTAL_CHIME, attack: 0.004, release: 0.16, gain: 0.16 },
+    { freq: CHIME_NOTES.A4, partials: CRYSTAL_CHIME, attack: 0.003, release: 0.1, gain: 0.22 },
+    { freq: CHIME_NOTES.F5, partials: CRYSTAL_CHIME, attack: 0.003, release: 0.1, gain: 0.14 },
   ],
 
-  // Dissonant bamboo clunk — B4, out of lydian comfort
+  // Muted bamboo tap — C4, soft low signal
   tool_result_error: {
-    freq: CHIME_NOTES.B3,
+    freq: CHIME_NOTES.C4,
     partials: BAMBOO_CHIME,
-    attack: 0.003,
-    release: 0.14,
-    gain: 0.26,
+    attack: 0.002,
+    release: 0.08,
+    gain: 0.22,
   },
 
   // Cascading crystal fanfare — F5 + A5 + C6 + F6
   tool_approval: [
-    { freq: CHIME_NOTES.F5, partials: CRYSTAL_CHIME, attack: 0.006, release: 0.7, gain: 0.26 },
-    { freq: CHIME_NOTES.A5, partials: CRYSTAL_CHIME, attack: 0.006, release: 0.7, gain: 0.2 },
-    { freq: CHIME_NOTES.C6, partials: CRYSTAL_CHIME, attack: 0.006, release: 0.7, gain: 0.14 },
-    { freq: CHIME_NOTES.F6, partials: CRYSTAL_CHIME, attack: 0.006, release: 0.7, gain: 0.08 },
+    { freq: CHIME_NOTES.F5, partials: CRYSTAL_CHIME, attack: 0.005, release: 0.3, gain: 0.24 },
+    { freq: CHIME_NOTES.A5, partials: CRYSTAL_CHIME, attack: 0.005, release: 0.3, gain: 0.18 },
+    { freq: CHIME_NOTES.C6, partials: CRYSTAL_CHIME, attack: 0.005, release: 0.3, gain: 0.12 },
+    { freq: CHIME_NOTES.F6, partials: CRYSTAL_CHIME, attack: 0.005, release: 0.3, gain: 0.07 },
   ],
 
   // user_question → playWindChimeQuestion() — sentinel
@@ -829,23 +829,23 @@ const WIND_CHIME_EVENT_NOTES: Record<ChirpEvent, NoteSpec | NoteSpec[]> = {
     gain: 0.0,
   },
 
-  // Warm landing — F4 + A4 + F5 tubular resolution
+  // Open landing — F4 + A4 + F5 tubular resolution
   message_stop: [
-    { freq: CHIME_NOTES.F4, partials: TUBULAR_CHIME, attack: 0.008, release: 0.45, gain: 0.26 },
-    { freq: CHIME_NOTES.A4, partials: TUBULAR_CHIME, attack: 0.008, release: 0.45, gain: 0.2 },
-    { freq: CHIME_NOTES.F5, partials: TUBULAR_CHIME, attack: 0.008, release: 0.45, gain: 0.14 },
+    { freq: CHIME_NOTES.F4, partials: TUBULAR_CHIME, attack: 0.006, release: 0.2, gain: 0.24 },
+    { freq: CHIME_NOTES.A4, partials: TUBULAR_CHIME, attack: 0.006, release: 0.2, gain: 0.18 },
+    { freq: CHIME_NOTES.F5, partials: TUBULAR_CHIME, attack: 0.006, release: 0.2, gain: 0.12 },
   ],
 
-  // Falling dissonance — E5 then B3, descending bell chimes
+  // Gentle descending bell — F5 → C4, soft falling interval
   error: [
-    { freq: CHIME_NOTES.E5, partials: BELL_CHIME, attack: 0.004, release: 0.22, gain: 0.28 },
-    { freq: CHIME_NOTES.B3, partials: BELL_CHIME, attack: 0.004, release: 0.22, gain: 0.2 },
+    { freq: CHIME_NOTES.F5, partials: BELL_CHIME, attack: 0.004, release: 0.18, gain: 0.24 },
+    { freq: CHIME_NOTES.C4, partials: BELL_CHIME, attack: 0.004, release: 0.18, gain: 0.16 },
   ],
 
   // Fading breeze — G5 → F5, gentle descending tinkle
   cancelled: [
-    { freq: CHIME_NOTES.G5, partials: TINKLE_CHIME, attack: 0.006, release: 0.3, gain: 0.2 },
-    { freq: CHIME_NOTES.F5, partials: TINKLE_CHIME, attack: 0.006, release: 0.4, gain: 0.14 },
+    { freq: CHIME_NOTES.G5, partials: TINKLE_CHIME, attack: 0.004, release: 0.12, gain: 0.18 },
+    { freq: CHIME_NOTES.F5, partials: TINKLE_CHIME, attack: 0.004, release: 0.15, gain: 0.12 },
   ],
 };
 
@@ -871,28 +871,28 @@ const WIND_CHIME_TOOL_NOTES: Record<ToolFamily, WindChimeToolNotes> = {
       { freq: CHIME_NOTES.A5, partials: TINKLE_CHIME, attack: 0.003, release: 0.14, gain: 0.12 },
     ],
   },
-  // Write — mid tubular chime, engraving with resonance
+  // Write — mid tubular chime, clean engraving
   write: {
-    start: { freq: CHIME_NOTES.F4, partials: TUBULAR_CHIME, attack: 0.006, release: 0.14, gain: 0.24 },
+    start: { freq: CHIME_NOTES.F4, partials: TUBULAR_CHIME, attack: 0.005, release: 0.1, gain: 0.22 },
     ok: [
-      { freq: CHIME_NOTES.C5, partials: TUBULAR_CHIME, attack: 0.006, release: 0.18, gain: 0.22 },
-      { freq: CHIME_NOTES.F5, partials: TUBULAR_CHIME, attack: 0.006, release: 0.18, gain: 0.14 },
+      { freq: CHIME_NOTES.C5, partials: TUBULAR_CHIME, attack: 0.005, release: 0.12, gain: 0.2 },
+      { freq: CHIME_NOTES.F5, partials: TUBULAR_CHIME, attack: 0.005, release: 0.12, gain: 0.12 },
     ],
   },
   // Search — crystal chime sweep, sparkling discovery
   search: {
-    start: { freq: CHIME_NOTES.F5, partials: CRYSTAL_CHIME, attack: 0.01, release: 0.2, gain: 0.2 },
+    start: { freq: CHIME_NOTES.F5, partials: CRYSTAL_CHIME, attack: 0.005, release: 0.12, gain: 0.2 },
     ok: [
-      { freq: CHIME_NOTES.C5, partials: CRYSTAL_CHIME, attack: 0.005, release: 0.18, gain: 0.2 },
-      { freq: CHIME_NOTES.F5, partials: CRYSTAL_CHIME, attack: 0.005, release: 0.18, gain: 0.12 },
+      { freq: CHIME_NOTES.C5, partials: CRYSTAL_CHIME, attack: 0.004, release: 0.1, gain: 0.2 },
+      { freq: CHIME_NOTES.F5, partials: CRYSTAL_CHIME, attack: 0.004, release: 0.1, gain: 0.12 },
     ],
   },
-  // Agent — deep bell chime, awakening with resonance
+  // Agent — bell chime, clear awakening
   agent: {
-    start: { freq: CHIME_NOTES.F3, partials: BELL_CHIME, attack: 0.02, release: 0.55, gain: 0.26 },
+    start: { freq: CHIME_NOTES.F3, partials: BELL_CHIME, attack: 0.015, release: 0.25, gain: 0.24 },
     ok: [
-      { freq: CHIME_NOTES.C4, partials: BELL_CHIME, attack: 0.015, release: 0.45, gain: 0.24 },
-      { freq: CHIME_NOTES.F4, partials: BELL_CHIME, attack: 0.015, release: 0.45, gain: 0.16 },
+      { freq: CHIME_NOTES.C4, partials: BELL_CHIME, attack: 0.01, release: 0.2, gain: 0.22 },
+      { freq: CHIME_NOTES.F4, partials: BELL_CHIME, attack: 0.01, release: 0.2, gain: 0.14 },
     ],
   },
   // Default — bamboo tap F4
@@ -1761,30 +1761,31 @@ export class ChirpEngine {
 
   /**
    * Wind chime breeze — replaces text_delta in wind-chime mode.
-   * A gentle, airy shimmer: soft filtered noise shaped like
-   * a light breeze stirring tiny chime tubes, with a delicate
-   * high-frequency tinkle overtone.
+   * A gentle, airy shimmer: soft high-passed noise shaped like
+   * a light breeze, with a delicate high-frequency tinkle overtone.
+   * Uses a higher centre frequency and wider band for a more open,
+   * spacious airiness rather than a tight hiss.
    */
   private playWindChimeBreeze(): void {
     const ctx = this.ensureContext();
     const master = this.masterGain!;
     const now = ctx.currentTime;
     const buf = this.makeNoiseBuffer(ctx);
-    const dur = 0.055;
+    const dur = 0.04;
 
-    // Airy breeze: broad bandpass around 2.4 kHz, very soft
+    // Airy breeze: higher bandpass at 3.2 kHz, very wide = spacious air
     const src = ctx.createBufferSource();
     src.buffer = buf;
 
     const bp = ctx.createBiquadFilter();
     bp.type = 'bandpass';
-    bp.frequency.value = 2400;
-    bp.Q.value = 0.8; // very wide band = gentle breeze
+    bp.frequency.value = 3200;
+    bp.Q.value = 0.5; // very wide band = open, spacious breeze
 
     const env = ctx.createGain();
     env.gain.setValueAtTime(0, now);
-    env.gain.linearRampToValueAtTime(0.12, now + 0.01); // gentle onset
-    env.gain.setTargetAtTime(0.0001, now + 0.01, 0.025);
+    env.gain.linearRampToValueAtTime(0.08, now + 0.006); // soft onset
+    env.gain.setTargetAtTime(0.0001, now + 0.006, 0.015);
 
     src.connect(bp);
     bp.connect(env);
@@ -1792,14 +1793,14 @@ export class ChirpEngine {
     src.start(now);
     src.stop(now + dur + 0.01);
 
-    // Add a tiny tinkle chime overtone for sparkle
+    // Add a tiny pure tinkle overtone for sparkle
     const tinkle = ctx.createOscillator();
     const tinkleEnv = ctx.createGain();
     tinkle.type = 'sine';
     tinkle.frequency.setValueAtTime(CHIME_NOTES.F6, now);
     tinkleEnv.gain.setValueAtTime(0, now);
-    tinkleEnv.gain.linearRampToValueAtTime(0.035, now + 0.005);
-    tinkleEnv.gain.setTargetAtTime(0.0001, now + 0.005, 0.018);
+    tinkleEnv.gain.linearRampToValueAtTime(0.025, now + 0.003);
+    tinkleEnv.gain.setTargetAtTime(0.0001, now + 0.003, 0.012);
     tinkle.connect(tinkleEnv);
     tinkleEnv.connect(master);
     tinkle.start(now);
@@ -1808,8 +1809,8 @@ export class ChirpEngine {
 
   /**
    * Wind chime question — ascending crystal chime tones.
-   * Three brightening chime strikes with the last bending upward,
-   * like wind chimes stirred by a questioning gust.
+   * Three brightening chime strikes (F5 → A5 → C6 bend up),
+   * using consonant intervals for a clean, open rising question.
    */
   private playWindChimeQuestion(): void {
     const ctx = this.ensureContext();
@@ -1828,20 +1829,20 @@ export class ChirpEngine {
         }
         env.gain.setValueAtTime(0, now + startT);
         env.gain.linearRampToValueAtTime(peakGain, now + startT + 0.003);
-        env.gain.setTargetAtTime(0.0001, now + startT + 0.003, ot.decay * 0.4);
+        env.gain.setTargetAtTime(0.0001, now + startT + 0.003, ot.decay * 0.35);
         env.gain.setValueAtTime(0.0001, now + startT + dur);
-        env.gain.linearRampToValueAtTime(0, now + startT + dur + 0.06);
+        env.gain.linearRampToValueAtTime(0, now + startT + dur + 0.04);
         osc.connect(env);
         env.connect(master);
         osc.start(now + startT);
-        osc.stop(now + startT + dur + 0.1);
+        osc.stop(now + startT + dur + 0.08);
       }
     };
 
     //                start  fA                  fB                  dur   gain
-    chimeStrike(0.0,   CHIME_NOTES.C5, CHIME_NOTES.C5, 0.08, 0.22);
-    chimeStrike(0.1,   CHIME_NOTES.E5, CHIME_NOTES.E5, 0.08, 0.24);
-    chimeStrike(0.21,  CHIME_NOTES.F5, CHIME_NOTES.A5, 0.28, 0.3); // bends up — the "?"
+    chimeStrike(0.0,   CHIME_NOTES.F5, CHIME_NOTES.F5, 0.07, 0.2);
+    chimeStrike(0.09,  CHIME_NOTES.A5, CHIME_NOTES.A5, 0.07, 0.22);
+    chimeStrike(0.19,  CHIME_NOTES.C6, CHIME_NOTES.F6, 0.22, 0.26); // bends up — the "?"
   }
 
   toolStart(name: string) {
