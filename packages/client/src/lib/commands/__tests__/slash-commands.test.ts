@@ -39,7 +39,7 @@ vi.mock('$lib/stores/ui.svelte', () => ({
     setSidebarTab: vi.fn(),
     setSidebarOpen: vi.fn(),
     openSettings: vi.fn(),
-    openMcpManager: vi.fn(),
+    closeModal: vi.fn(),
   },
 }));
 
@@ -214,10 +214,11 @@ describe('executeSlashCommand', () => {
     );
   });
 
-  test('/mcp opens MCP manager', () => {
+  test('/mcp opens MCP sidebar panel', () => {
     const result = executeSlashCommand('mcp', ctx);
     expect(result.handled).toBe(true);
-    expect(uiStore.openMcpManager).toHaveBeenCalled();
+    expect(uiStore.closeModal).toHaveBeenCalled();
+    expect(uiStore.setSidebarTab).toHaveBeenCalledWith('mcp');
   });
 
   test('/compact returns sendAsMessage', () => {

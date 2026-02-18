@@ -23,7 +23,6 @@ export type SidebarTab =
 type ModalId =
   | 'settings'
   | 'command-palette'
-  | 'mcp-manager'
   | 'keybindings'
   | 'quick-open'
   | 'workspace-setup'
@@ -120,10 +119,6 @@ function createUIStore() {
     openSettings() {
       activeModal = 'settings';
     },
-    openMcpManager() {
-      activeModal = 'mcp-manager';
-    },
-
     toast(
       message: string,
       type: 'info' | 'success' | 'error' | 'warning' = 'info',

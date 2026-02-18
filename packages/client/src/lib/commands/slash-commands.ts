@@ -198,7 +198,8 @@ const commands: SlashCommand[] = [
     name: 'mcp',
     description: 'Manage MCP servers',
     execute: () => {
-      uiStore.openMcpManager();
+      uiStore.closeModal();
+      uiStore.setSidebarTab('mcp');
       return { handled: true };
     },
   },

@@ -1331,7 +1331,7 @@
               MCP servers can be configured to extend Claude's capabilities with custom tools and
               resources.
             </p>
-            <button class="btn-primary" onclick={() => uiStore.openModal('mcp-manager')}
+            <button class="btn-primary" onclick={() => { uiStore.closeModal(); uiStore.setSidebarTab('mcp'); }}
               >Manage MCP Servers</button
             >
           </div>

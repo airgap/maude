@@ -125,7 +125,8 @@
       label: 'Manage MCP Servers',
       category: 'Settings',
       action: () => {
-        uiStore.openModal('mcp-manager');
+        uiStore.closeModal();
+        uiStore.setSidebarTab('mcp');
       },
     },
     {
