@@ -40,7 +40,7 @@
     return result;
   }
 
-  let allSymbols = $derived(() => {
+  let allSymbols = $derived.by(() => {
     const items: SymbolItem[] = [];
     for (const [fileId, syms] of symbolStore.symbolsByFile) {
       const tab = editorStore.tabs.find((t) => t.id === fileId);
@@ -53,12 +53,12 @@
 
   let filtered = $derived(
     searchQuery.trim()
-      ? allSymbols().filter(
+      ? allSymbols.filter(
           (s) =>
             s.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
             s.kind.toLowerCase().includes(searchQuery.toLowerCase()),
         )
-      : allSymbols(),
+      : allSymbols,
   );
 
   function kindIcon(kind: string): string {
@@ -111,7 +111,7 @@
   <div class="picker-list">
     {#if filtered.length === 0}
       <div class="picker-empty">
-        {allSymbols().length === 0 ? 'No symbols parsed yet — open a file in the editor first' : 'No symbols match'}
+        {allSymbols.length === 0 ? 'No symbols parsed yet — open a file in the editor first' : 'No symbols match'}
       </div>
     {:else}
       {#each filtered as sym, i}

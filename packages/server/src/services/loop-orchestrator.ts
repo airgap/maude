@@ -36,13 +36,34 @@ class LoopOrchestrator {
       this.runners.delete(loopId);
     });
 
-    // On startup, fix any DB loops stuck as 'running' from a previous server crash
+    // On startup, fix any DB state stuck from a previous server crash
     try {
       const db = getDb();
-      const zombies = db.query("SELECT id FROM loops WHERE status = 'running'").all() as any[];
-      for (const z of zombies) {
-        db.query("UPDATE loops SET status = 'failed', completed_at = ? WHERE id = ?").run(Date.now(), z.id);
+      const now = Date.now();
+
+      // 1. Recover zombie loops (running or paused with no in-memory runner)
+      const zombieLoops = db
+        .query("SELECT id FROM loops WHERE status IN ('running', 'paused')")
+        .all() as any[];
+      for (const z of zombieLoops) {
+        db.query('UPDATE loops SET status = ?, completed_at = ? WHERE id = ?').run(
+          'failed',
+          now,
+          z.id,
+        );
         console.log(`[loop] Recovered zombie loop ${z.id} → failed`);
+      }
+
+      // 2. Reset any stories stuck as 'in_progress' back to 'pending' so they
+      //    can be retried when a new loop starts. Without this, the story stays
+      //    in_progress forever after a server crash mid-execution.
+      if (zombieLoops.length > 0) {
+        const reset = db
+          .query("UPDATE prd_stories SET status = 'pending', updated_at = ? WHERE status = 'in_progress'")
+          .run(now);
+        if (reset.changes > 0) {
+          console.log(`[loop] Reset ${reset.changes} in_progress stories → pending`);
+        }
       }
     } catch {
       /* DB may not be ready yet */
@@ -248,6 +269,7 @@ class LoopRunner {
         if (allCompleted) {
           this.updateLoopDb({ status: 'completed', completed_at: Date.now() });
           this.emitEvent('completed', { message: 'All stories completed!' });
+          this.events.emit('loop_done', this.loopId);
           return;
         }
 
@@ -256,6 +278,7 @@ class LoopRunner {
         this.emitEvent('completed', {
           message: 'No more eligible stories. Some stories could not be completed.',
         });
+        this.events.emit('loop_done', this.loopId);
         return;
       }
 
@@ -483,7 +506,9 @@ class LoopRunner {
 
         // Check if retries exhausted
         const updatedStory = this.getStory(story.id);
-        if (updatedStory && updatedStory.attempts >= updatedStory.maxAttempts) {
+        const retriesExhausted = updatedStory && updatedStory.attempts >= updatedStory.maxAttempts;
+
+        if (retriesExhausted) {
           this.updateStory(story.id, { status: 'failed' });
 
           const loop = db.query('SELECT * FROM loops WHERE id = ?').get(this.loopId) as any;
@@ -507,6 +532,7 @@ class LoopRunner {
           iteration,
           conversationId,
           message: failReason,
+          willRetry: !retriesExhausted,
         });
         this.addLogEntry({
           iteration,
@@ -537,6 +563,7 @@ class LoopRunner {
 
     if (this.cancelled) {
       this.updateLoopDb({ status: 'cancelled', completed_at: Date.now() });
+      this.events.emit('loop_done', this.loopId);
       return;
     }
 

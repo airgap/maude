@@ -729,5 +729,7 @@ export interface StreamLoopEvent {
     qualityResult?: QualityCheckResult;
     learning?: string;
     message?: string;
+    /** When a story fails, indicates whether retries remain (true) or it's permanent (false) */
+    willRetry?: boolean;
   };
 }

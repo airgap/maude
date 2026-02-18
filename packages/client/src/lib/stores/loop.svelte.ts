@@ -477,7 +477,8 @@ function createLoopStore() {
           break;
 
         case 'story_failed':
-          this.updateStoryInPrds(event.data.storyId!, 'failed');
+          // If the server will retry, mark as pending (not failed) so UI reflects retry
+          this.updateStoryInPrds(event.data.storyId!, event.data.willRetry ? 'pending' : 'failed');
           break;
 
         case 'paused':
