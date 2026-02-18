@@ -99,6 +99,9 @@ function createWorkStore() {
     get completedStories() {
       return this.filteredStories.filter((s) => s.status === 'completed');
     },
+    get archivedStories() {
+      return this.filteredStories.filter((s) => s.status === 'archived');
+    },
 
     get standaloneCount() {
       return standaloneStories.length;
@@ -208,6 +211,24 @@ function createWorkStore() {
       } else {
         await this.updateStandaloneStory(storyId, { status: next });
       }
+    },
+
+    async archiveStory(storyId: string, prdId: string | null) {
+      if (prdId) {
+        await api.prds.updateStory(prdId, storyId, { status: 'archived' });
+        await loopStore.loadPrd(prdId);
+      } else {
+        await this.updateStandaloneStory(storyId, { status: 'archived' });
+      }
+    },
+
+    async archiveAllCompleted(workspacePath: string) {
+      const res = await api.prds.archiveAllCompleted(workspacePath);
+      if (res.ok) {
+        // Refresh standalone stories to reflect the change
+        await this.loadStandaloneStories(workspacePath);
+      }
+      return res;
     },
 
     // Update a story from a loop event (used by SSE handler)

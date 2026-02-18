@@ -47,6 +47,8 @@
         return '✗';
       case 'skipped':
         return '⊘';
+      case 'archived':
+        return '▣';
       default:
         return '○';
     }
@@ -60,6 +62,8 @@
         return 'var(--accent-primary)';
       case 'failed':
         return 'var(--accent-error)';
+      case 'archived':
+        return 'var(--text-tertiary)';
       default:
         return 'var(--text-tertiary)';
     }
@@ -137,6 +141,24 @@
     await api.prds.deleteStory(prdId, storyId);
     await loopStore.loadPrd(prdId);
   }
+
+  async function handleArchiveStory(storyId: string) {
+    const prdId = loopStore.selectedPrdId;
+    if (!prdId) return;
+    await api.prds.updateStory(prdId, storyId, { status: 'archived' });
+    await loopStore.loadPrd(prdId);
+  }
+
+  async function handleArchiveAllCompleted() {
+    const prdId = loopStore.selectedPrdId;
+    if (!prdId) return;
+    await api.prds.archiveCompletedPrdStories(prdId);
+    await loopStore.loadPrd(prdId);
+  }
+
+  let prdCompletedStories = $derived(
+    (loopStore.selectedPrd?.stories || []).filter((s: any) => s.status === 'completed'),
+  );
 
   async function handleDeletePrd() {
     const prdId = loopStore.selectedPrdId;
@@ -656,6 +678,17 @@
             >{/if}
         </h4>
         <div class="header-actions">
+          {#if prdCompletedStories.length > 0}
+            <button
+              class="icon-btn archive-all-icon"
+              title="Archive all completed"
+              onclick={handleArchiveAllCompleted}
+            >
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="21 8 21 21 3 21 3 8" /><rect x="1" y="3" width="22" height="5" /><line x1="10" y1="12" x2="14" y2="12" />
+              </svg>
+            </button>
+          {/if}
           <button class="icon-btn" title="Add story" onclick={() => (showAddStory = !showAddStory)}
             >+</button
           >
@@ -780,6 +813,17 @@
                   <span class="priority-badge">{priorityLabel(story.priority)}</span>
                 {/if}
                 {#if !loopStore.isActive}
+                  {#if story.status === 'completed'}
+                    <button
+                      class="archive-btn"
+                      title="Archive"
+                      onclick={() => handleArchiveStory(story.id)}
+                    >
+                      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <polyline points="21 8 21 21 3 21 3 8" /><rect x="1" y="3" width="22" height="5" /><line x1="10" y1="12" x2="14" y2="12" />
+                      </svg>
+                    </button>
+                  {/if}
                   <button
                     class="validate-btn"
                     title="Validate acceptance criteria"
@@ -1170,18 +1214,25 @@
   .refine-btn,
   .estimate-btn,
   .priority-btn,
-  .delete-btn {
+  .delete-btn,
+  .archive-btn {
     font-size: var(--fs-sm);
     padding: 0 4px;
     color: var(--text-tertiary);
     opacity: 0;
     transition: opacity var(--transition);
+    background: none;
+    border: none;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
   }
   .story-item:hover .validate-btn,
   .story-item:hover .refine-btn,
   .story-item:hover .estimate-btn,
   .story-item:hover .priority-btn,
-  .story-item:hover .delete-btn {
+  .story-item:hover .delete-btn,
+  .story-item:hover .archive-btn {
     opacity: 1;
   }
   .validate-btn:hover {
@@ -1198,6 +1249,18 @@
   }
   .delete-btn:hover {
     color: var(--accent-error);
+  }
+  .archive-btn:hover {
+    color: var(--accent-primary);
+  }
+  .archive-all-icon {
+    color: var(--text-tertiary);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .archive-all-icon:hover {
+    color: var(--accent-primary);
   }
 
   .story-badges {

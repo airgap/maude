@@ -754,6 +754,11 @@ export const api = {
       }),
     deleteStory: (prdId: string, storyId: string) =>
       request<{ ok: boolean }>(`/prds/${prdId}/stories/${storyId}`, { method: 'DELETE' }),
+    archiveCompletedPrdStories: (prdId: string) =>
+      request<{ ok: boolean; data: { archived: number } }>(`/prds/${prdId}/stories/archive-completed`, {
+        method: 'POST',
+        body: JSON.stringify({}),
+      }),
     import: (workspacePath: string, prdJson: any) =>
       request<{ ok: boolean; data: { id: string; storyIds: string[]; imported: number } }>(
         '/prds/import',
@@ -1058,6 +1063,11 @@ export const api = {
       request<{ ok: boolean; data: any }>(`/prds/stories/${storyId}/estimate`, {
         method: 'PUT',
         body: JSON.stringify(body),
+      }),
+    archiveAllCompleted: (workspacePath: string) =>
+      request<{ ok: boolean; data: { archived: number } }>('/prds/stories/archive-completed', {
+        method: 'POST',
+        body: JSON.stringify({ workspacePath }),
       }),
   },
 

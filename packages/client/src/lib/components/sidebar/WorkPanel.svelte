@@ -53,6 +53,8 @@
         return '✗';
       case 'skipped':
         return '⊘';
+      case 'archived':
+        return '▣';
       default:
         return '○';
     }
@@ -66,6 +68,8 @@
         return 'status-in-progress';
       case 'failed':
         return 'status-failed';
+      case 'archived':
+        return 'status-archived';
       default:
         return 'status-pending';
     }
@@ -490,7 +494,18 @@
 
         {#if workStore.completedStories.length > 0}
           <div class="section">
-            <div class="section-label">Completed</div>
+            <div class="section-label-row">
+              <span class="section-label">Completed</span>
+              <button
+                class="archive-all-btn"
+                title="Archive all completed"
+                onclick={() => workStore.archiveAllCompleted(workspacePath)}
+              >
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <polyline points="21 8 21 21 3 21 3 8" /><rect x="1" y="3" width="22" height="5" /><line x1="10" y1="12" x2="14" y2="12" />
+                </svg>
+              </button>
+            </div>
             {#each workStore.completedStories as story (story.id)}
               <div class="story-item">
                 <div class="story-header">
@@ -514,6 +529,15 @@
                       {story.estimate.size?.[0]?.toUpperCase()}{story.estimate.storyPoints}
                     </span>
                   {/if}
+                  <button
+                    class="archive-btn"
+                    title="Archive"
+                    onclick={() => workStore.archiveStory(story.id, story.prdId)}
+                  >
+                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <polyline points="21 8 21 21 3 21 3 8" /><rect x="1" y="3" width="22" height="5" /><line x1="10" y1="12" x2="14" y2="12" />
+                    </svg>
+                  </button>
                 </div>
               </div>
             {/each}
@@ -830,6 +854,10 @@
   .status-pending {
     color: var(--text-tertiary);
   }
+  .status-archived {
+    color: var(--text-tertiary);
+    opacity: 0.5;
+  }
 
   .story-title {
     font-size: var(--fs-xs);
@@ -916,7 +944,8 @@
   }
 
   .estimate-btn,
-  .delete-btn {
+  .delete-btn,
+  .archive-btn {
     font-size: var(--fs-sm);
     padding: 0 4px;
     color: var(--text-tertiary);
@@ -925,9 +954,12 @@
     background: none;
     border: none;
     cursor: pointer;
+    display: flex;
+    align-items: center;
   }
   .story-item:hover .estimate-btn,
-  .story-item:hover .delete-btn {
+  .story-item:hover .delete-btn,
+  .story-item:hover .archive-btn {
     opacity: 1;
   }
   .estimate-btn:hover {
@@ -935,6 +967,25 @@
   }
   .delete-btn:hover {
     color: var(--accent-error);
+  }
+  .archive-btn:hover {
+    color: var(--accent-primary);
+  }
+
+  .archive-all-btn {
+    background: none;
+    border: none;
+    color: var(--text-tertiary);
+    cursor: pointer;
+    padding: 2px 4px;
+    border-radius: var(--radius-sm);
+    display: flex;
+    align-items: center;
+    transition: all var(--transition);
+  }
+  .archive-all-btn:hover {
+    color: var(--accent-primary);
+    background: var(--bg-hover);
   }
 
   .empty-stories {

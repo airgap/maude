@@ -211,6 +211,25 @@ app.post('/stories/reorder', async (c) => {
   return c.json({ ok: true });
 });
 
+// Archive all completed standalone stories for a workspace
+app.post('/stories/archive-completed', async (c) => {
+  const db = getDb();
+  const body = (await c.req.json()) as { workspacePath: string };
+
+  if (!body.workspacePath) {
+    return c.json({ ok: false, error: 'workspacePath is required' }, 400);
+  }
+
+  const now = Date.now();
+  const result = db
+    .query(
+      "UPDATE prd_stories SET status = 'archived', updated_at = ? WHERE prd_id IS NULL AND workspace_path = ? AND status = 'completed'",
+    )
+    .run(now, body.workspacePath);
+
+  return c.json({ ok: true, data: { archived: result.changes } });
+});
+
 // Update a standalone story
 app.patch('/stories/:storyId', async (c) => {
   const db = getDb();
@@ -882,6 +901,24 @@ app.delete('/:prdId/stories/:storyId', (c) => {
   db.query('UPDATE prds SET updated_at = ? WHERE id = ?').run(Date.now(), prdId);
 
   return c.json({ ok: true });
+});
+
+// Archive all completed stories in a PRD
+app.post('/:prdId/stories/archive-completed', async (c) => {
+  const db = getDb();
+  const prdId = c.req.param('prdId');
+  const now = Date.now();
+
+  const result = db
+    .query(
+      "UPDATE prd_stories SET status = 'archived', updated_at = ? WHERE prd_id = ? AND status = 'completed'",
+    )
+    .run(now, prdId);
+
+  // Touch PRD updated_at
+  db.query('UPDATE prds SET updated_at = ? WHERE id = ?').run(now, prdId);
+
+  return c.json({ ok: true, data: { archived: result.changes } });
 });
 
 // Import Ralph-format prd.json
