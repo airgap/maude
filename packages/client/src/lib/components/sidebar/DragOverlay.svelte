@@ -20,6 +20,8 @@
       fill="none"
       stroke="currentColor"
       stroke-width="2"
+      stroke-linecap="round"
+      stroke-linejoin="round"
     >
       <path d={tabDef.icon} />
     </svg>
