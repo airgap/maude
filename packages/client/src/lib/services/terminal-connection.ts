@@ -557,6 +557,49 @@ export class TerminalConnectionManager {
     conn?.terminal.focus();
   }
 
+  /** Get the current text selection from a terminal */
+  getSelection(sessionId: string): string {
+    const conn = this.connections.get(sessionId);
+    if (!conn) return '';
+    return conn.terminal.getSelection();
+  }
+
+  /** Check if the terminal has an active text selection */
+  hasSelection(sessionId: string): boolean {
+    const conn = this.connections.get(sessionId);
+    if (!conn) return false;
+    return conn.terminal.hasSelection();
+  }
+
+  /** Clear the current text selection */
+  clearSelection(sessionId: string): void {
+    const conn = this.connections.get(sessionId);
+    if (!conn) return;
+    conn.terminal.clearSelection();
+  }
+
+  /** Select all text in the terminal scrollback buffer */
+  selectAll(sessionId: string): void {
+    const conn = this.connections.get(sessionId);
+    if (!conn) return;
+    conn.terminal.selectAll();
+  }
+
+  /** Clear the terminal viewport (reset + clear scrollback) */
+  clearTerminal(sessionId: string): void {
+    const conn = this.connections.get(sessionId);
+    if (!conn) return;
+    conn.terminal.clear();
+  }
+
+  /** Register a selection change handler for copy-on-select */
+  onSelectionChange(sessionId: string, callback: () => void): () => void {
+    const conn = this.connections.get(sessionId);
+    if (!conn) return () => {};
+    const disposable = conn.terminal.onSelectionChange(callback);
+    return () => disposable.dispose();
+  }
+
   // -----------------------------------------------------------------------
   // Private helpers
   // -----------------------------------------------------------------------

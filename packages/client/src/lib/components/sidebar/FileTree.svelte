@@ -179,6 +179,14 @@
     class="tree-item"
     class:directory={node.type === 'directory'}
     style:padding-left="{8 + depth * 16}px"
+    draggable="true"
+    ondragstart={(e) => {
+      if (e.dataTransfer) {
+        e.dataTransfer.setData('text/terminal-path', node.path);
+        e.dataTransfer.setData('text/plain', node.path);
+        e.dataTransfer.effectAllowed = 'copy';
+      }
+    }}
     onclick={() => {
       if (node.type === 'directory') {
         toggleDir(node.path);
