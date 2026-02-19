@@ -53,18 +53,67 @@
     terminalStore.setProfiles([...autoDetected, ...custom]);
   }
 
+  /**
+   * Query the server for surviving terminal sessions and build a
+   * reconnectable-sessions map.  TerminalInstance components check this
+   * map to decide whether to reconnect or create fresh sessions.
+   */
+  async function reconcileServerSessions(): Promise<void> {
+    try {
+      const serverSessions = await terminalConnectionManager.listRemoteSessions();
+      const sessionMap = new Map<string, TerminalSessionMeta>();
+      for (const s of serverSessions) {
+        sessionMap.set(s.id, s);
+      }
+
+      // Collect all session IDs referenced in current (persisted) tabs
+      const tabSessionIds = terminalStore.getAllSessionIds();
+
+      // Build reconnectable map: sessions that exist on both server and in tabs
+      const reconnectable = new Map<string, TerminalSessionMeta>();
+      for (const sid of tabSessionIds) {
+        const serverSession = sessionMap.get(sid);
+        if (serverSession) {
+          reconnectable.set(sid, serverSession);
+        }
+      }
+
+      terminalStore.setReconnectableSessions(reconnectable);
+
+      // Clean up stale buffer snapshots from sessionStorage
+      terminalConnectionManager.cleanupStaleSnapshots(new Set(reconnectable.keys()));
+    } catch (err) {
+      // If server is unreachable, proceed without reconnection —
+      // all sessions will be created fresh.
+      console.warn('[TerminalPanel] Failed to reconcile server sessions:', err);
+    }
+  }
+
   onMount(() => {
-    // Initialize store from localStorage
+    let destroyed = false;
+
+    // Initialize store from localStorage (restores tabs, preferences)
     terminalStore.init();
 
-    // Load shell profiles
+    // Load shell profiles (async, non-blocking)
     loadShellProfiles();
 
-    // If no tabs exist, create one (using default profile if set)
-    if (terminalStore.tabs.length === 0) {
-      const defaultProfileId = settingsStore.termDefaultProfileId;
-      terminalStore.createTab(defaultProfileId || undefined);
-    }
+    // Reconcile with server sessions for persistence across page reload.
+    // This must complete BEFORE TerminalInstance components mount so they
+    // can check whether to reconnect or create fresh sessions.
+    (async () => {
+      await reconcileServerSessions();
+
+      if (destroyed) return;
+
+      // If no tabs exist after reconciliation, create one
+      if (terminalStore.tabs.length === 0) {
+        const defaultProfileId = settingsStore.termDefaultProfileId;
+        terminalStore.createTab(defaultProfileId || undefined);
+      }
+
+      reconciled = true;
+    })();
 
     // Set up broadcast handler: when broadcast mode is active for a tab,
     // replicate keyboard input to all sibling sessions in the same tab.
@@ -82,6 +131,7 @@
     // Closing the panel does NOT kill sessions (AC #9).
     // On unmount, we just detach terminals from DOM.
     return () => {
+      destroyed = true;
       // Clear the broadcast handler on unmount
       terminalConnectionManager.setBroadcastHandler(null);
       // Sessions stay alive in ConnectionManager memory.
@@ -135,7 +185,9 @@
   style:height={panelHeight ? `${panelHeight}px` : undefined}
 >
   <TerminalHeader />
-  <TerminalContent />
+  {#if reconciled}
+    <TerminalContent />
+  {/if}
 </div>
 
 <style>

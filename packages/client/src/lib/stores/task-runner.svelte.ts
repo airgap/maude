@@ -51,7 +51,7 @@ function createTaskRunnerStore() {
   const hasTasks = $derived(tasks.length > 0);
 
   /** Tasks sorted with recent items first */
-  const sortedTasks = $derived(() => {
+  const sortedTasks = $derived.by(() => {
     if (recentTaskIds.length === 0) return tasks;
 
     const recentSet = new Set(recentTaskIds);
