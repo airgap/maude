@@ -20,13 +20,18 @@
  *   0x02 — JSON control message → parsed and emitted as typed events
  */
 
-import { Terminal } from '@xterm/xterm';
+import { Terminal, type IDisposable } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import { SearchAddon, type ISearchOptions } from '@xterm/addon-search';
 import { WebLinksAddon } from '@xterm/addon-web-links';
 import { Unicode11Addon } from '@xterm/addon-unicode11';
 import { ClipboardAddon } from '@xterm/addon-clipboard';
 import { getBaseUrl, getWsBase, getAuthToken } from '$lib/api/client';
+import {
+  createUrlClickHandler,
+  createUrlLinkOptions,
+  createFilePathLinkProvider,
+} from './terminal-links';
 import type {
   TerminalCreateRequest,
   TerminalCreateResponse,
@@ -72,6 +77,10 @@ interface TerminalConnection {
   webglAddon: unknown | null;
   /** Whether WebSocket has successfully connected at least once */
   hasConnected: boolean;
+  /** Disposable for the file-path link provider */
+  linkProviderDisposable: IDisposable | null;
+  /** CWD used when the session was created (fallback for link resolution) */
+  initialCwd: string;
 }
 
 /** Fallback theme colours (used when CSS custom properties aren't available) */
@@ -206,7 +215,10 @@ export class TerminalConnectionManager {
     // 3. Create addons
     const fitAddon = new FitAddon();
     const searchAddon = new SearchAddon();
-    const webLinksAddon = new WebLinksAddon();
+    const webLinksAddon = new WebLinksAddon(
+      createUrlClickHandler(),
+      createUrlLinkOptions(terminal),
+    );
     const unicode11Addon = new Unicode11Addon();
     const clipboardAddon = new ClipboardAddon();
 
@@ -219,7 +231,13 @@ export class TerminalConnectionManager {
     // Activate unicode11 version
     terminal.unicode.activeVersion = '11';
 
-    // 4. Build connection record
+    // 4. Register file-path link provider for Ctrl+Click navigation
+    const initialCwd = body.cwd ?? '.';
+    const linkProviderDisposable = terminal.registerLinkProvider(
+      createFilePathLinkProvider(terminal, sessionId, initialCwd),
+    );
+
+    // 5. Build connection record
     const conn: TerminalConnection = {
       sessionId,
       terminal,
@@ -234,14 +252,16 @@ export class TerminalConnectionManager {
       controlListeners: new Set(),
       webglAddon: null,
       hasConnected: false,
+      linkProviderDisposable,
+      initialCwd,
     };
 
     this.connections.set(sessionId, conn);
 
-    // 5. Open WebSocket
+    // 6. Open WebSocket
     this.openWebSocket(conn);
 
-    // 6. Wire terminal input → WebSocket
+    // 7. Wire terminal input → WebSocket
     terminal.onData((input) => {
       if (conn.ws?.readyState === WebSocket.OPEN) {
         conn.ws.send(input);
@@ -346,6 +366,12 @@ export class TerminalConnectionManager {
 
     // Clean up ready timeout
     if (conn.readyTimeout) clearTimeout(conn.readyTimeout);
+
+    // Dispose link provider
+    if (conn.linkProviderDisposable) {
+      conn.linkProviderDisposable.dispose();
+      conn.linkProviderDisposable = null;
+    }
 
     // Close WebSocket
     if (conn.ws) {

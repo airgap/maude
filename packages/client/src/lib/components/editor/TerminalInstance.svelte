@@ -151,4 +151,11 @@
   .terminal-instance.hidden {
     display: none;
   }
+  /* Tooltip shown when hovering clickable links in terminal output */
+  .terminal-instance :global(.terminal-link-tooltip) {
+    font-family: var(--font-ui, system-ui, sans-serif);
+    max-width: 400px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
 </style>
