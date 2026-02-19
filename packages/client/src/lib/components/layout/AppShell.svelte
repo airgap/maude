@@ -251,11 +251,27 @@
       terminalStore.open();
       terminalStore.createTab();
     }
-    // Ctrl+Shift+5: Split active terminal (new tab)
+    // Ctrl+Shift+5: Split active terminal horizontally
     if ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === '%' || e.key === '5')) {
       e.preventDefault();
       terminalStore.open();
-      terminalStore.createTab();
+      terminalStore.splitActive('horizontal');
+    }
+    // Alt+Arrow: Navigate between terminal split panes
+    if (e.altKey && !e.ctrlKey && !e.metaKey && !e.shiftKey && terminalStore.isOpen && terminalStore.hasSplits) {
+      if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        terminalStore.navigateSplit('up');
+      } else if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        terminalStore.navigateSplit('down');
+      } else if (e.key === 'ArrowLeft') {
+        e.preventDefault();
+        terminalStore.navigateSplit('left');
+      } else if (e.key === 'ArrowRight') {
+        e.preventDefault();
+        terminalStore.navigateSplit('right');
+      }
     }
     // Ctrl+Alt+Left: Previous workspace
     if ((e.ctrlKey || e.metaKey) && e.altKey && e.key === 'ArrowLeft') {

@@ -7,12 +7,13 @@
   }
 
   function splitHorizontal() {
-    // Create a new tab (split within tabs can be added later)
-    terminalStore.createTab();
+    terminalStore.open();
+    terminalStore.splitActive('horizontal');
   }
 
   function splitVertical() {
-    terminalStore.createTab();
+    terminalStore.open();
+    terminalStore.splitActive('vertical');
   }
 
   function killSession() {
@@ -20,10 +21,8 @@
     if (sid) {
       terminalConnectionManager.destroySession(sid);
       terminalStore.unregisterSession(sid);
-      // Close the tab if it was the active one
-      if (terminalStore.activeTab) {
-        terminalStore.closeTab(terminalStore.activeTab.id);
-      }
+      // Close the split pane (or tab if last pane)
+      terminalStore.closeSplit(sid);
     }
   }
 
@@ -52,7 +51,7 @@
   <button
     class="action-btn"
     onclick={splitHorizontal}
-    title="Split horizontal"
+    title="Split horizontal (side by side)"
     aria-label="Split horizontal"
   >
     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -63,7 +62,7 @@
   <button
     class="action-btn"
     onclick={splitVertical}
-    title="Split vertical"
+    title="Split vertical (top/bottom)"
     aria-label="Split vertical"
   >
     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">

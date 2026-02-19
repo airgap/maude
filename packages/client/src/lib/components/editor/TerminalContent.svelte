@@ -1,24 +1,18 @@
 <script lang="ts">
   import { terminalStore } from '$lib/stores/terminal.svelte';
-  import TerminalInstance from './TerminalInstance.svelte';
-
-  /** Collect all session IDs from a layout tree */
-  function getSessionId(tab: { layout: { type: string; sessionId?: string } }): string | null {
-    if (tab.layout.type === 'leaf' && tab.layout.sessionId) {
-      return tab.layout.sessionId;
-    }
-    return null;
-  }
+  import TerminalSplitPane from './TerminalSplitPane.svelte';
 </script>
 
 <div class="terminal-content">
   {#each terminalStore.tabs as tab (tab.id)}
-    {@const sessionId = getSessionId(tab)}
     {@const isActive = tab.id === terminalStore.activeTabId}
-
-    {#if sessionId}
-      <TerminalInstance {sessionId} active={isActive} />
-    {/if}
+    <div class="tab-pane" class:hidden={!isActive}>
+      <TerminalSplitPane
+        layout={tab.layout}
+        focusedSessionId={tab.focusedSessionId}
+        active={isActive}
+      />
+    </div>
   {/each}
 
   {#if terminalStore.tabs.length === 0}
@@ -35,6 +29,17 @@
     display: flex;
     position: relative;
     overflow: hidden;
+  }
+
+  .tab-pane {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .tab-pane.hidden {
+    display: none;
   }
 
   .empty-state {

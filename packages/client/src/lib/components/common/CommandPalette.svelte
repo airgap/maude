@@ -195,13 +195,35 @@
       },
     },
     {
-      id: 'split-terminal',
-      label: 'Split Terminal',
+      id: 'split-terminal-horizontal',
+      label: 'Split Terminal Horizontal',
       category: 'Terminal',
       shortcut: 'Ctrl+Shift+5',
       action: () => {
         terminalStore.open();
-        terminalStore.createTab();
+        terminalStore.splitActive('horizontal');
+        close();
+      },
+    },
+    {
+      id: 'split-terminal-vertical',
+      label: 'Split Terminal Vertical',
+      category: 'Terminal',
+      action: () => {
+        terminalStore.open();
+        terminalStore.splitActive('vertical');
+        close();
+      },
+    },
+    {
+      id: 'close-terminal-split',
+      label: 'Close Terminal Split Pane',
+      category: 'Terminal',
+      action: () => {
+        const sid = terminalStore.activeSessionId;
+        if (sid) {
+          terminalStore.closeSplit(sid);
+        }
         close();
       },
     },
