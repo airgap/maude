@@ -728,8 +728,6 @@ function createLoopStore() {
               if (saved) {
                 if (prds.some((p) => p.id === saved)) {
                   selectedPrdId = saved;
-                  // Load the full PRD data
-                  this.loadPrd(saved);
                   // Sync work panel filter (lazy import to avoid circular dep)
                   import('../stores/work.svelte').then(({ workStore }) => {
                     if (
@@ -747,6 +745,13 @@ function createLoopStore() {
             } catch {
               /* localStorage unavailable */
             }
+          }
+          // Always load full PRD data for the selected PRD.
+          // The list endpoint may not include full stories, and loadPrds
+          // can be called multiple times (e.g. from both WorkPanel and LoopPanel
+          // onMount), overwriting previously-loaded full PRD data each time.
+          if (selectedPrdId && prds.some((p) => p.id === selectedPrdId)) {
+            await this.loadPrd(selectedPrdId);
           }
         }
       } finally {
