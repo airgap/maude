@@ -989,6 +989,11 @@ function createTerminalStore() {
 
     // ── Preferences ──
 
+    setPreferences(prefs: TerminalPreferences) {
+      preferences = prefs;
+      savePreferences(prefs);
+    },
+
     updatePreferences(partial: Partial<TerminalPreferences>) {
       preferences = { ...preferences, ...partial };
       persistPrefs();

@@ -11,7 +11,7 @@
   import { uiStore, onFocusChatInput } from '$lib/stores/ui.svelte';
   import { workStore } from '$lib/stores/work.svelte';
   import { draftsStore } from '$lib/stores/drafts.svelte';
-  import { onMount } from 'svelte';
+  import { onMount, tick } from 'svelte';
   import SlashCommandMenu from './SlashCommandMenu.svelte';
   import MentionMenu from './MentionMenu.svelte';
   import MentionFilePicker from './MentionFilePicker.svelte';
@@ -615,6 +615,7 @@
         pendingMessage = text;
         taskSuggestion = detection;
         inputText = '';
+        await tick();
         resizeTextarea();
         return;
       }
@@ -626,6 +627,9 @@
 
   /** Send a message through the normal flow (conversation creation + stream). */
   async function sendOriginalMessage(text: string) {
+    // Capture the draft key BEFORE conversation creation may change activeId
+    const draftKey = conversationStore.activeId;
+
     if (!conversationStore.activeId) {
       await createConversation(text);
     }
@@ -643,10 +647,16 @@
     }
 
     inputText = '';
-    resizeTextarea();
     contextFiles = new Set();
     mentions = [];
+    // Clear draft for the original tab (may differ from activeId after conversation creation)
+    draftsStore.clear(draftKey);
     draftsStore.clear(conversationStore.activeId);
+    // Sync lastDraftConvId so the $effect doesn't re-save the old draft
+    lastDraftConvId = conversationStore.activeId;
+    // Wait for Svelte to flush the empty inputText to the DOM, then resize
+    await tick();
+    resizeTextarea();
 
     const attachmentsToSend = imageAttachments.length > 0 ? imageAttachments : undefined;
     pendingAttachments = [];

@@ -192,9 +192,8 @@
       imageMaxHeight: settingsStore.termImageMaxHeight,
       imageStorageLimit: settingsStore.termImageStorageLimit,
     };
-    // Push to terminalStore (persists in its own localStorage)
-    terminalStore.updatePreferences(prefs);
-    // Apply immediately to all open terminals
+    // Push to terminalStore (full replace, no merge needed) and connection manager
+    terminalStore.setPreferences(prefs);
     terminalConnectionManager.updatePreferences(prefs);
   });
 

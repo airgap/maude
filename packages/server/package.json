@@ -5,6 +5,8 @@
   "license": "MIT",
   "type": "module",
   "scripts": {
+    "build:pty": "gcc -O2 -o src/native/pty-helper src/native/pty-helper.c -lutil",
+    "predev": "bun run build:pty",
     "dev": "bun run --hot src/index.ts",
     "start": "bun run src/index.ts",
     "build": "bun build src/index.ts --outdir dist --target bun",
@@ -20,7 +22,6 @@
     "editorconfig": "^3.0.1",
     "hono": "^4.7.0",
     "nanoid": "^5.0.0",
-    "node-pty": "^1.1.0",
     "zod": "^3.24.0"
   },
   "devDependencies": {

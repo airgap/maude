@@ -7,7 +7,7 @@ import type {
   ShellInfo,
 } from '@e/shared';
 import { TERMINAL_PROTOCOL } from '@e/shared';
-import { existsSync, mkdirSync, appendFileSync, writeFileSync } from 'fs';
+import { existsSync, mkdirSync, appendFileSync, writeFileSync, realpathSync } from 'fs';
 import { basename, resolve, dirname, join } from 'path';
 import { homedir } from 'os';
 
@@ -152,15 +152,100 @@ function ensureLogDir(): void {
   }
 }
 
-// --- node-pty dynamic import ---
+// --- PTY Helper ---
+// node-pty's native addon doesn't work under Bun (PTY processes get SIGHUP
+// immediately). We use a native C helper that does forkpty+exec and proxies
+// raw I/O — no JSON, no base64, no Node.js subprocess.
 
-let pty: typeof import('node-pty') | null = null;
-try {
-  const modName = ['node', 'pty'].join('-');
-  pty = require(modName);
-} catch {
-  console.warn('[terminal] node-pty not available — terminal feature disabled');
+import { spawn as nodeSpawn, type ChildProcess } from 'child_process';
+
+const PTY_HELPER_PATH = resolve(dirname(import.meta.dir), '..', 'src', 'native', 'pty-helper');
+
+/** IPty-compatible handle backed by the native pty-helper binary */
+class NativePty {
+  pid: number = 0;
+  /** Called when the child PID is detected (may be delayed) */
+  onPid: ((pid: number) => void) | null = null;
+  private helper: ChildProcess;
+  private ctlStream: import('stream').Writable | null = null;
+  private dataCallbacks: Array<(data: string) => void> = [];
+  private exitCallbacks: Array<(info: { exitCode: number; signal?: number }) => void> = [];
+  private exited = false;
+
+  constructor(
+    shell: string,
+    args: string[],
+    opts: { cols: number; rows: number; cwd: string; env: Record<string, string>; name?: string },
+  ) {
+    this.helper = nodeSpawn(
+      PTY_HELPER_PATH,
+      [shell, opts.cwd, String(opts.cols), String(opts.rows), ...args],
+      {
+        stdio: ['pipe', 'pipe', 'inherit', 'pipe'],
+        env: opts.env,
+      },
+    );
+
+    // fd 3 = control channel for resize
+    this.ctlStream = this.helper.stdio[3] as import('stream').Writable;
+
+    // Raw PTY output — no decoding, no framing
+    this.helper.stdout!.on('data', (chunk: Buffer) => {
+      const str = chunk.toString();
+      for (const cb of this.dataCallbacks) cb(str);
+    });
+
+    // Detect PID from the helper's child (use helper's own pid as fallback,
+    // real child pid is inside the helper)
+    this.pid = this.helper.pid ?? 0;
+    // The helper's child PID isn't directly exposed, but for session metadata
+    // the helper PID is sufficient (killing it will kill the child too).
+    if (this.pid && this.onPid) this.onPid(this.pid);
+
+    this.helper.on('exit', (code, signal) => {
+      if (!this.exited) {
+        this.exited = true;
+        const exitCode = code ?? (signal ? 128 : 1);
+        const sig = signal ? parseInt(signal) || undefined : undefined;
+        for (const cb of this.exitCallbacks) cb({ exitCode, signal: sig });
+      }
+    });
+  }
+
+  write(data: string) {
+    if (this.helper.stdin?.writable) {
+      this.helper.stdin.write(data);
+    }
+  }
+
+  resize(cols: number, rows: number) {
+    if (this.ctlStream?.writable) {
+      const buf = Buffer.alloc(5);
+      buf[0] = 0x01;
+      buf.writeUInt16LE(cols, 1);
+      buf.writeUInt16LE(rows, 3);
+      this.ctlStream.write(buf);
+    }
+  }
+
+  kill() {
+    try { this.helper.kill('SIGTERM'); } catch {}
+    setTimeout(() => {
+      try { this.helper.kill('SIGKILL'); } catch {}
+    }, 200);
+  }
+
+  onData(cb: (data: string) => void) {
+    this.dataCallbacks.push(cb);
+  }
+
+  onExit(cb: (info: { exitCode: number; signal?: number }) => void) {
+    this.exitCallbacks.push(cb);
+  }
 }
+
+/** Check that the pty-helper binary exists */
+const ptyAvailable = existsSync(PTY_HELPER_PATH);
 
 // --- Types ---
 
@@ -179,7 +264,7 @@ interface TerminalSession {
   cols: number;
   rows: number;
   pid: number;
-  pty: import('node-pty').IPty;
+  pty: NativePty;
   /** Ring buffer of recent output chunks for reconnect replay */
   scrollbackBuffer: string[];
   scrollbackBytes: number;
@@ -199,10 +284,18 @@ interface TerminalSession {
   commandCounter: number;
   /** The current in-flight command ID (for pairing start/end) */
   currentCommandId: string | null;
+  /** Coalescing buffer for PTY output — flushed on a microtimer */
+  outputBuffer: string;
+  /** Timer handle for the coalescing flush */
+  flushTimer: ReturnType<typeof setTimeout> | null;
 }
 
 /** Maximum scrollback buffer size in bytes per session */
 const MAX_SCROLLBACK_BYTES = 64 * 1024; // 64KB
+
+/** Output coalescing: flush interval and size threshold */
+const FLUSH_INTERVAL_MS = 2; // Flush at most every 2ms
+const FLUSH_SIZE_THRESHOLD = 8 * 1024; // Flush immediately if buffer exceeds 8KB
 
 /** GC interval: check for orphaned sessions every 5 minutes */
 const GC_INTERVAL_MS = 5 * 60 * 1000;
@@ -254,13 +347,13 @@ class TerminalSessionManager {
   }
 
   get available(): boolean {
-    return pty !== null;
+    return ptyAvailable;
   }
 
   /** Create a new terminal session with its own PTY */
   create(opts: TerminalCreateRequest & { workspacePath?: string }): TerminalCreateResponse {
-    if (!pty) {
-      throw new Error('node-pty not available');
+    if (!ptyAvailable) {
+      throw new Error('PTY worker not available');
     }
 
     const id = `term_${nanoid(10)}`;
@@ -311,7 +404,7 @@ class TerminalSessionManager {
       }
     }
 
-    const term = pty.spawn(shell, spawnArgs, {
+    const term = new NativePty(shell, spawnArgs, {
       name: 'xterm-256color',
       cols,
       rows,
@@ -357,7 +450,7 @@ class TerminalSessionManager {
       env,
       cols,
       rows,
-      pid: term.pid,
+      pid: 0, // Updated asynchronously when the worker reports the real PID
       pty: term,
       scrollbackBuffer: [],
       scrollbackBytes: 0,
@@ -371,7 +464,12 @@ class TerminalSessionManager {
       shellIntegration: enableIntegration && integrationScript !== null,
       commandCounter: 0,
       currentCommandId: null,
+      outputBuffer: '',
+      flushTimer: null,
     };
+
+    // Update PID when the worker reports it
+    term.onPid = (pid) => { session.pid = pid; };
 
     // Forward PTY data to all attached WebSockets and buffer for replay.
     // When shell integration is active, parse OSC sequences from the output,
@@ -420,33 +518,11 @@ class TerminalSessionManager {
         // Forward cleaned data (OSC sequences stripped) to clients
         const cleanData = result.cleanData;
         if (cleanData.length > 0) {
-          this.appendScrollback(session, cleanData);
-          for (const ws of session.attachedWs) {
-            try {
-              ws.send(cleanData);
-            } catch {
-              // WebSocket may be closed
-            }
-          }
-          // Tee output to log file if logging is active
-          if (session.logging && session.logFilePath) {
-            this.appendToLog(session.logFilePath, cleanData);
-          }
+          this.queueOutput(session, cleanData);
         }
       } else {
         // No shell integration — forward raw data as-is
-        this.appendScrollback(session, data);
-        for (const ws of session.attachedWs) {
-          try {
-            ws.send(data);
-          } catch {
-            // WebSocket may be closed — will be cleaned up on next detach
-          }
-        }
-        // Tee output to log file if logging is active
-        if (session.logging && session.logFilePath) {
-          this.appendToLog(session.logFilePath, data);
-        }
+        this.queueOutput(session, data);
       }
     });
 
@@ -470,7 +546,7 @@ class TerminalSessionManager {
     return {
       sessionId: id,
       shell,
-      pid: term.pid,
+      pid: 0,
       cwd,
     };
   }
@@ -502,6 +578,9 @@ class TerminalSessionManager {
   kill(id: string): boolean {
     const session = this.sessions.get(id);
     if (!session) return false;
+
+    // Flush any buffered output before teardown
+    this.flushOutput(session);
 
     // Stop logging if active
     if (session.logging) {
@@ -540,10 +619,10 @@ class TerminalSessionManager {
     const replayBytes = session.scrollbackBytes;
     this.sendControlToWs(ws, { type: 'replay_start', bytes: replayBytes });
 
-    // Replay scrollback buffer
+    // Replay scrollback buffer as binary frames
     for (const chunk of session.scrollbackBuffer) {
       try {
-        ws.send(chunk);
+        ws.send(this.textEncoder.encode(chunk));
       } catch {
         break;
       }
@@ -610,22 +689,26 @@ class TerminalSessionManager {
     const results: ShellInfo[] = [];
     const seen = new Set<string>();
 
+    /** Resolve symlinks so /bin/bash and /usr/bin/bash don't appear as separate shells */
+    function realPath(p: string): string {
+      try { return realpathSync(p); } catch { return p; }
+    }
+
     // Check user's default shell first
     const userShell = process.env.SHELL;
-    if (userShell && existsSync(userShell) && !seen.has(userShell)) {
-      seen.add(userShell);
+    if (userShell && existsSync(userShell) && !seen.has(realPath(userShell))) {
+      seen.add(realPath(userShell));
       const version = await getShellVersion(userShell);
       results.push({ path: userShell, name: basename(userShell), version });
     }
 
     // Check known candidates
     for (const candidate of SHELL_CANDIDATES) {
-      if (seen.has(candidate.path)) continue;
-      if (existsSync(candidate.path)) {
-        seen.add(candidate.path);
-        const version = await getShellVersion(candidate.path);
-        results.push({ path: candidate.path, name: candidate.name, version });
-      }
+      if (!existsSync(candidate.path)) continue;
+      if (seen.has(realPath(candidate.path))) continue;
+      seen.add(realPath(candidate.path));
+      const version = await getShellVersion(candidate.path);
+      results.push({ path: candidate.path, name: candidate.name, version });
     }
 
     cachedShells = results;
@@ -737,6 +820,58 @@ class TerminalSessionManager {
     }
   }
 
+  /**
+   * Queue PTY output for coalesced delivery.
+   * Flushes to WebSocket clients after FLUSH_INTERVAL_MS or when buffer exceeds
+   * FLUSH_SIZE_THRESHOLD — whichever comes first.  Reduces the number of
+   * WebSocket frames during high-throughput output (builds, logs, find).
+   */
+  private queueOutput(session: TerminalSession, data: string): void {
+    this.appendScrollback(session, data);
+    session.outputBuffer += data;
+
+    // Tee to log file immediately (logging shouldn't be delayed)
+    if (session.logging && session.logFilePath) {
+      this.appendToLog(session.logFilePath, data);
+    }
+
+    // Flush immediately if buffer is large enough
+    if (session.outputBuffer.length >= FLUSH_SIZE_THRESHOLD) {
+      this.flushOutput(session);
+      return;
+    }
+
+    // Otherwise schedule a flush
+    if (!session.flushTimer) {
+      session.flushTimer = setTimeout(() => this.flushOutput(session), FLUSH_INTERVAL_MS);
+    }
+  }
+
+  /** Shared TextEncoder for binary WebSocket frames */
+  private textEncoder = new TextEncoder();
+
+  /** Flush the coalesced output buffer to all attached WebSocket clients as binary frames */
+  private flushOutput(session: TerminalSession): void {
+    if (session.flushTimer) {
+      clearTimeout(session.flushTimer);
+      session.flushTimer = null;
+    }
+    if (session.outputBuffer.length === 0) return;
+
+    const data = session.outputBuffer;
+    session.outputBuffer = '';
+
+    // Send as binary frame — avoids UTF-8 validation overhead on both ends
+    const buf = this.textEncoder.encode(data);
+    for (const ws of session.attachedWs) {
+      try {
+        ws.send(buf);
+      } catch {
+        // WebSocket may be closed
+      }
+    }
+  }
+
   /** Send a JSON control message to all attached WebSockets */
   private sendControl(session: TerminalSession, msg: TerminalControlMessage): void {
     for (const ws of session.attachedWs) {
@@ -744,12 +879,12 @@ class TerminalSessionManager {
     }
   }
 
-  /** Send a JSON control message to a specific WebSocket using 0x02 prefix */
+  /** Send a JSON control message to a specific WebSocket using 0x02 prefix as binary frame */
   private sendControlToWs(ws: WsLike, msg: TerminalControlMessage): void {
     try {
       const json = JSON.stringify(msg);
       const payload = String.fromCharCode(TERMINAL_PROTOCOL.CONTROL) + json;
-      ws.send(payload);
+      ws.send(this.textEncoder.encode(payload));
     } catch {
       // WebSocket may be closed
     }

@@ -11,6 +11,22 @@ export function getWsBase(): string {
   return `${wsProtocol}://${host}/api`;
 }
 
+/**
+ * Direct WebSocket base URL — bypasses Vite proxy in dev for lower latency.
+ * In production (Tauri), falls back to the same-origin getWsBase().
+ */
+export function getDirectWsBase(): string {
+  if (typeof window === 'undefined') return 'ws://localhost:3002/api';
+  // In dev mode, Vite serves on a different port than the API server.
+  // Connect directly to the API server to skip the proxy hop.
+  const isDev = window.location.port === '5173';
+  if (isDev) {
+    return 'ws://localhost:3002/api';
+  }
+  // Production / Tauri — same origin
+  return getWsBase();
+}
+
 export function setServerPort(_port: number) {
   // No-op — kept for backwards compatibility
 }

@@ -4,6 +4,7 @@ node_modules/
 # Build outputs
 packages/client/build/
 packages/server/dist/
+packages/server/src/native/pty-helper
 .svelte-kit/
 
 # Coverage

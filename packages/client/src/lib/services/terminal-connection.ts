@@ -35,7 +35,7 @@ import { SerializeAddon } from '@xterm/addon-serialize';
 import { WebLinksAddon } from '@xterm/addon-web-links';
 import { Unicode11Addon } from '@xterm/addon-unicode11';
 import { ClipboardAddon } from '@xterm/addon-clipboard';
-import { getBaseUrl, getWsBase, getAuthToken } from '$lib/api/client';
+import { getBaseUrl, getDirectWsBase, getAuthToken } from '$lib/api/client';
 import {
   createUrlClickHandler,
   createUrlLinkOptions,
@@ -98,6 +98,10 @@ interface TerminalConnection {
   initialCwd: string;
   /** If true, skip writing server replay data (we restored from a local snapshot) */
   skipReplay: boolean;
+  /** Accumulated write data waiting for next rAF flush */
+  writeBatch: string;
+  /** rAF handle for pending write batch flush */
+  writeBatchRaf: number | null;
 }
 
 /** Fallback theme colours (used when CSS custom properties aren't available) */
@@ -349,6 +353,8 @@ export class TerminalConnectionManager {
       linkProviderDisposable: null,
       initialCwd: '.',
       skipReplay: false,
+      writeBatch: '',
+      writeBatchRaf: null,
     };
 
     this.connections.set(sessionId, conn);
@@ -461,6 +467,13 @@ export class TerminalConnectionManager {
 
     // Clean up DOM
     this.detachFromContainerInternal(conn);
+
+    // Flush pending write batch
+    if (conn.writeBatchRaf !== null) {
+      cancelAnimationFrame(conn.writeBatchRaf);
+      conn.writeBatchRaf = null;
+      conn.writeBatch = '';
+    }
 
     // Clean up ready timeout
     if (conn.readyTimeout) clearTimeout(conn.readyTimeout);
@@ -998,6 +1011,8 @@ export class TerminalConnectionManager {
       linkProviderDisposable,
       initialCwd,
       skipReplay: false,
+      writeBatch: '',
+      writeBatchRaf: null,
     };
 
     this.connections.set(sessionId, conn);
@@ -1108,8 +1123,10 @@ export class TerminalConnectionManager {
 
   /** Open a WebSocket for a connection */
   private openWebSocket(conn: TerminalConnection): void {
-    const wsUrl = `${getWsBase()}/terminal/ws?sessionId=${encodeURIComponent(conn.sessionId)}`;
+    // Use direct WS base to bypass Vite proxy in dev — lower latency
+    const wsUrl = `${getDirectWsBase()}/terminal/ws?sessionId=${encodeURIComponent(conn.sessionId)}`;
     const ws = new WebSocket(wsUrl);
+    ws.binaryType = 'arraybuffer';
 
     conn.ws = ws;
 
@@ -1124,7 +1141,13 @@ export class TerminalConnectionManager {
     };
 
     ws.onmessage = (evt) => {
-      const raw: string = typeof evt.data === 'string' ? evt.data : '';
+      // Handle both binary (ArrayBuffer) and text frames
+      let raw: string;
+      if (evt.data instanceof ArrayBuffer) {
+        raw = new TextDecoder().decode(evt.data);
+      } else {
+        raw = evt.data as string;
+      }
 
       // --- Binary-prefix protocol: 0x02 = control message ---
       if (raw.length > 0 && raw.charCodeAt(0) === TERMINAL_PROTOCOL.CONTROL) {
@@ -1149,21 +1172,43 @@ export class TerminalConnectionManager {
         return;
       }
 
-      // --- Normal PTY data ---
+      // --- Normal PTY data: batch writes into one terminal.write() per frame ---
       if (conn.ready) {
-        conn.terminal.write(raw);
+        conn.writeBatch += raw;
+        if (conn.writeBatchRaf === null) {
+          conn.writeBatchRaf = requestAnimationFrame(() => {
+            const batch = conn.writeBatch;
+            conn.writeBatch = '';
+            conn.writeBatchRaf = null;
+            if (batch) conn.terminal.write(batch);
+          });
+        }
       } else {
         conn.messageBuffer.push(raw);
       }
     };
 
     ws.onclose = () => {
-      // Do not auto-destroy — the Terminal stays in memory for reattach
+      // Flush any pending write batch before going idle
+      this.flushWriteBatch(conn);
     };
 
     ws.onerror = () => {
       // Error will also trigger onclose
     };
+  }
+
+  /** Flush pending rAF write batch immediately (e.g. on close) */
+  private flushWriteBatch(conn: TerminalConnection): void {
+    if (conn.writeBatchRaf !== null) {
+      cancelAnimationFrame(conn.writeBatchRaf);
+      conn.writeBatchRaf = null;
+    }
+    if (conn.writeBatch) {
+      const batch = conn.writeBatch;
+      conn.writeBatch = '';
+      conn.terminal.write(batch);
+    }
   }
 
   /** Emit a control message to per-session and global listeners */
