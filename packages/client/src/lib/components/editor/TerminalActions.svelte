@@ -1,6 +1,7 @@
 <script lang="ts">
   import { terminalStore } from '$lib/stores/terminal.svelte';
   import { terminalConnectionManager } from '$lib/services/terminal-connection';
+  import TaskRunnerDropdown from './TaskRunnerDropdown.svelte';
 
   function toggleSearch() {
     terminalStore.toggleSearch();

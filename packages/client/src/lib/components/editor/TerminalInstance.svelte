@@ -203,22 +203,41 @@
     }
   }
 
+  /** Look up the profile for this session from the tab's profileId */
+  function getSessionProfile(): { shellPath?: string; args?: string[]; env?: Record<string, string>; cwd?: string } | undefined {
+    // Find the tab that contains this session
+    const tab = terminalStore.tabs.find((t) => {
+      function hasSession(layout: import('@e/shared').TerminalLayout): boolean {
+        if (layout.type === 'leaf') return layout.sessionId === sessionId;
+        return hasSession(layout.first) || hasSession(layout.second);
+      }
+      return hasSession(t.layout);
+    });
+    if (!tab?.profileId) return undefined;
+    return terminalStore.getProfile(tab.profileId);
+  }
+
   /**
    * Create a brand new server session (the original flow).
    * Used when no surviving server session matches this session ID.
    */
   async function createFreshSession(): Promise<void> {
+    const profile = getSessionProfile();
+    const cwd = profile?.cwd || getCwd();
     const createdId = await terminalConnectionManager.createSession({
-      cwd: getCwd(),
+      shellPath: profile?.shellPath,
+      args: profile?.args,
+      env: profile?.env,
+      cwd,
       cols: 80,
       rows: 24,
     });
 
     terminalStore.registerSession({
       id: createdId,
-      shell: 'sh',
+      shell: profile?.shellPath || 'sh',
       pid: 0,
-      cwd: getCwd(),
+      cwd,
       exitCode: null,
       attached: true,
     });
