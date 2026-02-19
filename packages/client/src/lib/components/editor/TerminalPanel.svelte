@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
+  import { onMount, setContext } from 'svelte';
   import { terminalStore } from '$lib/stores/terminal.svelte';
   import { terminalConnectionManager } from '$lib/services/terminal-connection';
   import { settingsStore } from '$lib/stores/settings.svelte';
@@ -8,6 +8,9 @@
   import TerminalHeader from './TerminalHeader.svelte';
   import TerminalContent from './TerminalContent.svelte';
   import '@xterm/xterm/css/xterm.css';
+
+  // Provide screen reader announcement function to child components (e.g. TerminalSearchBar)
+  setContext('terminal-announce', (msg: string) => terminalStore.announce(msg));
 
   /** Whether reconciliation with the server is complete (gates TerminalContent rendering) */
   let reconciled = $state(false);
@@ -128,10 +131,16 @@
       }
     });
 
+    // Install beforeunload handler to snapshot terminal buffers on page unload.
+    // This enables instant visual re-render on reload via @xterm/addon-serialize.
+    const cleanupBeforeUnload = terminalConnectionManager.installBeforeUnloadHandler();
+
     // Closing the panel does NOT kill sessions (AC #9).
     // On unmount, we just detach terminals from DOM.
     return () => {
       destroyed = true;
+      // Clean up beforeunload handler
+      cleanupBeforeUnload();
       // Clear the broadcast handler on unmount
       terminalConnectionManager.setBroadcastHandler(null);
       // Sessions stay alive in ConnectionManager memory.
@@ -155,7 +164,10 @@
       rightClickPaste: settingsStore.termRightClickPaste,
       defaultShell: settingsStore.termDefaultShell,
       enableShellIntegration: settingsStore.termEnableShellIntegration,
-      enableImages: false,
+      enableImages: settingsStore.termEnableImages,
+      imageMaxWidth: settingsStore.termImageMaxWidth,
+      imageMaxHeight: settingsStore.termImageMaxHeight,
+      imageStorageLimit: settingsStore.termImageStorageLimit,
     };
     // Push to terminalStore (persists in its own localStorage)
     terminalStore.updatePreferences(prefs);
@@ -183,7 +195,14 @@
   class="terminal-panel"
   class:maximized={terminalStore.maximized}
   style:height={panelHeight ? `${panelHeight}px` : undefined}
+  role="region"
+  aria-label="Terminal panel"
 >
+  <!-- Screen reader announcements (visually hidden, announced on change) -->
+  <div class="sr-only" aria-live="polite" aria-atomic="true" role="status">
+    {terminalStore.announcement}
+  </div>
+
   <TerminalHeader />
   {#if reconciled}
     <TerminalContent />
@@ -204,5 +223,18 @@
     flex: 1;
     max-height: none;
     min-height: 0;
+  }
+
+  /* Visually hidden but accessible to screen readers */
+  .sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
   }
 </style>

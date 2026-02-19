@@ -24,6 +24,11 @@ __e_emit_command_start() {
   printf '\e]633;C\a'
 }
 
+# Emit command line text OSC 633;E;commandText
+__e_emit_command_line() {
+  printf '\e]633;E;%s\a' "$1"
+}
+
 # Emit command end OSC 633;D;exitCode
 __e_emit_command_end() {
   printf '\e]633;D;%s\a' "$1"
@@ -47,6 +52,7 @@ __e_preexec() {
     return
   fi
   __e_command_executing=1
+  __e_emit_command_line "$BASH_COMMAND"
   __e_emit_command_start
 }
 

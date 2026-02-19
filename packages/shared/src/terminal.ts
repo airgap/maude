@@ -32,6 +32,10 @@ export interface TerminalSessionMeta {
   lastActivity: number;
   exitCode: number | null;
   attached: boolean;
+  /** Whether session logging is currently active */
+  logging: boolean;
+  /** Path to the log file (if logging is or was active) */
+  logFilePath: string | null;
 }
 
 /** Request to create a new terminal session */
@@ -62,7 +66,9 @@ export type TerminalControlMessage =
   | TerminalSessionExit
   | TerminalCwdChanged
   | TerminalCommandStart
-  | TerminalCommandEnd;
+  | TerminalCommandEnd
+  | TerminalLoggingStarted
+  | TerminalLoggingStopped;
 
 export interface TerminalReplayStart {
   type: 'replay_start';
@@ -93,6 +99,15 @@ export interface TerminalCommandEnd {
   type: 'command_end';
   id: string;
   exitCode: number;
+}
+
+export interface TerminalLoggingStarted {
+  type: 'logging_started';
+  logFilePath: string;
+}
+
+export interface TerminalLoggingStopped {
+  type: 'logging_stopped';
 }
 
 // --- Protocol Constants ---
@@ -155,7 +170,14 @@ export interface TerminalPreferences {
   rightClickPaste: boolean;
   defaultShell: string;
   enableShellIntegration: boolean;
+  /** Enable inline image rendering (iTerm2 + Sixel protocols) */
   enableImages: boolean;
+  /** Maximum image width in pixels (default 1000) */
+  imageMaxWidth: number;
+  /** Maximum image height in pixels (default 1000) */
+  imageMaxHeight: number;
+  /** Image storage cache limit in MB (default 64) */
+  imageStorageLimit: number;
 }
 
 export const DEFAULT_TERMINAL_PREFERENCES: TerminalPreferences = {
@@ -172,4 +194,7 @@ export const DEFAULT_TERMINAL_PREFERENCES: TerminalPreferences = {
   defaultShell: '',
   enableShellIntegration: true,
   enableImages: false,
+  imageMaxWidth: 1000,
+  imageMaxHeight: 1000,
+  imageStorageLimit: 64,
 };

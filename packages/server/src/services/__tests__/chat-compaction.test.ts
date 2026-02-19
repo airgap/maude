@@ -32,7 +32,7 @@ describe('Chat Compaction', () => {
     });
 
     it('should return default limit for unknown models', () => {
-      expect(getContextLimit('unknown-model')).toBe(100000);
+      expect(getContextLimit('unknown-model')).toBe(200000);
     });
   });
 

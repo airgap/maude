@@ -27,7 +27,10 @@ export function createTestDb(): Database {
       max_turns INTEGER,
       allowed_tools TEXT,
       disallowed_tools TEXT,
-      cli_session_id TEXT
+      cli_session_id TEXT,
+      compact_summary TEXT,
+      user_id TEXT,
+      profile_id TEXT
     )
   `);
 
@@ -90,7 +93,8 @@ export function createTestDb(): Database {
       stash_sha TEXT,
       reason TEXT NOT NULL DEFAULT 'pre-agent',
       has_changes INTEGER NOT NULL DEFAULT 0,
-      created_at INTEGER NOT NULL
+      created_at INTEGER NOT NULL,
+      message_id TEXT
     )
   `);
 
@@ -146,6 +150,7 @@ export function createTestDb(): Database {
       workspace_path TEXT,
       external_ref TEXT,
       external_status TEXT,
+      research_only INTEGER NOT NULL DEFAULT 0,
       created_at INTEGER NOT NULL,
       updated_at INTEGER NOT NULL,
       FOREIGN KEY (prd_id) REFERENCES prds(id) ON DELETE CASCADE

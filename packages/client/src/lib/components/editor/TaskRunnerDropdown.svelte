@@ -2,103 +2,65 @@
   import { onMount } from 'svelte';
   import { taskRunnerStore } from '$lib/stores/task-runner.svelte';
   import { terminalStore } from '$lib/stores/terminal.svelte';
-  import { terminalConnectionManager } from '$lib/services/terminal-connection';
   import { workspaceStore } from '$lib/stores/workspace.svelte';
+  import { settingsStore } from '$lib/stores/settings.svelte';
   import type { WorkspaceTask } from '@e/shared';
 
   let dropdownOpen = $state(false);
 
-  /** Load tasks when workspace changes */
+  /** Get the current workspace path from available sources */
+  function getWorkspacePath(): string | null {
+    return (
+      workspaceStore.activeWorkspace?.workspacePath ||
+      settingsStore.workspacePath ||
+      null
+    );
+  }
+
+  /** Load tasks on mount */
+  onMount(() => {
+    const wsPath = getWorkspacePath();
+    if (wsPath) {
+      taskRunnerStore.loadTasks(wsPath);
+    }
+  });
+
+  /** Reactively reload tasks when workspace changes */
   $effect(() => {
-    const ws = workspaceStore.activeWorkspace;
-    if (ws?.workspacePath) {
-      taskRunnerStore.loadTasks(ws.workspacePath);
+    const wsPath = getWorkspacePath();
+    if (wsPath && wsPath !== taskRunnerStore.workspacePath) {
+      taskRunnerStore.loadTasks(wsPath);
     }
   });
 
   function toggleDropdown(e: MouseEvent) {
     e.stopPropagation();
     dropdownOpen = !dropdownOpen;
-
-    // Refresh tasks when opening
-    if (dropdownOpen && workspaceStore.activeWorkspace?.workspacePath) {
-      taskRunnerStore.loadTasks(workspaceStore.activeWorkspace.workspacePath);
-    }
   }
 
   function closeDropdown() {
     dropdownOpen = false;
   }
 
-  async function runTask(task: WorkspaceTask) {
+  function runTask(task: WorkspaceTask) {
     dropdownOpen = false;
 
     // Record this task as recently run
     taskRunnerStore.recordRecentTask(task.id);
 
-    // Open terminal panel
+    // Open terminal panel and create a task tab with the command
+    // The command will be sent to the terminal after the session connects
     terminalStore.open();
-
-    // Create a new tab with a descriptive label
-    const tabId = terminalStore.createTab();
-
-    // Find the tab to get its session ID
-    const tab = terminalStore.tabs.find((t) => t.id === tabId);
-    if (!tab) return;
-
-    const sessionId = tab.focusedSessionId;
-
-    // Rename the tab to show the task being run
-    terminalStore.renameTab(tabId, task.execution);
-
-    // Get workspace path for the CWD
-    const cwd = workspaceStore.activeWorkspace?.workspacePath;
-
-    // Create the actual terminal session
-    try {
-      await terminalConnectionManager.createSession({
-        cwd: cwd || undefined,
-      });
-    } catch {
-      // Session creation is handled by the terminal instance component
-      // The tab already has a placeholder session ID that will get replaced
-    }
-
-    // Wait a tick for the terminal to connect, then write the command
-    // The terminal instance handles session creation in its onMount
-    // We need to send the command after the session is attached
-    scheduleCommandWrite(sessionId, task.execution);
+    terminalStore.createTaskTab(task.execution, task.execution);
   }
 
-  /**
-   * Schedule writing a command to the terminal. Retries briefly if the session
-   * isn't ready yet (the terminal instance creates the actual session on mount).
-   */
-  function scheduleCommandWrite(sessionId: string, command: string) {
-    let attempts = 0;
-    const maxAttempts = 20;
-    const interval = setInterval(() => {
-      attempts++;
-      const meta = terminalStore.sessions.get(sessionId);
-      if (meta?.attached) {
-        clearInterval(interval);
-        // Write the command + Enter to execute it
-        terminalConnectionManager.write(sessionId, command + '\n');
-      } else if (attempts >= maxAttempts) {
-        clearInterval(interval);
-        // Fallback: just try writing anyway
-        terminalConnectionManager.write(sessionId, command + '\n');
-      }
-    }, 100);
-  }
-
-  async function refreshTasks(e: MouseEvent) {
+  function refreshTasks(e: MouseEvent) {
     e.stopPropagation();
-    await taskRunnerStore.refreshTasks();
+    taskRunnerStore.refreshTasks();
   }
 
   // Group tasks by source for display
-  const groupedTasks = $derived(() => {
+  const groupedTasks = $derived.by(() => {
     const sorted = taskRunnerStore.sortedTasks;
     const hasRecent = sorted.some((t) => taskRunnerStore.isRecent(t.id));
     const recent: WorkspaceTask[] = [];
@@ -169,12 +131,12 @@
         <div class="dropdown-empty">No tasks found</div>
         <div class="dropdown-hint">Add scripts to package.json or targets to a Makefile</div>
       {:else}
-        {@const groups = groupedTasks()}
+        {@const groups = groupedTasks}
 
         {#if groups.recent.length > 0}
           <div class="task-group-label">Recent</div>
           {#each groups.recent as task (task.id)}
-            <button class="task-option" onclick={() => runTask(task)}>
+            <button class="task-option" onclick={() => runTask(task)} title={task.execution}>
               <svg class="task-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <circle cx="12" cy="12" r="10" />
                 <polyline points="12 6 12 12 16 14" />
@@ -191,7 +153,7 @@
             {taskRunnerStore.packageManager ?? 'npm'} scripts
           </div>
           {#each groups.pkgTasks as task (task.id)}
-            <button class="task-option" onclick={() => runTask(task)}>
+            <button class="task-option" onclick={() => runTask(task)} title={task.execution}>
               <svg class="task-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <polygon points="5 3 19 12 5 21 5 3" />
               </svg>
@@ -207,7 +169,7 @@
           {/if}
           <div class="task-group-label">Makefile targets</div>
           {#each groups.makeTasks as task (task.id)}
-            <button class="task-option" onclick={() => runTask(task)}>
+            <button class="task-option" onclick={() => runTask(task)} title={task.execution}>
               <svg class="task-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <polygon points="5 3 19 12 5 21 5 3" />
               </svg>

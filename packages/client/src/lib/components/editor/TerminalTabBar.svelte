@@ -35,6 +35,14 @@
   function closeTab(e: MouseEvent, tabId: string) {
     e.stopPropagation();
     terminalStore.closeTab(tabId);
+    // After closing, focus moves to the newly active tab
+    requestAnimationFrame(() => {
+      const newActiveId = terminalStore.activeTabId;
+      if (newActiveId) {
+        const el = document.getElementById(`terminal-tab-${newActiveId}`);
+        el?.focus();
+      }
+    });
   }
 
   function startRename(e: MouseEvent, tab: TerminalTab) {
@@ -70,6 +78,14 @@
   function addTab(profileId?: string) {
     terminalStore.createTab(profileId);
     dropdownOpen = false;
+    // Focus the newly created tab after DOM updates
+    requestAnimationFrame(() => {
+      const newActiveId = terminalStore.activeTabId;
+      if (newActiveId) {
+        const el = document.getElementById(`terminal-tab-${newActiveId}`);
+        el?.focus();
+      }
+    });
   }
 
   function addDefaultTab() {
@@ -89,16 +105,40 @@
   function closeDropdown() {
     dropdownOpen = false;
   }
+
+  /**
+   * Focus management: when active tab changes (create, close, switch),
+   * move DOM focus to the newly active tab element for keyboard users.
+   */
+  $effect(() => {
+    const id = terminalStore.activeTabId;
+    if (!id) return;
+    // Schedule focus after DOM update
+    requestAnimationFrame(() => {
+      const el = document.getElementById(`terminal-tab-${id}`);
+      // Only move focus if a tab element currently has focus (keyboard navigation)
+      // or if no element is focused (tab was just closed)
+      if (
+        el &&
+        (!document.activeElement ||
+          document.activeElement === document.body ||
+          document.activeElement?.getAttribute('role') === 'tab')
+      ) {
+        el.focus();
+      }
+    });
+  });
 </script>
 
 <svelte:window onclick={closeDropdown} />
 
 <div class="terminal-tab-bar">
-  <div class="tabs-scroll">
-    {#each terminalStore.tabs as tab (tab.id)}
+  <div class="tabs-scroll" role="tablist" aria-label="Terminal tabs">
+    {#each terminalStore.tabs as tab, tabIndex (tab.id)}
       {@const isActive = tab.id === terminalStore.activeTabId}
       {@const isEditing = tab.id === editingTabId}
       {@const isBroadcasting = terminalStore.isBroadcastActiveForTab(tab.id)}
+      {@const isLogging = terminalStore.isLogging(tab.focusedSessionId)}
 
       <!-- svelte-ignore a11y_no_static_element_interactions -->
       <div
@@ -108,12 +148,39 @@
         onclick={() => activateTab(tab.id)}
         ondblclick={(e) => startRename(e, tab)}
         role="tab"
-        tabindex="0"
+        id="terminal-tab-{tab.id}"
+        tabindex={isActive ? 0 : -1}
         aria-selected={isActive}
+        aria-controls="terminal-tabpanel-{tab.id}"
         onkeydown={(e) => {
           if (e.key === 'Enter' || e.key === ' ') {
             e.preventDefault();
             activateTab(tab.id);
+          } else if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
+            e.preventDefault();
+            const nextIdx = (tabIndex + 1) % terminalStore.tabs.length;
+            const nextTab = document.getElementById(`terminal-tab-${terminalStore.tabs[nextIdx].id}`);
+            nextTab?.focus();
+            activateTab(terminalStore.tabs[nextIdx].id);
+          } else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
+            e.preventDefault();
+            const prevIdx = (tabIndex - 1 + terminalStore.tabs.length) % terminalStore.tabs.length;
+            const prevTab = document.getElementById(`terminal-tab-${terminalStore.tabs[prevIdx].id}`);
+            prevTab?.focus();
+            activateTab(terminalStore.tabs[prevIdx].id);
+          } else if (e.key === 'Home') {
+            e.preventDefault();
+            const firstTab = document.getElementById(`terminal-tab-${terminalStore.tabs[0].id}`);
+            firstTab?.focus();
+            activateTab(terminalStore.tabs[0].id);
+          } else if (e.key === 'End') {
+            e.preventDefault();
+            const lastTab = document.getElementById(`terminal-tab-${terminalStore.tabs[terminalStore.tabs.length - 1].id}`);
+            lastTab?.focus();
+            activateTab(terminalStore.tabs[terminalStore.tabs.length - 1].id);
+          } else if (e.key === 'Delete') {
+            e.preventDefault();
+            terminalStore.closeTab(tab.id);
           }
         }}
       >
@@ -144,6 +211,14 @@
           <span class="tab-label" title={terminalStore.sessions.get(tab.focusedSessionId)?.cwd || tab.label}>{getTabDisplayLabel(tab)}</span>
         {/if}
 
+        {#if isLogging}
+          <span class="logging-indicator" title="Session logging active" aria-label="Session logging active">
+            <svg width="8" height="8" viewBox="0 0 8 8" aria-hidden="true">
+              <circle cx="4" cy="4" r="4" fill="currentColor" />
+            </svg>
+          </span>
+        {/if}
+
         <button
           class="tab-close-btn"
           onclick={(e) => closeTab(e, tab.id)}
@@ -163,6 +238,15 @@
       onclick={toggleDropdown}
       aria-label="New terminal"
       title="New terminal"
+      aria-haspopup="menu"
+      aria-expanded={dropdownOpen}
+      onkeydown={(e) => {
+        if (e.key === 'Escape' && dropdownOpen) {
+          e.preventDefault();
+          e.stopPropagation();
+          closeDropdown();
+        }
+      }}
     >
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
         <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
@@ -171,9 +255,21 @@
 
     {#if dropdownOpen}
       <!-- svelte-ignore a11y_no_static_element_interactions -->
-      <div class="shell-dropdown" onclick={(e) => e.stopPropagation()}>
+      <div
+        class="shell-dropdown"
+        role="menu"
+        aria-label="Shell profiles"
+        onclick={(e) => e.stopPropagation()}
+        onkeydown={(e) => {
+          if (e.key === 'Escape') {
+            e.preventDefault();
+            e.stopPropagation();
+            closeDropdown();
+          }
+        }}
+      >
         <!-- Default / plain shell -->
-        <button class="shell-option" onclick={() => addDefaultTab()}>
+        <button class="shell-option" role="menuitem" onclick={() => addDefaultTab()}>
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <polyline points="4 17 10 11 4 5" /><line x1="12" y1="19" x2="20" y2="19" />
           </svg>
@@ -188,7 +284,7 @@
           <div class="dropdown-separator"></div>
           <div class="dropdown-section-label">Detected Shells</div>
           {#each autoProfiles as profile (profile.id)}
-            <button class="shell-option" onclick={() => addTab(profile.id)}>
+            <button class="shell-option" role="menuitem" onclick={() => addTab(profile.id)}>
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <polyline points="4 17 10 11 4 5" /><line x1="12" y1="19" x2="20" y2="19" />
               </svg>
@@ -205,7 +301,7 @@
           <div class="dropdown-separator"></div>
           <div class="dropdown-section-label">Custom Profiles</div>
           {#each customProfiles as profile (profile.id)}
-            <button class="shell-option" onclick={() => addTab(profile.id)}>
+            <button class="shell-option" role="menuitem" onclick={() => addTab(profile.id)}>
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 {#if profile.icon === 'code'}
                   <polyline points="16 18 22 12 16 6" /><polyline points="8 6 2 12 8 18" />
@@ -275,6 +371,13 @@
     border-bottom: 2px solid var(--accent-primary);
     margin-bottom: -1px;
   }
+  .term-tab:focus-visible {
+    outline: 2px solid var(--border-focus);
+    outline-offset: -2px;
+  }
+  .term-tab:focus:not(:focus-visible) {
+    outline: none;
+  }
 
   .shell-icon {
     flex-shrink: 0;
@@ -302,6 +405,20 @@
     max-width: 120px;
     overflow: hidden;
     text-overflow: ellipsis;
+  }
+
+  /* ── Logging indicator ── */
+  .logging-indicator {
+    flex-shrink: 0;
+    color: var(--accent-error, #ff3344);
+    display: flex;
+    align-items: center;
+    animation: logging-pulse 2s ease-in-out infinite;
+  }
+
+  @keyframes logging-pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.4; }
   }
 
   .tab-rename-input {
@@ -344,6 +461,11 @@
     background: color-mix(in srgb, var(--accent-error) 18%, var(--bg-active));
     color: var(--accent-error);
   }
+  .tab-close-btn:focus-visible {
+    opacity: 1;
+    outline: 2px solid var(--border-focus);
+    outline-offset: -1px;
+  }
 
   /* ── Add tab button ── */
   .add-tab-wrapper {
@@ -370,6 +492,10 @@
   .add-tab-btn:hover {
     color: var(--text-primary);
     background: var(--bg-hover);
+  }
+  .add-tab-btn:focus-visible {
+    outline: 2px solid var(--border-focus);
+    outline-offset: -2px;
   }
 
   /* ── Shell profile dropdown ── */

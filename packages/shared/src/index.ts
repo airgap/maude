@@ -224,6 +224,8 @@ export type {
   TerminalCwdChanged,
   TerminalCommandStart,
   TerminalCommandEnd,
+  TerminalLoggingStarted,
+  TerminalLoggingStopped,
   SplitDirection,
   TerminalLeaf,
   TerminalBranch,

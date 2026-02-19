@@ -8,6 +8,7 @@
   import ContextMenu from '$lib/components/ui/ContextMenu.svelte';
   import type { ContextMenuItem } from '$lib/components/ui/ContextMenu.svelte';
   import { shellEscapePath } from '$lib/utils/shell-escape';
+  import { editorStore } from '$lib/stores/editor.svelte';
   import '@xterm/xterm/css/xterm.css';
 
   let { sessionId, active = true } = $props<{ sessionId: string; active?: boolean }>();
@@ -22,6 +23,17 @@
 
   // ── Drag-and-drop state ──
   let dragOver = $state(false);
+
+  /** Accessible label describing this terminal session */
+  const terminalAriaLabel = $derived.by(() => {
+    const meta = terminalStore.sessions.get(sessionId);
+    if (meta) {
+      const shell = meta.shell ? meta.shell.split('/').pop() : 'terminal';
+      const cwd = meta.cwd || '';
+      return `Terminal session: ${shell}${cwd ? ` — ${cwd}` : ''}`;
+    }
+    return `Terminal session: ${sessionId}`;
+  });
 
   /** Resolve the working directory for new sessions */
   function getCwd(): string {
@@ -110,6 +122,39 @@
     });
   }
 
+  // ── Session logging ──
+
+  /** Toggle session output logging on/off via server API */
+  async function toggleLogging(): Promise<void> {
+    const isCurrentlyLogging = terminalStore.isLogging(sessionId);
+    const enabled = !isCurrentlyLogging;
+
+    try {
+      const result = await terminalConnectionManager.toggleLogging(sessionId, enabled);
+      if (enabled && result.logFilePath) {
+        terminalStore.setLogging(sessionId, result.logFilePath);
+      } else if (!enabled) {
+        terminalStore.clearLogging(sessionId);
+      }
+    } catch (err) {
+      console.error('[TerminalInstance] Failed to toggle logging:', err);
+    }
+  }
+
+  /** Open the session log file in the IDE editor */
+  async function openLogFile(): Promise<void> {
+    const logPath = terminalStore.getLogFilePath(sessionId);
+    if (logPath) {
+      editorStore.openFile(logPath, false);
+      return;
+    }
+    // Fallback: ask the server for the log file path
+    const serverPath = await terminalConnectionManager.getLogFilePath(sessionId);
+    if (serverPath) {
+      editorStore.openFile(serverPath, false);
+    }
+  }
+
   // ── Context menu ──
 
   function handleContextMenu(e: MouseEvent) {
@@ -148,6 +193,23 @@
       action: () => terminalConnectionManager.clearTerminal(sessionId),
     },
     { kind: 'separator' },
+    {
+      label: terminalStore.isLogging(sessionId) ? 'Stop Logging' : 'Start Logging',
+      icon: terminalStore.isLogging(sessionId)
+        ? `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="9" y1="9" x2="15" y2="15"/><line x1="15" y1="9" x2="9" y2="15"/></svg>`
+        : `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="3" fill="currentColor"/></svg>`,
+      action: () => toggleLogging(),
+    },
+    ...(terminalStore.getLogFilePath(sessionId)
+      ? [
+          {
+            label: 'Open Log File',
+            icon: `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>`,
+            action: () => openLogFile(),
+          } as ContextMenuItem,
+        ]
+      : []),
+    { kind: 'separator' as const },
     {
       label: 'Split Horizontally',
       shortcut: isMac ? '⌘⇧H' : 'Ctrl+Shift+H',
@@ -240,6 +302,8 @@
       cwd,
       exitCode: null,
       attached: true,
+      logging: false,
+      logFilePath: null,
     });
 
     // If the server assigned a different ID than the store's placeholder,
@@ -266,8 +330,12 @@
       if (serverSession) {
         // ── Reconnect to existing server session ──
         try {
+          // Load buffer snapshot from sessionStorage for instant visual re-render
+          const snapshot = terminalConnectionManager.loadSnapshot(sessionId) ?? undefined;
+
           terminalConnectionManager.reconnectSession(sessionId, {
             cwd: serverSession.cwd,
+            snapshot,
           });
 
           // Register session metadata from server data
@@ -278,7 +346,14 @@
             cwd: serverSession.cwd,
             exitCode: serverSession.exitCode,
             attached: true,
+            logging: serverSession.logging ?? false,
+            logFilePath: serverSession.logFilePath ?? null,
           });
+
+          // Restore logging state if the server session was logging
+          if (serverSession.logging && serverSession.logFilePath) {
+            terminalStore.setLogging(sessionId, serverSession.logFilePath);
+          }
 
           // Clear the reconnectable flag so we don't try again
           terminalStore.clearReconnectable(sessionId);
@@ -319,6 +394,15 @@
     // Register control message listener for shell integration events
     cleanupControlListener?.();
     cleanupControlListener = registerControlListener(sessionId);
+
+    // Check for pending command (task runner) and send it after a short delay
+    // to allow the shell prompt to initialize
+    const pendingCmd = terminalStore.consumePendingCommand(sessionId);
+    if (pendingCmd) {
+      setTimeout(() => {
+        terminalConnectionManager.write(sessionId, pendingCmd);
+      }, 300);
+    }
   }
 
   // Re-derive and apply theme when settings change
@@ -367,6 +451,12 @@
         case 'session_exit':
           terminalStore.setExitCode(sid, msg.exitCode);
           break;
+        case 'logging_started':
+          terminalStore.setLogging(sid, msg.logFilePath);
+          break;
+        case 'logging_stopped':
+          terminalStore.clearLogging(sid);
+          break;
       }
     });
   }
@@ -410,6 +500,8 @@
   ondragover={handleDragOver}
   ondragleave={handleDragLeave}
   ondrop={handleDrop}
+  role="group"
+  aria-label={terminalAriaLabel}
 ></div>
 
 <style>

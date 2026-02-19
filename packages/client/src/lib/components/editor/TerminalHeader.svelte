@@ -3,7 +3,7 @@
   import TerminalActions from './TerminalActions.svelte';
 </script>
 
-<div class="terminal-header">
+<div class="terminal-header" role="toolbar" aria-label="Terminal controls">
   <TerminalTabBar />
   <TerminalActions />
 </div>

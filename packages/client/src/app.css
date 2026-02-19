@@ -1463,6 +1463,185 @@
   --syn-operator: #f9a8c0;
 }
 
+/* ---- HIGH CONTRAST DARK ---- */
+[data-theme='high-contrast'] {
+  --bg-primary: #000000;
+  --bg-secondary: #0a0a0a;
+  --bg-tertiary: #1a1a1a;
+  --bg-elevated: #2a2a2a;
+  --bg-input: #000000;
+  --bg-hover: rgba(255, 255, 255, 0.12);
+  --bg-active: rgba(255, 255, 255, 0.18);
+  --bg-selection: rgba(255, 255, 0, 0.35);
+  --bg-code: #0a0a0a;
+  --bg-diff-add: rgba(0, 255, 0, 0.15);
+  --bg-diff-remove: rgba(255, 0, 0, 0.15);
+  --bg-glass: rgba(0, 0, 0, 0.85);
+  --bg-message-user: rgba(255, 255, 255, 0.05);
+  --bg-message-assistant: rgba(255, 255, 255, 0.08);
+  --border-primary: rgba(255, 255, 255, 0.6);
+  --border-secondary: rgba(255, 255, 255, 0.3);
+  --border-focus: #ffffff;
+  --border-glow: rgba(255, 255, 255, 0.8);
+  --text-primary: #ffffff;
+  --text-secondary: #e0e0e0;
+  --text-tertiary: #b0b0b0;
+  --text-link: #66ccff;
+  --text-on-accent: #000000;
+  --accent-primary: #66ccff;
+  --accent-secondary: #00ff66;
+  --accent-warning: #ffff00;
+  --accent-error: #ff4444;
+  --accent-info: #66ccff;
+  --accent-purple: #cc88ff;
+  --accent-pink: #ff66aa;
+  --accent-gradient: linear-gradient(90deg, #66ccff, #00ff66);
+  --accent-gradient-vivid: linear-gradient(90deg, #3399ff, #66ccff, #00ff66);
+  --scrollbar-track: rgba(255, 255, 255, 0.05);
+  --scrollbar-thumb: rgba(255, 255, 255, 0.4);
+  --shadow: 0 2px 8px rgba(255, 255, 255, 0.1);
+  --shadow-lg: 0 4px 16px rgba(255, 255, 255, 0.15);
+  --shadow-glow: 0 0 8px rgba(255, 255, 255, 0.2);
+  --shadow-glow-sm: 0 0 4px rgba(255, 255, 255, 0.15);
+  --syn-keyword: #ff66aa;
+  --syn-string: #00ff66;
+  --syn-number: #ffff00;
+  --syn-function: #66ccff;
+  --syn-comment: #888888;
+  --syn-type: #cc88ff;
+  --syn-variable: #ffffff;
+  --syn-operator: #ff6644;
+  --hover-word-bg: rgba(255, 255, 255, 0.12);
+  --hover-word-border: rgba(255, 255, 255, 0.4);
+}
+
+/* ---- HIGH CONTRAST LIGHT ---- */
+[data-theme='high-contrast-light'] {
+  --rainbow-l: 0.65;
+  --bg-primary: #ffffff;
+  --bg-secondary: #f0f0f0;
+  --bg-tertiary: #e0e0e0;
+  --bg-elevated: #ffffff;
+  --bg-input: #ffffff;
+  --bg-hover: rgba(0, 0, 0, 0.08);
+  --bg-active: rgba(0, 0, 0, 0.14);
+  --bg-selection: rgba(0, 90, 180, 0.3);
+  --bg-code: #f0f0f0;
+  --bg-diff-add: rgba(0, 128, 0, 0.15);
+  --bg-diff-remove: rgba(200, 0, 0, 0.15);
+  --bg-glass: rgba(255, 255, 255, 0.92);
+  --bg-message-user: rgba(0, 0, 0, 0.04);
+  --bg-message-assistant: rgba(0, 0, 0, 0.06);
+  --border-primary: rgba(0, 0, 0, 0.7);
+  --border-secondary: rgba(0, 0, 0, 0.4);
+  --border-focus: #000000;
+  --border-glow: rgba(0, 0, 0, 0.9);
+  --text-primary: #000000;
+  --text-secondary: #1a1a1a;
+  --text-tertiary: #444444;
+  --text-link: #0000cc;
+  --text-on-accent: #ffffff;
+  --accent-primary: #0055aa;
+  --accent-secondary: #006600;
+  --accent-warning: #886600;
+  --accent-error: #cc0000;
+  --accent-info: #0055aa;
+  --accent-purple: #6600aa;
+  --accent-pink: #aa0066;
+  --accent-gradient: linear-gradient(90deg, #0055aa, #006600);
+  --accent-gradient-vivid: linear-gradient(90deg, #003388, #0055aa, #006600);
+  --scrollbar-track: rgba(0, 0, 0, 0.05);
+  --scrollbar-thumb: rgba(0, 0, 0, 0.4);
+  --shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+  --shadow-lg: 0 4px 16px rgba(0, 0, 0, 0.3);
+  --shadow-glow: none;
+  --shadow-glow-sm: none;
+  --syn-keyword: #aa0066;
+  --syn-string: #006600;
+  --syn-number: #886600;
+  --syn-function: #0055aa;
+  --syn-comment: #666666;
+  --syn-type: #6600aa;
+  --syn-variable: #000000;
+  --syn-operator: #cc0000;
+  --hover-word-bg: rgba(0, 0, 0, 0.08);
+  --hover-word-border: rgba(0, 0, 0, 0.3);
+}
+
+/* ── Auto-activate high contrast when OS/IDE requests it ── */
+@media (prefers-contrast: more) {
+  :root,
+  [data-theme='dark'] {
+    --bg-primary: #000000;
+    --bg-secondary: #0a0a0a;
+    --bg-tertiary: #1a1a1a;
+    --bg-elevated: #2a2a2a;
+    --bg-input: #000000;
+    --bg-hover: rgba(255, 255, 255, 0.12);
+    --bg-active: rgba(255, 255, 255, 0.18);
+    --bg-selection: rgba(255, 255, 0, 0.35);
+    --border-primary: rgba(255, 255, 255, 0.6);
+    --border-secondary: rgba(255, 255, 255, 0.3);
+    --border-focus: #ffffff;
+    --border-glow: rgba(255, 255, 255, 0.8);
+    --text-primary: #ffffff;
+    --text-secondary: #e0e0e0;
+    --text-tertiary: #b0b0b0;
+    --text-link: #66ccff;
+    --text-on-accent: #000000;
+    --accent-primary: #66ccff;
+    --accent-secondary: #00ff66;
+    --accent-warning: #ffff00;
+    --accent-error: #ff4444;
+  }
+
+  [data-theme='light'] {
+    --bg-primary: #ffffff;
+    --bg-secondary: #f0f0f0;
+    --bg-tertiary: #e0e0e0;
+    --bg-elevated: #ffffff;
+    --bg-input: #ffffff;
+    --bg-hover: rgba(0, 0, 0, 0.08);
+    --bg-active: rgba(0, 0, 0, 0.14);
+    --bg-selection: rgba(0, 90, 180, 0.3);
+    --border-primary: rgba(0, 0, 0, 0.7);
+    --border-secondary: rgba(0, 0, 0, 0.4);
+    --border-focus: #000000;
+    --border-glow: rgba(0, 0, 0, 0.9);
+    --text-primary: #000000;
+    --text-secondary: #1a1a1a;
+    --text-tertiary: #444444;
+    --text-link: #0000cc;
+    --text-on-accent: #ffffff;
+    --accent-primary: #0055aa;
+    --accent-secondary: #006600;
+    --accent-warning: #886600;
+    --accent-error: #cc0000;
+  }
+
+  /* Enhanced focus visibility in high contrast mode */
+  :focus-visible {
+    outline: 2px solid var(--border-focus) !important;
+    outline-offset: 2px !important;
+  }
+}
+
+/* ── Forced colors mode (Windows High Contrast) ── */
+@media (forced-colors: active) {
+  :root {
+    --border-primary: CanvasText;
+    --border-secondary: CanvasText;
+    --border-focus: Highlight;
+    --text-primary: CanvasText;
+    --text-secondary: CanvasText;
+    --text-link: LinkText;
+    --bg-primary: Canvas;
+    --bg-secondary: Canvas;
+    --accent-primary: Highlight;
+    --accent-error: Mark;
+  }
+}
+
 /* ============================================
    GLOBAL STYLES
    ============================================ */

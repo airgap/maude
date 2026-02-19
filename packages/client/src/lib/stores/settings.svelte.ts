@@ -70,9 +70,15 @@ interface SettingsState {
   termRightClickPaste: boolean;
   termDefaultShell: string;
   termEnableShellIntegration: boolean;
+  termEnableImages: boolean;
+  termImageMaxWidth: number;
+  termImageMaxHeight: number;
+  termImageStorageLimit: number;
   // Terminal profiles
   terminalProfiles: ShellProfile[];
   termDefaultProfileId: string;
+  // Agent terminal integration
+  agentTerminalEnabled: boolean;
 }
 
 const defaults: SettingsState = {
@@ -136,8 +142,13 @@ const defaults: SettingsState = {
   termRightClickPaste: false,
   termDefaultShell: '',
   termEnableShellIntegration: true,
+  termEnableImages: false,
+  termImageMaxWidth: 1000,
+  termImageMaxHeight: 1000,
+  termImageStorageLimit: 64,
   terminalProfiles: [],
   termDefaultProfileId: '',
+  agentTerminalEnabled: false,
 };
 
 function loadFromStorage(): SettingsState {
@@ -401,11 +412,26 @@ function createSettingsStore() {
     get termEnableShellIntegration() {
       return state.termEnableShellIntegration;
     },
+    get termEnableImages() {
+      return state.termEnableImages;
+    },
+    get termImageMaxWidth() {
+      return state.termImageMaxWidth;
+    },
+    get termImageMaxHeight() {
+      return state.termImageMaxHeight;
+    },
+    get termImageStorageLimit() {
+      return state.termImageStorageLimit;
+    },
     get terminalProfiles() {
       return state.terminalProfiles;
     },
     get termDefaultProfileId() {
       return state.termDefaultProfileId;
+    },
+    get agentTerminalEnabled() {
+      return state.agentTerminalEnabled;
     },
     get all() {
       return state;

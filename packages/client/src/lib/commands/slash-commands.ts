@@ -79,6 +79,8 @@ const commands: SlashCommand[] = [
           'light-colorblind',
           'dark-ansi',
           'light-ansi',
+          'high-contrast',
+          'high-contrast-light',
         ];
         if (validThemes.includes(name)) {
           settingsStore.setTheme(name as any);
@@ -92,6 +94,8 @@ const commands: SlashCommand[] = [
           'light-colorblind',
           'dark-ansi',
           'light-ansi',
+          'high-contrast',
+          'high-contrast-light',
         ] as const;
         const idx = themes.indexOf(settingsStore.theme as (typeof themes)[number]);
         settingsStore.setTheme(themes[(idx < 0 ? 0 : idx + 1) % themes.length]);

@@ -247,6 +247,8 @@
     { id: 'goth', label: 'Redrum' },
     { id: 'sakura-light', label: 'Sakura Light' },
     { id: 'sakura', label: 'Sakura Dark' },
+    { id: 'high-contrast', label: 'High Contrast Dark' },
+    { id: 'high-contrast-light', label: 'High Contrast Light' },
   ];
 
   const cloudModels = [
@@ -262,6 +264,97 @@
   // --- Terminal settings state ---
   let detectedShells = $state<ShellInfo[]>([]);
   let shellsLoading = $state(false);
+
+  // --- Terminal profile editing state ---
+  let termProfileEditing = $state(false);
+  let termProfileEditId = $state<string | null>(null);
+  let termProfileName = $state('');
+  let termProfileShellPath = $state('');
+  let termProfileArgs = $state('');
+  let termProfileEnvText = $state('');
+  let termProfileCwd = $state('');
+  let termProfileIcon = $state('terminal');
+
+  function startNewTermProfile() {
+    termProfileEditing = true;
+    termProfileEditId = null;
+    termProfileName = '';
+    termProfileShellPath = '';
+    termProfileArgs = '';
+    termProfileEnvText = '';
+    termProfileCwd = '';
+    termProfileIcon = 'terminal';
+  }
+
+  function startEditTermProfile(id: string) {
+    const p = settingsStore.terminalProfiles.find((prof) => prof.id === id);
+    if (!p) return;
+    termProfileEditing = true;
+    termProfileEditId = id;
+    termProfileName = p.name;
+    termProfileShellPath = p.shellPath;
+    termProfileArgs = (p.args || []).join(' ');
+    termProfileEnvText = Object.entries(p.env || {}).map(([k, v]) => `${k}=${v}`).join('\n');
+    termProfileCwd = p.cwd || '';
+    termProfileIcon = p.icon || 'terminal';
+  }
+
+  function cancelTermProfileEdit() {
+    termProfileEditing = false;
+    termProfileEditId = null;
+  }
+
+  function saveTermProfile() {
+    if (!termProfileName.trim() || !termProfileShellPath.trim()) return;
+
+    const args = termProfileArgs.trim() ? termProfileArgs.trim().split(/\s+/) : [];
+    const env: Record<string, string> = {};
+    for (const line of termProfileEnvText.split('\n')) {
+      const trimmed = line.trim();
+      if (!trimmed || !trimmed.includes('=')) continue;
+      const eqIdx = trimmed.indexOf('=');
+      const key = trimmed.slice(0, eqIdx).trim();
+      const val = trimmed.slice(eqIdx + 1).trim();
+      if (key) env[key] = val;
+    }
+
+    if (termProfileEditId) {
+      settingsStore.updateTerminalProfile(termProfileEditId, {
+        name: termProfileName.trim(),
+        shellPath: termProfileShellPath.trim(),
+        args,
+        env,
+        cwd: termProfileCwd.trim() || undefined,
+        icon: termProfileIcon,
+      });
+    } else {
+      const id = `custom-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+      settingsStore.addTerminalProfile({
+        id,
+        name: termProfileName.trim(),
+        shellPath: termProfileShellPath.trim(),
+        args,
+        env,
+        cwd: termProfileCwd.trim() || undefined,
+        icon: termProfileIcon,
+      });
+    }
+
+    termProfileEditing = false;
+    termProfileEditId = null;
+  }
+
+  function deleteTermProfile(id: string) {
+    settingsStore.deleteTerminalProfile(id);
+  }
+
+  function setTermDefaultProfile(id: string) {
+    if (settingsStore.termDefaultProfileId === id) {
+      settingsStore.setDefaultProfileId('');
+    } else {
+      settingsStore.setDefaultProfileId(id);
+    }
+  }
 
   async function loadDetectedShells() {
     shellsLoading = true;
@@ -1242,6 +1335,236 @@
               <span class="toggle-slider"></span>
             </label>
           </div>
+
+          <!-- Inline Images -->
+          <div class="setting-group">
+            <label class="setting-label">Inline images</label>
+            <p class="setting-desc">Render images inline via iTerm2 and Sixel protocols (for imgcat, viu, timg, matplotlib)</p>
+            <label class="toggle">
+              <input
+                type="checkbox"
+                checked={settingsStore.termEnableImages}
+                onchange={() =>
+                  settingsStore.update({ termEnableImages: !settingsStore.termEnableImages })}
+              />
+              <span class="toggle-slider"></span>
+            </label>
+          </div>
+
+          {#if settingsStore.termEnableImages}
+            <!-- Image Max Dimensions -->
+            <div class="setting-group">
+              <label class="setting-label">Max image dimensions — {settingsStore.termImageMaxWidth} &times; {settingsStore.termImageMaxHeight}px</label>
+              <p class="setting-desc">Maximum width and height for rendered images</p>
+              <div class="image-dimension-row">
+                <label class="image-dim-label">
+                  Width
+                  <input
+                    type="range"
+                    min="200"
+                    max="4000"
+                    step="100"
+                    value={settingsStore.termImageMaxWidth}
+                    oninput={(e) =>
+                      settingsStore.update({ termImageMaxWidth: Number((e.target as HTMLInputElement).value) })}
+                  />
+                </label>
+                <label class="image-dim-label">
+                  Height
+                  <input
+                    type="range"
+                    min="200"
+                    max="4000"
+                    step="100"
+                    value={settingsStore.termImageMaxHeight}
+                    oninput={(e) =>
+                      settingsStore.update({ termImageMaxHeight: Number((e.target as HTMLInputElement).value) })}
+                  />
+                </label>
+              </div>
+            </div>
+
+            <!-- Image Storage Limit -->
+            <div class="setting-group">
+              <label class="setting-label">Image cache limit — {settingsStore.termImageStorageLimit} MB</label>
+              <p class="setting-desc">Maximum memory for cached images (older images are evicted when exceeded)</p>
+              <input
+                type="range"
+                min="16"
+                max="256"
+                step="16"
+                value={settingsStore.termImageStorageLimit}
+                oninput={(e) =>
+                  settingsStore.update({ termImageStorageLimit: Number((e.target as HTMLInputElement).value) })}
+              />
+            </div>
+          {/if}
+
+          <!-- ─── Terminal Profiles ─── -->
+          <div class="setting-group">
+            <label class="setting-label">Terminal profiles</label>
+            <p class="setting-desc">Named configurations for quick terminal creation</p>
+
+            <!-- Auto-detected profiles (read-only) -->
+            {#if detectedShells.length > 0}
+              <div class="profiles-section">
+                <div class="profiles-section-label">Detected Shells</div>
+                {#each detectedShells as shell}
+                  {@const autoId = `auto-${shell.name.toLowerCase()}`}
+                  {@const isDefault = settingsStore.termDefaultProfileId === autoId}
+                  <div class="profile-row">
+                    <svg class="profile-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <polyline points="4 17 10 11 4 5" /><line x1="12" y1="19" x2="20" y2="19" />
+                    </svg>
+                    <div class="profile-info">
+                      <span class="profile-name">{shell.name}{shell.version ? ` (${shell.version})` : ''}</span>
+                      <span class="profile-path">{shell.path}</span>
+                    </div>
+                    <div class="profile-actions">
+                      <button
+                        class="profile-action-btn"
+                        class:is-default={isDefault}
+                        title={isDefault ? 'Remove as default' : 'Set as default'}
+                        onclick={() => setTermDefaultProfile(autoId)}
+                      >
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill={isDefault ? 'currentColor' : 'none'} stroke="currentColor" stroke-width="2">
+                          <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+                        </svg>
+                      </button>
+                      <span class="profile-badge read-only">auto</span>
+                    </div>
+                  </div>
+                {/each}
+              </div>
+            {/if}
+
+            <!-- Custom profiles -->
+            <div class="profiles-section">
+              <div class="profiles-section-label">Custom Profiles</div>
+              {#if settingsStore.terminalProfiles.length === 0 && !termProfileEditing}
+                <p class="setting-desc" style="margin: 4px 0 8px; font-style: italic;">No custom profiles yet</p>
+              {/if}
+              {#each settingsStore.terminalProfiles as tp (tp.id)}
+                {@const isDefault = settingsStore.termDefaultProfileId === tp.id}
+                <div class="profile-row">
+                  <svg class="profile-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    {#if tp.icon === 'code'}
+                      <polyline points="16 18 22 12 16 6" /><polyline points="8 6 2 12 8 18" />
+                    {:else if tp.icon === 'server'}
+                      <rect x="2" y="2" width="20" height="8" rx="2" /><rect x="2" y="14" width="20" height="8" rx="2" /><circle cx="6" cy="6" r="1" fill="currentColor" /><circle cx="6" cy="18" r="1" fill="currentColor" />
+                    {:else}
+                      <polyline points="4 17 10 11 4 5" /><line x1="12" y1="19" x2="20" y2="19" />
+                    {/if}
+                  </svg>
+                  <div class="profile-info">
+                    <span class="profile-name">{tp.name}</span>
+                    <span class="profile-path">{tp.shellPath}{tp.args?.length ? ' ' + tp.args.join(' ') : ''}</span>
+                  </div>
+                  <div class="profile-actions">
+                    <button
+                      class="profile-action-btn"
+                      class:is-default={isDefault}
+                      title={isDefault ? 'Remove as default' : 'Set as default'}
+                      onclick={() => setTermDefaultProfile(tp.id)}
+                    >
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill={isDefault ? 'currentColor' : 'none'} stroke="currentColor" stroke-width="2">
+                        <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+                      </svg>
+                    </button>
+                    <button
+                      class="profile-action-btn"
+                      title="Edit profile"
+                      onclick={() => startEditTermProfile(tp.id)}
+                    >
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" /><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+                      </svg>
+                    </button>
+                    <button
+                      class="profile-action-btn danger"
+                      title="Delete profile"
+                      onclick={() => deleteTermProfile(tp.id)}
+                    >
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <polyline points="3 6 5 6 21 6" /><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                      </svg>
+                    </button>
+                  </div>
+                </div>
+              {/each}
+
+              {#if !termProfileEditing}
+                <button class="btn-secondary profile-add-btn" onclick={startNewTermProfile}>
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
+                  </svg>
+                  Add Profile
+                </button>
+              {/if}
+            </div>
+
+            <!-- Profile editor form -->
+            {#if termProfileEditing}
+              <div class="profile-editor">
+                <div class="profile-editor-title">{termProfileEditId ? 'Edit' : 'New'} Profile</div>
+                <div class="profile-field">
+                  <label class="profile-field-label">Name</label>
+                  <input type="text" class="setting-text-input" placeholder="My Profile" bind:value={termProfileName} />
+                </div>
+                <div class="profile-field">
+                  <label class="profile-field-label">Shell path</label>
+                  <input type="text" class="setting-text-input" placeholder="/bin/bash" bind:value={termProfileShellPath} />
+                </div>
+                <div class="profile-field">
+                  <label class="profile-field-label">Arguments</label>
+                  <input type="text" class="setting-text-input" placeholder="--login" bind:value={termProfileArgs} />
+                  <span class="profile-field-hint">Space-separated shell arguments</span>
+                </div>
+                <div class="profile-field">
+                  <label class="profile-field-label">Environment variables</label>
+                  <textarea class="setting-textarea" placeholder={"KEY=value\nANOTHER=value"} rows="3" bind:value={termProfileEnvText}></textarea>
+                  <span class="profile-field-hint">One per line: KEY=value</span>
+                </div>
+                <div class="profile-field">
+                  <label class="profile-field-label">Working directory</label>
+                  <input type="text" class="setting-text-input" placeholder="(uses workspace default)" bind:value={termProfileCwd} />
+                </div>
+                <div class="profile-field">
+                  <label class="profile-field-label">Icon</label>
+                  <select bind:value={termProfileIcon}>
+                    <option value="terminal">Terminal</option>
+                    <option value="code">Code</option>
+                    <option value="server">Server</option>
+                  </select>
+                </div>
+                <div class="profile-editor-actions">
+                  <button class="btn-secondary" onclick={cancelTermProfileEdit}>Cancel</button>
+                  <button class="btn-primary" onclick={saveTermProfile} disabled={!termProfileName.trim() || !termProfileShellPath.trim()}>
+                    {termProfileEditId ? 'Save' : 'Create'}
+                  </button>
+                </div>
+              </div>
+            {/if}
+
+            <!-- Default profile selector -->
+            <div class="profiles-section" style="margin-top: 12px;">
+              <div class="profiles-section-label">Default Profile</div>
+              <p class="setting-desc">Profile used when opening new terminal tabs with no specific selection</p>
+              <select
+                value={settingsStore.termDefaultProfileId}
+                onchange={(e) => settingsStore.setDefaultProfileId((e.target as HTMLSelectElement).value)}
+              >
+                <option value="">System default shell</option>
+                {#each detectedShells as shell}
+                  <option value={`auto-${shell.name.toLowerCase()}`}>{shell.name}{shell.version ? ` (${shell.version})` : ''}</option>
+                {/each}
+                {#each settingsStore.terminalProfiles as tp2}
+                  <option value={tp2.id}>{tp2.name}</option>
+                {/each}
+              </select>
+            </div>
+          </div>
+
         {:else if activeTab === 'permissions'}
           <div class="setting-group">
             <label class="setting-label">Permission mode</label>
@@ -1858,6 +2181,23 @@
   }
   .toggle input:checked + .toggle-slider::before {
     transform: translateX(20px);
+  }
+
+  /* Image dimension controls */
+  .image-dimension-row {
+    display: flex;
+    gap: 16px;
+  }
+  .image-dim-label {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    font-size: var(--fs-sm);
+    color: var(--text-secondary);
+  }
+  .image-dim-label input[type='range'] {
+    width: 100%;
   }
 
   /* Hypertheme grid */
@@ -2911,5 +3251,173 @@
   .setting-input:focus {
     border-color: var(--accent-primary);
     outline: none;
+  }
+
+  /* ── Terminal Profiles ── */
+  .term-profiles-section {
+    margin-top: 8px;
+  }
+  .term-profiles-section-label {
+    font-size: var(--fs-xs);
+    color: var(--text-tertiary);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 6px;
+  }
+  .term-profile-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 10px;
+    border: 1px solid var(--border-secondary);
+    border-radius: var(--radius-sm);
+    margin-bottom: 4px;
+    background: var(--bg-secondary);
+    transition: border-color var(--transition);
+  }
+  .term-profile-row:hover {
+    border-color: var(--border-primary);
+  }
+  .term-profile-icon {
+    flex-shrink: 0;
+    color: var(--text-tertiary);
+  }
+  .term-profile-info {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+  }
+  .term-profile-name {
+    font-size: var(--fs-sm);
+    color: var(--text-primary);
+    font-weight: 500;
+  }
+  .term-profile-path {
+    font-size: 11px;
+    color: var(--text-tertiary);
+    font-family: var(--font-family-mono, monospace);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .term-profile-actions {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    flex-shrink: 0;
+  }
+  .term-profile-action-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    border: none;
+    border-radius: var(--radius-sm);
+    background: transparent;
+    color: var(--text-tertiary);
+    cursor: pointer;
+    transition: color var(--transition), background var(--transition);
+    padding: 0;
+  }
+  .term-profile-action-btn:hover {
+    color: var(--text-primary);
+    background: var(--bg-hover);
+  }
+  .term-profile-action-btn.is-default {
+    color: var(--accent-warning, #ffaa00);
+  }
+  .term-profile-action-btn.danger:hover {
+    color: var(--accent-error);
+    background: color-mix(in srgb, var(--accent-error) 12%, transparent);
+  }
+  .term-profile-badge {
+    font-size: 9px;
+    padding: 1px 5px;
+    border-radius: var(--radius-sm);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    flex-shrink: 0;
+  }
+  .term-profile-badge.read-only {
+    background: color-mix(in srgb, var(--text-tertiary) 15%, transparent);
+    color: var(--text-tertiary);
+  }
+  .term-profile-add-btn {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 6px;
+  }
+
+  /* Terminal profile editor form */
+  .term-profile-editor {
+    margin-top: 10px;
+    padding: 12px;
+    border: 1px solid var(--border-primary);
+    border-radius: var(--radius);
+    background: var(--bg-secondary);
+  }
+  .term-profile-editor-title {
+    font-size: var(--fs-sm);
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: 10px;
+  }
+  .term-profile-field {
+    margin-bottom: 10px;
+  }
+  .term-profile-field-label {
+    display: block;
+    font-size: var(--fs-xs);
+    color: var(--text-secondary);
+    margin-bottom: 3px;
+  }
+  .term-profile-field-hint {
+    display: block;
+    font-size: 11px;
+    color: var(--text-tertiary);
+    margin-top: 2px;
+  }
+  .setting-textarea {
+    width: 100%;
+    padding: 6px 8px;
+    background: var(--bg-input);
+    border: 1px solid var(--border-secondary);
+    border-radius: var(--radius-sm);
+    color: var(--text-primary);
+    font-family: var(--font-family-mono, monospace);
+    font-size: var(--fs-xs);
+    resize: vertical;
+    min-height: 60px;
+  }
+  .setting-textarea:focus {
+    border-color: var(--accent-primary);
+    outline: none;
+  }
+  .term-profile-editor-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    margin-top: 12px;
+  }
+  .btn-primary {
+    padding: 5px 14px;
+    background: var(--accent-primary);
+    color: var(--bg-primary);
+    border: none;
+    border-radius: var(--radius-sm);
+    font-size: var(--fs-xs);
+    cursor: pointer;
+    transition: opacity var(--transition);
+  }
+  .btn-primary:hover {
+    opacity: 0.9;
+  }
+  .btn-primary:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
   }
 </style>

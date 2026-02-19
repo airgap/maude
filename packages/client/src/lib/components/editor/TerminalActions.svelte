@@ -40,7 +40,11 @@
   }
 </script>
 
-<div class="terminal-actions">
+<div class="terminal-actions" role="toolbar" aria-label="Terminal actions">
+  <TaskRunnerDropdown />
+
+  <div class="action-separator"></div>
+
   <button
     class="action-btn"
     class:active={terminalStore.searchOpen}
@@ -182,6 +186,10 @@
   @keyframes broadcast-pulse {
     0%, 100% { box-shadow: 0 0 6px color-mix(in srgb, var(--accent-warning, #ffaa00) 50%, transparent), 0 0 12px color-mix(in srgb, var(--accent-warning, #ffaa00) 25%, transparent); }
     50% { box-shadow: 0 0 8px color-mix(in srgb, var(--accent-warning, #ffaa00) 70%, transparent), 0 0 18px color-mix(in srgb, var(--accent-warning, #ffaa00) 35%, transparent); }
+  }
+  .action-btn:focus-visible {
+    outline: 2px solid var(--border-focus);
+    outline-offset: -2px;
   }
   .action-btn:disabled {
     opacity: 0.3;

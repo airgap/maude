@@ -124,10 +124,20 @@
         : 'No results'
       : '',
   );
+
+  /** Announce search results count to screen readers via the store's aria-live region */
+  $effect(() => {
+    if (!query) return;
+    if (resultCount > 0) {
+      terminalStore.announce(`${resultCount} result${resultCount === 1 ? '' : 's'} found, showing result ${resultIndex + 1} of ${resultCount}`);
+    } else {
+      terminalStore.announce('No results found');
+    }
+  });
 </script>
 
 <!-- svelte-ignore a11y_no_static_element_interactions -->
-<div class="terminal-search-bar" onkeydown={onKeydown}>
+<div class="terminal-search-bar" onkeydown={onKeydown} role="search" aria-label="Find in terminal">
   <div class="search-icon">
     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
       <circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
@@ -143,6 +153,8 @@
     class="search-input"
     spellcheck="false"
     autocomplete="off"
+    aria-label="Search term"
+    aria-describedby="search-match-count-{sessionId}"
   />
 
   <button
@@ -151,6 +163,7 @@
     onclick={toggleRegex}
     title="Use regular expression"
     aria-label="Use regular expression"
+    aria-pressed={useRegex}
   >
     .*
   </button>
@@ -161,11 +174,19 @@
     onclick={toggleCaseSensitive}
     title="Match case"
     aria-label="Match case"
+    aria-pressed={caseSensitive}
   >
     Aa
   </button>
 
-  <span class="match-count" class:no-results={query && resultCount === 0}>
+  <span
+    class="match-count"
+    class:no-results={query && resultCount === 0}
+    id="search-match-count-{sessionId}"
+    role="status"
+    aria-live="polite"
+    aria-atomic="true"
+  >
     {matchDisplay}
   </span>
 
@@ -283,6 +304,12 @@
     color: var(--accent-primary);
     background: var(--bg-active);
     border-color: var(--accent-primary);
+  }
+  .search-toggle:focus-visible,
+  .search-nav-btn:focus-visible,
+  .search-close-btn:focus-visible {
+    outline: 2px solid var(--border-focus);
+    outline-offset: -1px;
   }
 
   .match-count {

@@ -26,6 +26,8 @@ export type ThemeId =
   | 'one-dark'
   | 'everforest'
   | 'goth'
+  | 'high-contrast'
+  | 'high-contrast-light'
   | (string & {});
 
 export type CliProvider = 'claude' | 'kiro' | 'gemini-cli' | 'copilot' | 'ollama' | 'bedrock';

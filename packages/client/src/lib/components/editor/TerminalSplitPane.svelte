@@ -47,6 +47,8 @@
     class:broadcasting={isBroadcasting}
     onmousedown={() => handlePaneClick(layout.sessionId)}
     onfocusin={() => handlePaneFocus(layout.sessionId)}
+    role="group"
+    aria-label={`Terminal pane${focusedSessionId === layout.sessionId ? ', focused' : ''}`}
   >
     {#if terminalStore.isSearchOpen(layout.sessionId)}
       <TerminalSearchBar sessionId={layout.sessionId} />
@@ -58,6 +60,8 @@
         class:success={cmdStatus.exitCode === 0}
         class:failure={cmdStatus.exitCode !== 0}
         title={cmdStatus.exitCode === 0 ? 'Last command succeeded' : `Last command failed (exit code ${cmdStatus.exitCode})`}
+        role="status"
+        aria-label={cmdStatus.exitCode === 0 ? 'Last command succeeded' : `Last command failed with exit code ${cmdStatus.exitCode}`}
       >
         {#if cmdStatus.exitCode === 0}
           <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3">

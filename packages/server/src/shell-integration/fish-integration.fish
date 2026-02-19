@@ -21,6 +21,11 @@ function __e_emit_command_start
     printf '\e]633;C\a'
 end
 
+# Emit command line text OSC 633;E;commandText
+function __e_emit_command_line
+    printf '\e]633;E;%s\a' $argv[1]
+end
+
 # Emit command end OSC 633;D;exitCode
 function __e_emit_command_end
     printf '\e]633;D;%s\a' $argv[1]
@@ -30,6 +35,7 @@ end
 
 # fish_preexec fires before each command
 function __e_fish_preexec --on-event fish_preexec
+    __e_emit_command_line $argv[1]
     __e_emit_command_start
 end
 

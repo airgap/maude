@@ -6,7 +6,14 @@
 <div class="terminal-content">
   {#each terminalStore.tabs as tab (tab.id)}
     {@const isActive = tab.id === terminalStore.activeTabId}
-    <div class="tab-pane" class:hidden={!isActive}>
+    <div
+      class="tab-pane"
+      class:hidden={!isActive}
+      role="tabpanel"
+      id="terminal-tabpanel-{tab.id}"
+      aria-labelledby="terminal-tab-{tab.id}"
+      tabindex="0"
+    >
       <TerminalSplitPane
         layout={tab.layout}
         focusedSessionId={tab.focusedSessionId}
@@ -16,7 +23,7 @@
   {/each}
 
   {#if terminalStore.tabs.length === 0}
-    <div class="empty-state">
+    <div class="empty-state" role="status">
       <span class="empty-text">No terminal sessions</span>
     </div>
   {/if}

@@ -7,8 +7,9 @@ import type {
   ShellInfo,
 } from '@e/shared';
 import { TERMINAL_PROTOCOL } from '@e/shared';
-import { existsSync } from 'fs';
-import { basename, resolve, dirname } from 'path';
+import { existsSync, mkdirSync, appendFileSync, writeFileSync } from 'fs';
+import { basename, resolve, dirname, join } from 'path';
+import { homedir } from 'os';
 
 // --- Shell Integration Script Paths ---
 
@@ -117,6 +118,35 @@ function parseOscSequences(data: string): OscParseResult {
   return { cleanData, cwd, commandStart, commandEndExitCode };
 }
 
+// --- Session Logging ---
+
+/** Default directory for terminal session logs */
+const LOG_DIR = join(homedir(), '.e', 'terminal-logs');
+
+/**
+ * Strip ANSI escape sequences (CSI, OSC, SGR, cursor movement, etc.)
+ * from terminal output for clean, readable log files.
+ */
+// eslint-disable-next-line no-control-regex
+const ANSI_RE = /\x1b\[[0-9;]*[a-zA-Z]|\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)|\x1b[()][0-9A-B]|\x1b[=><!]|\x1b\[[\?]?[0-9;]*[hlJKmSusr]|\r/g;
+
+function stripAnsi(data: string): string {
+  return data.replace(ANSI_RE, '');
+}
+
+/** Generate a timestamped log file path for a session */
+function makeLogFilePath(sessionId: string): string {
+  const ts = new Date().toISOString().replace(/[:.]/g, '-').replace('T', '_').replace('Z', '');
+  return join(LOG_DIR, `${sessionId}_${ts}.log`);
+}
+
+/** Ensure the log directory exists */
+function ensureLogDir(): void {
+  if (!existsSync(LOG_DIR)) {
+    mkdirSync(LOG_DIR, { recursive: true });
+  }
+}
+
 // --- node-pty dynamic import ---
 
 let pty: typeof import('node-pty') | null = null;
@@ -156,6 +186,8 @@ interface TerminalSession {
   attachedWs: Set<WsLike>;
   /** Whether logging is enabled for this session */
   logging: boolean;
+  /** Path to the active log file (null if logging never started) */
+  logFilePath: string | null;
   /** Whether shell integration OSC parsing is enabled */
   shellIntegration: boolean;
   /** Counter for generating unique command IDs */
@@ -330,6 +362,7 @@ class TerminalSessionManager {
       exitSignal: null,
       attachedWs: new Set(),
       logging: false,
+      logFilePath: null,
       shellIntegration: enableIntegration && integrationScript !== null,
       commandCounter: 0,
       currentCommandId: null,
@@ -380,6 +413,10 @@ class TerminalSessionManager {
               // WebSocket may be closed
             }
           }
+          // Tee output to log file if logging is active
+          if (session.logging && session.logFilePath) {
+            this.appendToLog(session.logFilePath, cleanData);
+          }
         }
       } else {
         // No shell integration — forward raw data as-is
@@ -390,6 +427,10 @@ class TerminalSessionManager {
           } catch {
             // WebSocket may be closed — will be cleaned up on next detach
           }
+        }
+        // Tee output to log file if logging is active
+        if (session.logging && session.logFilePath) {
+          this.appendToLog(session.logFilePath, data);
         }
       }
     });
@@ -437,6 +478,8 @@ class TerminalSessionManager {
       lastActivity: s.lastActivity,
       exitCode: s.exitCode,
       attached: s.attachedWs.size > 0,
+      logging: s.logging,
+      logFilePath: s.logFilePath,
     }));
   }
 
@@ -444,6 +487,11 @@ class TerminalSessionManager {
   kill(id: string): boolean {
     const session = this.sessions.get(id);
     if (!session) return false;
+
+    // Stop logging if active
+    if (session.logging) {
+      this.stopLogging(id);
+    }
 
     // Close all attached WebSockets
     for (const ws of session.attachedWs) {
@@ -501,6 +549,11 @@ class TerminalSessionManager {
         exitCode: session.exitCode,
         signal: session.exitSignal || undefined,
       });
+    }
+
+    // If session is logging, notify the new client
+    if (session.logging && session.logFilePath) {
+      this.sendControlToWs(ws, { type: 'logging_started', logFilePath: session.logFilePath });
     }
 
     return true;
@@ -567,6 +620,78 @@ class TerminalSessionManager {
   /** Clear the shell cache (e.g., after a shell is installed) */
   clearShellCache(): void {
     cachedShells = null;
+  }
+
+  /** Start logging PTY output to a file for a given session */
+  startLogging(id: string): { logFilePath: string } | null {
+    const session = this.sessions.get(id);
+    if (!session) return null;
+
+    if (session.logging && session.logFilePath) {
+      // Already logging — return existing path
+      return { logFilePath: session.logFilePath };
+    }
+
+    ensureLogDir();
+    const logFilePath = makeLogFilePath(id);
+
+    // Write header to the log file
+    const header = `# Terminal Session Log\n# Session: ${id}\n# Shell: ${session.shell}\n# Started: ${new Date().toISOString()}\n# CWD: ${session.cwd}\n${'#'.repeat(60)}\n\n`;
+    try {
+      writeFileSync(logFilePath, header, 'utf-8');
+    } catch (err) {
+      console.error(`[terminal] Failed to create log file: ${(err as Error).message}`);
+      return null;
+    }
+
+    session.logging = true;
+    session.logFilePath = logFilePath;
+
+    // Notify clients
+    this.sendControl(session, { type: 'logging_started', logFilePath });
+
+    return { logFilePath };
+  }
+
+  /** Stop logging PTY output for a given session */
+  stopLogging(id: string): boolean {
+    const session = this.sessions.get(id);
+    if (!session || !session.logging) return false;
+
+    // Write footer to log file
+    if (session.logFilePath) {
+      try {
+        const footer = `\n${'#'.repeat(60)}\n# Logging stopped: ${new Date().toISOString()}\n`;
+        appendFileSync(session.logFilePath, footer, 'utf-8');
+      } catch {
+        // Best effort
+      }
+    }
+
+    session.logging = false;
+
+    // Notify clients
+    this.sendControl(session, { type: 'logging_stopped' });
+
+    return true;
+  }
+
+  /** Get the log file path for a session (if logging has been started) */
+  getLogFilePath(id: string): string | null {
+    const session = this.sessions.get(id);
+    return session?.logFilePath ?? null;
+  }
+
+  /** Append cleaned (ANSI-stripped) data to a log file */
+  private appendToLog(logFilePath: string, data: string): void {
+    try {
+      const clean = stripAnsi(data);
+      if (clean.length > 0) {
+        appendFileSync(logFilePath, clean, 'utf-8');
+      }
+    } catch {
+      // Best effort — don't crash the session on log write failure
+    }
   }
 
   /** Garbage collect orphaned sessions */

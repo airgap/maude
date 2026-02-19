@@ -46,6 +46,31 @@ app.delete('/sessions/:id', (c) => {
   return c.json({ ok: true });
 });
 
+/** Toggle session logging on/off */
+app.post('/sessions/:id/logging', async (c) => {
+  const id = c.req.param('id');
+  const body = (await c.req.json().catch(() => ({}))) as { enabled?: boolean };
+  const enabled = body.enabled !== false; // default to true
+
+  if (enabled) {
+    const result = sessionManager.startLogging(id);
+    if (!result) return c.json({ ok: false, error: 'Session not found or log creation failed' }, 404);
+    return c.json({ ok: true, data: { logging: true, logFilePath: result.logFilePath } });
+  } else {
+    const stopped = sessionManager.stopLogging(id);
+    if (!stopped) return c.json({ ok: false, error: 'Session not found or not logging' }, 404);
+    return c.json({ ok: true, data: { logging: false } });
+  }
+});
+
+/** Get the log file path for a session */
+app.get('/sessions/:id/log', (c) => {
+  const id = c.req.param('id');
+  const logFilePath = sessionManager.getLogFilePath(id);
+  if (!logFilePath) return c.json({ ok: false, error: 'No log file for this session' }, 404);
+  return c.json({ ok: true, data: { logFilePath } });
+});
+
 /** List available shells */
 app.get('/shells', async (c) => {
   const shells = await sessionManager.detectShells();

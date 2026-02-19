@@ -22,6 +22,10 @@ export interface SessionMeta {
   cwd: string;
   exitCode: number | null;
   attached: boolean;
+  /** Whether session output logging is active */
+  logging: boolean;
+  /** Path to the active log file (if logging) */
+  logFilePath: string | null;
 }
 
 /** Last command exit code per session (for exit code badge display) */
@@ -380,6 +384,12 @@ function createTerminalStore() {
   // --- Command exit code tracking (for exit code badges) ---
   let lastCommandStatus = $state<Map<string, CommandStatus>>(new Map());
 
+  // --- Agent terminal tab ---
+  /** The tab ID of the dedicated Agent terminal tab (null if not created) */
+  let agentTabId = $state<string | null>(null);
+  /** Set of session IDs that belong to agent tabs (read-only, no PTY) */
+  let agentSessionIds = $state<Set<string>>(new Set());
+
   // --- UI toggles ---
   let searchOpenSessions = $state<Set<string>>(new Set());
   let broadcastTabIds = $state<Set<string>>(new Set());
@@ -387,6 +397,14 @@ function createTerminalStore() {
   // --- Session reconnection (for page reload persistence) ---
   /** Server sessions available for reconnection (populated during reconciliation) */
   let reconnectableSessions = $state<Map<string, TerminalSessionMeta>>(new Map());
+
+  // --- Pending commands (for task runner) ---
+  /** Commands to send to a session after it is created (keyed by sessionId) */
+  let pendingCommands = $state<Map<string, string>>(new Map());
+
+  // --- Screen reader announcements ---
+  /** Message to be announced to screen readers via aria-live region */
+  let announcement = $state('');
 
   // --- Derived state ---
   const activeTab = $derived(tabs.find((t) => t.id === activeTabId) ?? null);
@@ -461,6 +479,20 @@ function createTerminalStore() {
       return lastCommandStatus;
     },
 
+    /** Current screen reader announcement (consumed by aria-live region) */
+    get announcement() {
+      return announcement;
+    },
+
+    /** Send a screen reader announcement via the aria-live region */
+    announce(message: string) {
+      // Clear first so repeating the same message triggers a new announcement
+      announcement = '';
+      requestAnimationFrame(() => {
+        announcement = message;
+      });
+    },
+
     /** Get the last command status for a specific session */
     getCommandStatus(sessionId: string): CommandStatus | undefined {
       return lastCommandStatus.get(sessionId);
@@ -526,6 +558,7 @@ function createTerminalStore() {
       tabs = [...tabs, tab];
       activeTabId = tabId;
       persistTabs();
+      this.announce(`Terminal tab ${label} created`);
       return tabId;
     },
 
@@ -534,6 +567,8 @@ function createTerminalStore() {
       if (idx < 0) return;
 
       const tab = tabs[idx];
+      const closedLabel = tab.label;
+
       // Destroy all sessions belonging to this tab
       const sessionIds = collectSessionIds(tab.layout);
       const newSessions = new Map(sessions);
@@ -551,6 +586,16 @@ function createTerminalStore() {
         broadcastTabIds = next;
       }
 
+      // Clean up agent tab state if this was the agent tab
+      if (agentTabId === tabId) {
+        agentTabId = null;
+        const nextAgentSessions = new Set(agentSessionIds);
+        for (const sid of sessionIds) {
+          nextAgentSessions.delete(sid);
+        }
+        agentSessionIds = nextAgentSessions;
+      }
+
       // If we closed the active tab, pick an adjacent one
       if (activeTabId === tabId) {
         if (tabs.length > 0) {
@@ -562,12 +607,16 @@ function createTerminalStore() {
       }
 
       persistTabs();
+      this.announce(`Terminal tab ${closedLabel} closed. ${tabs.length} tabs remaining`);
     },
 
     activateTab(tabId: string) {
-      if (tabs.some((t) => t.id === tabId)) {
+      const tab = tabs.find((t) => t.id === tabId);
+      if (tab) {
         activeTabId = tabId;
         persistTabs();
+        const idx = tabs.indexOf(tab);
+        this.announce(`Tab ${tab.label}, ${idx + 1} of ${tabs.length}`);
       }
     },
 
@@ -735,6 +784,39 @@ function createTerminalStore() {
         newSessions.set(sessionId, { ...meta, exitCode });
         sessions = newSessions;
       }
+    },
+
+    // ── Session logging ──
+
+    /** Mark a session as logging (called when server confirms logging started) */
+    setLogging(sessionId: string, logFilePath: string) {
+      const meta = sessions.get(sessionId);
+      if (meta) {
+        const newSessions = new Map(sessions);
+        newSessions.set(sessionId, { ...meta, logging: true, logFilePath });
+        sessions = newSessions;
+      }
+    },
+
+    /** Mark a session as not logging (called when server confirms logging stopped) */
+    clearLogging(sessionId: string) {
+      const meta = sessions.get(sessionId);
+      if (meta) {
+        const newSessions = new Map(sessions);
+        // Keep logFilePath so user can still "Open Log File" after stopping
+        newSessions.set(sessionId, { ...meta, logging: false });
+        sessions = newSessions;
+      }
+    },
+
+    /** Check if logging is active for a session */
+    isLogging(sessionId: string): boolean {
+      return sessions.get(sessionId)?.logging ?? false;
+    },
+
+    /** Get the log file path for a session */
+    getLogFilePath(sessionId: string): string | null {
+      return sessions.get(sessionId)?.logFilePath ?? null;
     },
 
     /** Update the last command status for a session (from shell integration) */
@@ -931,6 +1013,132 @@ function createTerminalStore() {
       }
       tabs = [...tabs]; // trigger reactivity
       persistTabs();
+    },
+
+    // ── Pending commands (for task runner) ──
+
+    /** Set a command to be sent to a session after it is created */
+    setPendingCommand(sessionId: string, command: string) {
+      const next = new Map(pendingCommands);
+      next.set(sessionId, command);
+      pendingCommands = next;
+    },
+
+    /** Get and clear the pending command for a session (called after session creation) */
+    consumePendingCommand(sessionId: string): string | null {
+      const cmd = pendingCommands.get(sessionId);
+      if (cmd !== undefined) {
+        const next = new Map(pendingCommands);
+        next.delete(sessionId);
+        pendingCommands = next;
+        return cmd;
+      }
+      return null;
+    },
+
+    /**
+     * Create a new tab for running a task (e.g. "npm run dev").
+     * The command will be sent to the terminal after the session connects.
+     * Returns the tab ID.
+     */
+    createTaskTab(label: string, command: string): string {
+      const sessionId = uid();
+      const tabId = uid();
+
+      const tab: TerminalTab = {
+        id: tabId,
+        label,
+        layout: makeLeaf(sessionId),
+        focusedSessionId: sessionId,
+      };
+
+      // Store the command to be sent after the session is created
+      const next = new Map(pendingCommands);
+      next.set(sessionId, command + '\n');
+      pendingCommands = next;
+
+      tabs = [...tabs, tab];
+      activeTabId = tabId;
+      persistTabs();
+      return tabId;
+    },
+
+    // ── Agent terminal tab ──
+
+    /** Get the agent tab ID (null if not created) */
+    get agentTabId() {
+      return agentTabId;
+    },
+
+    /** Check if a tab is the agent tab */
+    isAgentTab(tabId: string): boolean {
+      return agentTabId === tabId;
+    },
+
+    /** Check if a session belongs to an agent tab (virtual, no PTY) */
+    isAgentSession(sessionId: string): boolean {
+      return agentSessionIds.has(sessionId);
+    },
+
+    /**
+     * Get or create the dedicated Agent terminal tab.
+     * If the agent tab already exists, return its tab ID.
+     * Otherwise, create a new tab labeled "Agent" and return it.
+     */
+    getOrCreateAgentTab(): { tabId: string; sessionId: string } {
+      // If agent tab still exists, reuse it
+      if (agentTabId) {
+        const existingTab = tabs.find((t) => t.id === agentTabId);
+        if (existingTab) {
+          return { tabId: agentTabId, sessionId: existingTab.focusedSessionId };
+        }
+        // Tab was removed but agentTabId wasn't cleared — reset
+        agentTabId = null;
+      }
+
+      // Create a new agent tab
+      const sessionId = uid();
+      const tabId = uid();
+
+      const tab: TerminalTab = {
+        id: tabId,
+        label: 'Agent',
+        layout: makeLeaf(sessionId),
+        focusedSessionId: sessionId,
+      };
+
+      // Track as agent session (no PTY)
+      const nextAgentSessions = new Set(agentSessionIds);
+      nextAgentSessions.add(sessionId);
+      agentSessionIds = nextAgentSessions;
+
+      agentTabId = tabId;
+      tabs = [...tabs, tab];
+      activeTabId = tabId;
+      isOpen = true;
+      persistTabs();
+      this.announce('Agent terminal tab created');
+      return { tabId, sessionId };
+    },
+
+    /**
+     * Close the agent tab. Resets agentTabId so it will recreate on next tool execution.
+     */
+    closeAgentTab() {
+      if (!agentTabId) return;
+      const tab = tabs.find((t) => t.id === agentTabId);
+      if (tab) {
+        // Clean up agent session IDs
+        const sessionIds = collectSessionIds(tab.layout);
+        const nextAgentSessions = new Set(agentSessionIds);
+        for (const sid of sessionIds) {
+          nextAgentSessions.delete(sid);
+        }
+        agentSessionIds = nextAgentSessions;
+      }
+      // Use standard closeTab logic
+      this.closeTab(agentTabId);
+      agentTabId = null;
     },
 
     // ── State capture / restore (for workspace snapshots) ──
