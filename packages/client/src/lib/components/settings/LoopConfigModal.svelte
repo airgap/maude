@@ -12,6 +12,7 @@
   interface SavedLoopConfig {
     maxIterations: number;
     maxAttemptsPerStory: number;
+    maxFixUpAttempts: number;
     model: string;
     effort: string;
     autoCommit: boolean;
@@ -54,7 +55,8 @@
   const saved = loadSavedConfig();
 
   let maxAttemptsPerStory = $state(saved?.maxAttemptsPerStory ?? 3);
-  // Default maxIterations: storyCount * maxAttemptsPerStory, minimum 10
+  let maxFixUpAttempts = $state(saved?.maxFixUpAttempts ?? 2);
+  // Default maxIterations: storyCount * maxAttemptsPerStory * (1 + maxFixUpAttempts), minimum 10
   let maxIterations = $state(saved?.maxIterations ?? 50);
   let model = $state(saved?.model ?? settingsStore.model);
   let effort = $state(saved?.effort ?? settingsStore.effort ?? 'high');
@@ -74,7 +76,7 @@
     if (!saved) {
       const count = storyCount;
       if (count > 0) {
-        maxIterations = Math.max(10, count * maxAttemptsPerStory);
+        maxIterations = Math.max(10, count * maxAttemptsPerStory * (1 + maxFixUpAttempts));
       }
     }
 
@@ -156,6 +158,7 @@
     const config: LoopConfig = {
       maxIterations,
       maxAttemptsPerStory,
+      maxFixUpAttempts,
       model,
       effort,
       autoCommit,
@@ -168,6 +171,7 @@
     saveConfig({
       maxIterations,
       maxAttemptsPerStory,
+      maxFixUpAttempts,
       model,
       effort,
       autoCommit,
@@ -260,13 +264,20 @@
         </div>
         {#if storyCount > 0}
           <div class="form-hint">
-            {storyCount} stories x {maxAttemptsPerStory} attempts = {storyCount * maxAttemptsPerStory} iterations needed
+            {storyCount} stories x {maxAttemptsPerStory} attempts x {1 + maxFixUpAttempts} passes = {storyCount * maxAttemptsPerStory * (1 + maxFixUpAttempts)} max iterations
           </div>
         {/if}
 
         <div class="form-row">
-          <label>Max attempts / story</label>
+          <label>Fresh attempts / story</label>
           <input type="number" bind:value={maxAttemptsPerStory} min="1" max="10" />
+        </div>
+        <div class="form-row">
+          <label>Fix-up passes / attempt</label>
+          <input type="number" bind:value={maxFixUpAttempts} min="0" max="5" />
+        </div>
+        <div class="form-hint">
+          Each attempt gets {maxFixUpAttempts} fix-up pass{maxFixUpAttempts !== 1 ? 'es' : ''} to fix errors before starting fresh
         </div>
       </div>
 

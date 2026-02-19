@@ -190,9 +190,11 @@
           (s: any) => s.status === 'pending' || s.status === 'in_progress',
         ).length ?? 0);
     const maxAttempts = 3;
+    const maxFixUps = 2;
     return {
-      maxIterations: Math.max(10, storyCount * maxAttempts),
+      maxIterations: Math.max(10, storyCount * maxAttempts * (1 + maxFixUps)),
       maxAttemptsPerStory: maxAttempts,
+      maxFixUpAttempts: maxFixUps,
       model: settingsStore.model,
       effort: settingsStore.effort || 'high',
       autoCommit: true,

@@ -173,7 +173,8 @@ export type LoopStatus = 'idle' | 'running' | 'paused' | 'completed' | 'failed' 
 
 export interface LoopConfig {
   maxIterations: number; // max total iterations across all stories
-  maxAttemptsPerStory: number; // max retries per individual story
+  maxAttemptsPerStory: number; // max fresh-start attempts per story (each gets fix-up sub-attempts)
+  maxFixUpAttempts: number; // fix-up sub-attempts per fresh start before reverting (default 2)
   model: string;
   effort: string;
   autoCommit: boolean; // commit after each successful story

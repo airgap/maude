@@ -418,6 +418,19 @@ class LoopRunner {
   private pauseGate: { promise: Promise<void>; resolve: () => void } | null = null;
   private heartbeatInterval: ReturnType<typeof setInterval> | null = null;
 
+  /**
+   * Tracks per-story fix-up state. When a story fails quality checks, we keep
+   * the broken code in place and give the agent multiple chances to fix it
+   * surgically ("fix-up" passes) before reverting and starting a fresh attempt.
+   *
+   * Each fresh attempt gets up to `config.maxFixUpAttempts` sub-attempts.
+   * Fix-up passes do NOT consume the story's main attempt counter.
+   *
+   * Map key: story ID
+   * Map value: { subAttempts count, lastResults from most recent failure }
+   */
+  private fixUpState = new Map<string, { subAttempts: number; lastResults: QualityCheckResult[] }>();
+
   constructor(
     private loopId: string,
     private prdId: string | null,
@@ -467,17 +480,20 @@ class LoopRunner {
     this.applyMaxAttemptsConfig();
 
     // Ensure maxIterations is large enough to actually complete all stories.
-    // Each story may need up to maxAttemptsPerStory iterations, so the minimum
-    // is storyCount * maxAttemptsPerStory. If the configured maxIterations is
-    // too low, auto-increase it to prevent premature stopping.
+    // Each story may need up to maxAttemptsPerStory fresh starts, and each
+    // fresh start may need up to (1 + maxFixUpAttempts) iterations (the initial
+    // attempt plus fix-up passes). Auto-increase if the budget is too low.
     const stories = this.getAllStories();
     const nonTerminalStories = stories.filter(
       (s) => s.status !== 'completed' && s.status !== 'skipped' && !s.researchOnly,
     );
-    const minIterationsNeeded = nonTerminalStories.length * (this.config.maxAttemptsPerStory || 3);
+    const maxAttempts = this.config.maxAttemptsPerStory || 3;
+    const maxFixUps = this.config.maxFixUpAttempts ?? 2;
+    const iterationsPerAttempt = 1 + maxFixUps; // initial + fix-ups
+    const minIterationsNeeded = nonTerminalStories.length * maxAttempts * iterationsPerAttempt;
     if (this.config.maxIterations < minIterationsNeeded) {
       console.log(
-        `[loop:${this.loopId}] Auto-increasing maxIterations from ${this.config.maxIterations} to ${minIterationsNeeded} (${nonTerminalStories.length} stories × ${this.config.maxAttemptsPerStory || 3} max attempts)`,
+        `[loop:${this.loopId}] Auto-increasing maxIterations from ${this.config.maxIterations} to ${minIterationsNeeded} (${nonTerminalStories.length} stories × ${maxAttempts} attempts × ${iterationsPerAttempt} iterations/attempt)`,
       );
       this.config.maxIterations = minIterationsNeeded;
     }
@@ -558,17 +574,28 @@ class LoopRunner {
           iteration,
         });
 
+        const isStoryFixUp = this.fixUpState.has(story.id);
+        const fixUpInfo = isStoryFixUp ? this.fixUpState.get(story.id)! : null;
+        const maxFixUps = this.config.maxFixUpAttempts ?? 2;
         this.addLogEntry({
           iteration,
           storyId: story.id,
           storyTitle: story.title,
           action: 'started',
-          detail: `Starting story: ${story.title} (attempt ${story.attempts + 1}/${story.maxAttempts})`,
+          detail: isStoryFixUp
+            ? `Fix-up pass ${fixUpInfo!.subAttempts}/${maxFixUps} for: ${story.title} (attempt ${story.attempts}/${story.maxAttempts}) — fixing errors in-place`
+            : `Starting story: ${story.title} (attempt ${story.attempts + 1}/${story.maxAttempts})`,
           timestamp: Date.now(),
         });
 
-        // Mark story as in_progress
-        this.updateStory(story.id, { status: 'in_progress', attempts: story.attempts + 1 });
+        // Mark story as in_progress.
+        // Only increment the attempt counter on fresh starts, NOT fix-up passes.
+        // Fix-ups are sub-attempts within a single main attempt.
+        if (isStoryFixUp) {
+          this.updateStory(story.id, { status: 'in_progress' });
+        } else {
+          this.updateStory(story.id, { status: 'in_progress', attempts: story.attempts + 1 });
+        }
 
         // Pre-generate assistant message ID for snapshot linkage
         const assistantMsgId = nanoid();
@@ -586,7 +613,11 @@ class LoopRunner {
         // previous story's uncommitted failure), clean the working tree before
         // the agent starts. This prevents cascading failures where story B gets
         // blamed for story A's broken code.
-        if (checksToRun.length > 0) {
+        //
+        // EXCEPTION: skip this gate when we intentionally kept broken code for a
+        // fix-up pass on this same story — the agent needs that code in-place.
+        const isFixUpPass = this.fixUpState.has(story.id);
+        if (checksToRun.length > 0 && !isFixUpPass) {
           const preCheckResults = await runAllQualityChecks(checksToRun, this.workspacePath);
           const preBuildBroken = preCheckResults.some((qr) => {
             const cfg = checksToRun.find((c) => c.id === qr.checkId);
@@ -607,6 +638,10 @@ class LoopRunner {
             });
             await this.revertUncommittedChanges();
           }
+        } else if (isFixUpPass) {
+          console.log(
+            `[loop:${this.loopId}] Skipping pre-story quality gate — fix-up pass for "${story.title}"`,
+          );
         }
 
         // Create an E conversation for this story
@@ -733,7 +768,8 @@ class LoopRunner {
         const passed = !hasAgentError && !requiredChecksFailed;
 
         if (passed) {
-          // Story succeeded!
+          // Story succeeded! Clear any fix-up state if it was a fix-up pass.
+          this.fixUpState.delete(story.id);
           this.updateStory(story.id, { status: 'completed' });
 
           // Increment completed counter
@@ -803,30 +839,80 @@ class LoopRunner {
           // Create agent note with failure report for the user
           this.createAgentNote(story, conversationId, 'failed', agentResult, qualityResults, failReason);
 
-          // Post-failure rollback: revert uncommitted changes so the next story
-          // starts from a clean (passing) build state. Without this, one story's
-          // broken code poisons every subsequent story's quality check.
-          if (requiredChecksFailed) {
+          // --- Fix-up pass logic ---
+          // When quality checks fail, instead of immediately reverting all work,
+          // we give the agent multiple chances to fix the broken code in-place.
+          // This is much more efficient than starting from scratch — most failures
+          // are small typecheck or lint errors that are quick to patch.
+          //
+          // Each fresh attempt gets up to maxFixUpAttempts sub-attempts:
+          //   fresh start → fail → fix-up 1 → fail → fix-up 2 → fail → REVERT → fresh start → ...
+          //   agent error → always revert immediately (code may be inconsistent)
+          const currentFixUp = this.fixUpState.get(story.id);
+          const fixUpSubAttempts = currentFixUp?.subAttempts ?? 0;
+          const maxFixUps = this.config.maxFixUpAttempts ?? 2;
+          const fixUpsExhausted = fixUpSubAttempts >= maxFixUps;
+
+          let didRevert = false;
+          if (hasAgentError) {
+            // Agent error — always revert, code may be in an inconsistent state
+            this.fixUpState.delete(story.id);
             console.log(
-              `[loop:${this.loopId}] Rolling back uncommitted changes after failed quality checks for "${story.title}"`,
+              `[loop:${this.loopId}] Agent error — reverting to clean state for "${story.title}"`,
             );
             this.addLogEntry({
               iteration,
               storyId: story.id,
               storyTitle: story.title,
               action: 'quality_check',
-              detail: `Post-failure rollback: reverting uncommitted changes to prevent cascading failures`,
+              detail: `Post-failure rollback: agent error — reverting to clean state`,
               timestamp: Date.now(),
             });
             await this.revertUncommittedChanges();
+            didRevert = true;
+          } else if (requiredChecksFailed && fixUpsExhausted) {
+            // All fix-up sub-attempts exhausted — revert and let the next fresh attempt start clean
+            this.fixUpState.delete(story.id);
+            console.log(
+              `[loop:${this.loopId}] Fix-up attempts exhausted (${fixUpSubAttempts}/${maxFixUps}) — reverting to clean state for "${story.title}"`,
+            );
+            this.addLogEntry({
+              iteration,
+              storyId: story.id,
+              storyTitle: story.title,
+              action: 'quality_check',
+              detail: `Post-failure rollback: fix-up attempts exhausted (${fixUpSubAttempts}/${maxFixUps}), reverting for fresh attempt`,
+              timestamp: Date.now(),
+            });
+            await this.revertUncommittedChanges();
+            didRevert = true;
+          } else if (requiredChecksFailed) {
+            // Fix-up sub-attempts remaining — keep the code, store/update errors for next fix-up
+            const failedResults = qualityResults.filter((qr) => !qr.passed);
+            const nextSubAttempt = fixUpSubAttempts + 1;
+            this.fixUpState.set(story.id, { subAttempts: nextSubAttempt, lastResults: failedResults });
+            console.log(
+              `[loop:${this.loopId}] Keeping broken code for fix-up pass ${nextSubAttempt}/${maxFixUps} on "${story.title}" (${failedResults.length} failed check(s))`,
+            );
+            this.addLogEntry({
+              iteration,
+              storyId: story.id,
+              storyTitle: story.title,
+              action: 'quality_check',
+              detail: `Skipping revert — next attempt will be fix-up pass ${nextSubAttempt}/${maxFixUps}`,
+              timestamp: Date.now(),
+            });
           }
 
-          // Check if retries exhausted
+          // Check if main retries exhausted (only matters after a revert,
+          // since fix-ups don't consume the attempt counter)
           const updatedStory = this.getStory(story.id);
-          const retriesExhausted =
-            updatedStory && updatedStory.attempts >= updatedStory.maxAttempts;
+          const retriesExhausted = didRevert
+            && updatedStory
+            && updatedStory.attempts >= updatedStory.maxAttempts;
 
           if (retriesExhausted) {
+            this.fixUpState.delete(story.id);
             this.updateStory(story.id, { status: 'failed' });
 
             const loop = db.query('SELECT * FROM loops WHERE id = ?').get(this.loopId) as any;
@@ -840,24 +926,26 @@ class LoopRunner {
               });
             }
           } else {
-            // Reset to pending for retry
+            // Reset to pending for retry (either fix-up or fresh)
             this.updateStory(story.id, { status: 'pending' });
           }
 
+          const willRetry = !retriesExhausted;
+          const hasFixUpNext = this.fixUpState.has(story.id);
           this.emitEvent('story_failed', {
             storyId: story.id,
             storyTitle: story.title,
             iteration,
             conversationId,
             message: failReason,
-            willRetry: !retriesExhausted,
+            willRetry,
           });
           this.addLogEntry({
             iteration,
             storyId: story.id,
             storyTitle: story.title,
             action: 'failed',
-            detail: failReason,
+            detail: failReason + (hasFixUpNext ? ` (fix-up pass ${this.fixUpState.get(story.id)!.subAttempts}/${maxFixUps} next)` : didRevert ? ' (reverted, fresh start next)' : ''),
             timestamp: Date.now(),
             qualityResults,
           });
@@ -1113,22 +1201,58 @@ class LoopRunner {
       .map((ac, i) => `${i + 1}. ${ac.description}`)
       .join('\n');
 
+    const fixUpInfo = this.fixUpState.get(story.id);
+    const isFixUp = !!fixUpInfo;
+    const maxFixUps = this.config.maxFixUpAttempts ?? 2;
+
     let prompt = `## User Story: ${story.title}
 
 ${story.description}
 
 ## Acceptance Criteria
 ${criteria}
+`;
 
-## Attempt ${story.attempts + 1} of ${story.maxAttempts}`;
+    if (isFixUp) {
+      prompt += `\n## Attempt ${story.attempts} of ${story.maxAttempts} — Fix-up ${fixUpInfo.subAttempts} of ${maxFixUps}`;
+    } else {
+      prompt += `\n## Attempt ${story.attempts + 1} of ${story.maxAttempts}`;
+    }
 
-    // Add learnings from previous attempts
+    // Fix-up pass: the previous attempt's code is still in place — tell the
+    // agent to fix the specific errors rather than rewriting from scratch.
+    if (isFixUp) {
+      prompt += `\n\n## ⚠️ FIX-UP PASS — Do Not Start Over`;
+      prompt += `\nYour previous attempt for this story is still in the working tree.`;
+      prompt += ` Quality checks failed. Your job is to **fix the specific errors below**,`;
+      prompt += ` not rewrite the implementation from scratch.`;
+      if (fixUpInfo.subAttempts > 1) {
+        prompt += ` This is fix-up attempt ${fixUpInfo.subAttempts} of ${maxFixUps} — previous fixes did not resolve all issues.`;
+      }
+      prompt += '\n';
+
+      for (const qr of fixUpInfo.lastResults) {
+        prompt += `\n### Failed: ${qr.checkName} (exit code ${qr.exitCode})`;
+        // Include up to 3000 chars of actual error output so the agent can
+        // see exactly what line/file/message caused each failure.
+        const output = qr.output.trim();
+        if (output) {
+          prompt += `\n\`\`\`\n${output.slice(0, 3000)}\n\`\`\`\n`;
+        }
+      }
+
+      prompt += `\nFix these errors. Keep all working code intact. Do not restructure or rewrite unchanged files.`;
+    }
+
+    // Add learnings from previous attempts (always useful context, even on fix-up)
     if (story.learnings.length > 0) {
       prompt += '\n\n## Learnings from Previous Attempts\n';
       for (const learning of story.learnings) {
         prompt += `- ${learning}\n`;
       }
-      prompt += '\nPlease address these issues in this attempt. Do not repeat the same mistakes.';
+      if (!isFixUp) {
+        prompt += '\nPlease address these issues in this attempt. Do not repeat the same mistakes.';
+      }
     }
 
     // Add progress context
