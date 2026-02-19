@@ -40,6 +40,8 @@ export interface TerminalCreateRequest {
   env?: Record<string, string>;
   cols?: number;
   rows?: number;
+  /** Whether to enable shell integration (CWD tracking, command boundaries). Default: true */
+  enableShellIntegration?: boolean;
 }
 
 /** Response from creating a terminal session */

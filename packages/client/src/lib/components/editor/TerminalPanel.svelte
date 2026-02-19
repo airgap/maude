@@ -56,9 +56,27 @@
     };
   });
 
-  // Sync terminal preferences when settings change
+  // Sync terminal preferences from settingsStore → terminalStore → connectionManager
   $effect(() => {
-    const prefs = terminalStore.preferences;
+    // Read all terminal settings from settingsStore (these are reactive)
+    const prefs = {
+      fontFamily: settingsStore.termFontFamily,
+      fontSize: settingsStore.termFontSize,
+      fontWeight: settingsStore.termFontWeight,
+      lineHeight: settingsStore.termLineHeight,
+      cursorStyle: settingsStore.termCursorStyle,
+      cursorBlink: settingsStore.termCursorBlink,
+      scrollback: settingsStore.termScrollback,
+      bellStyle: settingsStore.termBellStyle,
+      copyOnSelect: settingsStore.termCopyOnSelect,
+      rightClickPaste: settingsStore.termRightClickPaste,
+      defaultShell: settingsStore.termDefaultShell,
+      enableShellIntegration: settingsStore.termEnableShellIntegration,
+      enableImages: false,
+    };
+    // Push to terminalStore (persists in its own localStorage)
+    terminalStore.updatePreferences(prefs);
+    // Apply immediately to all open terminals
     terminalConnectionManager.updatePreferences(prefs);
   });
 

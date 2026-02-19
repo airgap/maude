@@ -56,6 +56,19 @@ interface SettingsState {
   notifyOnApproval: boolean;
   // Startup tips
   showStartupTips: boolean;
+  // Terminal preferences
+  termFontFamily: string;
+  termFontSize: number;
+  termFontWeight: number;
+  termLineHeight: number;
+  termCursorStyle: 'block' | 'underline' | 'bar';
+  termCursorBlink: boolean;
+  termScrollback: number;
+  termBellStyle: 'none' | 'visual' | 'audio' | 'both';
+  termCopyOnSelect: boolean;
+  termRightClickPaste: boolean;
+  termDefaultShell: string;
+  termEnableShellIntegration: boolean;
 }
 
 const defaults: SettingsState = {
@@ -107,6 +120,18 @@ const defaults: SettingsState = {
   notifyOnFailure: true,
   notifyOnApproval: true,
   showStartupTips: true,
+  termFontFamily: 'var(--font-family-mono, monospace)',
+  termFontSize: 13,
+  termFontWeight: 400,
+  termLineHeight: 1.2,
+  termCursorStyle: 'block',
+  termCursorBlink: true,
+  termScrollback: 5000,
+  termBellStyle: 'visual',
+  termCopyOnSelect: false,
+  termRightClickPaste: false,
+  termDefaultShell: '',
+  termEnableShellIntegration: true,
 };
 
 function loadFromStorage(): SettingsState {
@@ -333,6 +358,42 @@ function createSettingsStore() {
     },
     get showStartupTips() {
       return state.showStartupTips;
+    },
+    get termFontFamily() {
+      return state.termFontFamily;
+    },
+    get termFontSize() {
+      return state.termFontSize;
+    },
+    get termFontWeight() {
+      return state.termFontWeight;
+    },
+    get termLineHeight() {
+      return state.termLineHeight;
+    },
+    get termCursorStyle() {
+      return state.termCursorStyle;
+    },
+    get termCursorBlink() {
+      return state.termCursorBlink;
+    },
+    get termScrollback() {
+      return state.termScrollback;
+    },
+    get termBellStyle() {
+      return state.termBellStyle;
+    },
+    get termCopyOnSelect() {
+      return state.termCopyOnSelect;
+    },
+    get termRightClickPaste() {
+      return state.termRightClickPaste;
+    },
+    get termDefaultShell() {
+      return state.termDefaultShell;
+    },
+    get termEnableShellIntegration() {
+      return state.termEnableShellIntegration;
     },
     get all() {
       return state;

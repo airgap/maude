@@ -8,7 +8,114 @@ import type {
 } from '@e/shared';
 import { TERMINAL_PROTOCOL } from '@e/shared';
 import { existsSync } from 'fs';
-import { basename } from 'path';
+import { basename, resolve, dirname } from 'path';
+
+// --- Shell Integration Script Paths ---
+
+/** Resolve the path to a shell integration script by shell name */
+function getShellIntegrationPath(shellName: string): string | null {
+  // import.meta.dir = .../src/services/ in Bun
+  // Shell integration scripts live at .../src/shell-integration/
+  const srcDir = dirname(import.meta.dir); // .../src/
+  const candidates = [
+    resolve(srcDir, 'shell-integration'),  // .../src/shell-integration/
+  ];
+
+  const fileMap: Record<string, string> = {
+    bash: 'bash-integration.sh',
+    zsh: 'zsh-integration.sh',
+    fish: 'fish-integration.fish',
+  };
+
+  const fileName = fileMap[shellName];
+  if (!fileName) return null;
+
+  for (const dir of candidates) {
+    const script = resolve(dir, fileName);
+    if (existsSync(script)) return script;
+  }
+  return null;
+}
+
+/** Determine the shell name (bash, zsh, fish) from a shell path */
+function getShellName(shellPath: string): string {
+  const base = basename(shellPath).toLowerCase();
+  if (base.includes('bash')) return 'bash';
+  if (base.includes('zsh')) return 'zsh';
+  if (base.includes('fish')) return 'fish';
+  return base;
+}
+
+// --- OSC Sequence Parsing ---
+
+/**
+ * Parse and strip OSC sequences from PTY output data.
+ * Returns the cleaned data (for display) and any extracted events.
+ *
+ * Supported sequences:
+ *   - OSC 7: \x1b]7;file://hostname/path\x07  (or ST = \x1b\\)
+ *   - OSC 633;C: \x1b]633;C\x07              (command start)
+ *   - OSC 633;D;exitCode: \x1b]633;D;N\x07   (command end)
+ */
+interface OscParseResult {
+  /** PTY data with OSC sequences stripped out */
+  cleanData: string;
+  /** Extracted CWD from OSC 7, if any */
+  cwd: string | null;
+  /** Whether a command_start was detected */
+  commandStart: boolean;
+  /** Exit code from command_end, or null if no command_end detected */
+  commandEndExitCode: number | null;
+}
+
+// Regex for OSC sequences terminated by BEL (\x07) or ST (\x1b\\)
+// OSC 7:    \x1b]7;file://host/path(\x07|\x1b\\)
+// OSC 633:  \x1b]633;...\x07|\x1b\\)
+const OSC_RE = /\x1b\](?:7;([^\x07\x1b]*)|633;([^\x07\x1b]*))(?:\x07|\x1b\\)/g;
+
+function parseOscSequences(data: string): OscParseResult {
+  let cwd: string | null = null;
+  let commandStart = false;
+  let commandEndExitCode: number | null = null;
+
+  // Extract info from OSC sequences
+  let match: RegExpExecArray | null;
+  OSC_RE.lastIndex = 0;
+  while ((match = OSC_RE.exec(data)) !== null) {
+    const osc7Payload = match[1];
+    const osc633Payload = match[2];
+
+    if (osc7Payload !== undefined) {
+      // OSC 7: file://hostname/path
+      try {
+        const url = new URL(osc7Payload);
+        cwd = decodeURIComponent(url.pathname);
+      } catch {
+        // Try simple path extraction: file://host/path
+        const pathMatch = osc7Payload.match(/^file:\/\/[^/]*(\/.*)/);
+        if (pathMatch) {
+          cwd = decodeURIComponent(pathMatch[1]);
+        }
+      }
+    }
+
+    if (osc633Payload !== undefined) {
+      if (osc633Payload === 'C') {
+        commandStart = true;
+      } else if (osc633Payload.startsWith('D;')) {
+        const code = parseInt(osc633Payload.slice(2), 10);
+        commandEndExitCode = isNaN(code) ? 0 : code;
+      } else if (osc633Payload === 'D') {
+        commandEndExitCode = 0;
+      }
+    }
+  }
+
+  // Strip all OSC sequences from the data before forwarding to clients
+  const cleanData = data.replace(OSC_RE, '');
+
+  return { cleanData, cwd, commandStart, commandEndExitCode };
+}
 
 // --- node-pty dynamic import ---
 
@@ -49,6 +156,12 @@ interface TerminalSession {
   attachedWs: Set<WsLike>;
   /** Whether logging is enabled for this session */
   logging: boolean;
+  /** Whether shell integration OSC parsing is enabled */
+  shellIntegration: boolean;
+  /** Counter for generating unique command IDs */
+  commandCounter: number;
+  /** The current in-flight command ID (for pairing start/end) */
+  currentCommandId: string | null;
 }
 
 /** Maximum scrollback buffer size in bytes per session */
@@ -119,20 +232,85 @@ class TerminalSessionManager {
     const cwd = opts.cwd || opts.workspacePath || process.env.HOME || '/';
     const cols = opts.cols || 80;
     const rows = opts.rows || 24;
-    const env = {
+    const enableIntegration = opts.enableShellIntegration !== false;
+
+    const env: Record<string, string> = {
       ...(process.env as Record<string, string>),
       ...opts.env,
       TERM_PROGRAM: 'e-ide',
       TERM_PROGRAM_VERSION: '1.0.0',
     };
 
-    const term = pty.spawn(shell, args, {
+    // Inject shell integration script path via environment variable.
+    // The shell sources this script on startup via PROMPT_COMMAND (bash),
+    // precmd hook (zsh), or fish_prompt (fish).
+    const shellName = getShellName(shell);
+    const integrationScript = enableIntegration ? getShellIntegrationPath(shellName) : null;
+
+    let spawnArgs = [...args];
+    if (integrationScript) {
+      // Set env var so the shell knows integration is available
+      env.E_SHELL_INTEGRATION = integrationScript;
+
+      // For bash/zsh: pass --rcfile or source the script
+      // For fish: use --init-command
+      if (shellName === 'bash') {
+        // Use --rcfile to source our integration (it will also source user's bashrc)
+        // We create a wrapper that sources the user's rc file then our integration
+        env.E_SHELL_INTEGRATION_INJECT = '1';
+        spawnArgs = ['--rcfile', integrationScript, ...args];
+      } else if (shellName === 'zsh') {
+        // For zsh, we inject via ZDOTDIR or ENV. Simplest approach: use -i flag
+        // and set ENV to auto-source the integration script after user's zshrc.
+        env.E_SHELL_INTEGRATION_INJECT = '1';
+        // The cleanest approach: set an env var and have .zshrc source it.
+        // For automatic injection without modifying user files, we pass it as a
+        // command argument that zsh will execute on startup.
+        spawnArgs = ['-i', ...args];
+        // We'll source the integration at the end via precmd setup
+        env.ZDOTDIR_ORIGINAL = env.ZDOTDIR || '';
+      } else if (shellName === 'fish') {
+        spawnArgs = ['--init-command', `source ${integrationScript}`, ...args];
+      }
+    }
+
+    const term = pty.spawn(shell, spawnArgs, {
       name: 'xterm-256color',
       cols,
       rows,
       cwd,
       env,
     });
+
+    // For zsh, we inject the integration script by writing a source command
+    // immediately after the shell starts. This runs after .zshrc loads.
+    if (integrationScript && shellName === 'zsh') {
+      // Give zsh a moment to initialize, then source the integration script
+      setTimeout(() => {
+        try {
+          term.write(`source "${integrationScript}"\n`);
+        } catch {
+          // PTY may already be closed
+        }
+      }, 100);
+    }
+
+    // For bash with --rcfile, we need to also source the user's bashrc.
+    // We'll create a wrapper approach: the integration script itself is lightweight,
+    // and the user's bashrc is sourced via PROMPT_COMMAND or a subshell init.
+    // Actually, bash's --rcfile replaces .bashrc, so we inject sourcing of user's
+    // bashrc by writing it to the terminal after startup.
+    if (integrationScript && shellName === 'bash') {
+      setTimeout(() => {
+        try {
+          const bashrc = `${env.HOME || '/root'}/.bashrc`;
+          // Source user's bashrc if it exists, silently
+          term.write(`[ -f "${bashrc}" ] && source "${bashrc}" 2>/dev/null\n`);
+        } catch {
+          // PTY may already be closed
+        }
+      }, 50);
+    }
 
     const session: TerminalSession = {
       id,
@@ -152,18 +330,66 @@ class TerminalSessionManager {
       exitSignal: null,
       attachedWs: new Set(),
       logging: false,
+      shellIntegration: enableIntegration && integrationScript !== null,
+      commandCounter: 0,
+      currentCommandId: null,
     };
 
-    // Forward PTY data to all attached WebSockets and buffer for replay
+    // Forward PTY data to all attached WebSockets and buffer for replay.
+    // When shell integration is active, parse OSC sequences from the output,
+    // strip them from display data, and emit control messages.
     term.onData((data: string) => {
       session.lastActivity = Date.now();
-      this.appendScrollback(session, data);
 
-      for (const ws of session.attachedWs) {
-        try {
-          ws.send(data);
-        } catch {
-          // WebSocket may be closed — will be cleaned up on next detach
+      if (session.shellIntegration) {
+        const result = parseOscSequences(data);
+
+        // Emit control messages for detected events
+        if (result.cwd) {
+          session.cwd = result.cwd;
+          this.sendControl(session, { type: 'cwd_changed', cwd: result.cwd });
+        }
+
+        if (result.commandStart) {
+          session.commandCounter++;
+          session.currentCommandId = `${session.id}_cmd_${session.commandCounter}`;
+          this.sendControl(session, {
+            type: 'command_start',
+            id: session.currentCommandId,
+          });
+        }
+
+        if (result.commandEndExitCode !== null) {
+          const cmdId = session.currentCommandId || `${session.id}_cmd_${session.commandCounter}`;
+          this.sendControl(session, {
+            type: 'command_end',
+            id: cmdId,
+            exitCode: result.commandEndExitCode,
+          });
+          session.currentCommandId = null;
+        }
+
+        // Forward cleaned data (OSC sequences stripped) to clients
+        const cleanData = result.cleanData;
+        if (cleanData.length > 0) {
+          this.appendScrollback(session, cleanData);
+          for (const ws of session.attachedWs) {
+            try {
+              ws.send(cleanData);
+            } catch {
+              // WebSocket may be closed
+            }
+          }
+        }
+      } else {
+        // No shell integration — forward raw data as-is
+        this.appendScrollback(session, data);
+        for (const ws of session.attachedWs) {
+          try {
+            ws.send(data);
+          } catch {
+            // WebSocket may be closed — will be cleaned up on next detach
+          }
         }
       }
     });
@@ -262,6 +488,11 @@ class TerminalSessionManager {
 
     // Send replay_end control message
     this.sendControlToWs(ws, { type: 'replay_end' });
+
+    // Send current CWD if shell integration has tracked it
+    if (session.shellIntegration && session.cwd) {
+      this.sendControlToWs(ws, { type: 'cwd_changed', cwd: session.cwd });
+    }
 
     // If session already exited, notify immediately
     if (session.exitCode !== null) {

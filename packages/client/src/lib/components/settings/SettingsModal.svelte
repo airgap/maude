@@ -1,7 +1,8 @@
 <script lang="ts">
   import { settingsStore } from '$lib/stores/settings.svelte';
+  import { terminalStore } from '$lib/stores/terminal.svelte';
   import { uiStore } from '$lib/stores/ui.svelte';
-  import { api } from '$lib/api/client';
+  import { api, getBaseUrl } from '$lib/api/client';
   import { onMount } from 'svelte';
   import { desktopNotifications } from '$lib/notifications/desktop-notifications';
   import type {
@@ -12,6 +13,9 @@
     TerminalCommandPolicy,
     AgentProfile,
     AgentProfileCreateInput,
+    ShellInfo,
+    CursorStyle,
+    BellStyle,
   } from '@e/shared';
   import { PERMISSION_PRESETS } from '@e/shared';
   import { profilesStore } from '$lib/stores/profiles.svelte';
@@ -31,6 +35,7 @@
     | 'appearance'
     | 'audio'
     | 'editor'
+    | 'terminal'
     | 'permissions'
     | 'security'
     | 'mcp'
@@ -51,6 +56,7 @@
     | 'appearance'
     | 'audio'
     | 'editor'
+    | 'terminal'
     | 'permissions'
     | 'security'
     | 'mcp'
@@ -256,6 +262,24 @@
   let ollamaModels = $state<Array<{ name: string; size: number }>>([]);
   let models = $state(cloudModels);
 
+  // --- Terminal settings state ---
+  let detectedShells = $state<ShellInfo[]>([]);
+  let shellsLoading = $state(false);
+
+  async function loadDetectedShells() {
+    shellsLoading = true;
+    try {
+      const res = await fetch(`${getBaseUrl()}/terminal/shells`);
+      const json = await res.json();
+      if (json.ok && json.data) {
+        detectedShells = json.data;
+      }
+    } catch {
+      /* shells not available */
+    }
+    shellsLoading = false;
+  }
+
   onMount(async () => {
     let combined = [...cloudModels];
 
@@ -315,6 +339,7 @@
     loadBudget();
     loadSandbox();
     loadPermissionRules();
+    loadDetectedShells();
     profilesStore.load();
   });
 
@@ -519,7 +544,7 @@
     <div class="modal-body">
       <nav class="settings-tabs">
         <span class="settings-section-header">Interface</span>
-        {#each ['general', 'appearance', 'audio', 'editor', 'keybindings'] as tab}
+        {#each ['general', 'appearance', 'audio', 'editor', 'terminal', 'keybindings'] as tab}
           <button
             class="settings-tab"
             class:active={activeTab === tab}
@@ -1520,6 +1545,154 @@
                 </div>
               </div>
             {/if}
+          </div>
+        {:else if activeTab === 'terminal'}
+          <div class="setting-group">
+            <label class="setting-label">Font family</label>
+            <input
+              type="text"
+              class="setting-input"
+              value={terminalStore.preferences.fontFamily}
+              oninput={(e) =>
+                terminalStore.updatePreferences({
+                  fontFamily: (e.target as HTMLInputElement).value,
+                })}
+              placeholder="var(--font-family-mono, monospace)"
+            />
+            <p class="setting-desc">CSS font-family for the terminal. Use a monospaced font for best results.</p>
+          </div>
+
+          <div class="setting-group">
+            <label class="setting-label">Font size — {terminalStore.preferences.fontSize}px</label>
+            <input
+              type="range"
+              min="9"
+              max="24"
+              step="1"
+              value={terminalStore.preferences.fontSize}
+              oninput={(e) =>
+                terminalStore.updatePreferences({
+                  fontSize: Number((e.target as HTMLInputElement).value),
+                })}
+            />
+          </div>
+
+          <div class="setting-group">
+            <label class="setting-label">Cursor style</label>
+            <select
+              value={terminalStore.preferences.cursorStyle}
+              onchange={(e) =>
+                terminalStore.updatePreferences({
+                  cursorStyle: (e.target as HTMLSelectElement).value as CursorStyle,
+                })}
+            >
+              <option value="block">Block</option>
+              <option value="underline">Underline</option>
+              <option value="bar">Bar</option>
+            </select>
+          </div>
+
+          <div class="setting-group">
+            <label class="setting-label">Cursor blink</label>
+            <label class="toggle">
+              <input
+                type="checkbox"
+                checked={terminalStore.preferences.cursorBlink}
+                onchange={() =>
+                  terminalStore.updatePreferences({
+                    cursorBlink: !terminalStore.preferences.cursorBlink,
+                  })}
+              />
+              <span class="toggle-slider"></span>
+            </label>
+          </div>
+
+          <div class="setting-group">
+            <label class="setting-label">Scrollback lines — {terminalStore.preferences.scrollback.toLocaleString()}</label>
+            <input
+              type="range"
+              min="1000"
+              max="100000"
+              step="1000"
+              value={terminalStore.preferences.scrollback}
+              oninput={(e) =>
+                terminalStore.updatePreferences({
+                  scrollback: Number((e.target as HTMLInputElement).value),
+                })}
+            />
+            <p class="setting-desc">Number of lines kept in the scrollback buffer (1,000 – 100,000)</p>
+          </div>
+
+          <div class="setting-group">
+            <label class="setting-label">Bell style</label>
+            <select
+              value={terminalStore.preferences.bellStyle}
+              onchange={(e) =>
+                terminalStore.updatePreferences({
+                  bellStyle: (e.target as HTMLSelectElement).value as BellStyle,
+                })}
+            >
+              <option value="none">None</option>
+              <option value="visual">Visual</option>
+              <option value="audio">Audio</option>
+              <option value="both">Both</option>
+            </select>
+          </div>
+
+          <div class="setting-group">
+            <label class="setting-label">Copy on select</label>
+            <label class="toggle">
+              <input
+                type="checkbox"
+                checked={terminalStore.preferences.copyOnSelect}
+                onchange={() =>
+                  terminalStore.updatePreferences({
+                    copyOnSelect: !terminalStore.preferences.copyOnSelect,
+                  })}
+              />
+              <span class="toggle-slider"></span>
+            </label>
+            <p class="setting-desc">Automatically copy selected text to the clipboard</p>
+          </div>
+
+          <div class="setting-group">
+            <label class="setting-label">Default shell</label>
+            {#if shellsLoading}
+              <p class="setting-desc">Detecting available shells...</p>
+            {:else if detectedShells.length > 0}
+              <select
+                value={terminalStore.preferences.defaultShell}
+                onchange={(e) =>
+                  terminalStore.updatePreferences({
+                    defaultShell: (e.target as HTMLSelectElement).value,
+                  })}
+              >
+                <option value="">System default</option>
+                {#each detectedShells as shell}
+                  <option value={shell.path}>{shell.name} — {shell.path}</option>
+                {/each}
+              </select>
+            {:else}
+              <p class="setting-desc">No shells detected. Using system default.</p>
+            {/if}
+          </div>
+
+          <div class="setting-group">
+            <label class="setting-label">Shell integration</label>
+            <label class="toggle">
+              <input
+                type="checkbox"
+                checked={terminalStore.preferences.enableShellIntegration}
+                onchange={() =>
+                  terminalStore.updatePreferences({
+                    enableShellIntegration: !terminalStore.preferences.enableShellIntegration,
+                  })}
+              />
+              <span class="toggle-slider"></span>
+            </label>
+            <p class="setting-desc">
+              Inject shell integration scripts for CWD tracking and command exit codes
+            </p>
           </div>
         {:else if activeTab === 'keybindings'}
           <div class="keybindings-list">
@@ -2717,5 +2890,21 @@
   .btn-primary:disabled {
     opacity: 0.5;
     cursor: not-allowed;
+  }
+
+  /* Terminal settings */
+  .setting-input {
+    width: 100%;
+    padding: 8px 10px;
+    font-size: var(--fs-base);
+    background: var(--bg-input);
+    border: 1px solid var(--border-secondary);
+    border-radius: var(--radius-sm);
+    color: var(--text-primary);
+    font-family: var(--font-family);
+  }
+  .setting-input:focus {
+    border-color: var(--accent-primary);
+    outline: none;
   }
 </style>

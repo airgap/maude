@@ -1,7 +1,6 @@
 <script lang="ts">
   import type { TerminalLayout } from '@e/shared';
   import { terminalStore } from '$lib/stores/terminal.svelte';
-  import { terminalConnectionManager } from '$lib/services/terminal-connection';
   import SplitPane from '../layout/SplitPane.svelte';
   import TerminalInstance from './TerminalInstance.svelte';
   import TerminalSearchBar from './TerminalSearchBar.svelte';
@@ -38,6 +37,7 @@
 </script>
 
 {#if layout.type === 'leaf'}
+  {@const cmdStatus = terminalStore.getCommandStatus(layout.sessionId)}
   <!-- Leaf node: render a TerminalInstance with focus indicator -->
   <!-- svelte-ignore a11y_no_static_element_interactions -->
   <div
@@ -50,6 +50,25 @@
       <TerminalSearchBar sessionId={layout.sessionId} />
     {/if}
     <TerminalInstance sessionId={layout.sessionId} {active} />
+    {#if cmdStatus}
+      <div
+        class="exit-code-badge"
+        class:success={cmdStatus.exitCode === 0}
+        class:failure={cmdStatus.exitCode !== 0}
+        title={cmdStatus.exitCode === 0 ? 'Last command succeeded' : `Last command failed (exit code ${cmdStatus.exitCode})`}
+      >
+        {#if cmdStatus.exitCode === 0}
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3">
+            <polyline points="20 6 9 17 4 12" />
+          </svg>
+        {:else}
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3">
+            <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
+          </svg>
+          <span class="exit-code-num">{cmdStatus.exitCode}</span>
+        {/if}
+      </div>
+    {/if}
   </div>
 {:else}
   <!-- Branch node: render SplitPane with two recursive children -->
@@ -86,5 +105,36 @@
   .split-leaf.focused {
     border-color: color-mix(in srgb, var(--accent-primary) 50%, transparent);
     box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent-primary) 20%, transparent);
+  }
+
+  /* ── Exit code badge (gutter) ── */
+  .exit-code-badge {
+    position: absolute;
+    bottom: 6px;
+    right: 10px;
+    display: flex;
+    align-items: center;
+    gap: 3px;
+    padding: 2px 6px;
+    border-radius: var(--radius-sm, 4px);
+    font-size: 10px;
+    font-weight: 600;
+    font-family: var(--font-family-mono, monospace);
+    line-height: 1;
+    z-index: 10;
+    pointer-events: none;
+    opacity: 0.85;
+    transition: opacity var(--transition);
+  }
+  .exit-code-badge.success {
+    color: var(--accent-secondary, #00ff88);
+    background: color-mix(in srgb, var(--accent-secondary, #00ff88) 15%, transparent);
+  }
+  .exit-code-badge.failure {
+    color: var(--accent-error, #ff3344);
+    background: color-mix(in srgb, var(--accent-error, #ff3344) 15%, transparent);
+  }
+  .exit-code-num {
+    font-size: 9px;
   }
 </style>

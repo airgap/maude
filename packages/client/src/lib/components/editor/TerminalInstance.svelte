@@ -254,6 +254,10 @@
 
     // Register custom key handler for clipboard + search shortcuts
     registerKeyHandler();
+
+    // Register control message listener for shell integration events
+    cleanupControlListener?.();
+    cleanupControlListener = registerControlListener(sessionId);
   }
 
   // Re-derive and apply theme when settings change
@@ -283,6 +287,28 @@
   });
 
   let cleanupCopyOnSelect: (() => void) | undefined;
+  let cleanupControlListener: (() => void) | undefined;
+
+  /** Register control message listener for shell integration events */
+  function registerControlListener(sid: string): () => void {
+    return terminalConnectionManager.onControlMessage(sid, (msg) => {
+      switch (msg.type) {
+        case 'cwd_changed':
+          terminalStore.setCwd(sid, msg.cwd);
+          break;
+        case 'command_start':
+          // Clear previous exit code badge when a new command starts
+          terminalStore.clearCommandStatus(sid);
+          break;
+        case 'command_end':
+          terminalStore.setCommandStatus(sid, msg.id, msg.exitCode);
+          break;
+        case 'session_exit':
+          terminalStore.setExitCode(sid, msg.exitCode);
+          break;
+      }
+    });
+  }
 
   onMount(() => {
     mounted = true;
@@ -292,6 +318,7 @@
     return () => {
       mounted = false;
       cleanupCopyOnSelect?.();
+      cleanupControlListener?.();
       // Detach from DOM but keep session alive (AC #9)
       if (terminalConnectionManager.has(sessionId)) {
         terminalConnectionManager.detachFromContainer(sessionId);

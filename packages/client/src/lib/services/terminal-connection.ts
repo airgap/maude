@@ -200,6 +200,7 @@ export class TerminalConnectionManager {
       env: profile?.env,
       cols: profile?.cols ?? 80,
       rows: profile?.rows ?? 24,
+      enableShellIntegration: this.prefs.enableShellIntegration,
     };
 
     const { data } = await apiRequest<{ ok: boolean; data: TerminalCreateResponse }>(

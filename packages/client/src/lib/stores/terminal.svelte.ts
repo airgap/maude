@@ -23,6 +23,16 @@ export interface SessionMeta {
   attached: boolean;
 }
 
+/** Last command exit code per session (for exit code badge display) */
+export interface CommandStatus {
+  /** The command ID from shell integration */
+  commandId: string;
+  /** Exit code: 0 = success, non-zero = failure */
+  exitCode: number;
+  /** Timestamp of the command completion */
+  timestamp: number;
+}
+
 // ── Persisted tab shape (no live session references) ──
 export interface PersistedTerminalTab {
   id: string;
@@ -345,6 +355,9 @@ function createTerminalStore() {
   // --- Preferences ---
   let preferences = $state<TerminalPreferences>(loadPreferences());
 
+  // --- Command exit code tracking (for exit code badges) ---
+  let lastCommandStatus = $state<Map<string, CommandStatus>>(new Map());
+
   // --- UI toggles ---
   let searchOpenSessions = $state<Set<string>>(new Set());
   let broadcastInput = $state(false);
@@ -416,6 +429,15 @@ function createTerminalStore() {
     },
     get connected() {
       return connected;
+    },
+
+    get lastCommandStatus() {
+      return lastCommandStatus;
+    },
+
+    /** Get the last command status for a specific session */
+    getCommandStatus(sessionId: string): CommandStatus | undefined {
+      return lastCommandStatus.get(sessionId);
     },
 
     // ── Panel lifecycle ──
@@ -673,6 +695,20 @@ function createTerminalStore() {
         newSessions.set(sessionId, { ...meta, exitCode });
         sessions = newSessions;
       }
+    },
+
+    /** Update the last command status for a session (from shell integration) */
+    setCommandStatus(sessionId: string, commandId: string, exitCode: number) {
+      const newMap = new Map(lastCommandStatus);
+      newMap.set(sessionId, { commandId, exitCode, timestamp: Date.now() });
+      lastCommandStatus = newMap;
+    },
+
+    /** Clear command status for a session */
+    clearCommandStatus(sessionId: string) {
+      const newMap = new Map(lastCommandStatus);
+      newMap.delete(sessionId);
+      lastCommandStatus = newMap;
     },
 
     /** @deprecated use registerSession/unregisterSession instead */

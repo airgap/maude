@@ -2,6 +2,18 @@
   import { terminalStore } from '$lib/stores/terminal.svelte';
   import type { TerminalTab } from '@e/shared';
 
+  /** Get the display label for a tab — use CWD directory name if available */
+  function getTabDisplayLabel(tab: TerminalTab): string {
+    const meta = terminalStore.sessions.get(tab.focusedSessionId);
+    if (meta?.cwd) {
+      // Extract directory name from path (last component)
+      const parts = meta.cwd.replace(/\/+$/, '').split('/');
+      const dirName = parts[parts.length - 1];
+      if (dirName) return dirName;
+    }
+    return tab.label;
+  }
+
   let dropdownOpen = $state(false);
   let editingTabId = $state<string | null>(null);
   let editValue = $state('');
@@ -100,7 +112,7 @@
             autofocus
           />
         {:else}
-          <span class="tab-label">{tab.label}</span>
+          <span class="tab-label" title={terminalStore.sessions.get(tab.focusedSessionId)?.cwd || tab.label}>{getTabDisplayLabel(tab)}</span>
         {/if}
 
         <button
