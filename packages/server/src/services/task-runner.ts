@@ -8,11 +8,7 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
-import type {
-  PackageManager,
-  WorkspaceTask,
-  TaskDiscoveryResponse,
-} from '@e/shared';
+import type { PackageManager, WorkspaceTask, TaskDiscoveryResponse } from '@e/shared';
 
 // ---------------------------------------------------------------------------
 // File-system helpers

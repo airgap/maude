@@ -59,16 +59,34 @@
         class="exit-code-badge"
         class:success={cmdStatus.exitCode === 0}
         class:failure={cmdStatus.exitCode !== 0}
-        title={cmdStatus.exitCode === 0 ? 'Last command succeeded' : `Last command failed (exit code ${cmdStatus.exitCode})`}
+        title={cmdStatus.exitCode === 0
+          ? 'Last command succeeded'
+          : `Last command failed (exit code ${cmdStatus.exitCode})`}
         role="status"
-        aria-label={cmdStatus.exitCode === 0 ? 'Last command succeeded' : `Last command failed with exit code ${cmdStatus.exitCode}`}
+        aria-label={cmdStatus.exitCode === 0
+          ? 'Last command succeeded'
+          : `Last command failed with exit code ${cmdStatus.exitCode}`}
       >
         {#if cmdStatus.exitCode === 0}
-          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3">
+          <svg
+            width="10"
+            height="10"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="3"
+          >
             <polyline points="20 6 9 17 4 12" />
           </svg>
         {:else}
-          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3">
+          <svg
+            width="10"
+            height="10"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="3"
+          >
             <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
           </svg>
           <span class="exit-code-num">{cmdStatus.exitCode}</span>
@@ -105,7 +123,9 @@
     flex-direction: column;
     position: relative;
     border: 1px solid transparent;
-    transition: border-color var(--transition), box-shadow var(--transition);
+    transition:
+      border-color var(--transition),
+      box-shadow var(--transition);
   }
 
   .split-leaf.focused {

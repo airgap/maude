@@ -64,13 +64,53 @@
   let fileInput: HTMLInputElement;
   let isDragOver = $state(false);
 
-  const ALLOWED_IMAGE_TYPES = ['image/png', 'image/jpeg', 'image/gif', 'image/webp', 'image/svg+xml'];
+  const ALLOWED_IMAGE_TYPES = [
+    'image/png',
+    'image/jpeg',
+    'image/gif',
+    'image/webp',
+    'image/svg+xml',
+  ];
   const ALLOWED_MISC_EXTENSIONS = [
-    '.txt', '.md', '.json', '.csv', '.xml', '.yaml', '.yml', '.toml',
-    '.js', '.ts', '.jsx', '.tsx', '.py', '.rb', '.rs', '.go', '.java',
-    '.c', '.cpp', '.h', '.hpp', '.cs', '.swift', '.kt', '.sh', '.bash',
-    '.css', '.scss', '.html', '.sql', '.graphql', '.proto', '.env',
-    '.log', '.conf', '.cfg', '.ini', '.diff', '.patch',
+    '.txt',
+    '.md',
+    '.json',
+    '.csv',
+    '.xml',
+    '.yaml',
+    '.yml',
+    '.toml',
+    '.js',
+    '.ts',
+    '.jsx',
+    '.tsx',
+    '.py',
+    '.rb',
+    '.rs',
+    '.go',
+    '.java',
+    '.c',
+    '.cpp',
+    '.h',
+    '.hpp',
+    '.cs',
+    '.swift',
+    '.kt',
+    '.sh',
+    '.bash',
+    '.css',
+    '.scss',
+    '.html',
+    '.sql',
+    '.graphql',
+    '.proto',
+    '.env',
+    '.log',
+    '.conf',
+    '.cfg',
+    '.ini',
+    '.diff',
+    '.patch',
   ];
   const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
 
@@ -568,7 +608,11 @@
     if (showMatch) {
       const raw = showMatch[1].replace(/^["'`]+|["'`]+$/g, '').trim();
       const wsPath = conversationStore.active?.workspacePath || settingsStore.workspacePath;
-      const filePath = raw.startsWith('/') ? raw : (wsPath && wsPath !== '.' ? wsPath + '/' + raw : raw);
+      const filePath = raw.startsWith('/')
+        ? raw
+        : wsPath && wsPath !== '.'
+          ? wsPath + '/' + raw
+          : raw;
       // Verify the file exists before intercepting — if not, fall through to Claude
       try {
         await api.files.read(filePath);
@@ -1065,7 +1109,22 @@
             title={mention.collapsed ? 'Expand context' : 'Collapse context'}
           >
             <span class="mention-badge-kind">{mention.label}</span>
-            <span class="mention-badge-arrow"><svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" style="transform: rotate({mention.collapsed ? '0deg' : '90deg'}); transition: transform 0.15s ease"><polyline points="9 18 15 12 9 6" /></svg></span>
+            <span class="mention-badge-arrow"
+              ><svg
+                width="8"
+                height="8"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="3"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                style="transform: rotate({mention.collapsed
+                  ? '0deg'
+                  : '90deg'}); transition: transform 0.15s ease"
+                ><polyline points="9 18 15 12 9 6" /></svg
+              ></span
+            >
           </button>
           {#if !mention.collapsed}
             <div class="mention-badge-preview">
@@ -1103,7 +1162,11 @@
   {#if pendingAttachments.length > 0}
     <div class="attachment-previews">
       {#each pendingAttachments as att, i}
-        <div class="attachment-preview" class:image={att.type === 'image'} class:file={att.type === 'file'}>
+        <div
+          class="attachment-preview"
+          class:image={att.type === 'image'}
+          class:file={att.type === 'file'}
+        >
           {#if att.type === 'image' && att.content}
             <img
               src="data:{att.mimeType};base64,{att.content}"
@@ -1112,7 +1175,19 @@
             />
           {:else}
             <div class="attachment-file-icon">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+              <svg
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                ><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><polyline
+                  points="14 2 14 8 20 8"
+                /></svg
+              >
             </div>
           {/if}
           <div class="attachment-info">
@@ -1126,7 +1201,16 @@
             onclick={() => removeAttachment(i)}
             title="Remove attachment"
           >
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
+            <svg
+              width="12"
+              height="12"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2.5"
+              stroke-linecap="round"
+              ><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg
+            >
           </button>
         </div>
       {/each}
@@ -1136,7 +1220,19 @@
   {#if isDragOver}
     <div class="drag-overlay">
       <div class="drag-overlay-content">
-        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="17 8 12 3 7 8" /><line x1="12" y1="3" x2="12" y2="15" /></svg>
+        <svg
+          width="32"
+          height="32"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="1.5"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          ><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline
+            points="17 8 12 3 7 8"
+          /><line x1="12" y1="3" x2="12" y2="15" /></svg
+        >
         <span>Drop files to attach</span>
       </div>
     </div>
@@ -1178,13 +1274,39 @@
       <button
         class="btn-icon-sm"
         onclick={() => fileInput?.click()}
-        title="Attach files (images, code, text)"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48" /></svg></button
+        title="Attach files (images, code, text)"
+        ><svg
+          width="14"
+          height="14"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          ><path
+            d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"
+          /></svg
+        ></button
       >
       <button
         class="btn-icon-sm"
         class:active={localTeachMode}
         onclick={() => (localTeachMode = !localTeachMode)}
-        title="Teach Me Mode — E guides you with questions instead of answers"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 10v6M2 10l10-5 10 5-10 5z" /><path d="M6 12v5c0 2 3 3 6 3s6-1 6-3v-5" /></svg></button
+        title="Teach Me Mode — E guides you with questions instead of answers"
+        ><svg
+          width="14"
+          height="14"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          ><path d="M22 10v6M2 10l10-5 10 5-10 5z" /><path
+            d="M6 12v5c0 2 3 3 6 3s6-1 6-3v-5"
+          /></svg
+        ></button
       >
 
       <VoiceButton onTranscript={handleVoiceTranscript} />

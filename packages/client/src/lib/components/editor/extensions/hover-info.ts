@@ -266,7 +266,8 @@ const BUILTINS: Record<string, BuiltinInfo> = {
     sig: 'interface Promise<T>',
     doc: 'Represents the eventual completion or failure of an asynchronous operation. Use `.then()`, `.catch()`, `.finally()`, or `await`.',
     tags: ['JavaScript'],
-    docUrl: 'https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Promise',
+    docUrl:
+      'https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Promise',
   },
   fetch: {
     sig: 'function fetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response>',
@@ -320,13 +321,15 @@ const BUILTINS: Record<string, BuiltinInfo> = {
     sig: 'namespace Object',
     doc: 'Object utilities. Key: `Object.keys`, `Object.values`, `Object.entries`, `Object.assign`, `Object.freeze`, `Object.fromEntries`.',
     tags: ['JavaScript'],
-    docUrl: 'https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Object',
+    docUrl:
+      'https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Object',
   },
   Array: {
     sig: 'namespace Array',
     doc: 'Array utilities. Key: `Array.isArray(val)`, `Array.from(iterable)`, `Array.of(...items)`.',
     tags: ['JavaScript'],
-    docUrl: 'https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Array',
+    docUrl:
+      'https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Array',
   },
   Map: {
     sig: 'class Map<K, V>',
@@ -344,25 +347,29 @@ const BUILTINS: Record<string, BuiltinInfo> = {
     sig: 'class WeakMap<K extends object, V>',
     doc: 'Like `Map` but keys are held weakly — no memory leak if key is garbage collected. Keys must be objects.',
     tags: ['JavaScript'],
-    docUrl: 'https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/WeakMap',
+    docUrl:
+      'https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/WeakMap',
   },
   WeakSet: {
     sig: 'class WeakSet<T extends object>',
     doc: 'Like `Set` but values are held weakly. Useful for tracking objects without preventing garbage collection.',
     tags: ['JavaScript'],
-    docUrl: 'https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/WeakSet',
+    docUrl:
+      'https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/WeakSet',
   },
   Symbol: {
     sig: 'function Symbol(description?: string | number): symbol',
     doc: 'Creates a unique, immutable primitive value. Often used as object keys to avoid name collisions.',
     tags: ['JavaScript'],
-    docUrl: 'https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Symbol',
+    docUrl:
+      'https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Symbol',
   },
   Proxy: {
     sig: 'class Proxy<T extends object>',
     doc: "Wraps an object and intercepts operations (get, set, delete, etc.) via a handler. Used internally by Svelte's `$state` for deep reactivity.",
     tags: ['JavaScript'],
-    docUrl: 'https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Proxy',
+    docUrl:
+      'https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Proxy',
   },
   structuredClone: {
     sig: 'function structuredClone<T>(value: T, options?: { transfer?: Transferable[] }): T',
@@ -399,49 +406,57 @@ const BUILTINS: Record<string, BuiltinInfo> = {
     sig: 'class RegExp',
     doc: 'Creates a regular expression for pattern matching. Use `/pattern/flags` literal syntax or `new RegExp(pattern, flags)`. Key methods: `.test()`, `.exec()`.',
     tags: ['JavaScript'],
-    docUrl: 'https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/RegExp',
+    docUrl:
+      'https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/RegExp',
   },
   Error: {
     sig: 'class Error',
     doc: 'Base class for runtime errors. Subclasses: `TypeError`, `RangeError`, `ReferenceError`, `SyntaxError`. Has `message`, `stack`, and `name` properties.',
     tags: ['JavaScript'],
-    docUrl: 'https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Error',
+    docUrl:
+      'https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Error',
   },
   parseInt: {
     sig: 'function parseInt(string: string, radix?: number): number',
     doc: 'Parses a string and returns an integer of the specified radix. Always specify the radix (e.g., `parseInt(str, 10)`) to avoid octal parsing.',
     tags: ['JavaScript'],
-    docUrl: 'https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/parseInt',
+    docUrl:
+      'https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/parseInt',
   },
   parseFloat: {
     sig: 'function parseFloat(string: string): number',
     doc: 'Parses a string and returns a floating-point number. Returns `NaN` if the string cannot be parsed.',
     tags: ['JavaScript'],
-    docUrl: 'https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/parseFloat',
+    docUrl:
+      'https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/parseFloat',
   },
   isNaN: {
     sig: 'function isNaN(value: number): boolean',
     doc: 'Returns `true` if the value is `NaN`. Prefer `Number.isNaN()` which does not coerce the value.',
     tags: ['JavaScript'],
-    docUrl: 'https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/isNaN',
+    docUrl:
+      'https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/isNaN',
   },
   isFinite: {
     sig: 'function isFinite(value: number): boolean',
     doc: 'Returns `true` if the value is a finite number (not `Infinity`, `-Infinity`, or `NaN`).',
     tags: ['JavaScript'],
-    docUrl: 'https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/isFinite',
+    docUrl:
+      'https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/isFinite',
   },
   encodeURIComponent: {
     sig: 'function encodeURIComponent(component: string): string',
     doc: 'Encodes a URI component by escaping special characters. Use for query parameters and path segments.',
     tags: ['JavaScript'],
-    docUrl: 'https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/encodeURIComponent',
+    docUrl:
+      'https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/encodeURIComponent',
   },
   decodeURIComponent: {
     sig: 'function decodeURIComponent(encoded: string): string',
     doc: 'Decodes a URI component previously encoded with `encodeURIComponent`.',
     tags: ['JavaScript'],
-    docUrl: 'https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/decodeURIComponent',
+    docUrl:
+      'https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/decodeURIComponent',
   },
   atob: {
     sig: 'function atob(data: string): string',
@@ -704,7 +719,10 @@ export function extractDocComment(
 
         if (trimmed.startsWith('/**') || trimmed.startsWith('/*')) {
           // Opening of block comment — extract the content after /** or /*
-          const afterOpen = trimmed.replace(/^\/\*\*?\s?/, '').replace(/\*\/$/, '').trim();
+          const afterOpen = trimmed
+            .replace(/^\/\*\*?\s?/, '')
+            .replace(/\*\/$/, '')
+            .trim();
           if (afterOpen) commentLines.unshift(afterOpen);
           break;
         } else {

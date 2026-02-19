@@ -61,7 +61,11 @@
   }
 
   function formatTime(ts: number): string {
-    return new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    return new Date(ts).toLocaleTimeString([], {
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+    });
   }
 
   // --- Per-story execution state derived from iteration log ---
@@ -210,7 +214,8 @@
     passed: 'M20 6L9 17l-5-5', // check
     failed: 'M18 6L6 18M6 6l12 12', // x
     committed: 'M16 3h5v5M4 20L21 3', // arrow
-    quality_check: 'M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83', // sun/gear
+    quality_check:
+      'M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83', // sun/gear
     learning: 'M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2zM22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z', // book
     skipped: 'M5 4l10 8-10 8V4z', // skip
   };
@@ -242,33 +247,57 @@
     <!-- ═══ Section A: Status Header ═══ -->
     <div class="status-header">
       <div class="status-left">
-        <span class="status-badge" style:background={statusColors[loop.status] ?? 'var(--text-tertiary)'}>
+        <span
+          class="status-badge"
+          style:background={statusColors[loop.status] ?? 'var(--text-tertiary)'}
+        >
           {statusLabels[loop.status] ?? loop.status}
         </span>
         <span class="elapsed">{formatElapsed(loop.startedAt, loop.completedAt)}</span>
       </div>
       <div class="status-center">
-        <span class="config-tag">{config?.model?.split('-').slice(1, 3).join(' ') ?? 'unknown'}</span>
+        <span class="config-tag"
+          >{config?.model?.split('-').slice(1, 3).join(' ') ?? 'unknown'}</span
+        >
         <span class="config-sep">/</span>
         <span class="config-tag">{config?.effort ?? '?'} effort</span>
         <span class="config-sep">/</span>
-        <span class="config-tag">{config?.maxAttemptsPerStory ?? 3}a x {(config?.maxFixUpAttempts ?? 2)}f</span>
+        <span class="config-tag"
+          >{config?.maxAttemptsPerStory ?? 3}a x {config?.maxFixUpAttempts ?? 2}f</span
+        >
       </div>
       <div class="status-right">
         {#if loopStore.isRunning}
           <button class="ctrl-btn warning" onclick={() => loopStore.pauseLoop()}>
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><rect x="4" y="3" width="6" height="18" rx="1" /><rect x="14" y="3" width="6" height="18" rx="1" /></svg>
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"
+              ><rect x="4" y="3" width="6" height="18" rx="1" /><rect
+                x="14"
+                y="3"
+                width="6"
+                height="18"
+                rx="1"
+              /></svg
+            >
             Pause
           </button>
         {:else if loopStore.isPaused}
           <button class="ctrl-btn primary" onclick={() => loopStore.resumeLoop()}>
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3" /></svg>
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"
+              ><polygon points="5 3 19 12 5 21 5 3" /></svg
+            >
             Resume
           </button>
         {/if}
         {#if loopStore.isActive}
-          <button class="ctrl-btn danger" onclick={() => { if (confirm('Cancel the loop?')) loopStore.cancelLoop(); }}>
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><rect x="4" y="4" width="16" height="16" rx="2" /></svg>
+          <button
+            class="ctrl-btn danger"
+            onclick={() => {
+              if (confirm('Cancel the loop?')) loopStore.cancelLoop();
+            }}
+          >
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"
+              ><rect x="4" y="4" width="16" height="16" rx="2" /></svg
+            >
             Cancel
           </button>
         {/if}
@@ -280,7 +309,10 @@
       <div class="progress-bar-container">
         <div class="progress-bar-fill" style:width="{loopStore.progress}%"></div>
         {#if loop.totalStoriesFailed > 0}
-          <div class="progress-bar-failed" style:width="{(loop.totalStoriesFailed / loopStore.totalStories) * 100}%"></div>
+          <div
+            class="progress-bar-failed"
+            style:width="{(loop.totalStoriesFailed / loopStore.totalStories) * 100}%"
+          ></div>
         {/if}
       </div>
       <div class="progress-stats">
@@ -291,7 +323,9 @@
           <span class="stat failed-stat">{loop.totalStoriesFailed} failed</span>
         {/if}
         <span class="stat-sep"></span>
-        <span class="stat muted">Iteration {loop.currentIteration} of {config?.maxIterations ?? '?'}</span>
+        <span class="stat muted"
+          >Iteration {loop.currentIteration} of {config?.maxIterations ?? '?'}</span
+        >
       </div>
     </div>
 
@@ -310,7 +344,11 @@
                 </span>
               {/if}
               {#if currentStory.conversationId}
-                <button class="cs-link" onclick={() => openConversation(currentStory?.conversationId, currentStory?.title ?? 'Story')}>
+                <button
+                  class="cs-link"
+                  onclick={() =>
+                    openConversation(currentStory?.conversationId, currentStory?.title ?? 'Story')}
+                >
                   View chat
                 </button>
               {/if}
@@ -330,7 +368,10 @@
                       {i + 1}
                     </div>
                     {#if i < execState.maxAttempts - 1}
-                      <div class="cycle-connector" class:done={i + 1 < execState.freshAttempts}></div>
+                      <div
+                        class="cycle-connector"
+                        class:done={i + 1 < execState.freshAttempts}
+                      ></div>
                     {/if}
                   {/each}
                 </div>
@@ -348,7 +389,10 @@
                         {i + 1}
                       </div>
                       {#if i < execState.maxFixUps - 1}
-                        <div class="cycle-connector small" class:done={i + 1 < execState.currentFixUp}></div>
+                        <div
+                          class="cycle-connector small"
+                          class:done={i + 1 < execState.currentFixUp}
+                        ></div>
                       {/if}
                     {/each}
                     {#if execState.currentFixUp === 0}
@@ -403,13 +447,23 @@
               {@const exec = deriveStoryState(story.id)}
               <div class="pipeline-row active">
                 <span class="pl-icon spinning">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4" /></svg>
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                    ><path
+                      d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4"
+                    /></svg
+                  >
                 </span>
                 <span class="pl-title">{story.title}</span>
                 {#if priorityLabel(story.priority)}
-                  <span class="priority-badge small" style:color={priorityColors[story.priority]}>{priorityLabel(story.priority)}</span>
+                  <span class="priority-badge small" style:color={priorityColors[story.priority]}
+                    >{priorityLabel(story.priority)}</span
+                  >
                 {/if}
-                <span class="pl-attempts">{exec.freshAttempts}/{exec.maxAttempts}{exec.currentFixUp > 0 ? ` f${exec.currentFixUp}` : ''}</span>
+                <span class="pl-attempts"
+                  >{exec.freshAttempts}/{exec.maxAttempts}{exec.currentFixUp > 0
+                    ? ` f${exec.currentFixUp}`
+                    : ''}</span
+                >
               </div>
             {/each}
           </div>
@@ -421,11 +475,14 @@
             {#each grouped.pending as story (story.id)}
               <div class="pipeline-row">
                 <span class="pl-icon pending">
-                  <svg viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="12" r="4" /></svg>
+                  <svg viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="12" r="4" /></svg
+                  >
                 </span>
                 <span class="pl-title">{story.title}</span>
                 {#if priorityLabel(story.priority)}
-                  <span class="priority-badge small" style:color={priorityColors[story.priority]}>{priorityLabel(story.priority)}</span>
+                  <span class="priority-badge small" style:color={priorityColors[story.priority]}
+                    >{priorityLabel(story.priority)}</span
+                  >
                 {/if}
                 {#if story.dependsOn.length > 0}
                   <span class="pl-dep">dep:{story.dependsOn.length}</span>
@@ -439,9 +496,18 @@
           <div class="pipeline-group">
             <span class="pipeline-group-label">Completed ({grouped.completed.length})</span>
             {#each grouped.completed as story (story.id)}
-              <div class="pipeline-row completed" role="button" tabindex="0" onclick={() => openConversation(story.conversationId, story.title)} onkeydown={(e) => e.key === 'Enter' && openConversation(story.conversationId, story.title)}>
+              <div
+                class="pipeline-row completed"
+                role="button"
+                tabindex="0"
+                onclick={() => openConversation(story.conversationId, story.title)}
+                onkeydown={(e) =>
+                  e.key === 'Enter' && openConversation(story.conversationId, story.title)}
+              >
                 <span class="pl-icon done">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6L9 17l-5-5" /></svg>
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
+                    ><path d="M20 6L9 17l-5-5" /></svg
+                  >
                 </span>
                 <span class="pl-title">{story.title}</span>
                 {#if story.commitSha}
@@ -456,14 +522,27 @@
           <div class="pipeline-group">
             <span class="pipeline-group-label">Failed ({grouped.failed.length})</span>
             {#each grouped.failed as story (story.id)}
-              <div class="pipeline-row failed-row" role="button" tabindex="0" onclick={() => openConversation(story.conversationId, story.title)} onkeydown={(e) => e.key === 'Enter' && openConversation(story.conversationId, story.title)}>
+              <div
+                class="pipeline-row failed-row"
+                role="button"
+                tabindex="0"
+                onclick={() => openConversation(story.conversationId, story.title)}
+                onkeydown={(e) =>
+                  e.key === 'Enter' && openConversation(story.conversationId, story.title)}
+              >
                 <span class="pl-icon failed">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 6L6 18M6 6l12 12" /></svg>
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
+                    ><path d="M18 6L6 18M6 6l12 12" /></svg
+                  >
                 </span>
                 <span class="pl-title">{story.title}</span>
                 <span class="pl-attempts fail">{story.attempts}/{story.maxAttempts}</span>
                 {#if story.learnings.length > 0}
-                  <span class="pl-learnings">{story.learnings.length} learning{story.learnings.length !== 1 ? 's' : ''}</span>
+                  <span class="pl-learnings"
+                    >{story.learnings.length} learning{story.learnings.length !== 1
+                      ? 's'
+                      : ''}</span
+                  >
                 {/if}
               </div>
             {/each}
@@ -479,7 +558,14 @@
             <div class="tl-group">
               <!-- svelte-ignore a11y_no_static_element_interactions a11y_click_events_have_key_events -->
               <div class="tl-group-header" onclick={() => toggleLogStory(group.storyId)}>
-                <svg class="tl-chevron" class:open={expandedLogStories.has(group.storyId)} viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <svg
+                  class="tl-chevron"
+                  class:open={expandedLogStories.has(group.storyId)}
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                >
                   <polyline points="9 18 15 12 9 6" />
                 </svg>
                 <span class="tl-group-title">{group.storyTitle}</span>
@@ -489,13 +575,23 @@
                 <div class="tl-entries">
                   {#each group.entries as entry (entry.originalIndex)}
                     <div class="tl-entry">
-                      <svg class="tl-action-icon" style:color={actionColors[entry.action] ?? 'var(--text-tertiary)'} viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <svg
+                        class="tl-action-icon"
+                        style:color={actionColors[entry.action] ?? 'var(--text-tertiary)'}
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                      >
                         <path d={actionIcons[entry.action] ?? actionIcons.started} />
                       </svg>
                       <span class="tl-time">{formatTime(entry.timestamp)}</span>
                       <span class="tl-detail">{entry.detail}</span>
                       {#if entry.qualityResults?.length}
-                        <button class="tl-expand" onclick={() => toggleLogOutput(entry.originalIndex)}>
+                        <button
+                          class="tl-expand"
+                          onclick={() => toggleLogOutput(entry.originalIndex)}
+                        >
                           {expandedLogOutputs.has(entry.originalIndex) ? 'hide' : 'details'}
                         </button>
                       {/if}
@@ -504,7 +600,9 @@
                       <div class="tl-qr-details">
                         {#each entry.qualityResults as qr}
                           <div class="tl-qr-row">
-                            <span class="qc-icon" class:passed={qr.passed} class:failed={!qr.passed}>{qr.passed ? '\u2713' : '\u2717'}</span>
+                            <span class="qc-icon" class:passed={qr.passed} class:failed={!qr.passed}
+                              >{qr.passed ? '\u2713' : '\u2717'}</span
+                            >
                             <span>{qr.checkName}</span>
                             <span class="qc-duration">{(qr.duration / 1000).toFixed(1)}s</span>
                           </div>
@@ -548,9 +646,19 @@
     gap: 8px;
     color: var(--text-tertiary);
   }
-  .empty-state svg { width: 40px; height: 40px; opacity: 0.3; }
-  .empty-state p { font-size: var(--fs-md); margin: 0; }
-  .empty-state span { font-size: var(--fs-sm); opacity: 0.6; }
+  .empty-state svg {
+    width: 40px;
+    height: 40px;
+    opacity: 0.3;
+  }
+  .empty-state p {
+    font-size: var(--fs-md);
+    margin: 0;
+  }
+  .empty-state span {
+    font-size: var(--fs-sm);
+    opacity: 0.6;
+  }
 
   /* ── Status Header ── */
   .status-header {
@@ -589,8 +697,12 @@
     font-size: var(--fs-xs);
     color: var(--text-tertiary);
   }
-  .config-tag { font-family: var(--font-mono); }
-  .config-sep { opacity: 0.3; }
+  .config-tag {
+    font-family: var(--font-mono);
+  }
+  .config-sep {
+    opacity: 0.3;
+  }
   .status-right {
     display: flex;
     gap: 6px;
@@ -607,10 +719,21 @@
     cursor: pointer;
     transition: opacity var(--transition);
   }
-  .ctrl-btn:hover { opacity: 0.85; }
-  .ctrl-btn.primary { background: var(--accent-primary); color: var(--text-on-accent, #fff); }
-  .ctrl-btn.warning { background: var(--accent-warning); color: var(--bg-primary); }
-  .ctrl-btn.danger { background: var(--accent-error); color: #fff; }
+  .ctrl-btn:hover {
+    opacity: 0.85;
+  }
+  .ctrl-btn.primary {
+    background: var(--accent-primary);
+    color: var(--text-on-accent, #fff);
+  }
+  .ctrl-btn.warning {
+    background: var(--accent-warning);
+    color: var(--bg-primary);
+  }
+  .ctrl-btn.danger {
+    background: var(--accent-error);
+    color: #fff;
+  }
 
   /* ── Progress ── */
   .progress-section {
@@ -643,10 +766,18 @@
     font-size: var(--fs-xs);
     color: var(--text-secondary);
   }
-  .stat strong { color: var(--text-primary); }
-  .failed-stat { color: var(--accent-error); }
-  .stat-sep { flex: 1; }
-  .muted { color: var(--text-tertiary); }
+  .stat strong {
+    color: var(--text-primary);
+  }
+  .failed-stat {
+    color: var(--accent-error);
+  }
+  .stat-sep {
+    flex: 1;
+  }
+  .muted {
+    color: var(--text-tertiary);
+  }
 
   /* ── Scroll area ── */
   .scroll-area {
@@ -703,7 +834,9 @@
     border-radius: var(--radius-sm);
     flex-shrink: 0;
   }
-  .cs-link:hover { background: var(--bg-hover); }
+  .cs-link:hover {
+    background: var(--bg-hover);
+  }
 
   /* ── Cycle visualization ── */
   .cycle-viz {
@@ -772,8 +905,12 @@
     height: 2px;
     background: var(--border-primary);
   }
-  .cycle-connector.small { width: 10px; }
-  .cycle-connector.done { background: var(--accent-secondary); }
+  .cycle-connector.small {
+    width: 10px;
+  }
+  .cycle-connector.done {
+    background: var(--accent-secondary);
+  }
   .cycle-hint {
     font-size: var(--fs-xxs);
     color: var(--text-muted);
@@ -807,9 +944,15 @@
     width: 16px;
     text-align: center;
   }
-  .qc-icon.passed { color: var(--accent-secondary); }
-  .qc-icon.failed { color: var(--accent-error); }
-  .qc-name { flex: 1; }
+  .qc-icon.passed {
+    color: var(--accent-secondary);
+  }
+  .qc-icon.failed {
+    color: var(--accent-error);
+  }
+  .qc-name {
+    flex: 1;
+  }
   .qc-duration {
     font-family: var(--font-mono);
     font-size: var(--fs-xxs);
@@ -824,7 +967,9 @@
     padding: 1px 4px;
     border-radius: 2px;
   }
-  .qc-expand:hover { background: var(--bg-hover); }
+  .qc-expand:hover {
+    background: var(--bg-hover);
+  }
   .qc-output {
     font-family: var(--font-mono);
     font-size: 11px;
@@ -849,7 +994,9 @@
     font-family: var(--font-mono);
     flex-shrink: 0;
   }
-  .priority-badge.small { font-size: 9px; }
+  .priority-badge.small {
+    font-size: 9px;
+  }
 
   /* ── Pipeline ── */
   .pipeline-group {
@@ -892,12 +1039,28 @@
     align-items: center;
     justify-content: center;
   }
-  .pl-icon svg { width: 14px; height: 14px; }
-  .pl-icon.pending { color: var(--text-muted); }
-  .pl-icon.done { color: var(--accent-secondary); }
-  .pl-icon.failed { color: var(--accent-error); }
-  .pl-icon.spinning { color: var(--accent-primary); animation: spin 2s linear infinite; }
-  @keyframes spin { to { transform: rotate(360deg); } }
+  .pl-icon svg {
+    width: 14px;
+    height: 14px;
+  }
+  .pl-icon.pending {
+    color: var(--text-muted);
+  }
+  .pl-icon.done {
+    color: var(--accent-secondary);
+  }
+  .pl-icon.failed {
+    color: var(--accent-error);
+  }
+  .pl-icon.spinning {
+    color: var(--accent-primary);
+    animation: spin 2s linear infinite;
+  }
+  @keyframes spin {
+    to {
+      transform: rotate(360deg);
+    }
+  }
 
   .pl-title {
     flex: 1;
@@ -912,7 +1075,9 @@
     color: var(--text-tertiary);
     flex-shrink: 0;
   }
-  .pl-attempts.fail { color: var(--accent-error); }
+  .pl-attempts.fail {
+    color: var(--accent-error);
+  }
   .pl-sha {
     font-size: var(--fs-xxs);
     font-family: var(--font-mono);
@@ -951,7 +1116,9 @@
     transition: background var(--transition);
     user-select: none;
   }
-  .tl-group-header:hover { background: var(--bg-hover); }
+  .tl-group-header:hover {
+    background: var(--bg-hover);
+  }
   .tl-chevron {
     width: 12px;
     height: 12px;
@@ -959,7 +1126,9 @@
     transition: transform 0.15s;
     color: var(--text-tertiary);
   }
-  .tl-chevron.open { transform: rotate(90deg); }
+  .tl-chevron.open {
+    transform: rotate(90deg);
+  }
   .tl-group-title {
     font-size: var(--fs-sm);
     font-weight: 500;
@@ -1014,7 +1183,9 @@
     border-radius: 2px;
     flex-shrink: 0;
   }
-  .tl-expand:hover { background: var(--bg-hover); }
+  .tl-expand:hover {
+    background: var(--bg-hover);
+  }
   .tl-qr-details {
     padding: 4px 8px 8px 38px;
   }

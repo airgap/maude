@@ -1126,12 +1126,12 @@ describe('PRD Routes', () => {
       insertStory({ id: 'existing-1', prd_id: 'prd-1', title: 'Existing Story' });
 
       mockCallLlmResponse = JSON.stringify([
-      {
-        title: 'New Story',
-        description: 'New',
-        acceptanceCriteria: ['AC1', 'AC2', 'AC3'],
-        priority: 'medium',
-      },
+        {
+          title: 'New Story',
+          description: 'New',
+          acceptanceCriteria: ['AC1', 'AC2', 'AC3'],
+          priority: 'medium',
+        },
       ]);
 
       await app.request('/prd-1/generate', {
@@ -1157,12 +1157,12 @@ describe('PRD Routes', () => {
       });
 
       mockCallLlmResponse = JSON.stringify([
-      {
-        title: 'Story',
-        description: 'Desc',
-        acceptanceCriteria: ['AC1', 'AC2', 'AC3'],
-        priority: 'medium',
-      },
+        {
+          title: 'Story',
+          description: 'Desc',
+          acceptanceCriteria: ['AC1', 'AC2', 'AC3'],
+          priority: 'medium',
+        },
       ]);
 
       await app.request('/prd-1/generate', {
@@ -2473,7 +2473,6 @@ describe('PRD Routes', () => {
       const c1 = json.data.criteria[1];
       expect(c1.isValid).toBe(true);
       expect(c1.issues).toHaveLength(0);
-
     });
 
     test('normalizes severity and category values from AI', async () => {
@@ -2530,7 +2529,6 @@ describe('PRD Routes', () => {
         'missing_detail',
       ]).toContain(issue.category);
       expect(issue.category).toBe('vague');
-
     });
 
     test('clamps overall score to 0-100 range', async () => {
@@ -2558,7 +2556,6 @@ describe('PRD Routes', () => {
       expect(json.ok).toBe(true);
       expect(json.data.overallScore).toBeLessThanOrEqual(100);
       expect(json.data.overallScore).toBeGreaterThanOrEqual(0);
-
     });
 
     test('handles markdown code fences in AI response', async () => {
@@ -2591,7 +2588,6 @@ describe('PRD Routes', () => {
       const json = await res.json();
       expect(json.ok).toBe(true);
       expect(json.data.overallScore).toBe(90);
-
     });
 
     test('returns 502 when AI returns non-JSON response', async () => {
@@ -2610,7 +2606,6 @@ describe('PRD Routes', () => {
       const json = await res.json();
       expect(json.ok).toBe(false);
       expect(json.error).toContain('parse');
-
     });
 
     test('returns 500 when AI API returns error status', async () => {
@@ -2629,7 +2624,6 @@ describe('PRD Routes', () => {
       const json = await res.json();
       expect(json.ok).toBe(false);
       expect(json.error).toContain('validation failed');
-
     });
 
     test('returns 500 when AI returns no text content', async () => {
@@ -2648,7 +2642,6 @@ describe('PRD Routes', () => {
       const json = await res.json();
       expect(json.ok).toBe(false);
       expect(json.error).toContain('validation failed');
-
     });
 
     test('correctly determines allValid based on individual criteria validity', async () => {
@@ -2692,7 +2685,6 @@ describe('PRD Routes', () => {
       expect(json.ok).toBe(true);
       // Server recomputes allValid from individual criteria, so it should be false
       expect(json.data.allValid).toBe(false);
-
     });
 
     test('provides suggested improvements for each problematic criterion', async () => {
@@ -2790,7 +2782,6 @@ describe('PRD Routes', () => {
           expect(issue.suggestedReplacement).toBeTruthy();
         }
       }
-
     });
 
     test('uses story title and description for context when provided', async () => {
@@ -2832,7 +2823,6 @@ describe('PRD Routes', () => {
       const userMessage = mockCallLlmCapture.user;
       expect(userMessage).toContain('Custom Title Override');
       expect(userMessage).toContain('Custom description override');
-
     });
 
     test('treats info-only issues as valid criteria', async () => {
@@ -2885,7 +2875,6 @@ describe('PRD Routes', () => {
       expect(c0.issues).toHaveLength(1);
       expect(c0.issues[0].severity).toBe('info');
       expect(json.data.allValid).toBe(true);
-
     });
 
     test('handles missing overallScore with default of 50', async () => {
@@ -2912,7 +2901,6 @@ describe('PRD Routes', () => {
       const json = await res.json();
       expect(json.ok).toBe(true);
       expect(json.data.overallScore).toBe(50); // Default when missing
-
     });
 
     test('includes system prompt checking for all six validation categories', async () => {
@@ -4771,7 +4759,6 @@ describe('PRD Routes', () => {
         .get('standalone-1') as any;
       const saved = JSON.parse(row.estimate);
       expect(saved.storyPoints).toBe(5);
-
     });
 
     test('handles AI API error gracefully', async () => {
@@ -4794,7 +4781,6 @@ describe('PRD Routes', () => {
       const json = await res.json();
       expect(json.ok).toBe(false);
       expect(json.error).toContain('Estimation failed');
-
     });
   });
 });

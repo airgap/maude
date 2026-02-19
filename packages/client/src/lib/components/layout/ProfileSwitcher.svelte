@@ -62,7 +62,18 @@
     aria-haspopup="listbox"
     aria-expanded={open}
   >
-    <svg class="profile-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d={profileIconPaths[activeProfile?.id ?? 'write'] ?? defaultIconPath} /></svg>
+    <svg
+      class="profile-icon"
+      width="13"
+      height="13"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      stroke-width="2"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+      ><path d={profileIconPaths[activeProfile?.id ?? 'write'] ?? defaultIconPath} /></svg
+    >
     <span class="profile-name">{activeProfile?.name ?? 'Write'}</span>
     <svg
       class="chevron"
@@ -89,7 +100,18 @@
           aria-selected={profile.id === profilesStore.activeProfileId}
           onclick={() => selectProfile(profile.id)}
         >
-          <svg class="option-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d={profileIconPaths[profile.id] ?? defaultIconPath} /></svg>
+          <svg
+            class="option-icon"
+            width="16"
+            height="16"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            ><path d={profileIconPaths[profile.id] ?? defaultIconPath} /></svg
+          >
           <div class="option-info">
             <span class="option-name">{profile.name}</span>
             {#if profile.description}

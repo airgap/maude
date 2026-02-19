@@ -58,9 +58,9 @@ const FILE_PATH_RE = new RegExp(
     '|' +
     // Branch 3 – bare filename (must be followed by :line)
     '[a-zA-Z_][a-zA-Z0-9_.-]*\\.[a-zA-Z0-9]{1,10}(?=:\\d)' +
-  ')' +
-  // Optional :line:col suffix
-  '(?::(\\d+)(?::(\\d+))?)?',
+    ')' +
+    // Optional :line:col suffix
+    '(?::(\\d+)(?::(\\d+))?)?',
   'g',
 );
 
@@ -171,8 +171,7 @@ function resolvePath(filePath: string, cwd: string): string {
 const TOOLTIP_CLASS = 'terminal-link-tooltip';
 
 /** Whether the platform uses Cmd rather than Ctrl as the modifier key */
-const IS_MAC =
-  typeof navigator !== 'undefined' && /mac/i.test(navigator.platform);
+const IS_MAC = typeof navigator !== 'undefined' && /mac/i.test(navigator.platform);
 
 const MODIFIER_LABEL = IS_MAC ? 'Cmd' : 'Ctrl';
 
@@ -191,11 +190,7 @@ function applyTooltipStyles(el: HTMLElement): void {
   el.style.boxShadow = '0 2px 8px rgba(0,0,0,.35)';
 }
 
-function showTooltip(
-  terminal: Terminal,
-  event: MouseEvent,
-  message: string,
-): void {
+function showTooltip(terminal: Terminal, event: MouseEvent, message: string): void {
   hideTooltip(terminal);
   const container = terminal.element;
   if (!container) return;
@@ -265,10 +260,7 @@ export function createFilePathLinkProvider(
   fallbackCwd: string,
 ): ILinkProvider {
   return {
-    provideLinks(
-      bufferLineNumber: number,
-      callback: (links: ILink[] | undefined) => void,
-    ) {
+    provideLinks(bufferLineNumber: number, callback: (links: ILink[] | undefined) => void) {
       const bufLine = terminal.buffer.active.getLine(bufferLineNumber - 1);
       if (!bufLine) {
         callback(undefined);
@@ -297,20 +289,14 @@ export function createFilePathLinkProvider(
         activate(event: MouseEvent) {
           if (!event.ctrlKey && !event.metaKey) return;
           const resolved = resolvePath(p.path, cwd);
-          const goTo = p.line
-            ? { line: p.line, col: p.col ?? 1 }
-            : undefined;
+          const goTo = p.line ? { line: p.line, col: p.col ?? 1 } : undefined;
           editorStore.openFile(resolved, false, goTo);
         },
         hover(event: MouseEvent) {
           let label = p.path;
           if (p.line) label += `:${p.line}`;
           if (p.col) label += `:${p.col}`;
-          showTooltip(
-            terminal,
-            event,
-            `${MODIFIER_LABEL}+Click to open ${label}`,
-          );
+          showTooltip(terminal, event, `${MODIFIER_LABEL}+Click to open ${label}`);
         },
         leave() {
           hideTooltip(terminal);

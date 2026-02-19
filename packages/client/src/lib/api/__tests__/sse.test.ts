@@ -313,7 +313,12 @@ describe('sendAndStream (additional paths)', () => {
 
     await sendAndStream('conv-1', 'Hello');
 
-    expect(mockApi.git.snapshot).toHaveBeenCalledWith('/my/project', 'conv-1', 'pre-agent', expect.any(String));
+    expect(mockApi.git.snapshot).toHaveBeenCalledWith(
+      '/my/project',
+      'conv-1',
+      'pre-agent',
+      expect.any(String),
+    );
   });
 
   test('does not fire auto-snapshot when no workspacePath', async () => {
@@ -502,7 +507,13 @@ describe('sendAndStream (additional paths)', () => {
     await sendAndStream('conv-1', 'Hello');
 
     // The first arg to mockSend is convId, second is content, third is sessionId, fourth is signal, fifth is attachments
-    expect(mockSend).toHaveBeenCalledWith('conv-1', 'Hello', 'session-1', expect.any(AbortSignal), undefined);
+    expect(mockSend).toHaveBeenCalledWith(
+      'conv-1',
+      'Hello',
+      'session-1',
+      expect.any(AbortSignal),
+      undefined,
+    );
   });
 
   test('includes model in assistant message', async () => {

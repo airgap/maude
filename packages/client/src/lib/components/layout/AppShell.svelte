@@ -258,7 +258,14 @@
       terminalStore.splitActive('horizontal');
     }
     // Alt+Arrow: Navigate between terminal split panes
-    if (e.altKey && !e.ctrlKey && !e.metaKey && !e.shiftKey && terminalStore.isOpen && terminalStore.hasSplits) {
+    if (
+      e.altKey &&
+      !e.ctrlKey &&
+      !e.metaKey &&
+      !e.shiftKey &&
+      terminalStore.isOpen &&
+      terminalStore.hasSplits
+    ) {
       if (e.key === 'ArrowUp') {
         e.preventDefault();
         terminalStore.navigateSplit('up');
@@ -360,7 +367,11 @@
       ></div>
     {/if}
 
-    <main class="main-content" class:resizing-terminal={resizingTerminal} onclick={onMainContentClick}>
+    <main
+      class="main-content"
+      class:resizing-terminal={resizingTerminal}
+      onclick={onMainContentClick}
+    >
       <!-- Mobile sidebar overlay backdrop -->
       {#if isMobileUI && uiStore.sidebarOpen}
         <!-- svelte-ignore a11y_no_static_element_interactions -->

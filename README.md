@@ -76,22 +76,22 @@ The desktop build compiles the Bun server into a standalone sidecar binary and b
 
 ## Scripts
 
-| Script                     | Description                                       |
-| -------------------------- | ------------------------------------------------- |
-| `bun run dev`              | Start both client and server in dev mode          |
-| `bun run dev:client`       | Start only the SvelteKit dev server               |
-| `bun run dev:server`       | Start only the API server                         |
-| `bun run start`            | Build client + serve everything on port 3002      |
-| `bun run build`            | Build all packages                                |
-| `bun run build:desktop`    | Build static client + compiled server binary      |
-| `bun run build:standalone` | Build standalone single-binary distribution       |
-| `bun run tauri:dev`        | Run desktop app in development                    |
-| `bun run tauri:build`      | Build production desktop installer                |
-| `bun run check`            | Type-check all packages                           |
-| `bun run test`             | Run tests across all packages                     |
-| `bun run test:coverage`    | Run tests with coverage reporting                 |
-| `bun run format`           | Format all files with Prettier                    |
-| `bun run format:check`     | Check formatting without writing changes          |
+| Script                     | Description                                  |
+| -------------------------- | -------------------------------------------- |
+| `bun run dev`              | Start both client and server in dev mode     |
+| `bun run dev:client`       | Start only the SvelteKit dev server          |
+| `bun run dev:server`       | Start only the API server                    |
+| `bun run start`            | Build client + serve everything on port 3002 |
+| `bun run build`            | Build all packages                           |
+| `bun run build:desktop`    | Build static client + compiled server binary |
+| `bun run build:standalone` | Build standalone single-binary distribution  |
+| `bun run tauri:dev`        | Run desktop app in development               |
+| `bun run tauri:build`      | Build production desktop installer           |
+| `bun run check`            | Type-check all packages                      |
+| `bun run test`             | Run tests across all packages                |
+| `bun run test:coverage`    | Run tests with coverage reporting            |
+| `bun run format`           | Format all files with Prettier               |
+| `bun run format:check`     | Check formatting without writing changes     |
 
 ## License
 

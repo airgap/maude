@@ -32,7 +32,8 @@
   const typeIconPaths: Record<string, string> = {
     plan: 'M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2 M15 2H9a1 1 0 0 0-1 1v1a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V3a1 1 0 0 0-1-1z',
     diff: 'M17 3a2.83 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z',
-    screenshot: 'M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z M12 17a4 4 0 1 0 0-8 4 4 0 0 0 0 8z',
+    screenshot:
+      'M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z M12 17a4 4 0 1 0 0-8 4 4 0 0 0 0 8z',
     walkthrough: 'M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5',
   };
   const defaultIconPath = 'M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z M14 2v6h6';
@@ -48,7 +49,18 @@
 <div class="artifact-card" class:expanded>
   <!-- Header row -->
   <button class="artifact-header" onclick={toggleExpand}>
-    <span class="artifact-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d={typeIconPaths[artifact.type] ?? defaultIconPath} /></svg></span>
+    <span class="artifact-icon"
+      ><svg
+        width="14"
+        height="14"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"><path d={typeIconPaths[artifact.type] ?? defaultIconPath} /></svg
+      ></span
+    >
     <span class="artifact-type-badge">{typeLabels[artifact.type] ?? artifact.type}</span>
     <span class="artifact-title">{artifact.title}</span>
     <span class="artifact-chevron" class:rotated={expanded}>

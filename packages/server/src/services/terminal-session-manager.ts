@@ -19,7 +19,7 @@ function getShellIntegrationPath(shellName: string): string | null {
   // Shell integration scripts live at .../src/shell-integration/
   const srcDir = dirname(import.meta.dir); // .../src/
   const candidates = [
-    resolve(srcDir, 'shell-integration'),  // .../src/shell-integration/
+    resolve(srcDir, 'shell-integration'), // .../src/shell-integration/
   ];
 
   const fileMap: Record<string, string> = {
@@ -133,7 +133,8 @@ const LOG_DIR = join(homedir(), '.e', 'terminal-logs');
  * from terminal output for clean, readable log files.
  */
 // eslint-disable-next-line no-control-regex
-const ANSI_RE = /\x1b\[[0-9;]*[a-zA-Z]|\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)|\x1b[()][0-9A-B]|\x1b[=><!]|\x1b\[[\?]?[0-9;]*[hlJKmSusr]|\r/g;
+const ANSI_RE =
+  /\x1b\[[0-9;]*[a-zA-Z]|\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)|\x1b[()][0-9A-B]|\x1b[=><!]|\x1b\[[\?]?[0-9;]*[hlJKmSusr]|\r/g;
 
 function stripAnsi(data: string): string {
   return data.replace(ANSI_RE, '');
@@ -229,9 +230,13 @@ class NativePty {
   }
 
   kill() {
-    try { this.helper.kill('SIGTERM'); } catch {}
+    try {
+      this.helper.kill('SIGTERM');
+    } catch {}
     setTimeout(() => {
-      try { this.helper.kill('SIGKILL'); } catch {}
+      try {
+        this.helper.kill('SIGKILL');
+      } catch {}
     }, 200);
   }
 
@@ -469,7 +474,9 @@ class TerminalSessionManager {
     };
 
     // Update PID when the worker reports it
-    term.onPid = (pid) => { session.pid = pid; };
+    term.onPid = (pid) => {
+      session.pid = pid;
+    };
 
     // Forward PTY data to all attached WebSockets and buffer for replay.
     // When shell integration is active, parse OSC sequences from the output,
@@ -691,7 +698,11 @@ class TerminalSessionManager {
 
     /** Resolve symlinks so /bin/bash and /usr/bin/bash don't appear as separate shells */
     function realPath(p: string): string {
-      try { return realpathSync(p); } catch { return p; }
+      try {
+        return realpathSync(p);
+      } catch {
+        return p;
+      }
     }
 
     // Check user's default shell first

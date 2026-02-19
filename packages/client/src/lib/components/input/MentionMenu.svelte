@@ -7,7 +7,12 @@
   }
 
   const MENTION_TYPES: MentionType[] = [
-    { id: 'file', label: '@file', description: 'Inject file content as context', iconPath: 'M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z M14 2v6h6' },
+    {
+      id: 'file',
+      label: '@file',
+      description: 'Inject file content as context',
+      iconPath: 'M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z M14 2v6h6',
+    },
     {
       id: 'symbol',
       label: '@symbol',
@@ -24,7 +29,8 @@
       id: 'rule',
       label: '@rule',
       description: 'Inject an on-demand rule from Rules Library',
-      iconPath: 'M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2 M15 2H9a1 1 0 0 0-1 1v1a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V3a1 1 0 0 0-1-1z',
+      iconPath:
+        'M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2 M15 2H9a1 1 0 0 0-1 1v1a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V3a1 1 0 0 0-1-1z',
     },
     {
       id: 'thread',
@@ -90,7 +96,18 @@
         onclick={() => onSelect(type.id)}
         onmouseenter={() => (selectedIndex = i)}
       >
-        <span class="mention-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d={type.iconPath} /></svg></span>
+        <span class="mention-icon"
+          ><svg
+            width="14"
+            height="14"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"><path d={type.iconPath} /></svg
+          ></span
+        >
         <span class="mention-label">{type.label}</span>
         <span class="mention-desc">{type.description}</span>
       </button>

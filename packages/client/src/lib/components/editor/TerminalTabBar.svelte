@@ -20,12 +20,8 @@
   let editValue = $state('');
 
   // Split profiles into auto-detected and custom
-  const autoProfiles = $derived(
-    terminalStore.profiles.filter((p) => p.isAutoDetected),
-  );
-  const customProfiles = $derived(
-    terminalStore.profiles.filter((p) => !p.isAutoDetected),
-  );
+  const autoProfiles = $derived(terminalStore.profiles.filter((p) => p.isAutoDetected));
+  const customProfiles = $derived(terminalStore.profiles.filter((p) => !p.isAutoDetected));
   const defaultProfileId = $derived(settingsStore.termDefaultProfileId);
 
   function activateTab(tabId: string) {
@@ -103,7 +99,9 @@
     if (dropdownOpen) {
       // Focus first menu item when dropdown opens
       requestAnimationFrame(() => {
-        const firstItem = document.querySelector('.shell-dropdown [role="menuitem"]') as HTMLElement;
+        const firstItem = document.querySelector(
+          '.shell-dropdown [role="menuitem"]',
+        ) as HTMLElement;
         firstItem?.focus();
       });
     }
@@ -216,13 +214,17 @@
           } else if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
             e.preventDefault();
             const nextIdx = (tabIndex + 1) % terminalStore.tabs.length;
-            const nextTab = document.getElementById(`terminal-tab-${terminalStore.tabs[nextIdx].id}`);
+            const nextTab = document.getElementById(
+              `terminal-tab-${terminalStore.tabs[nextIdx].id}`,
+            );
             nextTab?.focus();
             activateTab(terminalStore.tabs[nextIdx].id);
           } else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
             e.preventDefault();
             const prevIdx = (tabIndex - 1 + terminalStore.tabs.length) % terminalStore.tabs.length;
-            const prevTab = document.getElementById(`terminal-tab-${terminalStore.tabs[prevIdx].id}`);
+            const prevTab = document.getElementById(
+              `terminal-tab-${terminalStore.tabs[prevIdx].id}`,
+            );
             prevTab?.focus();
             activateTab(terminalStore.tabs[prevIdx].id);
           } else if (e.key === 'Home') {
@@ -232,7 +234,9 @@
             activateTab(terminalStore.tabs[0].id);
           } else if (e.key === 'End') {
             e.preventDefault();
-            const lastTab = document.getElementById(`terminal-tab-${terminalStore.tabs[terminalStore.tabs.length - 1].id}`);
+            const lastTab = document.getElementById(
+              `terminal-tab-${terminalStore.tabs[terminalStore.tabs.length - 1].id}`,
+            );
             lastTab?.focus();
             activateTab(terminalStore.tabs[terminalStore.tabs.length - 1].id);
           } else if (e.key === 'Delete') {
@@ -242,17 +246,53 @@
         }}
       >
         {#if isAgent}
-          <svg class="agent-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-label="Agent terminal">
-            <rect x="3" y="4" width="18" height="12" rx="2" /><line x1="8" y1="20" x2="16" y2="20" /><line x1="12" y1="16" x2="12" y2="20" /><circle cx="9" cy="10" r="1.5" fill="currentColor" /><circle cx="15" cy="10" r="1.5" fill="currentColor" />
+          <svg
+            class="agent-icon"
+            width="12"
+            height="12"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            aria-label="Agent terminal"
+          >
+            <rect x="3" y="4" width="18" height="12" rx="2" /><line
+              x1="8"
+              y1="20"
+              x2="16"
+              y2="20"
+            /><line x1="12" y1="16" x2="12" y2="20" /><circle
+              cx="9"
+              cy="10"
+              r="1.5"
+              fill="currentColor"
+            /><circle cx="15" cy="10" r="1.5" fill="currentColor" />
           </svg>
         {:else if isBroadcasting}
-          <svg class="broadcast-badge" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-label="Broadcast input active">
+          <svg
+            class="broadcast-badge"
+            width="10"
+            height="10"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2.5"
+            aria-label="Broadcast input active"
+          >
             <path d="M4.9 19.1C1 15.2 1 8.8 4.9 4.9" />
             <circle cx="12" cy="12" r="2" fill="currentColor" />
             <path d="M19.1 4.9C23 8.8 23 15.2 19.1 19.1" />
           </svg>
         {:else}
-          <svg class="shell-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <svg
+            class="shell-icon"
+            width="12"
+            height="12"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+          >
             <polyline points="4 17 10 11 4 5" /><line x1="12" y1="19" x2="20" y2="19" />
           </svg>
         {/if}
@@ -269,11 +309,19 @@
             autofocus
           />
         {:else}
-          <span class="tab-label" title={terminalStore.sessions.get(tab.focusedSessionId)?.cwd || tab.label}>{getTabDisplayLabel(tab)}</span>
+          <span
+            class="tab-label"
+            title={terminalStore.sessions.get(tab.focusedSessionId)?.cwd || tab.label}
+            >{getTabDisplayLabel(tab)}</span
+          >
         {/if}
 
         {#if isLogging}
-          <span class="logging-indicator" title="Session logging active" aria-label="Session logging active">
+          <span
+            class="logging-indicator"
+            title="Session logging active"
+            aria-label="Session logging active"
+          >
             <svg width="8" height="8" viewBox="0 0 8 8" aria-hidden="true">
               <circle cx="4" cy="4" r="4" fill="currentColor" />
             </svg>
@@ -310,13 +358,22 @@
           e.preventDefault();
           dropdownOpen = true;
           requestAnimationFrame(() => {
-            const firstItem = document.querySelector('.shell-dropdown [role="menuitem"]') as HTMLElement;
+            const firstItem = document.querySelector(
+              '.shell-dropdown [role="menuitem"]',
+            ) as HTMLElement;
             firstItem?.focus();
           });
         }
       }}
     >
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <svg
+        width="14"
+        height="14"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+      >
         <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
       </svg>
     </button>
@@ -332,7 +389,14 @@
       >
         <!-- Default / plain shell -->
         <button class="shell-option" role="menuitem" onclick={() => addDefaultTab()}>
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <svg
+            width="12"
+            height="12"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+          >
             <polyline points="4 17 10 11 4 5" /><line x1="12" y1="19" x2="20" y2="19" />
           </svg>
           <span class="option-label">Default Shell</span>
@@ -347,7 +411,14 @@
           <div class="dropdown-section-label">Detected Shells</div>
           {#each autoProfiles as profile (profile.id)}
             <button class="shell-option" role="menuitem" onclick={() => addTab(profile.id)}>
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <svg
+                width="12"
+                height="12"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+              >
                 <polyline points="4 17 10 11 4 5" /><line x1="12" y1="19" x2="20" y2="19" />
               </svg>
               <span class="option-label">{profile.name}</span>
@@ -364,11 +435,29 @@
           <div class="dropdown-section-label">Custom Profiles</div>
           {#each customProfiles as profile (profile.id)}
             <button class="shell-option" role="menuitem" onclick={() => addTab(profile.id)}>
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <svg
+                width="12"
+                height="12"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+              >
                 {#if profile.icon === 'code'}
                   <polyline points="16 18 22 12 16 6" /><polyline points="8 6 2 12 8 18" />
                 {:else if profile.icon === 'server'}
-                  <rect x="2" y="2" width="20" height="8" rx="2" /><rect x="2" y="14" width="20" height="8" rx="2" /><circle cx="6" cy="6" r="1" fill="currentColor" /><circle cx="6" cy="18" r="1" fill="currentColor" />
+                  <rect x="2" y="2" width="20" height="8" rx="2" /><rect
+                    x="2"
+                    y="14"
+                    width="20"
+                    height="8"
+                    rx="2"
+                  /><circle cx="6" cy="6" r="1" fill="currentColor" /><circle
+                    cx="6"
+                    cy="18"
+                    r="1"
+                    fill="currentColor"
+                  />
                 {:else}
                   <polyline points="4 17 10 11 4 5" /><line x1="12" y1="19" x2="20" y2="19" />
                 {/if}
@@ -416,7 +505,9 @@
     border-right: 1px solid var(--border-secondary);
     background: transparent;
     white-space: nowrap;
-    transition: background var(--transition), color var(--transition);
+    transition:
+      background var(--transition),
+      color var(--transition);
     cursor: pointer;
     user-select: none;
     flex-shrink: 0;
@@ -498,8 +589,13 @@
   }
 
   @keyframes logging-pulse {
-    0%, 100% { opacity: 1; }
-    50% { opacity: 0.4; }
+    0%,
+    100% {
+      opacity: 1;
+    }
+    50% {
+      opacity: 0.4;
+    }
   }
 
   .tab-rename-input {
@@ -524,7 +620,10 @@
     border-radius: 3px;
     color: var(--text-tertiary);
     opacity: 0;
-    transition: opacity var(--transition), background var(--transition), color var(--transition);
+    transition:
+      opacity var(--transition),
+      background var(--transition),
+      color var(--transition);
     flex-shrink: 0;
     padding: 0;
     border: none;
@@ -567,7 +666,9 @@
     background: transparent;
     color: var(--text-tertiary);
     cursor: pointer;
-    transition: color var(--transition), background var(--transition);
+    transition:
+      color var(--transition),
+      background var(--transition);
     padding: 0;
   }
   .add-tab-btn:hover {
@@ -607,7 +708,9 @@
     font-size: var(--fs-xs);
     cursor: pointer;
     text-align: left;
-    transition: background var(--transition), color var(--transition);
+    transition:
+      background var(--transition),
+      color var(--transition);
     white-space: nowrap;
   }
   .shell-option:hover {

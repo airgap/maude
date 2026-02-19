@@ -45,7 +45,21 @@ interface SettingsState {
     { name: string; type: 'dark' | 'light'; cssVars: Record<string, string> }
   >;
   streamingIndicator: 'dots' | 'spinner' | 'pulse' | 'none';
-  streamingProgressBar: 'rainbow' | 'accent' | 'pulse' | 'neon' | 'cylon' | 'matrix' | 'comet' | 'helix' | 'fire' | 'ocean' | 'electric' | 'candy' | 'vapor' | 'none';
+  streamingProgressBar:
+    | 'rainbow'
+    | 'accent'
+    | 'pulse'
+    | 'neon'
+    | 'cylon'
+    | 'matrix'
+    | 'comet'
+    | 'helix'
+    | 'fire'
+    | 'ocean'
+    | 'electric'
+    | 'candy'
+    | 'vapor'
+    | 'none';
   streamingCursor: 'block' | 'line' | 'underscore' | 'none';
   sendWithEnter: boolean;
   soundEnabled: boolean;

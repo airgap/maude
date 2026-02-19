@@ -28,15 +28,21 @@
     "test": "bun run --filter '*' test",
     "test:coverage": "bun run --filter @e/server test:coverage && bun run --filter @e/shared test:coverage && bun run --filter @e/client test:coverage",
     "format": "prettier --write .",
-    "format:check": "prettier --check ."
+    "format:check": "prettier --check .",
+    "prepare": "husky"
   },
   "devDependencies": {
     "@testing-library/jest-dom": "^6.9.1",
     "@vitest/coverage-v8": "^4.0.18",
     "happy-dom": "^20.6.1",
+    "husky": "^9.1.7",
+    "lint-staged": "^16.2.7",
     "prettier": "^3.8.1",
     "prettier-plugin-svelte": "^3.4.1",
     "vitest": "^4.0.18"
+  },
+  "lint-staged": {
+    "*.{ts,js,svelte,json,css,md,html}": "prettier --write"
   },
   "dependencies": {
     "@xterm/addon-image": "0.9.0"

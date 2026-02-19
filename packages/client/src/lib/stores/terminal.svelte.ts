@@ -274,13 +274,7 @@ interface LeafRegion {
   h: number;
 }
 
-function computeLeafRegions(
-  layout: TerminalLayout,
-  x = 0,
-  y = 0,
-  w = 1,
-  h = 1,
-): LeafRegion[] {
+function computeLeafRegions(layout: TerminalLayout, x = 0, y = 0, w = 1, h = 1): LeafRegion[] {
   if (layout.type === 'leaf') {
     return [{ sessionId: layout.sessionId, x, y, w, h }];
   }
@@ -911,9 +905,7 @@ function createTerminalStore() {
       newBlocks.set(
         sessionId,
         blocks.map((b) =>
-          b.id === commandId
-            ? { ...b, exitCode, endRow, finishedAt: Date.now() }
-            : b,
+          b.id === commandId ? { ...b, exitCode, endRow, finishedAt: Date.now() } : b,
         ),
       );
       commandBlocks = newBlocks;
@@ -927,9 +919,7 @@ function createTerminalStore() {
       const newBlocks = new Map(commandBlocks);
       newBlocks.set(
         sessionId,
-        blocks.map((b) =>
-          b.id === commandId ? { ...b, collapsed: !b.collapsed } : b,
-        ),
+        blocks.map((b) => (b.id === commandId ? { ...b, collapsed: !b.collapsed } : b)),
       );
       commandBlocks = newBlocks;
     },
@@ -1052,7 +1042,11 @@ function createTerminalStore() {
         next.add(activeTabId);
       }
       broadcastTabIds = next;
-      this.announce(wasActive ? 'Broadcast input disabled' : 'Broadcast input enabled — typing is sent to all panes in this tab');
+      this.announce(
+        wasActive
+          ? 'Broadcast input disabled'
+          : 'Broadcast input enabled — typing is sent to all panes in this tab',
+      );
     },
 
     setBroadcast(v: boolean) {

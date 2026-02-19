@@ -118,18 +118,16 @@
 
   /** Formatted match count display */
   const matchDisplay = $derived(
-    query
-      ? resultCount > 0
-        ? `${resultIndex + 1} of ${resultCount}`
-        : 'No results'
-      : '',
+    query ? (resultCount > 0 ? `${resultIndex + 1} of ${resultCount}` : 'No results') : '',
   );
 
   /** Announce search results count to screen readers via the store's aria-live region */
   $effect(() => {
     if (!query) return;
     if (resultCount > 0) {
-      terminalStore.announce(`${resultCount} result${resultCount === 1 ? '' : 's'} found, showing result ${resultIndex + 1} of ${resultCount}`);
+      terminalStore.announce(
+        `${resultCount} result${resultCount === 1 ? '' : 's'} found, showing result ${resultIndex + 1} of ${resultCount}`,
+      );
     } else {
       terminalStore.announce('No results found');
     }
@@ -139,7 +137,14 @@
 <!-- svelte-ignore a11y_no_static_element_interactions -->
 <div class="terminal-search-bar" onkeydown={onKeydown} role="search" aria-label="Find in terminal">
   <div class="search-icon">
-    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+    <svg
+      width="13"
+      height="13"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      stroke-width="2"
+    >
       <circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
     </svg>
   </div>
@@ -197,7 +202,14 @@
     title="Previous match (Shift+Enter)"
     aria-label="Previous match"
   >
-    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+    <svg
+      width="12"
+      height="12"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      stroke-width="2.5"
+    >
       <polyline points="18 15 12 9 6 15" />
     </svg>
   </button>
@@ -209,7 +221,14 @@
     title="Next match (Enter)"
     aria-label="Next match"
   >
-    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+    <svg
+      width="12"
+      height="12"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      stroke-width="2.5"
+    >
       <polyline points="6 9 12 15 18 9" />
     </svg>
   </button>
@@ -220,7 +239,14 @@
     title="Close search (Escape)"
     aria-label="Close search"
   >
-    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+    <svg
+      width="12"
+      height="12"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      stroke-width="2.5"
+    >
       <path d="M18 6L6 18M6 6l12 12" />
     </svg>
   </button>

@@ -246,15 +246,15 @@ Last Updated: 2026-02-18
 
 ## Performance Characteristics
 
-| Provider    | Latency    | Throughput | Cost        | Reliability |
-| ----------- | ---------- | ---------- | ----------- | ----------- |
-| Claude CLI  | Medium     | Medium     | API         | High        |
-| Claude API  | Low        | High       | API         | Very High   |
-| Kiro CLI    | Medium     | Medium     | Variable    | High        |
-| Gemini CLI  | Low        | High       | Free/API    | High        |
-| Copilot CLI | Low-Medium | Medium     | Subscription| High        |
-| Bedrock     | Low-Medium | High       | AWS         | Very High   |
-| Ollama      | Low        | Variable   | Free        | Medium      |
+| Provider    | Latency    | Throughput | Cost         | Reliability |
+| ----------- | ---------- | ---------- | ------------ | ----------- |
+| Claude CLI  | Medium     | Medium     | API          | High        |
+| Claude API  | Low        | High       | API          | Very High   |
+| Kiro CLI    | Medium     | Medium     | Variable     | High        |
+| Gemini CLI  | Low        | High       | Free/API     | High        |
+| Copilot CLI | Low-Medium | Medium     | Subscription | High        |
+| Bedrock     | Low-Medium | High       | AWS          | Very High   |
+| Ollama      | Low        | Variable   | Free         | Medium      |
 
 ## Use Case Recommendations
 

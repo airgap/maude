@@ -65,7 +65,9 @@ app.get('/unread-count', (c) => {
 
   const db = getDb();
   const row = db
-    .query("SELECT COUNT(*) as count FROM agent_notes WHERE workspace_path = ? AND status = 'unread'")
+    .query(
+      "SELECT COUNT(*) as count FROM agent_notes WHERE workspace_path = ? AND status = 'unread'",
+    )
     .get(workspacePath) as any;
 
   return c.json({ ok: true, data: { count: row?.count ?? 0 } });
@@ -132,7 +134,9 @@ app.patch('/mark-read', async (c) => {
   const db = getDb();
   const now = Date.now();
   const result = db
-    .query("UPDATE agent_notes SET status = 'read', updated_at = ? WHERE workspace_path = ? AND status = 'unread'")
+    .query(
+      "UPDATE agent_notes SET status = 'read', updated_at = ? WHERE workspace_path = ? AND status = 'unread'",
+    )
     .run(now, body.workspacePath);
 
   return c.json({ ok: true, data: { updated: result.changes } });

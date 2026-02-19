@@ -25,14 +25,18 @@
     try {
       const raw = localStorage.getItem(LOOP_CONFIG_KEY);
       if (raw) return JSON.parse(raw);
-    } catch { /* localStorage unavailable */ }
+    } catch {
+      /* localStorage unavailable */
+    }
     return null;
   }
 
   function saveConfig(config: SavedLoopConfig) {
     try {
       localStorage.setItem(LOOP_CONFIG_KEY, JSON.stringify(config));
-    } catch { /* localStorage unavailable */ }
+    } catch {
+      /* localStorage unavailable */
+    }
   }
 
   // Standalone mode: no PRD selected
@@ -264,7 +268,9 @@
         </div>
         {#if storyCount > 0}
           <div class="form-hint">
-            {storyCount} stories x {maxAttemptsPerStory} attempts x {1 + maxFixUpAttempts} passes = {storyCount * maxAttemptsPerStory * (1 + maxFixUpAttempts)} max iterations
+            {storyCount} stories x {maxAttemptsPerStory} attempts x {1 + maxFixUpAttempts} passes = {storyCount *
+              maxAttemptsPerStory *
+              (1 + maxFixUpAttempts)} max iterations
           </div>
         {/if}
 
@@ -277,7 +283,8 @@
           <input type="number" bind:value={maxFixUpAttempts} min="0" max="5" />
         </div>
         <div class="form-hint">
-          Each attempt gets {maxFixUpAttempts} fix-up pass{maxFixUpAttempts !== 1 ? 'es' : ''} to fix errors before starting fresh
+          Each attempt gets {maxFixUpAttempts} fix-up pass{maxFixUpAttempts !== 1 ? 'es' : ''} to fix
+          errors before starting fresh
         </div>
       </div>
 
@@ -376,7 +383,19 @@
     <div class="modal-footer">
       <button class="btn-cancel" onclick={close}>Cancel</button>
       <button class="btn-start" onclick={startLoop}>
-        {#if depWarnings.length > 0}<svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor" stroke="none"><polygon points="5 3 19 12 5 21 5 3" /></svg> Start Loop (with warnings){:else}<svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor" stroke="none"><polygon points="5 3 19 12 5 21 5 3" /></svg> Start Loop{/if}
+        {#if depWarnings.length > 0}<svg
+            width="11"
+            height="11"
+            viewBox="0 0 24 24"
+            fill="currentColor"
+            stroke="none"><polygon points="5 3 19 12 5 21 5 3" /></svg
+          > Start Loop (with warnings){:else}<svg
+            width="11"
+            height="11"
+            viewBox="0 0 24 24"
+            fill="currentColor"
+            stroke="none"><polygon points="5 3 19 12 5 21 5 3" /></svg
+          > Start Loop{/if}
       </button>
     </div>
   </div>

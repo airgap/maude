@@ -31,10 +31,13 @@
 
   const categoryIcons: Record<AgentNoteCategory, string> = {
     research: 'M11 3a8 8 0 1 0 0 16 8 8 0 0 0 0-16zM21 21l-4.35-4.35',
-    report: 'M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z M14 2v6h6 M16 13H8 M16 17H8 M10 9H8',
-    recommendation: 'M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 1 1 7.072 0l-.548.547A3.374 3.374 0 0 0 14 18.469V19a2 2 0 1 1-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z',
+    report:
+      'M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z M14 2v6h6 M16 13H8 M16 17H8 M10 9H8',
+    recommendation:
+      'M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 1 1 7.072 0l-.548.547A3.374 3.374 0 0 0 14 18.469V19a2 2 0 1 1-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z',
     status: 'M9 11l3 3L22 4 M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11',
-    general: 'M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-3l-4 4z',
+    general:
+      'M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-3l-4 4z',
   };
 
   function toggleExpand(note: AgentNote) {
@@ -98,7 +101,16 @@
         onclick={() => agentNotesStore.markAllAsRead()}
         title="Mark all as read"
       >
-        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <svg
+          width="12"
+          height="12"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
           <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
           <polyline points="22 4 12 14.01 9 11.01"></polyline>
         </svg>
@@ -116,7 +128,9 @@
       >
         {#if f === 'all'}All
         {:else if f === 'unread'}
-          <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor" stroke="none"><circle cx="12" cy="12" r="6" /></svg>
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor" stroke="none"
+            ><circle cx="12" cy="12" r="6" /></svg
+          >
           Unread
         {:else}
           {categoryLabels[f as AgentNoteCategory] ?? f}
@@ -137,8 +151,19 @@
           No unread notes. You're all caught up!
         {:else if agentNotesStore.filterCategory === 'all'}
           <div class="empty-icon">
-            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-3l-4 4z" />
+            <svg
+              width="32"
+              height="32"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.5"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <path
+                d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-3l-4 4z"
+              />
             </svg>
           </div>
           No agent notes yet. When agents complete tasks in the loop, their reports will appear here.
@@ -148,25 +173,41 @@
       </div>
     {:else}
       {#each agentNotesStore.filteredNotes as note (note.id)}
-        <div class="note-item" class:expanded={expandedId === note.id} class:unread={note.status === 'unread'}>
+        <div
+          class="note-item"
+          class:expanded={expandedId === note.id}
+          class:unread={note.status === 'unread'}
+        >
           <!-- Header row -->
           <div class="note-header">
-            <button
-              class="note-expand-btn"
-              onclick={() => toggleExpand(note)}
-              title="Expand note"
-            >
+            <button class="note-expand-btn" onclick={() => toggleExpand(note)} title="Expand note">
               {#if note.status === 'unread'}
                 <span class="unread-dot"></span>
               {/if}
               <span class="note-category-icon">
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <svg
+                  width="12"
+                  height="12"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
                   <path d={categoryIcons[note.category] || categoryIcons.general} />
                 </svg>
               </span>
               <span class="note-title">{note.title}</span>
               <span class="note-chevron" class:rotated={expandedId === note.id}>
-                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <svg
+                  width="10"
+                  height="10"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                >
                   <polyline points="6 9 12 15 18 9"></polyline>
                 </svg>
               </span>
@@ -178,7 +219,16 @@
                   onclick={() => navigateToConversation(note)}
                   title="Go to conversation"
                 >
-                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <svg
+                    width="11"
+                    height="11"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
                     <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
                   </svg>
                 </button>
@@ -188,7 +238,16 @@
                 onclick={() => agentNotesStore.archive(note.id)}
                 title="Archive"
               >
-                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <svg
+                  width="11"
+                  height="11"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
                   <path d="M21 8v13H3V8M1 3h22v5H1zM10 12h4" />
                 </svg>
               </button>
@@ -197,7 +256,14 @@
                 onclick={() => agentNotesStore.remove(note.id)}
                 title="Delete"
               >
-                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <svg
+                  width="11"
+                  height="11"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                >
                   <path d="M18 6L6 18M6 6l12 12"></path>
                 </svg>
               </button>
@@ -206,14 +272,20 @@
 
           <!-- Meta row -->
           <div class="note-meta">
-            <span class="note-category-badge">{categoryLabels[note.category] ?? note.category}</span>
+            <span class="note-category-badge">{categoryLabels[note.category] ?? note.category}</span
+            >
             <span class="note-date">{formatDate(note.createdAt)}</span>
           </div>
 
           <!-- Preview (collapsed) -->
           {#if expandedId !== note.id}
             <div class="note-preview">
-              {truncateContent(note.content.replace(/^#.*\n/gm, '').replace(/[*`#\[\]]/g, '').trim())}
+              {truncateContent(
+                note.content
+                  .replace(/^#.*\n/gm, '')
+                  .replace(/[*`#\[\]]/g, '')
+                  .trim(),
+              )}
             </div>
           {/if}
 

@@ -91,7 +91,7 @@ export function handleAgentTerminalEvent(event: StreamEvent): void {
       }
       writeToAgent(
         `${ANSI.bold}${ANSI.green}❯${ANSI.reset} ${ANSI.bold}${ANSI.white}${commandStr}${ANSI.reset}` +
-        `  ${ANSI.dim}${timestamp}${ANSI.reset}\r\n`
+          `  ${ANSI.dim}${timestamp}${ANSI.reset}\r\n`,
       );
       break;
     }
@@ -120,14 +120,10 @@ export function handleAgentTerminalEvent(event: StreamEvent): void {
 
       // Write duration footer
       if (duration !== undefined) {
-        const durationStr = duration >= 1000
-          ? `${(duration / 1000).toFixed(1)}s`
-          : `${duration}ms`;
+        const durationStr = duration >= 1000 ? `${(duration / 1000).toFixed(1)}s` : `${duration}ms`;
         const statusColor = isError ? ANSI.red : ANSI.green;
         const statusIcon = isError ? '✗' : '✓';
-        writeToAgent(
-          `${ANSI.dim}${statusColor}${statusIcon} ${durationStr}${ANSI.reset}\r\n`
-        );
+        writeToAgent(`${ANSI.dim}${statusColor}${statusIcon} ${durationStr}${ANSI.reset}\r\n`);
       }
 
       // Clear tracked state

@@ -109,7 +109,18 @@
 <!-- svelte-ignore a11y_no_static_element_interactions -->
 <div class="symbol-picker" onclick={(e) => e.stopPropagation()}>
   <div class="picker-header">
-    <span class="picker-title"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" /></svg> Select Symbol</span>
+    <span class="picker-title"
+      ><svg
+        width="12"
+        height="12"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" /></svg
+      > Select Symbol</span
+    >
     <button class="picker-close" onclick={onClose}>×</button>
   </div>
   <div class="search-wrap">

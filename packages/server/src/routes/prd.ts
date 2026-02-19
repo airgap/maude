@@ -213,9 +213,7 @@ app.post('/stories/reorder', async (c) => {
       const depPos = positionMap.get(depId);
       if (depPos !== undefined && depPos > myPos) {
         const depRow = storyRows.find((r) => r.id === depId);
-        violations.push(
-          `Story at position ${myPos} depends on story at position ${depPos}`,
-        );
+        violations.push(`Story at position ${myPos} depends on story at position ${depPos}`);
       }
     }
   }
@@ -2183,7 +2181,9 @@ function computeTopologicalSortOrder(
  */
 function reorderStoriesByDependencies(db: ReturnType<typeof getDb>, prdId: string): void {
   const rows = db
-    .query('SELECT id, depends_on, sort_order FROM prd_stories WHERE prd_id = ? ORDER BY sort_order ASC')
+    .query(
+      'SELECT id, depends_on, sort_order FROM prd_stories WHERE prd_id = ? ORDER BY sort_order ASC',
+    )
     .all(prdId) as Array<{ id: string; depends_on: string; sort_order: number }>;
 
   if (rows.length === 0) return;

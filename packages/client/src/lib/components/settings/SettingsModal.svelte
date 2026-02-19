@@ -294,7 +294,9 @@
     termProfileName = p.name;
     termProfileShellPath = p.shellPath;
     termProfileArgs = (p.args || []).join(' ');
-    termProfileEnvText = Object.entries(p.env || {}).map(([k, v]) => `${k}=${v}`).join('\n');
+    termProfileEnvText = Object.entries(p.env || {})
+      .map(([k, v]) => `${k}=${v}`)
+      .join('\n');
     termProfileCwd = p.cwd || '';
     termProfileIcon = p.icon || 'terminal';
   }
@@ -762,7 +764,18 @@
                   class:active={settingsStore.hypertheme === ht.id}
                   onclick={() => settingsStore.setHypertheme(ht.id)}
                 >
-                  <span class="ht-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d={ht.icon} /></svg></span>
+                  <span class="ht-icon"
+                    ><svg
+                      width="20"
+                      height="20"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"><path d={ht.icon} /></svg
+                    ></span
+                  >
                   <span class="ht-label">{ht.label}</span>
                 </button>
               {/each}
@@ -1038,7 +1051,19 @@
               Volume — {settingsStore.soundVolume}%
             </label>
             <div class="volume-row">
-              <span class="volume-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" /></svg></span>
+              <span class="volume-icon"
+                ><svg
+                  width="14"
+                  height="14"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  ><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" /></svg
+                ></span
+              >
               <input
                 type="range"
                 min="0"
@@ -1051,7 +1076,21 @@
                     soundVolume: Number((e.target as HTMLInputElement).value),
                   })}
               />
-              <span class="volume-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" /><path d="M19.07 4.93a10 10 0 0 1 0 14.14" /><path d="M15.54 8.46a5 5 0 0 1 0 7.07" /></svg></span>
+              <span class="volume-icon"
+                ><svg
+                  width="14"
+                  height="14"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  ><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" /><path
+                    d="M19.07 4.93a10 10 0 0 1 0 14.14"
+                  /><path d="M15.54 8.46a5 5 0 0 1 0 7.07" /></svg
+                ></span
+              >
             </div>
           </div>
 
@@ -1065,7 +1104,12 @@
                   disabled={!settingsStore.soundEnabled}
                   onclick={() =>
                     settingsStore.update({
-                      soundStyle: opt.value as 'classic' | 'melodic' | 'whimsy' | 'forest' | 'wind-chime',
+                      soundStyle: opt.value as
+                        | 'classic'
+                        | 'melodic'
+                        | 'whimsy'
+                        | 'forest'
+                        | 'wind-chime',
                     })}
                 >
                   <span class="sound-style-name">{opt.label}</span>
@@ -1220,7 +1264,9 @@
               step="1"
               value={settingsStore.termFontSize}
               oninput={(e) =>
-                settingsStore.update({ termFontSize: Number((e.target as HTMLInputElement).value) })}
+                settingsStore.update({
+                  termFontSize: Number((e.target as HTMLInputElement).value),
+                })}
             />
           </div>
 
@@ -1231,7 +1277,10 @@
               value={settingsStore.termCursorStyle}
               onchange={(e) =>
                 settingsStore.update({
-                  termCursorStyle: (e.target as HTMLSelectElement).value as 'block' | 'underline' | 'bar',
+                  termCursorStyle: (e.target as HTMLSelectElement).value as
+                    | 'block'
+                    | 'underline'
+                    | 'bar',
                 })}
             >
               <option value="block">Block</option>
@@ -1256,7 +1305,9 @@
 
           <!-- Scrollback Lines -->
           <div class="setting-group">
-            <label class="setting-label">Scrollback lines — {settingsStore.termScrollback.toLocaleString()}</label>
+            <label class="setting-label"
+              >Scrollback lines — {settingsStore.termScrollback.toLocaleString()}</label
+            >
             <p class="setting-desc">Number of lines retained in terminal history (1,000-100,000)</p>
             <input
               type="range"
@@ -1265,7 +1316,9 @@
               step="1000"
               value={settingsStore.termScrollback}
               oninput={(e) =>
-                settingsStore.update({ termScrollback: Number((e.target as HTMLInputElement).value) })}
+                settingsStore.update({
+                  termScrollback: Number((e.target as HTMLInputElement).value),
+                })}
             />
           </div>
 
@@ -1276,7 +1329,11 @@
               value={settingsStore.termBellStyle}
               onchange={(e) =>
                 settingsStore.update({
-                  termBellStyle: (e.target as HTMLSelectElement).value as 'none' | 'visual' | 'audio' | 'both',
+                  termBellStyle: (e.target as HTMLSelectElement).value as
+                    | 'none'
+                    | 'visual'
+                    | 'audio'
+                    | 'both',
                 })}
             >
               <option value="none">None</option>
@@ -1315,7 +1372,9 @@
               >
                 <option value="">System default</option>
                 {#each detectedShells as shell}
-                  <option value={shell.path}>{shell.name}{shell.version ? ` (${shell.version})` : ''}</option>
+                  <option value={shell.path}
+                    >{shell.name}{shell.version ? ` (${shell.version})` : ''}</option
+                  >
                 {/each}
               </select>
             {/if}
@@ -1330,7 +1389,9 @@
                 type="checkbox"
                 checked={settingsStore.termEnableShellIntegration}
                 onchange={() =>
-                  settingsStore.update({ termEnableShellIntegration: !settingsStore.termEnableShellIntegration })}
+                  settingsStore.update({
+                    termEnableShellIntegration: !settingsStore.termEnableShellIntegration,
+                  })}
               />
               <span class="toggle-slider"></span>
             </label>
@@ -1339,7 +1400,10 @@
           <!-- Inline Images -->
           <div class="setting-group">
             <label class="setting-label">Inline images</label>
-            <p class="setting-desc">Render images inline via iTerm2 and Sixel protocols (for imgcat, viu, timg, matplotlib)</p>
+            <p class="setting-desc">
+              Render images inline via iTerm2 and Sixel protocols (for imgcat, viu, timg,
+              matplotlib)
+            </p>
             <label class="toggle">
               <input
                 type="checkbox"
@@ -1354,7 +1418,9 @@
           {#if settingsStore.termEnableImages}
             <!-- Image Max Dimensions -->
             <div class="setting-group">
-              <label class="setting-label">Max image dimensions — {settingsStore.termImageMaxWidth} &times; {settingsStore.termImageMaxHeight}px</label>
+              <label class="setting-label"
+                >Max image dimensions — {settingsStore.termImageMaxWidth} &times; {settingsStore.termImageMaxHeight}px</label
+              >
               <p class="setting-desc">Maximum width and height for rendered images</p>
               <div class="image-dimension-row">
                 <label class="image-dim-label">
@@ -1366,7 +1432,9 @@
                     step="100"
                     value={settingsStore.termImageMaxWidth}
                     oninput={(e) =>
-                      settingsStore.update({ termImageMaxWidth: Number((e.target as HTMLInputElement).value) })}
+                      settingsStore.update({
+                        termImageMaxWidth: Number((e.target as HTMLInputElement).value),
+                      })}
                   />
                 </label>
                 <label class="image-dim-label">
@@ -1378,7 +1446,9 @@
                     step="100"
                     value={settingsStore.termImageMaxHeight}
                     oninput={(e) =>
-                      settingsStore.update({ termImageMaxHeight: Number((e.target as HTMLInputElement).value) })}
+                      settingsStore.update({
+                        termImageMaxHeight: Number((e.target as HTMLInputElement).value),
+                      })}
                   />
                 </label>
               </div>
@@ -1386,8 +1456,12 @@
 
             <!-- Image Storage Limit -->
             <div class="setting-group">
-              <label class="setting-label">Image cache limit — {settingsStore.termImageStorageLimit} MB</label>
-              <p class="setting-desc">Maximum memory for cached images (older images are evicted when exceeded)</p>
+              <label class="setting-label"
+                >Image cache limit — {settingsStore.termImageStorageLimit} MB</label
+              >
+              <p class="setting-desc">
+                Maximum memory for cached images (older images are evicted when exceeded)
+              </p>
               <input
                 type="range"
                 min="16"
@@ -1395,7 +1469,9 @@
                 step="16"
                 value={settingsStore.termImageStorageLimit}
                 oninput={(e) =>
-                  settingsStore.update({ termImageStorageLimit: Number((e.target as HTMLInputElement).value) })}
+                  settingsStore.update({
+                    termImageStorageLimit: Number((e.target as HTMLInputElement).value),
+                  })}
               />
             </div>
           {/if}
@@ -1403,13 +1479,17 @@
           <!-- Agent Terminal Integration -->
           <div class="setting-group">
             <label class="setting-label">Agent terminal</label>
-            <p class="setting-desc">Show AI tool execution (Bash commands) in a dedicated read-only terminal tab</p>
+            <p class="setting-desc">
+              Show AI tool execution (Bash commands) in a dedicated read-only terminal tab
+            </p>
             <label class="toggle">
               <input
                 type="checkbox"
                 checked={settingsStore.agentTerminalEnabled}
                 onchange={() =>
-                  settingsStore.update({ agentTerminalEnabled: !settingsStore.agentTerminalEnabled })}
+                  settingsStore.update({
+                    agentTerminalEnabled: !settingsStore.agentTerminalEnabled,
+                  })}
               />
               <span class="toggle-slider"></span>
             </label>
@@ -1428,11 +1508,21 @@
                   {@const autoId = `auto-${shell.name.toLowerCase()}`}
                   {@const isDefault = settingsStore.termDefaultProfileId === autoId}
                   <div class="term-profile-row">
-                    <svg class="term-profile-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <svg
+                      class="term-profile-icon"
+                      width="14"
+                      height="14"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                    >
                       <polyline points="4 17 10 11 4 5" /><line x1="12" y1="19" x2="20" y2="19" />
                     </svg>
                     <div class="term-profile-info">
-                      <span class="term-profile-name">{shell.name}{shell.version ? ` (${shell.version})` : ''}</span>
+                      <span class="term-profile-name"
+                        >{shell.name}{shell.version ? ` (${shell.version})` : ''}</span
+                      >
                       <span class="term-profile-path">{shell.path}</span>
                     </div>
                     <div class="term-profile-actions">
@@ -1442,8 +1532,17 @@
                         title={isDefault ? 'Remove as default' : 'Set as default'}
                         onclick={() => setTermDefaultProfile(autoId)}
                       >
-                        <svg width="12" height="12" viewBox="0 0 24 24" fill={isDefault ? 'currentColor' : 'none'} stroke="currentColor" stroke-width="2">
-                          <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+                        <svg
+                          width="12"
+                          height="12"
+                          viewBox="0 0 24 24"
+                          fill={isDefault ? 'currentColor' : 'none'}
+                          stroke="currentColor"
+                          stroke-width="2"
+                        >
+                          <polygon
+                            points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"
+                          />
                         </svg>
                       </button>
                       <span class="term-profile-badge read-only">auto</span>
@@ -1457,23 +1556,46 @@
             <div class="term-profiles-section">
               <div class="term-profiles-section-label">Custom Profiles</div>
               {#if settingsStore.terminalProfiles.length === 0 && !termProfileEditing}
-                <p class="setting-desc" style="margin: 4px 0 8px; font-style: italic;">No custom profiles yet</p>
+                <p class="setting-desc" style="margin: 4px 0 8px; font-style: italic;">
+                  No custom profiles yet
+                </p>
               {/if}
               {#each settingsStore.terminalProfiles as tp (tp.id)}
                 {@const isDefault = settingsStore.termDefaultProfileId === tp.id}
                 <div class="term-profile-row">
-                  <svg class="term-profile-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <svg
+                    class="term-profile-icon"
+                    width="14"
+                    height="14"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                  >
                     {#if tp.icon === 'code'}
                       <polyline points="16 18 22 12 16 6" /><polyline points="8 6 2 12 8 18" />
                     {:else if tp.icon === 'server'}
-                      <rect x="2" y="2" width="20" height="8" rx="2" /><rect x="2" y="14" width="20" height="8" rx="2" /><circle cx="6" cy="6" r="1" fill="currentColor" /><circle cx="6" cy="18" r="1" fill="currentColor" />
+                      <rect x="2" y="2" width="20" height="8" rx="2" /><rect
+                        x="2"
+                        y="14"
+                        width="20"
+                        height="8"
+                        rx="2"
+                      /><circle cx="6" cy="6" r="1" fill="currentColor" /><circle
+                        cx="6"
+                        cy="18"
+                        r="1"
+                        fill="currentColor"
+                      />
                     {:else}
                       <polyline points="4 17 10 11 4 5" /><line x1="12" y1="19" x2="20" y2="19" />
                     {/if}
                   </svg>
                   <div class="term-profile-info">
                     <span class="term-profile-name">{tp.name}</span>
-                    <span class="term-profile-path">{tp.shellPath}{tp.args?.length ? ' ' + tp.args.join(' ') : ''}</span>
+                    <span class="term-profile-path"
+                      >{tp.shellPath}{tp.args?.length ? ' ' + tp.args.join(' ') : ''}</span
+                    >
                   </div>
                   <div class="term-profile-actions">
                     <button
@@ -1482,8 +1604,17 @@
                       title={isDefault ? 'Remove as default' : 'Set as default'}
                       onclick={() => setTermDefaultProfile(tp.id)}
                     >
-                      <svg width="12" height="12" viewBox="0 0 24 24" fill={isDefault ? 'currentColor' : 'none'} stroke="currentColor" stroke-width="2">
-                        <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+                      <svg
+                        width="12"
+                        height="12"
+                        viewBox="0 0 24 24"
+                        fill={isDefault ? 'currentColor' : 'none'}
+                        stroke="currentColor"
+                        stroke-width="2"
+                      >
+                        <polygon
+                          points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"
+                        />
                       </svg>
                     </button>
                     <button
@@ -1491,8 +1622,17 @@
                       title="Edit profile"
                       onclick={() => startEditTermProfile(tp.id)}
                     >
-                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" /><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+                      <svg
+                        width="12"
+                        height="12"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                      >
+                        <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" /><path
+                          d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"
+                        />
                       </svg>
                     </button>
                     <button
@@ -1500,8 +1640,17 @@
                       title="Delete profile"
                       onclick={() => deleteTermProfile(tp.id)}
                     >
-                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <polyline points="3 6 5 6 21 6" /><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                      <svg
+                        width="12"
+                        height="12"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                      >
+                        <polyline points="3 6 5 6 21 6" /><path
+                          d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"
+                        />
                       </svg>
                     </button>
                   </div>
@@ -1510,7 +1659,14 @@
 
               {#if !termProfileEditing}
                 <button class="btn-secondary term-profile-add-btn" onclick={startNewTermProfile}>
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <svg
+                    width="12"
+                    height="12"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                  >
                     <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
                   </svg>
                   Add Profile
@@ -1521,28 +1677,55 @@
             <!-- Profile editor form -->
             {#if termProfileEditing}
               <div class="term-profile-editor">
-                <div class="term-profile-editor-title">{termProfileEditId ? 'Edit' : 'New'} Profile</div>
+                <div class="term-profile-editor-title">
+                  {termProfileEditId ? 'Edit' : 'New'} Profile
+                </div>
                 <div class="term-profile-field">
                   <label class="term-profile-field-label">Name</label>
-                  <input type="text" class="setting-text-input" placeholder="My Profile" bind:value={termProfileName} />
+                  <input
+                    type="text"
+                    class="setting-text-input"
+                    placeholder="My Profile"
+                    bind:value={termProfileName}
+                  />
                 </div>
                 <div class="term-profile-field">
                   <label class="term-profile-field-label">Shell path</label>
-                  <input type="text" class="setting-text-input" placeholder="/bin/bash" bind:value={termProfileShellPath} />
+                  <input
+                    type="text"
+                    class="setting-text-input"
+                    placeholder="/bin/bash"
+                    bind:value={termProfileShellPath}
+                  />
                 </div>
                 <div class="term-profile-field">
                   <label class="term-profile-field-label">Arguments</label>
-                  <input type="text" class="setting-text-input" placeholder="--login" bind:value={termProfileArgs} />
+                  <input
+                    type="text"
+                    class="setting-text-input"
+                    placeholder="--login"
+                    bind:value={termProfileArgs}
+                  />
                   <span class="term-profile-field-hint">Space-separated shell arguments</span>
                 </div>
                 <div class="term-profile-field">
                   <label class="term-profile-field-label">Environment variables</label>
-                  <textarea class="setting-textarea" placeholder={"KEY=value\nANOTHER=value"} rows="3" bind:value={termProfileEnvText}></textarea>
+                  <textarea
+                    class="setting-textarea"
+                    placeholder={'KEY=value\nANOTHER=value'}
+                    rows="3"
+                    bind:value={termProfileEnvText}
+                  ></textarea>
                   <span class="term-profile-field-hint">One per line: KEY=value</span>
                 </div>
                 <div class="term-profile-field">
                   <label class="term-profile-field-label">Working directory</label>
-                  <input type="text" class="setting-text-input" placeholder="(uses workspace default)" bind:value={termProfileCwd} />
+                  <input
+                    type="text"
+                    class="setting-text-input"
+                    placeholder="(uses workspace default)"
+                    bind:value={termProfileCwd}
+                  />
                 </div>
                 <div class="term-profile-field">
                   <label class="term-profile-field-label">Icon</label>
@@ -1554,7 +1737,11 @@
                 </div>
                 <div class="term-profile-editor-actions">
                   <button class="btn-secondary" onclick={cancelTermProfileEdit}>Cancel</button>
-                  <button class="btn-primary" onclick={saveTermProfile} disabled={!termProfileName.trim() || !termProfileShellPath.trim()}>
+                  <button
+                    class="btn-primary"
+                    onclick={saveTermProfile}
+                    disabled={!termProfileName.trim() || !termProfileShellPath.trim()}
+                  >
                     {termProfileEditId ? 'Save' : 'Create'}
                   </button>
                 </div>
@@ -1564,14 +1751,19 @@
             <!-- Default profile selector -->
             <div class="term-profiles-section" style="margin-top: 12px;">
               <div class="term-profiles-section-label">Default Profile</div>
-              <p class="setting-desc">Profile used when opening new terminal tabs with no specific selection</p>
+              <p class="setting-desc">
+                Profile used when opening new terminal tabs with no specific selection
+              </p>
               <select
                 value={settingsStore.termDefaultProfileId}
-                onchange={(e) => settingsStore.setDefaultProfileId((e.target as HTMLSelectElement).value)}
+                onchange={(e) =>
+                  settingsStore.setDefaultProfileId((e.target as HTMLSelectElement).value)}
               >
                 <option value="">System default shell</option>
                 {#each detectedShells as shell}
-                  <option value={`auto-${shell.name.toLowerCase()}`}>{shell.name}{shell.version ? ` (${shell.version})` : ''}</option>
+                  <option value={`auto-${shell.name.toLowerCase()}`}
+                    >{shell.name}{shell.version ? ` (${shell.version})` : ''}</option
+                  >
                 {/each}
                 {#each settingsStore.terminalProfiles as tp2}
                   <option value={tp2.id}>{tp2.name}</option>
@@ -1579,7 +1771,6 @@
               </select>
             </div>
           </div>
-
         {:else if activeTab === 'permissions'}
           <div class="setting-group">
             <label class="setting-label">Permission mode</label>
@@ -1852,8 +2043,12 @@
               MCP servers can be configured to extend Claude's capabilities with custom tools and
               resources.
             </p>
-            <button class="btn-primary" onclick={() => { uiStore.closeModal(); uiStore.setSidebarTab('mcp'); }}
-              >Manage MCP Servers</button
+            <button
+              class="btn-primary"
+              onclick={() => {
+                uiStore.closeModal();
+                uiStore.setSidebarTab('mcp');
+              }}>Manage MCP Servers</button
             >
           </div>
         {:else if activeTab === 'profiles'}
@@ -3334,7 +3529,9 @@
     background: transparent;
     color: var(--text-tertiary);
     cursor: pointer;
-    transition: color var(--transition), background var(--transition);
+    transition:
+      color var(--transition),
+      background var(--transition);
     padding: 0;
   }
   .term-profile-action-btn:hover {

@@ -398,7 +398,7 @@ describe('error handling', () => {
     });
 
     await expect(api.conversations.list()).rejects.toThrow(
-      'Server returned non-JSON response. Is the backend running?',
+      'Server returned non-JSON response (text/html from /conversations). Is the backend running?',
     );
   });
 

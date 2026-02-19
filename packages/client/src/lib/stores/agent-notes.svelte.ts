@@ -107,9 +107,7 @@ function createAgentNotesStore() {
       try {
         const res = await api.agentNotes.markRead(currentWorkspacePath);
         if (res.ok) {
-          notes = notes.map((n) =>
-            n.status === 'unread' ? { ...n, status: 'read' as const } : n,
-          );
+          notes = notes.map((n) => (n.status === 'unread' ? { ...n, status: 'read' as const } : n));
           unreadCount = 0;
         }
       } catch (err) {

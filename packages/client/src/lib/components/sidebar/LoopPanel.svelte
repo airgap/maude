@@ -186,7 +186,9 @@
   function getDefaultConfig(): LoopConfig {
     const isStandaloneLoop = !loopStore.selectedPrdId;
     const storyCount = isStandaloneLoop
-      ? workStore.standaloneStories.filter((s) => s.status === 'pending' || s.status === 'in_progress').length
+      ? workStore.standaloneStories.filter(
+          (s) => s.status === 'pending' || s.status === 'in_progress',
+        ).length
       : (loopStore.selectedPrd?.stories?.filter(
           (s: any) => s.status === 'pending' || s.status === 'in_progress',
         ).length ?? 0);
@@ -201,15 +203,17 @@
       autoCommit: true,
       autoSnapshot: true,
       pauseOnFailure: false,
-      qualityChecks: [{
-        id: 'default-tc',
-        type: 'typecheck',
-        name: 'Typecheck',
-        command: 'bun run check',
-        timeout: 60000,
-        required: true,
-        enabled: true,
-      }],
+      qualityChecks: [
+        {
+          id: 'default-tc',
+          type: 'typecheck',
+          name: 'Typecheck',
+          command: 'bun run check',
+          timeout: 60000,
+          required: true,
+          enabled: true,
+        },
+      ],
     };
   }
 
@@ -278,7 +282,7 @@
     try {
       if (!prdId) {
         const standaloneCount = workStore.standaloneStories.filter(
-          (s) => s.status === 'pending' || s.status === 'in_progress'
+          (s) => s.status === 'pending' || s.status === 'in_progress',
         ).length;
         loopStore.setStandaloneStoryCount(standaloneCount);
       }
@@ -687,8 +691,22 @@
               title="Archive all completed"
               onclick={handleArchiveAllCompleted}
             >
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <polyline points="21 8 21 21 3 21 3 8" /><rect x="1" y="3" width="22" height="5" /><line x1="10" y1="12" x2="14" y2="12" />
+              <svg
+                width="12"
+                height="12"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <polyline points="21 8 21 21 3 21 3 8" /><rect
+                  x="1"
+                  y="3"
+                  width="22"
+                  height="5"
+                /><line x1="10" y1="12" x2="14" y2="12" />
               </svg>
             </button>
           {/if}
@@ -822,8 +840,22 @@
                       title="Archive"
                       onclick={() => handleArchiveStory(story.id)}
                     >
-                      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                        <polyline points="21 8 21 21 3 21 3 8" /><rect x="1" y="3" width="22" height="5" /><line x1="10" y1="12" x2="14" y2="12" />
+                      <svg
+                        width="11"
+                        height="11"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                      >
+                        <polyline points="21 8 21 21 3 21 3 8" /><rect
+                          x="1"
+                          y="3"
+                          width="22"
+                          height="5"
+                        /><line x1="10" y1="12" x2="14" y2="12" />
                       </svg>
                     </button>
                   {/if}
@@ -898,7 +930,27 @@
     {#if loopStore.sprintWarnings.length > 0 && !loopStore.isActive}
       <div class="sprint-warnings">
         <div class="section-header">
-          <h4><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" /><line x1="12" y1="9" x2="12" y2="13" /><line x1="12" y1="17" x2="12.01" y2="17" /></svg> Sprint Warnings ({loopStore.sprintWarnings.length})</h4>
+          <h4>
+            <svg
+              width="12"
+              height="12"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              ><path
+                d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"
+              /><line x1="12" y1="9" x2="12" y2="13" /><line
+                x1="12"
+                y1="17"
+                x2="12.01"
+                y2="17"
+              /></svg
+            >
+            Sprint Warnings ({loopStore.sprintWarnings.length})
+          </h4>
         </div>
         <div class="warning-list">
           {#each loopStore.sprintWarnings as warning}
@@ -930,10 +982,21 @@
           <button
             class="dashboard-btn"
             onclick={() => {
-              if (loopStore.activeLoop?.id) primaryPaneStore.openLooperTab(loopStore.activeLoop.id, 'Looper');
+              if (loopStore.activeLoop?.id)
+                primaryPaneStore.openLooperTab(loopStore.activeLoop.id, 'Looper');
             }}
           >
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 1l4 4-4 4" /><path d="M3 11V9a4 4 0 0 1 4-4h14" /><path d="M7 23l-4-4 4-4" /><path d="M21 13v2a4 4 0 0 1-4 4H3" /></svg>
+            <svg
+              width="12"
+              height="12"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              ><path d="M17 1l4 4-4 4" /><path d="M3 11V9a4 4 0 0 1 4-4h14" /><path
+                d="M7 23l-4-4 4-4"
+              /><path d="M21 13v2a4 4 0 0 1-4 4H3" /></svg
+            >
             Dashboard
           </button>
         </div>
@@ -941,16 +1004,32 @@
 
       <div class="control-buttons">
         {#if loopStore.isRunning}
-          <button class="btn-sm btn-warning" onclick={() => loopStore.pauseLoop()}><svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor" stroke="none"><rect x="4" y="3" width="6" height="18" rx="1" /><rect x="14" y="3" width="6" height="18" rx="1" /></svg> Pause</button>
+          <button class="btn-sm btn-warning" onclick={() => loopStore.pauseLoop()}
+            ><svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor" stroke="none"
+              ><rect x="4" y="3" width="6" height="18" rx="1" /><rect
+                x="14"
+                y="3"
+                width="6"
+                height="18"
+                rx="1"
+              /></svg
+            > Pause</button
+          >
         {:else if loopStore.isPaused}
-          <button class="btn-sm btn-primary" onclick={() => loopStore.resumeLoop()}><svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor" stroke="none"><polygon points="5 3 19 12 5 21 5 3" /></svg> Resume</button
+          <button class="btn-sm btn-primary" onclick={() => loopStore.resumeLoop()}
+            ><svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor" stroke="none"
+              ><polygon points="5 3 19 12 5 21 5 3" /></svg
+            > Resume</button
           >
         {/if}
         <button
           class="btn-sm btn-danger"
           onclick={() => {
             if (confirm('Cancel the autonomous loop?')) loopStore.cancelLoop();
-          }}><svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor" stroke="none"><rect x="4" y="4" width="16" height="16" rx="2" /></svg> Cancel</button
+          }}
+          ><svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor" stroke="none"
+            ><rect x="4" y="4" width="16" height="16" rx="2" /></svg
+          > Cancel</button
         >
       </div>
     {:else}
@@ -969,11 +1048,24 @@
           <span class="hold-fill" style:width="{holdProgress * 100}%"></span>
           <span class="hold-label">
             {#if holdCompleted}
-              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12" /></svg> Starting...
+              <svg
+                width="11"
+                height="11"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="3"
+                stroke-linecap="round"
+                stroke-linejoin="round"><polyline points="20 6 9 17 4 12" /></svg
+              > Starting...
             {:else if isHolding}
-              <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor" stroke="none"><polygon points="5 3 19 12 5 21 5 3" /></svg> Hold for Quick Start
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor" stroke="none"
+                ><polygon points="5 3 19 12 5 21 5 3" /></svg
+              > Hold for Quick Start
             {:else}
-              <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor" stroke="none"><polygon points="5 3 19 12 5 21 5 3" /></svg> Start Loop
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor" stroke="none"
+                ><polygon points="5 3 19 12 5 21 5 3" /></svg
+              > Start Loop
             {/if}
           </span>
         </button>
@@ -1564,7 +1656,9 @@
     overflow: hidden;
     user-select: none;
     touch-action: none;
-    transition: transform 0.1s ease, box-shadow 0.15s ease;
+    transition:
+      transform 0.1s ease,
+      box-shadow 0.15s ease;
   }
 
   .hold-btn:active:not(:disabled) {
@@ -1614,9 +1708,18 @@
   }
 
   @keyframes hold-pulse {
-    0% { transform: scale(1); box-shadow: 0 0 0 0 var(--accent-primary); }
-    50% { transform: scale(1.02); box-shadow: 0 0 12px 2px var(--accent-primary); }
-    100% { transform: scale(1); box-shadow: 0 0 0 0 transparent; }
+    0% {
+      transform: scale(1);
+      box-shadow: 0 0 0 0 var(--accent-primary);
+    }
+    50% {
+      transform: scale(1.02);
+      box-shadow: 0 0 12px 2px var(--accent-primary);
+    }
+    100% {
+      transform: scale(1);
+      box-shadow: 0 0 0 0 transparent;
+    }
   }
 
   @keyframes pulse {

@@ -157,7 +157,6 @@ export function getAutoCompactThreshold(model: string): number {
   return effectiveWindow - SAFETY_BUFFER;
 }
 
-
 /**
  * Claude Code's exact compaction prompt (DCI function in their source).
  * Produces a structured LLM-generated summary of the conversation.

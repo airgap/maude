@@ -10,11 +10,7 @@
 
   /** Get the current workspace path from available sources */
   function getWorkspacePath(): string | null {
-    return (
-      workspaceStore.activeWorkspace?.workspacePath ||
-      settingsStore.workspacePath ||
-      null
-    );
+    return workspaceStore.activeWorkspace?.workspacePath || settingsStore.workspacePath || null;
   }
 
   /** Load tasks on mount */
@@ -150,7 +146,14 @@
       }
     }}
   >
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+    <svg
+      width="14"
+      height="14"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      stroke-width="2"
+    >
       <polygon points="5 3 19 12 5 21 5 3" />
     </svg>
   </button>
@@ -199,13 +202,30 @@
         {#if groups.recent.length > 0}
           <div class="task-group-label">Recent</div>
           {#each groups.recent as task (task.id)}
-            <button class="task-option" role="menuitem" onclick={() => runTask(task)} title={task.execution}>
-              <svg class="task-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <button
+              class="task-option"
+              role="menuitem"
+              onclick={() => runTask(task)}
+              title={task.execution}
+            >
+              <svg
+                class="task-icon"
+                width="12"
+                height="12"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+              >
                 <circle cx="12" cy="12" r="10" />
                 <polyline points="12 6 12 12 16 14" />
               </svg>
               <span class="task-name">{task.name}</span>
-              <span class="task-source">{task.source === 'package.json' ? taskRunnerStore.packageManager ?? 'npm' : 'make'}</span>
+              <span class="task-source"
+                >{task.source === 'package.json'
+                  ? (taskRunnerStore.packageManager ?? 'npm')
+                  : 'make'}</span
+              >
             </button>
           {/each}
           <div class="task-separator"></div>
@@ -216,8 +236,21 @@
             {taskRunnerStore.packageManager ?? 'npm'} scripts
           </div>
           {#each groups.pkgTasks as task (task.id)}
-            <button class="task-option" role="menuitem" onclick={() => runTask(task)} title={task.execution}>
-              <svg class="task-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <button
+              class="task-option"
+              role="menuitem"
+              onclick={() => runTask(task)}
+              title={task.execution}
+            >
+              <svg
+                class="task-icon"
+                width="12"
+                height="12"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+              >
                 <polygon points="5 3 19 12 5 21 5 3" />
               </svg>
               <span class="task-name">{task.name}</span>
@@ -232,8 +265,21 @@
           {/if}
           <div class="task-group-label">Makefile targets</div>
           {#each groups.makeTasks as task (task.id)}
-            <button class="task-option" role="menuitem" onclick={() => runTask(task)} title={task.execution}>
-              <svg class="task-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <button
+              class="task-option"
+              role="menuitem"
+              onclick={() => runTask(task)}
+              title={task.execution}
+            >
+              <svg
+                class="task-icon"
+                width="12"
+                height="12"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+              >
                 <polygon points="5 3 19 12 5 21 5 3" />
               </svg>
               <span class="task-name">{task.name}</span>
@@ -263,7 +309,9 @@
     background: transparent;
     color: var(--text-tertiary);
     cursor: pointer;
-    transition: color var(--transition), background var(--transition);
+    transition:
+      color var(--transition),
+      background var(--transition);
     padding: 0;
   }
   .action-btn:hover {
@@ -324,7 +372,9 @@
     background: transparent;
     color: var(--text-tertiary);
     cursor: pointer;
-    transition: color var(--transition), background var(--transition);
+    transition:
+      color var(--transition),
+      background var(--transition);
     padding: 0;
   }
   .refresh-btn:hover {
@@ -341,8 +391,12 @@
     animation: spin 0.8s linear infinite;
   }
   @keyframes spin {
-    from { transform: rotate(0deg); }
-    to { transform: rotate(360deg); }
+    from {
+      transform: rotate(0deg);
+    }
+    to {
+      transform: rotate(360deg);
+    }
   }
 
   .dropdown-empty {
@@ -388,7 +442,9 @@
     font-size: var(--fs-xs);
     cursor: pointer;
     text-align: left;
-    transition: background var(--transition), color var(--transition);
+    transition:
+      background var(--transition),
+      color var(--transition);
     white-space: nowrap;
   }
   .task-option:hover {

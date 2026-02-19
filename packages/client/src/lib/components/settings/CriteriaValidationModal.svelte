@@ -273,7 +273,64 @@
                       ? 'var(--accent-secondary)'
                       : severityColor(criterion.issues[0]?.severity || 'warning')}
                   >
-                    {#if criterion.isValid}<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12" /></svg>{:else}{@const sev = criterion.issues[0]?.severity || 'warning'}{#if sev === 'error'}<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>{:else if sev === 'warning'}<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" /><line x1="12" y1="9" x2="12" y2="13" /><line x1="12" y1="17" x2="12.01" y2="17" /></svg>{:else}<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10" /><line x1="12" y1="16" x2="12" y2="12" /><line x1="12" y1="8" x2="12.01" y2="8" /></svg>{/if}{/if}
+                    {#if criterion.isValid}<svg
+                        width="12"
+                        height="12"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="3"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"><polyline points="20 6 9 17 4 12" /></svg
+                      >{:else}{@const sev =
+                        criterion.issues[0]?.severity || 'warning'}{#if sev === 'error'}<svg
+                          width="11"
+                          height="11"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          stroke-width="3"
+                          stroke-linecap="round"
+                          stroke-linejoin="round"
+                          ><line x1="18" y1="6" x2="6" y2="18" /><line
+                            x1="6"
+                            y1="6"
+                            x2="18"
+                            y2="18"
+                          /></svg
+                        >{:else if sev === 'warning'}<svg
+                          width="11"
+                          height="11"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          stroke-width="2"
+                          stroke-linecap="round"
+                          stroke-linejoin="round"
+                          ><path
+                            d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"
+                          /><line x1="12" y1="9" x2="12" y2="13" /><line
+                            x1="12"
+                            y1="17"
+                            x2="12.01"
+                            y2="17"
+                          /></svg
+                        >{:else}<svg
+                          width="11"
+                          height="11"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          stroke-width="2"
+                          stroke-linecap="round"
+                          stroke-linejoin="round"
+                          ><circle cx="12" cy="12" r="10" /><line
+                            x1="12"
+                            y1="16"
+                            x2="12"
+                            y2="12"
+                          /><line x1="12" y1="8" x2="12.01" y2="8" /></svg
+                        >{/if}{/if}
                   </span>
                   <span class="criterion-text">{criterion.text}</span>
                 </div>
@@ -288,7 +345,54 @@
                       >
                         <div class="issue-header-row">
                           <span class="issue-severity" style:color={severityColor(issue.severity)}>
-                            {#if issue.severity === 'error'}<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>{:else if issue.severity === 'warning'}<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" /><line x1="12" y1="9" x2="12" y2="13" /><line x1="12" y1="17" x2="12.01" y2="17" /></svg>{:else}<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10" /><line x1="12" y1="16" x2="12" y2="12" /><line x1="12" y1="8" x2="12.01" y2="8" /></svg>{/if}
+                            {#if issue.severity === 'error'}<svg
+                                width="11"
+                                height="11"
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                stroke="currentColor"
+                                stroke-width="3"
+                                stroke-linecap="round"
+                                stroke-linejoin="round"
+                                ><line x1="18" y1="6" x2="6" y2="18" /><line
+                                  x1="6"
+                                  y1="6"
+                                  x2="18"
+                                  y2="18"
+                                /></svg
+                              >{:else if issue.severity === 'warning'}<svg
+                                width="11"
+                                height="11"
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                stroke="currentColor"
+                                stroke-width="2"
+                                stroke-linecap="round"
+                                stroke-linejoin="round"
+                                ><path
+                                  d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"
+                                /><line x1="12" y1="9" x2="12" y2="13" /><line
+                                  x1="12"
+                                  y1="17"
+                                  x2="12.01"
+                                  y2="17"
+                                /></svg
+                              >{:else}<svg
+                                width="11"
+                                height="11"
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                stroke="currentColor"
+                                stroke-width="2"
+                                stroke-linecap="round"
+                                stroke-linejoin="round"
+                                ><circle cx="12" cy="12" r="10" /><line
+                                  x1="12"
+                                  y1="16"
+                                  x2="12"
+                                  y2="12"
+                                /><line x1="12" y1="8" x2="12.01" y2="8" /></svg
+                              >{/if}
                           </span>
                           <span class="issue-category">{categoryLabel(issue.category)}</span>
                         </div>
@@ -311,7 +415,18 @@
                         class:active={acceptedSuggestions.has(criterion.index)}
                         onclick={() => toggleAcceptSuggestion(criterion.index)}
                       >
-                        {#if acceptedSuggestions.has(criterion.index)}<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" style="display:inline-block;vertical-align:middle;margin-right:3px"><polyline points="20 6 9 17 4 12" /></svg>Accepted{:else}Accept{/if}
+                        {#if acceptedSuggestions.has(criterion.index)}<svg
+                            width="10"
+                            height="10"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="3"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            style="display:inline-block;vertical-align:middle;margin-right:3px"
+                            ><polyline points="20 6 9 17 4 12" /></svg
+                          >Accepted{:else}Accept{/if}
                       </button>
                       {#if !criterion.isValid}
                         <button class="btn-override" onclick={() => startOverride(criterion.index)}>

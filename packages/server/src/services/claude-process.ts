@@ -972,7 +972,11 @@ class ClaudeProcessManager {
                               try {
                                 const { readFileSync } = await import('fs');
                                 const fileContent = readFileSync(filePath, 'utf-8');
-                                editLineHint = extractEditLineHint(toolName, toolInput, fileContent);
+                                editLineHint = extractEditLineHint(
+                                  toolName,
+                                  toolInput,
+                                  fileContent,
+                                );
                               } catch {
                                 // File may have been deleted or unreadable — derive without content
                                 editLineHint = extractEditLineHint(toolName, toolInput);

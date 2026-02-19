@@ -384,7 +384,25 @@
                 ttsStore.toggle(text, message.id);
               }}
             >
-              {#if ttsStore.currentId === message.id}<svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" stroke="none"><rect x="4" y="4" width="16" height="16" rx="2" /></svg>{:else}<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" /><path d="M19.07 4.93a10 10 0 0 1 0 14.14" /><path d="M15.54 8.46a5 5 0 0 1 0 7.07" /></svg>{/if}
+              {#if ttsStore.currentId === message.id}<svg
+                  width="12"
+                  height="12"
+                  viewBox="0 0 24 24"
+                  fill="currentColor"
+                  stroke="none"><rect x="4" y="4" width="16" height="16" rx="2" /></svg
+                >{:else}<svg
+                  width="12"
+                  height="12"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  ><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" /><path
+                    d="M19.07 4.93a10 10 0 0 1 0 14.14"
+                  /><path d="M15.54 8.46a5 5 0 0 1 0 7.07" /></svg
+                >{/if}
             </button>
           </Tooltip>
           {#if conversationId}
@@ -392,7 +410,10 @@
               <button
                 class="btn-icon"
                 aria-label="Replay session"
-                onclick={() => (showReplay = true)}><svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" stroke="none"><polygon points="5 3 19 12 5 21 5 3" /></svg></button
+                onclick={() => (showReplay = true)}
+                ><svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" stroke="none"
+                  ><polygon points="5 3 19 12 5 21 5 3" /></svg
+                ></button
               >
             </Tooltip>
           {/if}
@@ -516,11 +537,7 @@
                       loading="lazy"
                     />
                   {:else if imgBlock.source.type === 'url' && imgBlock.source.url}
-                    <img
-                      src={imgBlock.source.url}
-                      alt="Attached image"
-                      loading="lazy"
-                    />
+                    <img src={imgBlock.source.url} alt="Attached image" loading="lazy" />
                   {/if}
                 </div>
               {:else if entry.block.type === 'tool_use'}
@@ -575,11 +592,7 @@
                     loading="lazy"
                   />
                 {:else if imgBlock.source?.type === 'url' && imgBlock.source.url}
-                  <img
-                    src={imgBlock.source.url}
-                    alt="Attached image"
-                    loading="lazy"
-                  />
+                  <img src={imgBlock.source.url} alt="Attached image" loading="lazy" />
                 {/if}
               </div>
             {/each}

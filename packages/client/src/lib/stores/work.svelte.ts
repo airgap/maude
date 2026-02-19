@@ -274,14 +274,13 @@ function createWorkStore() {
       manualOrderOverride = false;
 
       // Get pending non-external stories and sort by priority
-      const pendingNonExternal = standaloneStories
-        .filter((s) => s.status === 'pending' && !s.externalRef);
+      const pendingNonExternal = standaloneStories.filter(
+        (s) => s.status === 'pending' && !s.externalRef,
+      );
       const sorted = sortByPriority(pendingNonExternal);
 
       // Rebuild in a stable order: non-pending + sorted pending
-      const nonPending = standaloneStories.filter(
-        (s) => s.status !== 'pending' || !!s.externalRef,
-      );
+      const nonPending = standaloneStories.filter((s) => s.status !== 'pending' || !!s.externalRef);
       const allStories = [...nonPending, ...sorted];
 
       // Update sortOrder based on new positions

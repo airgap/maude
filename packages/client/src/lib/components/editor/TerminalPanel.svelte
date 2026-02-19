@@ -208,9 +208,7 @@
   });
 
   // Panel height — default 250px, resizable 100-600px (AC #10)
-  const panelHeight = $derived(
-    terminalStore.maximized ? undefined : terminalStore.panelHeight,
-  );
+  const panelHeight = $derived(terminalStore.maximized ? undefined : terminalStore.panelHeight);
 </script>
 
 <div

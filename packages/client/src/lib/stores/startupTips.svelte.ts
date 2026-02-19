@@ -55,7 +55,7 @@ export const STARTUP_TIPS: StartupTip[] = [
   {
     id: 'memory-panel',
     category: 'Feature',
-    text: 'Use the Memory panel to teach E about your project\'s conventions. It remembers across conversations.',
+    text: "Use the Memory panel to teach E about your project's conventions. It remembers across conversations.",
     actionLabel: 'Open Memory',
     actionId: 'open-memory-panel',
   },

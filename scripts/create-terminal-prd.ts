@@ -485,7 +485,9 @@ console.log(`  Medium: ${stories.filter((s) => s.priority === 'medium').length}`
 console.log(`  Low: ${stories.filter((s) => s.priority === 'low').length}`);
 console.log(`\nStory IDs:`);
 storyIds.forEach((id, i) => {
-  const deps = (stories[i].dependsOn || []).map((idx) => stories[idx].title.slice(0, 30)).join(', ');
+  const deps = (stories[i].dependsOn || [])
+    .map((idx) => stories[idx].title.slice(0, 30))
+    .join(', ');
   console.log(
     `  ${String(i + 1).padStart(2)}. [${stories[i].priority.toUpperCase().padEnd(8)}] ${stories[i].title}${deps ? ` (depends: ${deps})` : ''}`,
   );

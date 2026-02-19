@@ -126,9 +126,7 @@ async function callViaCli(
 
   const exitCode = await proc.exited;
   if (exitCode !== 0 && !stdout.trim()) {
-    throw new Error(
-      `CLI exited with code ${exitCode}: ${stderr.slice(0, 500)}`,
-    );
+    throw new Error(`CLI exited with code ${exitCode}: ${stderr.slice(0, 500)}`);
   }
 
   return extractTextFromStreamJson(stdout);
@@ -204,9 +202,7 @@ async function callViaOllama(opts: CallLlmOptions, timeoutMs: number): Promise<s
   });
 
   if (!response.ok) {
-    throw new Error(
-      `Ollama error ${response.status}: ${await response.text().catch(() => '')}`,
-    );
+    throw new Error(`Ollama error ${response.status}: ${await response.text().catch(() => '')}`);
   }
 
   const result = (await response.json()) as any;
@@ -221,9 +217,8 @@ async function callViaOllama(opts: CallLlmOptions, timeoutMs: number): Promise<s
 
 async function callViaBedrock(opts: CallLlmOptions, timeoutMs: number): Promise<string> {
   // Dynamic import to avoid requiring the AWS SDK when not using Bedrock
-  const { BedrockRuntimeClient, InvokeModelCommand } = await import(
-    '@aws-sdk/client-bedrock-runtime'
-  );
+  const { BedrockRuntimeClient, InvokeModelCommand } =
+    await import('@aws-sdk/client-bedrock-runtime');
 
   const region = process.env.AWS_REGION || 'us-east-1';
   const client = new BedrockRuntimeClient({ region });

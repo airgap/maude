@@ -348,9 +348,7 @@ function createStreamStore() {
                   for (let i = contentBlocks.length - 1; i >= 0; i--) {
                     const block = contentBlocks[i];
                     if (block.type === 'tool_use' && block.id === event.toolCallId) {
-                      const tab = editorStore.tabs.find(
-                        (t) => t.filePath === event.filePath,
-                      );
+                      const tab = editorStore.tabs.find((t) => t.filePath === event.filePath);
                       editLine = extractEditLineHint(
                         event.toolName || block.name,
                         block.input as Record<string, unknown>,
@@ -372,11 +370,14 @@ function createStreamStore() {
                 const filePath = event.filePath;
                 const fileName = filePath.split('/').pop() ?? filePath;
                 const language = detectLanguage(fileName);
-                api.files.read(filePath).then((res) => {
-                  primaryPaneStore.openFileTab(filePath, res.data.content, language);
-                }).catch(() => {
-                  // File may not be readable — skip
-                });
+                api.files
+                  .read(filePath)
+                  .then((res) => {
+                    primaryPaneStore.openFileTab(filePath, res.data.content, language);
+                  })
+                  .catch(() => {
+                    // File may not be readable — skip
+                  });
               }
               // Refresh both editor-pane tabs and primary-pane file tabs
               editorStore.refreshFile(event.filePath);

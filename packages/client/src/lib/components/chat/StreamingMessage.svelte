@@ -388,13 +388,17 @@
     animation: neonBreathe 1.8s ease-in-out infinite;
   }
   @keyframes neonBreathe {
-    0%, 100% {
+    0%,
+    100% {
       opacity: 0.2;
       box-shadow: 0 0 2px var(--accent-primary);
     }
     50% {
       opacity: 1;
-      box-shadow: 0 0 12px var(--accent-primary), 0 0 24px var(--accent-primary), 0 0 4px #fff;
+      box-shadow:
+        0 0 12px var(--accent-primary),
+        0 0 24px var(--accent-primary),
+        0 0 4px #fff;
     }
   }
 
@@ -411,13 +415,25 @@
     left: 0;
     width: 30%;
     height: 100%;
-    background: linear-gradient(90deg, transparent, var(--accent-primary), var(--accent-primary), transparent);
-    box-shadow: 0 0 12px var(--accent-primary), 0 0 4px var(--accent-primary);
+    background: linear-gradient(
+      90deg,
+      transparent,
+      var(--accent-primary),
+      var(--accent-primary),
+      transparent
+    );
+    box-shadow:
+      0 0 12px var(--accent-primary),
+      0 0 4px var(--accent-primary);
     animation: cylonScan 1.4s ease-in-out infinite alternate;
   }
   @keyframes cylonScan {
-    0% { left: -30%; }
-    100% { left: 100%; }
+    0% {
+      left: -30%;
+    }
+    100% {
+      left: 100%;
+    }
   }
 
   /* ── Matrix: cascading digital green ── */
@@ -431,11 +447,17 @@
     );
     background-size: 200% 100%;
     animation: matrixRain 0.8s linear infinite;
-    box-shadow: 0 0 8px #00ff4199, 0 0 3px #00ff41cc;
+    box-shadow:
+      0 0 8px #00ff4199,
+      0 0 3px #00ff41cc;
   }
   @keyframes matrixRain {
-    0% { background-position: 0% 0%; }
-    100% { background-position: -4px 0%; }
+    0% {
+      background-position: 0% 0%;
+    }
+    100% {
+      background-position: -4px 0%;
+    }
   }
 
   /* ── Comet: bright dot streaking across ── */
@@ -451,16 +473,34 @@
     left: -10%;
     width: 10%;
     height: 100%;
-    background: linear-gradient(90deg, transparent, var(--accent-primary) 60%, #fff 90%, transparent);
-    box-shadow: 0 0 8px var(--accent-primary), 0 0 2px #fff;
+    background: linear-gradient(
+      90deg,
+      transparent,
+      var(--accent-primary) 60%,
+      #fff 90%,
+      transparent
+    );
+    box-shadow:
+      0 0 8px var(--accent-primary),
+      0 0 2px #fff;
     border-radius: 2px;
     animation: cometStreak 1.2s cubic-bezier(0.4, 0, 0.2, 1) infinite;
   }
   @keyframes cometStreak {
-    0% { left: -10%; opacity: 0; }
-    10% { opacity: 1; }
-    90% { opacity: 1; }
-    100% { left: 110%; opacity: 0; }
+    0% {
+      left: -10%;
+      opacity: 0;
+    }
+    10% {
+      opacity: 1;
+    }
+    90% {
+      opacity: 1;
+    }
+    100% {
+      left: 110%;
+      opacity: 0;
+    }
   }
 
   /* ── Helix: double-strand interweave ── */
@@ -480,45 +520,84 @@
         transparent 12px,
         var(--accent-secondary) 14px
       );
-    background-size: 200% 100%, 200% 100%;
+    background-size:
+      200% 100%,
+      200% 100%;
     animation: helixSlide 1.5s linear infinite;
     opacity: 0.7;
   }
   @keyframes helixSlide {
-    0% { background-position: 0% 0%, 0% 0%; }
-    100% { background-position: 20px 0%, -20px 0%; }
+    0% {
+      background-position:
+        0% 0%,
+        0% 0%;
+    }
+    100% {
+      background-position:
+        20px 0%,
+        -20px 0%;
+    }
   }
 
   /* ── Fire: warm blaze gradient ── */
   .progress-bar.fire {
     background: linear-gradient(
       90deg,
-      #ff440080, #ff880080, #ffcc0080, #ff660080, #ff220080, #ff880080
+      #ff440080,
+      #ff880080,
+      #ffcc0080,
+      #ff660080,
+      #ff220080,
+      #ff880080
     );
     background-size: 300% 100%;
     animation: fireFlicker 1s ease-in-out infinite;
   }
   @keyframes fireFlicker {
-    0% { background-position: 0% 0%; opacity: 0.6; }
-    25% { opacity: 0.9; }
-    50% { background-position: 150% 0%; opacity: 0.5; }
-    75% { opacity: 1; }
-    100% { background-position: 300% 0%; opacity: 0.6; }
+    0% {
+      background-position: 0% 0%;
+      opacity: 0.6;
+    }
+    25% {
+      opacity: 0.9;
+    }
+    50% {
+      background-position: 150% 0%;
+      opacity: 0.5;
+    }
+    75% {
+      opacity: 1;
+    }
+    100% {
+      background-position: 300% 0%;
+      opacity: 0.6;
+    }
   }
 
   /* ── Ocean: deep blue wave ── */
   .progress-bar.ocean {
     background: linear-gradient(
       90deg,
-      #001a4d80, #0044aa80, #0088cc80, #00bbff80, #0066dd80, #001a4d80
+      #001a4d80,
+      #0044aa80,
+      #0088cc80,
+      #00bbff80,
+      #0066dd80,
+      #001a4d80
     );
     background-size: 300% 100%;
     animation: oceanWave 3s ease-in-out infinite;
   }
   @keyframes oceanWave {
-    0% { background-position: 0% 0%; }
-    50% { background-position: 150% 0%; }
-    100% { background-position: 300% 0%; }
+    0% {
+      background-position: 0% 0%;
+    }
+    50% {
+      background-position: 150% 0%;
+    }
+    100% {
+      background-position: 300% 0%;
+    }
   }
 
   /* ── Electric: crackling spark ── */
@@ -536,19 +615,35 @@
     height: 100%;
     background: linear-gradient(
       90deg,
-      transparent 0%, transparent 45%,
-      var(--accent-primary) 48%, #fff 50%, var(--accent-primary) 52%,
-      transparent 55%, transparent 100%
+      transparent 0%,
+      transparent 45%,
+      var(--accent-primary) 48%,
+      #fff 50%,
+      var(--accent-primary) 52%,
+      transparent 55%,
+      transparent 100%
     );
     background-size: 200% 100%;
     animation: electricSpark 0.4s steps(3) infinite;
     box-shadow: 0 0 4px var(--accent-primary);
   }
   @keyframes electricSpark {
-    0% { background-position: 0% 0%; opacity: 0.3; }
-    33% { background-position: 80% 0%; opacity: 1; }
-    66% { background-position: 160% 0%; opacity: 0.2; }
-    100% { background-position: 200% 0%; opacity: 0.8; }
+    0% {
+      background-position: 0% 0%;
+      opacity: 0.3;
+    }
+    33% {
+      background-position: 80% 0%;
+      opacity: 1;
+    }
+    66% {
+      background-position: 160% 0%;
+      opacity: 0.2;
+    }
+    100% {
+      background-position: 200% 0%;
+      opacity: 0.8;
+    }
   }
 
   /* ── Candy: pastel barber pole ── */
@@ -568,24 +663,39 @@
     animation: candyScroll 1s linear infinite;
   }
   @keyframes candyScroll {
-    0% { background-position: 0 0; }
-    100% { background-position: 32px 0; }
+    0% {
+      background-position: 0 0;
+    }
+    100% {
+      background-position: 32px 0;
+    }
   }
 
   /* ── Vapor: vaporwave aesthetic ── */
   .progress-bar.vapor {
     background: linear-gradient(
       90deg,
-      #ff71ce80, #01cdfe80, #05ffa180, #b967ff80, #fffb9680, #ff71ce80
+      #ff71ce80,
+      #01cdfe80,
+      #05ffa180,
+      #b967ff80,
+      #fffb9680,
+      #ff71ce80
     );
     background-size: 300% 100%;
     animation: vaporDrift 5s ease-in-out infinite;
     filter: blur(0.3px) saturate(1.2);
   }
   @keyframes vaporDrift {
-    0% { background-position: 0% 0%; }
-    50% { background-position: 150% 0%; }
-    100% { background-position: 300% 0%; }
+    0% {
+      background-position: 0% 0%;
+    }
+    50% {
+      background-position: 150% 0%;
+    }
+    100% {
+      background-position: 300% 0%;
+    }
   }
 
   @keyframes shieldCharge {

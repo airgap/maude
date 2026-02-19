@@ -215,9 +215,7 @@ export class TerminalConnectionManager {
    * input string. The UI layer uses this to fan out input to sibling sessions
    * when broadcast mode is active for the source session's tab.
    */
-  private broadcastHandler:
-    | ((sourceSessionId: string, data: string) => void)
-    | null = null;
+  private broadcastHandler: ((sourceSessionId: string, data: string) => void) | null = null;
 
   // -----------------------------------------------------------------------
   // Lifecycle
@@ -727,10 +725,7 @@ export class TerminalConnectionManager {
    * The handler runs before xterm processes the key. Return `false` to prevent
    * xterm from handling the key.
    */
-  attachCustomKeyHandler(
-    sessionId: string,
-    handler: (ev: KeyboardEvent) => boolean,
-  ): void {
+  attachCustomKeyHandler(sessionId: string, handler: (ev: KeyboardEvent) => boolean): void {
     const conn = this.connections.get(sessionId);
     if (!conn) return;
     conn.terminal.attachCustomKeyEventHandler(handler);
@@ -798,9 +793,7 @@ export class TerminalConnectionManager {
    * the UI layer to replicate that input to sibling sessions in the same
    * tab group. Resize events are never broadcast.
    */
-  setBroadcastHandler(
-    handler: ((sourceSessionId: string, data: string) => void) | null,
-  ): void {
+  setBroadcastHandler(handler: ((sourceSessionId: string, data: string) => void) | null): void {
     this.broadcastHandler = handler;
   }
 

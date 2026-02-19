@@ -395,7 +395,6 @@ const TOY_XYLOPHONE: Overtone[] = [
   { ratio: 12.0, gain: 0.06, decay: 0.02 },
 ];
 
-
 // ---------------------------------------------------------------------------
 // Forest instrument partial series
 // Enchanted woodland synthesis: wind chimes, wooden flutes, owl hoots,
@@ -423,7 +422,7 @@ const WIND_CHIME: Overtone[] = [
 const WOODEN_FLUTE: Overtone[] = [
   { ratio: 1, gain: 1.0, decay: 1.4 },
   { ratio: 2.0, gain: 0.15, decay: 0.8 }, // weak even harmonic (open pipe)
-  { ratio: 3.0, gain: 0.4, decay: 0.6 },  // strong 3rd
+  { ratio: 3.0, gain: 0.4, decay: 0.6 }, // strong 3rd
   { ratio: 5.0, gain: 0.12, decay: 0.3 },
   { ratio: 7.0, gain: 0.04, decay: 0.12 },
 ];
@@ -446,7 +445,7 @@ const RAINDROP: Overtone[] = [
  */
 const FAIRY_SPARKLE: Overtone[] = [
   { ratio: 1, gain: 1.0, decay: 0.6 },
-  { ratio: 1.5, gain: 0.6, decay: 0.45 },  // perfect fifth shimmer
+  { ratio: 1.5, gain: 0.6, decay: 0.45 }, // perfect fifth shimmer
   { ratio: 2.0, gain: 0.4, decay: 0.3 },
   { ratio: 3.17, gain: 0.2, decay: 0.15 },
   { ratio: 5.34, gain: 0.08, decay: 0.06 },
@@ -459,7 +458,7 @@ const FAIRY_SPARKLE: Overtone[] = [
  */
 const OWL_HOOT: Overtone[] = [
   { ratio: 1, gain: 1.0, decay: 2.0 },
-  { ratio: 1.5, gain: 0.12, decay: 1.2 },  // faint fifth
+  { ratio: 1.5, gain: 0.12, decay: 1.2 }, // faint fifth
   { ratio: 2.0, gain: 0.06, decay: 0.6 },
 ];
 
@@ -607,7 +606,13 @@ const FOREST_TOOL_NOTES: Record<ToolFamily, ForestToolNotes> = {
   },
   // Read — high fairy sparkle, scanning through leaves
   read: {
-    start: { freq: FOREST_NOTES.A5, partials: FAIRY_SPARKLE, attack: 0.002, release: 0.1, gain: 0.18 },
+    start: {
+      freq: FOREST_NOTES.A5,
+      partials: FAIRY_SPARKLE,
+      attack: 0.002,
+      release: 0.1,
+      gain: 0.18,
+    },
     ok: [
       { freq: FOREST_NOTES.E5, partials: FAIRY_SPARKLE, attack: 0.003, release: 0.14, gain: 0.18 },
       { freq: FOREST_NOTES.A5, partials: FAIRY_SPARKLE, attack: 0.003, release: 0.14, gain: 0.12 },
@@ -615,7 +620,13 @@ const FOREST_TOOL_NOTES: Record<ToolFamily, ForestToolNotes> = {
   },
   // Write — mid wooden flute, inscribing on bark
   write: {
-    start: { freq: FOREST_NOTES.D4, partials: WOODEN_FLUTE, attack: 0.006, release: 0.12, gain: 0.24 },
+    start: {
+      freq: FOREST_NOTES.D4,
+      partials: WOODEN_FLUTE,
+      attack: 0.006,
+      release: 0.12,
+      gain: 0.24,
+    },
     ok: [
       { freq: FOREST_NOTES.G4, partials: WOODEN_FLUTE, attack: 0.006, release: 0.16, gain: 0.22 },
       { freq: FOREST_NOTES.D5, partials: WOODEN_FLUTE, attack: 0.006, release: 0.16, gain: 0.14 },
@@ -660,7 +671,7 @@ const FOREST_TOOL_NOTES: Record<ToolFamily, ForestToolNotes> = {
  */
 const TUBULAR_CHIME: Overtone[] = [
   { ratio: 1, gain: 1.0, decay: 1.6 },
-  { ratio: 1.003, gain: 0.45, decay: 1.3 },  // very slight detuning = gentle shimmer
+  { ratio: 1.003, gain: 0.45, decay: 1.3 }, // very slight detuning = gentle shimmer
   { ratio: 2.41, gain: 0.25, decay: 0.7 },
   { ratio: 4.02, gain: 0.1, decay: 0.35 },
   { ratio: 6.35, gain: 0.04, decay: 0.15 },
@@ -673,8 +684,8 @@ const TUBULAR_CHIME: Overtone[] = [
  */
 const CRYSTAL_CHIME: Overtone[] = [
   { ratio: 1, gain: 1.0, decay: 1.0 },
-  { ratio: 2.0, gain: 0.5, decay: 0.7 },     // pure octave = open, clean
-  { ratio: 3.0, gain: 0.3, decay: 0.45 },     // fifth above octave = bright
+  { ratio: 2.0, gain: 0.5, decay: 0.7 }, // pure octave = open, clean
+  { ratio: 3.0, gain: 0.3, decay: 0.45 }, // fifth above octave = bright
   { ratio: 5.04, gain: 0.15, decay: 0.2 },
   { ratio: 8.0, gain: 0.06, decay: 0.08 },
 ];
@@ -686,7 +697,7 @@ const CRYSTAL_CHIME: Overtone[] = [
  */
 const BAMBOO_CHIME: Overtone[] = [
   { ratio: 1, gain: 1.0, decay: 0.6 },
-  { ratio: 2.0, gain: 0.3, decay: 0.35 },    // clean octave = open woody ring
+  { ratio: 2.0, gain: 0.3, decay: 0.35 }, // clean octave = open woody ring
   { ratio: 3.0, gain: 0.1, decay: 0.15 },
   { ratio: 4.7, gain: 0.03, decay: 0.06 },
 ];
@@ -698,9 +709,9 @@ const BAMBOO_CHIME: Overtone[] = [
  */
 const BELL_CHIME: Overtone[] = [
   { ratio: 1, gain: 1.0, decay: 1.8 },
-  { ratio: 2.0, gain: 0.45, decay: 1.2 },    // clean octave = open bell ring
-  { ratio: 3.0, gain: 0.25, decay: 0.7 },     // twelfth = bright bell character
-  { ratio: 4.24, gain: 0.12, decay: 0.35 },   // mild inharmonic = bell colour
+  { ratio: 2.0, gain: 0.45, decay: 1.2 }, // clean octave = open bell ring
+  { ratio: 3.0, gain: 0.25, decay: 0.7 }, // twelfth = bright bell character
+  { ratio: 4.24, gain: 0.12, decay: 0.35 }, // mild inharmonic = bell colour
   { ratio: 6.0, gain: 0.05, decay: 0.15 },
 ];
 
@@ -711,7 +722,7 @@ const BELL_CHIME: Overtone[] = [
  */
 const TINKLE_CHIME: Overtone[] = [
   { ratio: 1, gain: 1.0, decay: 0.35 },
-  { ratio: 2.0, gain: 0.5, decay: 0.2 },      // clean octave
+  { ratio: 2.0, gain: 0.5, decay: 0.2 }, // clean octave
   { ratio: 4.0, gain: 0.2, decay: 0.08 },
   { ratio: 7.0, gain: 0.06, decay: 0.03 },
 ];
@@ -857,7 +868,13 @@ interface WindChimeToolNotes {
 const WIND_CHIME_TOOL_NOTES: Record<ToolFamily, WindChimeToolNotes> = {
   // Shell — deep bamboo knock, grounded and earthy
   shell: {
-    start: { freq: CHIME_NOTES.F3, partials: BAMBOO_CHIME, attack: 0.003, release: 0.12, gain: 0.24 },
+    start: {
+      freq: CHIME_NOTES.F3,
+      partials: BAMBOO_CHIME,
+      attack: 0.003,
+      release: 0.12,
+      gain: 0.24,
+    },
     ok: [
       { freq: CHIME_NOTES.F3, partials: BAMBOO_CHIME, attack: 0.004, release: 0.14, gain: 0.22 },
       { freq: CHIME_NOTES.C4, partials: BAMBOO_CHIME, attack: 0.004, release: 0.14, gain: 0.14 },
@@ -865,7 +882,13 @@ const WIND_CHIME_TOOL_NOTES: Record<ToolFamily, WindChimeToolNotes> = {
   },
   // Read — high tinkle, scanning through pages
   read: {
-    start: { freq: CHIME_NOTES.A5, partials: TINKLE_CHIME, attack: 0.002, release: 0.1, gain: 0.18 },
+    start: {
+      freq: CHIME_NOTES.A5,
+      partials: TINKLE_CHIME,
+      attack: 0.002,
+      release: 0.1,
+      gain: 0.18,
+    },
     ok: [
       { freq: CHIME_NOTES.E5, partials: TINKLE_CHIME, attack: 0.003, release: 0.14, gain: 0.18 },
       { freq: CHIME_NOTES.A5, partials: TINKLE_CHIME, attack: 0.003, release: 0.14, gain: 0.12 },
@@ -873,7 +896,13 @@ const WIND_CHIME_TOOL_NOTES: Record<ToolFamily, WindChimeToolNotes> = {
   },
   // Write — mid tubular chime, clean engraving
   write: {
-    start: { freq: CHIME_NOTES.F4, partials: TUBULAR_CHIME, attack: 0.005, release: 0.1, gain: 0.22 },
+    start: {
+      freq: CHIME_NOTES.F4,
+      partials: TUBULAR_CHIME,
+      attack: 0.005,
+      release: 0.1,
+      gain: 0.22,
+    },
     ok: [
       { freq: CHIME_NOTES.C5, partials: TUBULAR_CHIME, attack: 0.005, release: 0.12, gain: 0.2 },
       { freq: CHIME_NOTES.F5, partials: TUBULAR_CHIME, attack: 0.005, release: 0.12, gain: 0.12 },
@@ -881,7 +910,13 @@ const WIND_CHIME_TOOL_NOTES: Record<ToolFamily, WindChimeToolNotes> = {
   },
   // Search — crystal chime sweep, sparkling discovery
   search: {
-    start: { freq: CHIME_NOTES.F5, partials: CRYSTAL_CHIME, attack: 0.005, release: 0.12, gain: 0.2 },
+    start: {
+      freq: CHIME_NOTES.F5,
+      partials: CRYSTAL_CHIME,
+      attack: 0.005,
+      release: 0.12,
+      gain: 0.2,
+    },
     ok: [
       { freq: CHIME_NOTES.C5, partials: CRYSTAL_CHIME, attack: 0.004, release: 0.1, gain: 0.2 },
       { freq: CHIME_NOTES.F5, partials: CRYSTAL_CHIME, attack: 0.004, release: 0.1, gain: 0.12 },
@@ -1754,9 +1789,9 @@ export class ChirpEngine {
     };
 
     //             start  fA                    fB                    dur   gain
-    fluteNote(0.0,   FOREST_NOTES.G4, FOREST_NOTES.G4, 0.09, 0.22);
-    fluteNote(0.11,  FOREST_NOTES.A4, FOREST_NOTES.A4, 0.09, 0.24);
-    fluteNote(0.22,  FOREST_NOTES.B4, FOREST_NOTES.D5, 0.3,  0.3); // bends up — the "?"
+    fluteNote(0.0, FOREST_NOTES.G4, FOREST_NOTES.G4, 0.09, 0.22);
+    fluteNote(0.11, FOREST_NOTES.A4, FOREST_NOTES.A4, 0.09, 0.24);
+    fluteNote(0.22, FOREST_NOTES.B4, FOREST_NOTES.D5, 0.3, 0.3); // bends up — the "?"
   }
 
   /**
@@ -1817,7 +1852,13 @@ export class ChirpEngine {
     const master = this.masterGain!;
     const now = ctx.currentTime;
 
-    const chimeStrike = (startT: number, freqA: number, freqB: number, dur: number, gain: number) => {
+    const chimeStrike = (
+      startT: number,
+      freqA: number,
+      freqB: number,
+      dur: number,
+      gain: number,
+    ) => {
       for (const ot of CRYSTAL_CHIME) {
         const osc = ctx.createOscillator();
         const env = ctx.createGain();
@@ -1840,9 +1881,9 @@ export class ChirpEngine {
     };
 
     //                start  fA                  fB                  dur   gain
-    chimeStrike(0.0,   CHIME_NOTES.F5, CHIME_NOTES.F5, 0.07, 0.2);
-    chimeStrike(0.09,  CHIME_NOTES.A5, CHIME_NOTES.A5, 0.07, 0.22);
-    chimeStrike(0.19,  CHIME_NOTES.C6, CHIME_NOTES.F6, 0.22, 0.26); // bends up — the "?"
+    chimeStrike(0.0, CHIME_NOTES.F5, CHIME_NOTES.F5, 0.07, 0.2);
+    chimeStrike(0.09, CHIME_NOTES.A5, CHIME_NOTES.A5, 0.07, 0.22);
+    chimeStrike(0.19, CHIME_NOTES.C6, CHIME_NOTES.F6, 0.22, 0.26); // bends up — the "?"
   }
 
   toolStart(name: string) {

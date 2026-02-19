@@ -281,7 +281,9 @@
 
   <div class="tab-bar-actions">
     <Tooltip
-      content={editorStore.followAlong ? 'Following edits (click to stop)' : 'Follow along with edits'}
+      content={editorStore.followAlong
+        ? 'Following edits (click to stop)'
+        : 'Follow along with edits'}
       placement="bottom"
       delay={400}
     >
@@ -542,8 +544,13 @@
   }
 
   @keyframes follow-pulse {
-    0%, 100% { opacity: 1; }
-    50% { opacity: 0.5; }
+    0%,
+    100% {
+      opacity: 1;
+    }
+    50% {
+      opacity: 0.5;
+    }
   }
 
   .follow-btn.streaming {

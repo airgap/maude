@@ -1,6 +1,12 @@
 // --- PRD Types ---
 
-export type StoryStatus = 'pending' | 'in_progress' | 'completed' | 'failed' | 'skipped' | 'archived';
+export type StoryStatus =
+  | 'pending'
+  | 'in_progress'
+  | 'completed'
+  | 'failed'
+  | 'skipped'
+  | 'archived';
 
 export type StoryPriority = 'critical' | 'high' | 'medium' | 'low';
 

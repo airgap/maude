@@ -54,7 +54,8 @@ app.post('/sessions/:id/logging', async (c) => {
 
   if (enabled) {
     const result = sessionManager.startLogging(id);
-    if (!result) return c.json({ ok: false, error: 'Session not found or log creation failed' }, 404);
+    if (!result)
+      return c.json({ ok: false, error: 'Session not found or log creation failed' }, 404);
     return c.json({ ok: true, data: { logging: true, logFilePath: result.logFilePath } });
   } else {
     const stopped = sessionManager.stopLogging(id);

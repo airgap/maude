@@ -107,11 +107,7 @@
 {#if tutorialStore.active && mounted}
   {#if minimized}
     <!-- Minimized pill — the overlay is gone so the user can interact with panels/modals -->
-    <button
-      class="tutorial-pill"
-      onclick={handleRestore}
-      title="Resume Guide (Esc)"
-    >
+    <button class="tutorial-pill" onclick={handleRestore} title="Resume Guide (Esc)">
       <svg
         width="16"
         height="16"
@@ -198,10 +194,7 @@
         <div class="tutorial-actions">
           <div class="actions-left">
             {#if step.actionLabel && step.actionId}
-              <button
-                class="try-btn"
-                onclick={() => step.actionId && handleAction(step.actionId)}
-              >
+              <button class="try-btn" onclick={() => step.actionId && handleAction(step.actionId)}>
                 <svg
                   width="14"
                   height="14"
@@ -235,9 +228,7 @@
             {/if}
 
             {#if !isLast && !isFirst}
-              <button class="skip-btn" onclick={handleFinish}>
-                Skip All
-              </button>
+              <button class="skip-btn" onclick={handleFinish}> Skip All </button>
             {/if}
 
             <button class="nav-btn primary" onclick={handleNext}>
@@ -334,7 +325,11 @@
 
   .progress-fill {
     height: 100%;
-    background: linear-gradient(90deg, var(--accent-primary), var(--accent-secondary, var(--accent-primary)));
+    background: linear-gradient(
+      90deg,
+      var(--accent-primary),
+      var(--accent-secondary, var(--accent-primary))
+    );
     border-radius: 0 2px 2px 0;
     transition: width 300ms ease;
   }

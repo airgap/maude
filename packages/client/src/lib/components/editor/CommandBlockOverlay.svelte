@@ -3,23 +3,16 @@
   import { terminalStore } from '$lib/stores/terminal.svelte';
   import { terminalConnectionManager } from '$lib/services/terminal-connection';
 
-  let {
-    sessionId,
-    blocks,
-    cellHeight,
-    cellWidth,
-    viewportTopRow,
-    viewportRows,
-    terminalElement,
-  } = $props<{
-    sessionId: string;
-    blocks: TerminalCommandBlock[];
-    cellHeight: number;
-    cellWidth: number;
-    viewportTopRow: number;
-    viewportRows: number;
-    terminalElement: HTMLElement | null;
-  }>();
+  let { sessionId, blocks, cellHeight, cellWidth, viewportTopRow, viewportRows, terminalElement } =
+    $props<{
+      sessionId: string;
+      blocks: TerminalCommandBlock[];
+      cellHeight: number;
+      cellWidth: number;
+      viewportTopRow: number;
+      viewportRows: number;
+      terminalElement: HTMLElement | null;
+    }>();
 
   /** Track which blocks just had their output copied (for visual feedback) */
   let copiedBlockId = $state<string | null>(null);
@@ -92,7 +85,7 @@
         const visOutputStart = Math.max(outputStartRow, viewportTopRow);
         const visOutputEnd = Math.min(outputEndRow, vpBottom);
         const outputTopPx = (visOutputStart - viewportTopRow) * cellHeight;
-        const outputHeightPx = Math.max(0, (visOutputEnd - visOutputStart)) * cellHeight;
+        const outputHeightPx = Math.max(0, visOutputEnd - visOutputStart) * cellHeight;
 
         const isRunning = block.exitCode === null;
         const isCopied = copiedBlockId === block.id;
@@ -178,11 +171,25 @@
                 title={block.exitCode === 0 ? 'Success' : `Exit code ${block.exitCode}`}
               >
                 {#if block.exitCode === 0}
-                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3">
+                  <svg
+                    width="10"
+                    height="10"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="3"
+                  >
                     <polyline points="20 6 9 17 4 12" />
                   </svg>
                 {:else}
-                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3">
+                  <svg
+                    width="10"
+                    height="10"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="3"
+                  >
                     <line x1="18" y1="6" x2="6" y2="18" />
                     <line x1="6" y1="6" x2="18" y2="18" />
                   </svg>
@@ -204,11 +211,25 @@
               aria-label="Copy command output to clipboard"
             >
               {#if vb.isCopied}
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                <svg
+                  width="12"
+                  height="12"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2.5"
+                >
                   <polyline points="20 6 9 17 4 12" />
                 </svg>
               {:else}
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <svg
+                  width="12"
+                  height="12"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                >
                   <rect x="9" y="9" width="13" height="13" rx="2" />
                   <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
                 </svg>
@@ -228,7 +249,15 @@
           style="top: {vb.outputTopPx}px; height: {vb.outputHeightPx}px"
         >
           <div class="collapsed-mask-inner">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="collapsed-icon">
+            <svg
+              width="14"
+              height="14"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              class="collapsed-icon"
+            >
               <polyline points="6 9 12 15 18 9" />
             </svg>
             <span class="collapsed-label">
@@ -294,7 +323,9 @@
     font-family: var(--font-family-mono, monospace);
     font-size: 11px;
     line-height: 1;
-    transition: background 0.15s ease, border-color 0.15s ease;
+    transition:
+      background 0.15s ease,
+      border-color 0.15s ease;
   }
 
   .command-block-header.success .block-header-inner {
@@ -328,7 +359,9 @@
     cursor: pointer;
     border-radius: var(--radius-sm, 4px);
     flex-shrink: 0;
-    transition: color 0.15s ease, background 0.15s ease;
+    transition:
+      color 0.15s ease,
+      background 0.15s ease;
   }
 
   .collapse-toggle:hover {
@@ -417,8 +450,13 @@
   }
 
   @keyframes pulse-dot {
-    0%, 100% { opacity: 0.4; }
-    50% { opacity: 1; }
+    0%,
+    100% {
+      opacity: 0.4;
+    }
+    50% {
+      opacity: 1;
+    }
   }
 
   /* ── Copy button ── */
@@ -437,7 +475,10 @@
     border-radius: var(--radius-sm, 4px);
     flex-shrink: 0;
     opacity: 0;
-    transition: opacity 0.15s ease, color 0.15s ease, background 0.15s ease;
+    transition:
+      opacity 0.15s ease,
+      color 0.15s ease,
+      background 0.15s ease;
   }
 
   .block-header-inner:hover .copy-btn {

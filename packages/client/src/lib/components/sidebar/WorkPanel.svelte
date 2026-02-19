@@ -112,7 +112,7 @@
     dragOverStoryId = storyId;
 
     // Determine if we're above or below the midpoint
-    const target = (e.currentTarget as HTMLElement);
+    const target = e.currentTarget as HTMLElement;
     const rect = target.getBoundingClientRect();
     const midY = rect.top + rect.height / 2;
     dragOverPosition = e.clientY < midY ? 'above' : 'below';
@@ -319,7 +319,11 @@
       {#if workStore.filteredStories.some((s) => s.status === 'pending' || s.status === 'in_progress')}
         <div class="loop-controls">
           {#if !loopStore.isActive}
-            <button class="btn-sm btn-primary" onclick={startStandaloneLoop}><svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor" stroke="none"><polygon points="5 3 19 12 5 21 5 3" /></svg> Loop </button>
+            <button class="btn-sm btn-primary" onclick={startStandaloneLoop}
+              ><svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor" stroke="none"
+                ><polygon points="5 3 19 12 5 21 5 3" /></svg
+              > Loop
+            </button>
           {/if}
         </div>
       {/if}
@@ -354,12 +358,23 @@
                   </button>
                   {#if story.researchOnly}
                     <span class="research-badge" title="Research only">
-                      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <svg
+                        width="11"
+                        height="11"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                      >
                         <circle cx="11" cy="11" r="8" /><path d="m21 21-4.35-4.35" />
                       </svg>
                     </span>
                   {/if}
-                  <span class="story-title" class:research-title={story.researchOnly}>{story.title}</span>
+                  <span class="story-title" class:research-title={story.researchOnly}
+                    >{story.title}</span
+                  >
                   {#if story.estimate}
                     <span class="estimate-badge" title="{story.estimate.storyPoints} points">
                       {story.estimate.size?.[0]?.toUpperCase()}{story.estimate.storyPoints}
@@ -385,14 +400,39 @@
                     title="Auto-sort by priority"
                     onclick={() => workStore.sortByPriority()}
                   >
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                      <path d="M11 5h10" /><path d="M11 9h7" /><path d="M11 13h4" /><path d="M3 17l3 3 3-3" /><path d="M6 18V4" />
+                    <svg
+                      width="12"
+                      height="12"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <path d="M11 5h10" /><path d="M11 9h7" /><path d="M11 13h4" /><path
+                        d="M3 17l3 3 3-3"
+                      /><path d="M6 18V4" />
                     </svg>
                   </button>
                 {:else}
-                  <span class="sort-indicator" title="Sorted by priority (drag to reorder manually)">
-                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                      <path d="M11 5h10" /><path d="M11 9h7" /><path d="M11 13h4" /><path d="M3 17l3 3 3-3" /><path d="M6 18V4" />
+                  <span
+                    class="sort-indicator"
+                    title="Sorted by priority (drag to reorder manually)"
+                  >
+                    <svg
+                      width="10"
+                      height="10"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <path d="M11 5h10" /><path d="M11 9h7" /><path d="M11 13h4" /><path
+                        d="M3 17l3 3 3-3"
+                      /><path d="M6 18V4" />
                     </svg>
                   </span>
                 {/if}
@@ -428,13 +468,27 @@
                     {statusIcon(story.status)}
                   </button>
                   {#if story.researchOnly}
-                    <span class="research-badge" title="Research only — excluded from implementation loops">
-                      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <span
+                      class="research-badge"
+                      title="Research only — excluded from implementation loops"
+                    >
+                      <svg
+                        width="11"
+                        height="11"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                      >
                         <circle cx="11" cy="11" r="8" /><path d="m21 21-4.35-4.35" />
                       </svg>
                     </span>
                   {/if}
-                  <span class="story-title" class:research-title={story.researchOnly}>{story.title}</span>
+                  <span class="story-title" class:research-title={story.researchOnly}
+                    >{story.title}</span
+                  >
                   {#if story.estimate}
                     <span class="estimate-badge" title="{story.estimate.storyPoints} points">
                       {story.estimate.size?.[0]?.toUpperCase()}{story.estimate.storyPoints}
@@ -455,10 +509,21 @@
                   <div class="story-actions">
                     <button
                       class="research-toggle-btn"
-                      title={story.researchOnly ? 'Mark as implementation work' : 'Mark as research only'}
+                      title={story.researchOnly
+                        ? 'Mark as implementation work'
+                        : 'Mark as research only'}
                       onclick={() => workStore.toggleResearchOnly(story.id, story.researchOnly)}
                     >
-                      <svg width="11" height="11" viewBox="0 0 24 24" fill={story.researchOnly ? 'currentColor' : 'none'} stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <svg
+                        width="11"
+                        height="11"
+                        viewBox="0 0 24 24"
+                        fill={story.researchOnly ? 'currentColor' : 'none'}
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                      >
                         <circle cx="11" cy="11" r="8" /><path d="m21 21-4.35-4.35" />
                       </svg>
                     </button>
@@ -501,8 +566,22 @@
                 title="Archive all completed"
                 onclick={() => workStore.archiveAllCompleted(workspacePath)}
               >
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                  <polyline points="21 8 21 21 3 21 3 8" /><rect x="1" y="3" width="22" height="5" /><line x1="10" y1="12" x2="14" y2="12" />
+                <svg
+                  width="12"
+                  height="12"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <polyline points="21 8 21 21 3 21 3 8" /><rect
+                    x="1"
+                    y="3"
+                    width="22"
+                    height="5"
+                  /><line x1="10" y1="12" x2="14" y2="12" />
                 </svg>
               </button>
             </div>
@@ -518,7 +597,16 @@
                   </button>
                   {#if story.researchOnly}
                     <span class="research-badge" title="Research only">
-                      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <svg
+                        width="11"
+                        height="11"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                      >
                         <circle cx="11" cy="11" r="8" /><path d="m21 21-4.35-4.35" />
                       </svg>
                     </span>
@@ -534,8 +622,22 @@
                     title="Archive"
                     onclick={() => workStore.archiveStory(story.id, story.prdId)}
                   >
-                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                      <polyline points="21 8 21 21 3 21 3 8" /><rect x="1" y="3" width="22" height="5" /><line x1="10" y1="12" x2="14" y2="12" />
+                    <svg
+                      width="11"
+                      height="11"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <polyline points="21 8 21 21 3 21 3 8" /><rect
+                        x="1"
+                        y="3"
+                        width="22"
+                        height="5"
+                      /><line x1="10" y1="12" x2="14" y2="12" />
                     </svg>
                   </button>
                 </div>
@@ -577,7 +679,11 @@
               >
             </div>
           {:else if !loopStore.isActive}
-            <button class="btn-sm btn-primary" onclick={startStandaloneLoop}><svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor" stroke="none"><polygon points="5 3 19 12 5 21 5 3" /></svg> Loop </button>
+            <button class="btn-sm btn-primary" onclick={startStandaloneLoop}
+              ><svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor" stroke="none"
+                ><polygon points="5 3 19 12 5 21 5 3" /></svg
+              > Loop
+            </button>
           {/if}
         </div>
       {/if}
@@ -778,7 +884,10 @@
     border-radius: var(--radius-sm);
     margin-bottom: 2px;
     background: var(--bg-tertiary);
-    transition: background var(--transition), border-color 0.15s ease, box-shadow 0.15s ease;
+    transition:
+      background var(--transition),
+      border-color 0.15s ease,
+      box-shadow 0.15s ease;
   }
   .story-item:hover {
     background: var(--bg-hover);

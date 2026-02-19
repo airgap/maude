@@ -305,6 +305,14 @@ export async function reconnectActiveStream(): Promise<string | null> {
       }
     }
     if (!sessionsRes || !sessionsRes.ok || !sessionsRes.data.length) {
+      // If all session retries failed and we were streaming, clear streaming
+      // state so the UI doesn't get stuck in a "streaming" indicator.
+      if (!sessionsRes) {
+        const s = streamStore.status;
+        if (s === 'streaming' || s === 'connecting') {
+          streamStore.handleEvent({ type: 'message_stop' } as any);
+        }
+      }
       streamStore.setReconnecting(false);
       return null;
     }

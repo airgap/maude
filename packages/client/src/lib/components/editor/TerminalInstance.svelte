@@ -323,7 +323,9 @@
   }
 
   /** Look up the profile for this session from the tab's profileId */
-  function getSessionProfile(): { shellPath?: string; args?: string[]; env?: Record<string, string>; cwd?: string } | undefined {
+  function getSessionProfile():
+    | { shellPath?: string; args?: string[]; env?: Record<string, string>; cwd?: string }
+    | undefined {
     // Find the tab that contains this session
     const tab = terminalStore.tabs.find((t) => {
       function hasSession(layout: import('@e/shared').TerminalLayout): boolean {
@@ -620,10 +622,7 @@
 {/if}
 
 <!-- svelte-ignore a11y_no_static_element_interactions -->
-<div
-  class="terminal-instance-wrapper"
-  class:hidden={!active}
->
+<div class="terminal-instance-wrapper" class:hidden={!active}>
   <div
     class="terminal-instance"
     class:drag-over={dragOver}

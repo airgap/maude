@@ -104,7 +104,14 @@
     <div class="startup-tip-card">
       <div class="tip-header">
         <div class="tip-icon">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <svg
+            width="16"
+            height="16"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+          >
             <circle cx="12" cy="12" r="10" />
             <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" />
             <line x1="12" y1="17" x2="12.01" y2="17" />
@@ -115,7 +122,14 @@
           {startupTipsStore.currentIndex} / {startupTipsStore.totalTips}
         </span>
         <button class="tip-close" onclick={dismiss} title="Dismiss (Esc)">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <svg
+            width="14"
+            height="14"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+          >
             <path d="M18 6L6 18M6 6l12 12" />
           </svg>
         </button>
@@ -135,12 +149,8 @@
             {tip.actionLabel}
           </button>
         {/if}
-        <button class="tip-action-btn secondary" onclick={nextTip}>
-          Next tip →
-        </button>
-        <button class="tip-disable-btn" onclick={handleDisableClick}>
-          Don't show again
-        </button>
+        <button class="tip-action-btn secondary" onclick={nextTip}> Next tip → </button>
+        <button class="tip-disable-btn" onclick={handleDisableClick}> Don't show again </button>
       </div>
     </div>
   </div>
@@ -164,7 +174,9 @@
     background: var(--bg-elevated);
     border: var(--ht-card-border-width) var(--ht-card-border-style) var(--border-primary);
     border-radius: var(--radius-lg, var(--radius));
-    box-shadow: var(--shadow-lg), 0 0 40px rgba(0, 0, 0, 0.15);
+    box-shadow:
+      var(--shadow-lg),
+      0 0 40px rgba(0, 0, 0, 0.15);
     padding: 16px 20px 14px;
     min-width: 380px;
     max-width: 520px;

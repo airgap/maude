@@ -26,10 +26,7 @@ app.get('/discover', (c) => {
     const result = taskRunnerService.discover(workspacePath);
     return c.json({ ok: true, data: result });
   } catch (err) {
-    return c.json(
-      { ok: false, error: `Failed to discover tasks: ${(err as Error).message}` },
-      500,
-    );
+    return c.json({ ok: false, error: `Failed to discover tasks: ${(err as Error).message}` }, 500);
   }
 });
 
@@ -49,10 +46,7 @@ app.post('/refresh', (c) => {
     const result = taskRunnerService.refresh(workspacePath);
     return c.json({ ok: true, data: result });
   } catch (err) {
-    return c.json(
-      { ok: false, error: `Failed to refresh tasks: ${(err as Error).message}` },
-      500,
-    );
+    return c.json({ ok: false, error: `Failed to refresh tasks: ${(err as Error).message}` }, 500);
   }
 });
 
