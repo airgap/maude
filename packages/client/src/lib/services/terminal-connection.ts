@@ -74,8 +74,8 @@ interface TerminalConnection {
   hasConnected: boolean;
 }
 
-/** Theme colours for the terminal — mirrors TerminalPanel.svelte's existing theme */
-const DEFAULT_THEME = {
+/** Fallback theme colours (used when CSS custom properties aren't available) */
+const FALLBACK_THEME = {
   background: '#0d1117',
   foreground: '#c9d1d9',
   cursor: '#00b4ff',
@@ -97,6 +97,43 @@ const DEFAULT_THEME = {
   brightCyan: '#76e3ea',
   brightWhite: '#f0f6fc',
 };
+
+/**
+ * Derive terminal theme from CSS custom properties.
+ * Falls back to FALLBACK_THEME values when properties are not set.
+ */
+export function getThemeFromCSS(): typeof FALLBACK_THEME {
+  if (typeof document === 'undefined') return { ...FALLBACK_THEME };
+
+  const style = getComputedStyle(document.documentElement);
+  const get = (prop: string, fallback: string): string => {
+    const val = style.getPropertyValue(prop).trim();
+    return val || fallback;
+  };
+
+  return {
+    background: get('--bg-primary', FALLBACK_THEME.background),
+    foreground: get('--text-primary', FALLBACK_THEME.foreground),
+    cursor: get('--accent-primary', FALLBACK_THEME.cursor),
+    selectionBackground: get('--bg-selection', FALLBACK_THEME.selectionBackground),
+    black: get('--bg-primary', FALLBACK_THEME.black),
+    red: get('--accent-error', FALLBACK_THEME.red),
+    green: get('--accent-secondary', FALLBACK_THEME.green),
+    yellow: get('--accent-warning', FALLBACK_THEME.yellow),
+    blue: get('--accent-primary', FALLBACK_THEME.blue),
+    magenta: get('--text-link', FALLBACK_THEME.magenta),
+    cyan: get('--accent-info', FALLBACK_THEME.cyan),
+    white: get('--text-primary', FALLBACK_THEME.white),
+    brightBlack: get('--text-tertiary', FALLBACK_THEME.brightBlack),
+    brightRed: FALLBACK_THEME.brightRed,
+    brightGreen: FALLBACK_THEME.brightGreen,
+    brightYellow: FALLBACK_THEME.brightYellow,
+    brightBlue: FALLBACK_THEME.brightBlue,
+    brightMagenta: FALLBACK_THEME.brightMagenta,
+    brightCyan: FALLBACK_THEME.brightCyan,
+    brightWhite: FALLBACK_THEME.brightWhite,
+  };
+}
 
 // ---------------------------------------------------------------------------
 // REST helpers (thin wrappers around fetch)
@@ -466,7 +503,7 @@ export class TerminalConnectionManager {
   // Private helpers
   // -----------------------------------------------------------------------
 
-  /** Create a Terminal instance with the current preferences and default theme */
+  /** Create a Terminal instance with the current preferences and CSS-derived theme */
   private createTerminalInstance(): Terminal {
     return new Terminal({
       cursorBlink: this.prefs.cursorBlink,
@@ -477,8 +514,16 @@ export class TerminalConnectionManager {
       lineHeight: this.prefs.lineHeight,
       scrollback: this.prefs.scrollback,
       allowProposedApi: true,
-      theme: DEFAULT_THEME,
+      theme: getThemeFromCSS(),
     });
+  }
+
+  /** Re-derive theme from CSS custom properties and apply to all terminals */
+  reapplyTheme(): void {
+    const theme = getThemeFromCSS();
+    for (const conn of this.connections.values()) {
+      conn.terminal.options.theme = theme;
+    }
   }
 
   /** Apply current preferences to an existing terminal */
