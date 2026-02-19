@@ -100,10 +100,65 @@
   function toggleDropdown(e: MouseEvent) {
     e.stopPropagation();
     dropdownOpen = !dropdownOpen;
+    if (dropdownOpen) {
+      // Focus first menu item when dropdown opens
+      requestAnimationFrame(() => {
+        const firstItem = document.querySelector('.shell-dropdown [role="menuitem"]') as HTMLElement;
+        firstItem?.focus();
+      });
+    }
   }
 
   function closeDropdown() {
     dropdownOpen = false;
+  }
+
+  /**
+   * Handle keyboard navigation within the shell profile dropdown.
+   * Implements WAI-ARIA menu pattern: ArrowDown/ArrowUp to move,
+   * Home/End for first/last, Escape to close.
+   */
+  function onDropdownKeydown(e: KeyboardEvent) {
+    const items = Array.from(
+      document.querySelectorAll('.shell-dropdown [role="menuitem"]'),
+    ) as HTMLElement[];
+    if (items.length === 0) return;
+
+    const currentIndex = items.findIndex((el) => el === document.activeElement);
+
+    switch (e.key) {
+      case 'ArrowDown': {
+        e.preventDefault();
+        const next = currentIndex < items.length - 1 ? currentIndex + 1 : 0;
+        items[next].focus();
+        break;
+      }
+      case 'ArrowUp': {
+        e.preventDefault();
+        const prev = currentIndex > 0 ? currentIndex - 1 : items.length - 1;
+        items[prev].focus();
+        break;
+      }
+      case 'Home': {
+        e.preventDefault();
+        items[0].focus();
+        break;
+      }
+      case 'End': {
+        e.preventDefault();
+        items[items.length - 1].focus();
+        break;
+      }
+      case 'Escape': {
+        e.preventDefault();
+        e.stopPropagation();
+        closeDropdown();
+        // Return focus to the add button
+        const addBtn = document.querySelector('.add-tab-btn') as HTMLElement;
+        addBtn?.focus();
+        break;
+      }
+    }
   }
 
   /**
@@ -251,6 +306,13 @@
           e.preventDefault();
           e.stopPropagation();
           closeDropdown();
+        } else if ((e.key === 'ArrowDown' || e.key === 'Enter' || e.key === ' ') && !dropdownOpen) {
+          e.preventDefault();
+          dropdownOpen = true;
+          requestAnimationFrame(() => {
+            const firstItem = document.querySelector('.shell-dropdown [role="menuitem"]') as HTMLElement;
+            firstItem?.focus();
+          });
         }
       }}
     >
@@ -266,13 +328,7 @@
         role="menu"
         aria-label="Shell profiles"
         onclick={(e) => e.stopPropagation()}
-        onkeydown={(e) => {
-          if (e.key === 'Escape') {
-            e.preventDefault();
-            e.stopPropagation();
-            closeDropdown();
-          }
-        }}
+        onkeydown={onDropdownKeydown}
       >
         <!-- Default / plain shell -->
         <button class="shell-option" role="menuitem" onclick={() => addDefaultTab()}>

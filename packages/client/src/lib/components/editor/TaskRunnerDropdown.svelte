@@ -59,6 +59,49 @@
     taskRunnerStore.refreshTasks();
   }
 
+  /**
+   * Keyboard navigation within the task dropdown (WAI-ARIA menu pattern).
+   */
+  function onTaskDropdownKeydown(e: KeyboardEvent) {
+    const items = Array.from(
+      document.querySelectorAll('.task-dropdown .task-option'),
+    ) as HTMLElement[];
+    if (items.length === 0) return;
+
+    const currentIndex = items.findIndex((el) => el === document.activeElement);
+
+    switch (e.key) {
+      case 'ArrowDown': {
+        e.preventDefault();
+        const next = currentIndex < items.length - 1 ? currentIndex + 1 : 0;
+        items[next].focus();
+        break;
+      }
+      case 'ArrowUp': {
+        e.preventDefault();
+        const prev = currentIndex > 0 ? currentIndex - 1 : items.length - 1;
+        items[prev].focus();
+        break;
+      }
+      case 'Home': {
+        e.preventDefault();
+        items[0].focus();
+        break;
+      }
+      case 'End': {
+        e.preventDefault();
+        items[items.length - 1].focus();
+        break;
+      }
+      case 'Escape': {
+        e.preventDefault();
+        e.stopPropagation();
+        closeDropdown();
+        break;
+      }
+    }
+  }
+
   // Group tasks by source for display
   const groupedTasks = $derived.by(() => {
     const sorted = taskRunnerStore.sortedTasks;
@@ -90,8 +133,22 @@
     onclick={toggleDropdown}
     title="Run task"
     aria-label="Run task"
-    aria-haspopup="true"
+    aria-haspopup="menu"
     aria-expanded={dropdownOpen}
+    onkeydown={(e) => {
+      if (e.key === 'Escape' && dropdownOpen) {
+        e.preventDefault();
+        e.stopPropagation();
+        closeDropdown();
+      } else if ((e.key === 'ArrowDown' || e.key === 'Enter' || e.key === ' ') && !dropdownOpen) {
+        e.preventDefault();
+        dropdownOpen = true;
+        requestAnimationFrame(() => {
+          const firstItem = document.querySelector('.task-dropdown .task-option') as HTMLElement;
+          firstItem?.focus();
+        });
+      }
+    }}
   >
     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
       <polygon points="5 3 19 12 5 21 5 3" />
@@ -100,7 +157,13 @@
 
   {#if dropdownOpen}
     <!-- svelte-ignore a11y_no_static_element_interactions -->
-    <div class="task-dropdown" onclick={(e) => e.stopPropagation()}>
+    <div
+      class="task-dropdown"
+      role="menu"
+      aria-label="Available tasks"
+      onclick={(e) => e.stopPropagation()}
+      onkeydown={onTaskDropdownKeydown}
+    >
       <div class="dropdown-header">
         <span class="dropdown-title">Tasks</span>
         <button
@@ -136,7 +199,7 @@
         {#if groups.recent.length > 0}
           <div class="task-group-label">Recent</div>
           {#each groups.recent as task (task.id)}
-            <button class="task-option" onclick={() => runTask(task)} title={task.execution}>
+            <button class="task-option" role="menuitem" onclick={() => runTask(task)} title={task.execution}>
               <svg class="task-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <circle cx="12" cy="12" r="10" />
                 <polyline points="12 6 12 12 16 14" />
@@ -153,7 +216,7 @@
             {taskRunnerStore.packageManager ?? 'npm'} scripts
           </div>
           {#each groups.pkgTasks as task (task.id)}
-            <button class="task-option" onclick={() => runTask(task)} title={task.execution}>
+            <button class="task-option" role="menuitem" onclick={() => runTask(task)} title={task.execution}>
               <svg class="task-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <polygon points="5 3 19 12 5 21 5 3" />
               </svg>
@@ -169,7 +232,7 @@
           {/if}
           <div class="task-group-label">Makefile targets</div>
           {#each groups.makeTasks as task (task.id)}
-            <button class="task-option" onclick={() => runTask(task)} title={task.execution}>
+            <button class="task-option" role="menuitem" onclick={() => runTask(task)} title={task.execution}>
               <svg class="task-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <polygon points="5 3 19 12 5 21 5 3" />
               </svg>

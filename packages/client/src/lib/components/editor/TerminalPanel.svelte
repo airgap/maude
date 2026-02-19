@@ -135,12 +135,35 @@
     // This enables instant visual re-render on reload via @xterm/addon-serialize.
     const cleanupBeforeUnload = terminalConnectionManager.installBeforeUnloadHandler();
 
+    // Listen for OS/IDE high contrast mode changes and reapply terminal theme.
+    // This ensures xterm.js picks up the updated CSS custom properties from
+    // @media (prefers-contrast: more) or @media (forced-colors: active).
+    let cleanupContrastListener: (() => void) | undefined;
+    if (typeof window !== 'undefined' && window.matchMedia) {
+      const contrastQuery = window.matchMedia('(prefers-contrast: more)');
+      const forcedColorsQuery = window.matchMedia('(forced-colors: active)');
+      const onContrastChange = () => {
+        // CSS vars have already been updated by the browser; reapply to xterm
+        requestAnimationFrame(() => {
+          terminalConnectionManager.reapplyTheme();
+        });
+      };
+      contrastQuery.addEventListener('change', onContrastChange);
+      forcedColorsQuery.addEventListener('change', onContrastChange);
+      cleanupContrastListener = () => {
+        contrastQuery.removeEventListener('change', onContrastChange);
+        forcedColorsQuery.removeEventListener('change', onContrastChange);
+      };
+    }
+
     // Closing the panel does NOT kill sessions (AC #9).
     // On unmount, we just detach terminals from DOM.
     return () => {
       destroyed = true;
       // Clean up beforeunload handler
       cleanupBeforeUnload();
+      // Clean up contrast change listeners
+      cleanupContrastListener?.();
       // Clear the broadcast handler on unmount
       terminalConnectionManager.setBroadcastHandler(null);
       // Sessions stay alive in ConnectionManager memory.

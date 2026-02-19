@@ -146,8 +146,26 @@
         return false;
       }
 
+      // Shift+F10 or Context Menu key: open context menu via keyboard
+      if (ev.key === 'ContextMenu' || (ev.shiftKey && ev.key === 'F10')) {
+        ev.preventDefault();
+        ev.stopPropagation();
+        openContextMenuFromKeyboard();
+        return false;
+      }
+
       return true;
     });
+  }
+
+  /** Open context menu at a reasonable position when triggered by keyboard */
+  function openContextMenuFromKeyboard() {
+    if (!containerEl) return;
+    const rect = containerEl.getBoundingClientRect();
+    // Position near center of the terminal pane
+    ctxX = rect.left + rect.width / 2;
+    ctxY = rect.top + rect.height / 3;
+    showCtx = true;
   }
 
   /** Register copy-on-select handler */

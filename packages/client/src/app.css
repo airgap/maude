@@ -1642,6 +1642,61 @@
   }
 }
 
+/* ── Terminal accessibility — high contrast enhancements ── */
+/* Strengthened focus/active indicators for the terminal panel when high
+   contrast is active (either via data-theme or OS media query).  These
+   rules use the CSS custom properties already set above, so they respond
+   to both manual high-contrast theme selection AND auto-detection.       */
+@media (prefers-contrast: more) {
+  /* Terminal tab active indicator — thicker, more visible */
+  [role="tab"][aria-selected="true"] {
+    border-bottom-width: 3px !important;
+    font-weight: 700 !important;
+  }
+
+  /* Terminal pane focus border — stronger */
+  [role="group"][aria-label*="Terminal pane"] {
+    border-width: 2px !important;
+  }
+
+  /* Terminal search bar — stronger outline */
+  [role="search"][aria-label="Find in terminal"] {
+    border-width: 2px !important;
+    border-color: var(--border-primary) !important;
+  }
+
+  /* Toolbar buttons — stronger focus indicator */
+  [role="toolbar"] button:focus-visible {
+    outline-width: 3px !important;
+    outline-offset: 1px !important;
+  }
+}
+
+[data-theme='high-contrast'] [role="tab"][aria-selected="true"],
+[data-theme='high-contrast-light'] [role="tab"][aria-selected="true"] {
+  border-bottom-width: 3px;
+  font-weight: 700;
+}
+
+[data-theme='high-contrast'] [role="group"][aria-label*="Terminal pane"],
+[data-theme='high-contrast-light'] [role="group"][aria-label*="Terminal pane"] {
+  border-width: 2px;
+}
+
+@media (forced-colors: active) {
+  /* Ensure tab selection is visible in forced colors mode */
+  [role="tab"][aria-selected="true"] {
+    border-bottom: 3px solid Highlight !important;
+    forced-color-adjust: none;
+  }
+
+  /* Terminal pane focus border */
+  [role="group"][aria-label*="Terminal pane"][class*="focused"] {
+    border-color: Highlight !important;
+    forced-color-adjust: none;
+  }
+}
+
 /* ============================================
    GLOBAL STYLES
    ============================================ */

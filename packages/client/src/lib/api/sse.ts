@@ -293,8 +293,18 @@ export async function reconnectActiveStream(): Promise<string | null> {
   streamStore.setReconnecting(true);
 
   try {
-    const sessionsRes = await api.stream.sessions();
-    if (!sessionsRes.ok || !sessionsRes.data.length) {
+    // Retry the sessions check a few times — on page load the backend or
+    // dev-proxy may not be fully ready yet, returning non-JSON (e.g. HTML).
+    let sessionsRes: Awaited<ReturnType<typeof api.stream.sessions>> | null = null;
+    for (let attempt = 0; attempt < 3; attempt++) {
+      try {
+        sessionsRes = await api.stream.sessions();
+        break; // success
+      } catch {
+        if (attempt < 2) await new Promise((r) => setTimeout(r, 500 * (attempt + 1)));
+      }
+    }
+    if (!sessionsRes || !sessionsRes.ok || !sessionsRes.data.length) {
       streamStore.setReconnecting(false);
       return null;
     }

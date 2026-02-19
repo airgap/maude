@@ -125,6 +125,10 @@ if (existsSync(clientBuildPath)) {
   app.use('*', serveStatic({ root: clientBuildPath, rewriteRequestPath: (path) => path }));
   // SPA fallback — serve index.html for non-API, non-file routes
   app.get('*', async (c) => {
+    // Never serve the SPA shell for API or health-check requests
+    if (c.req.path.startsWith('/api/') || c.req.path === '/health') {
+      return c.json({ ok: false, error: 'Not found' }, 404);
+    }
     const file = Bun.file(resolve(clientBuildPath, 'index.html'));
     return c.html(await file.text());
   });

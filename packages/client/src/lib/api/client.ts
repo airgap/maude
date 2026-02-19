@@ -55,7 +55,7 @@ async function request<T>(path: string, opts: RequestInit = {}): Promise<T> {
   if (!contentType.includes('application/json')) {
     throw new Error(
       res.ok
-        ? 'Server returned non-JSON response. Is the backend running?'
+        ? `Server returned non-JSON response (${contentType || 'no content-type'} from ${path}). Is the backend running?`
         : `HTTP ${res.status}: ${res.statusText}`,
     );
   }

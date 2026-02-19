@@ -665,6 +665,7 @@ function createTerminalStore() {
       tab.focusedSessionId = result.newSessionId;
       tabs = [...tabs]; // trigger reactivity
       persistTabs();
+      this.announce(`Terminal split ${direction === 'horizontal' ? 'horizontally' : 'vertically'}`);
 
       return result.newSessionId;
     },
@@ -701,6 +702,7 @@ function createTerminalStore() {
 
       tabs = [...tabs]; // trigger reactivity
       persistTabs();
+      this.announce('Terminal pane closed');
     },
 
     /**
@@ -792,6 +794,8 @@ function createTerminalStore() {
         const newSessions = new Map(sessions);
         newSessions.set(sessionId, { ...meta, exitCode });
         sessions = newSessions;
+        const shell = meta.shell ? meta.shell.split('/').pop() : 'terminal';
+        this.announce(`Terminal session ${shell} exited with code ${exitCode}`);
       }
     },
 
@@ -804,6 +808,7 @@ function createTerminalStore() {
         const newSessions = new Map(sessions);
         newSessions.set(sessionId, { ...meta, logging: true, logFilePath });
         sessions = newSessions;
+        this.announce('Session logging started');
       }
     },
 
@@ -815,6 +820,7 @@ function createTerminalStore() {
         // Keep logFilePath so user can still "Open Log File" after stopping
         newSessions.set(sessionId, { ...meta, logging: false });
         sessions = newSessions;
+        this.announce('Session logging stopped');
       }
     },
 
@@ -1034,12 +1040,14 @@ function createTerminalStore() {
     toggleBroadcast() {
       if (!activeTabId) return;
       const next = new Set(broadcastTabIds);
-      if (next.has(activeTabId)) {
+      const wasActive = next.has(activeTabId);
+      if (wasActive) {
         next.delete(activeTabId);
       } else {
         next.add(activeTabId);
       }
       broadcastTabIds = next;
+      this.announce(wasActive ? 'Broadcast input disabled' : 'Broadcast input enabled — typing is sent to all panes in this tab');
     },
 
     setBroadcast(v: boolean) {

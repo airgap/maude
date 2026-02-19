@@ -38,19 +38,64 @@
   function closePanel() {
     terminalStore.close();
   }
+
+  /**
+   * WAI-ARIA toolbar pattern: Left/Right arrow keys navigate between
+   * focusable buttons within the toolbar. Home/End jump to first/last.
+   */
+  function onToolbarKeydown(e: KeyboardEvent) {
+    if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(e.key)) return;
+
+    const toolbar = e.currentTarget as HTMLElement;
+    const buttons = Array.from(
+      toolbar.querySelectorAll('button:not([disabled])'),
+    ) as HTMLElement[];
+    if (buttons.length === 0) return;
+
+    const currentIndex = buttons.findIndex((btn) => btn === document.activeElement);
+    if (currentIndex < 0) return;
+
+    e.preventDefault();
+
+    let nextIndex: number;
+    switch (e.key) {
+      case 'ArrowRight':
+        nextIndex = currentIndex < buttons.length - 1 ? currentIndex + 1 : 0;
+        break;
+      case 'ArrowLeft':
+        nextIndex = currentIndex > 0 ? currentIndex - 1 : buttons.length - 1;
+        break;
+      case 'Home':
+        nextIndex = 0;
+        break;
+      case 'End':
+        nextIndex = buttons.length - 1;
+        break;
+      default:
+        return;
+    }
+
+    buttons[nextIndex].focus();
+  }
 </script>
 
-<div class="terminal-actions" role="toolbar" aria-label="Terminal actions">
+<!-- svelte-ignore a11y_no_static_element_interactions -->
+<div
+  class="terminal-actions"
+  role="toolbar"
+  aria-label="Terminal actions"
+  onkeydown={onToolbarKeydown}
+>
   <TaskRunnerDropdown />
 
-  <div class="action-separator"></div>
+  <div class="action-separator" role="separator"></div>
 
   <button
     class="action-btn"
     class:active={terminalStore.searchOpen}
     onclick={toggleSearch}
-    title="Toggle search"
-    aria-label="Toggle search"
+    title="Toggle search (Ctrl+Shift+F)"
+    aria-label={terminalStore.searchOpen ? 'Close search' : 'Open search'}
   >
     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
       <circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
@@ -125,7 +170,7 @@
     {/if}
   </button>
 
-  <div class="action-separator"></div>
+  <div class="action-separator" role="separator"></div>
 
   <button
     class="action-btn close-btn"
