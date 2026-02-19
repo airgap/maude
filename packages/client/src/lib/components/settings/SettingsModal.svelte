@@ -1407,22 +1407,22 @@
 
             <!-- Auto-detected profiles (read-only) -->
             {#if detectedShells.length > 0}
-              <div class="profiles-section">
-                <div class="profiles-section-label">Detected Shells</div>
+              <div class="term-profiles-section">
+                <div class="term-profiles-section-label">Detected Shells</div>
                 {#each detectedShells as shell}
                   {@const autoId = `auto-${shell.name.toLowerCase()}`}
                   {@const isDefault = settingsStore.termDefaultProfileId === autoId}
-                  <div class="profile-row">
-                    <svg class="profile-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <div class="term-profile-row">
+                    <svg class="term-profile-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                       <polyline points="4 17 10 11 4 5" /><line x1="12" y1="19" x2="20" y2="19" />
                     </svg>
-                    <div class="profile-info">
-                      <span class="profile-name">{shell.name}{shell.version ? ` (${shell.version})` : ''}</span>
-                      <span class="profile-path">{shell.path}</span>
+                    <div class="term-profile-info">
+                      <span class="term-profile-name">{shell.name}{shell.version ? ` (${shell.version})` : ''}</span>
+                      <span class="term-profile-path">{shell.path}</span>
                     </div>
-                    <div class="profile-actions">
+                    <div class="term-profile-actions">
                       <button
-                        class="profile-action-btn"
+                        class="term-profile-action-btn"
                         class:is-default={isDefault}
                         title={isDefault ? 'Remove as default' : 'Set as default'}
                         onclick={() => setTermDefaultProfile(autoId)}
@@ -1431,7 +1431,7 @@
                           <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
                         </svg>
                       </button>
-                      <span class="profile-badge read-only">auto</span>
+                      <span class="term-profile-badge read-only">auto</span>
                     </div>
                   </div>
                 {/each}
@@ -1439,15 +1439,15 @@
             {/if}
 
             <!-- Custom profiles -->
-            <div class="profiles-section">
-              <div class="profiles-section-label">Custom Profiles</div>
+            <div class="term-profiles-section">
+              <div class="term-profiles-section-label">Custom Profiles</div>
               {#if settingsStore.terminalProfiles.length === 0 && !termProfileEditing}
                 <p class="setting-desc" style="margin: 4px 0 8px; font-style: italic;">No custom profiles yet</p>
               {/if}
               {#each settingsStore.terminalProfiles as tp (tp.id)}
                 {@const isDefault = settingsStore.termDefaultProfileId === tp.id}
-                <div class="profile-row">
-                  <svg class="profile-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <div class="term-profile-row">
+                  <svg class="term-profile-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     {#if tp.icon === 'code'}
                       <polyline points="16 18 22 12 16 6" /><polyline points="8 6 2 12 8 18" />
                     {:else if tp.icon === 'server'}
@@ -1456,13 +1456,13 @@
                       <polyline points="4 17 10 11 4 5" /><line x1="12" y1="19" x2="20" y2="19" />
                     {/if}
                   </svg>
-                  <div class="profile-info">
-                    <span class="profile-name">{tp.name}</span>
-                    <span class="profile-path">{tp.shellPath}{tp.args?.length ? ' ' + tp.args.join(' ') : ''}</span>
+                  <div class="term-profile-info">
+                    <span class="term-profile-name">{tp.name}</span>
+                    <span class="term-profile-path">{tp.shellPath}{tp.args?.length ? ' ' + tp.args.join(' ') : ''}</span>
                   </div>
-                  <div class="profile-actions">
+                  <div class="term-profile-actions">
                     <button
-                      class="profile-action-btn"
+                      class="term-profile-action-btn"
                       class:is-default={isDefault}
                       title={isDefault ? 'Remove as default' : 'Set as default'}
                       onclick={() => setTermDefaultProfile(tp.id)}
@@ -1472,7 +1472,7 @@
                       </svg>
                     </button>
                     <button
-                      class="profile-action-btn"
+                      class="term-profile-action-btn"
                       title="Edit profile"
                       onclick={() => startEditTermProfile(tp.id)}
                     >
@@ -1481,7 +1481,7 @@
                       </svg>
                     </button>
                     <button
-                      class="profile-action-btn danger"
+                      class="term-profile-action-btn danger"
                       title="Delete profile"
                       onclick={() => deleteTermProfile(tp.id)}
                     >
@@ -1494,7 +1494,7 @@
               {/each}
 
               {#if !termProfileEditing}
-                <button class="btn-secondary profile-add-btn" onclick={startNewTermProfile}>
+                <button class="btn-secondary term-profile-add-btn" onclick={startNewTermProfile}>
                   <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
                   </svg>
@@ -1505,39 +1505,39 @@
 
             <!-- Profile editor form -->
             {#if termProfileEditing}
-              <div class="profile-editor">
-                <div class="profile-editor-title">{termProfileEditId ? 'Edit' : 'New'} Profile</div>
-                <div class="profile-field">
-                  <label class="profile-field-label">Name</label>
+              <div class="term-profile-editor">
+                <div class="term-profile-editor-title">{termProfileEditId ? 'Edit' : 'New'} Profile</div>
+                <div class="term-profile-field">
+                  <label class="term-profile-field-label">Name</label>
                   <input type="text" class="setting-text-input" placeholder="My Profile" bind:value={termProfileName} />
                 </div>
-                <div class="profile-field">
-                  <label class="profile-field-label">Shell path</label>
+                <div class="term-profile-field">
+                  <label class="term-profile-field-label">Shell path</label>
                   <input type="text" class="setting-text-input" placeholder="/bin/bash" bind:value={termProfileShellPath} />
                 </div>
-                <div class="profile-field">
-                  <label class="profile-field-label">Arguments</label>
+                <div class="term-profile-field">
+                  <label class="term-profile-field-label">Arguments</label>
                   <input type="text" class="setting-text-input" placeholder="--login" bind:value={termProfileArgs} />
-                  <span class="profile-field-hint">Space-separated shell arguments</span>
+                  <span class="term-profile-field-hint">Space-separated shell arguments</span>
                 </div>
-                <div class="profile-field">
-                  <label class="profile-field-label">Environment variables</label>
+                <div class="term-profile-field">
+                  <label class="term-profile-field-label">Environment variables</label>
                   <textarea class="setting-textarea" placeholder={"KEY=value\nANOTHER=value"} rows="3" bind:value={termProfileEnvText}></textarea>
-                  <span class="profile-field-hint">One per line: KEY=value</span>
+                  <span class="term-profile-field-hint">One per line: KEY=value</span>
                 </div>
-                <div class="profile-field">
-                  <label class="profile-field-label">Working directory</label>
+                <div class="term-profile-field">
+                  <label class="term-profile-field-label">Working directory</label>
                   <input type="text" class="setting-text-input" placeholder="(uses workspace default)" bind:value={termProfileCwd} />
                 </div>
-                <div class="profile-field">
-                  <label class="profile-field-label">Icon</label>
+                <div class="term-profile-field">
+                  <label class="term-profile-field-label">Icon</label>
                   <select bind:value={termProfileIcon}>
                     <option value="terminal">Terminal</option>
                     <option value="code">Code</option>
                     <option value="server">Server</option>
                   </select>
                 </div>
-                <div class="profile-editor-actions">
+                <div class="term-profile-editor-actions">
                   <button class="btn-secondary" onclick={cancelTermProfileEdit}>Cancel</button>
                   <button class="btn-primary" onclick={saveTermProfile} disabled={!termProfileName.trim() || !termProfileShellPath.trim()}>
                     {termProfileEditId ? 'Save' : 'Create'}
@@ -1547,8 +1547,8 @@
             {/if}
 
             <!-- Default profile selector -->
-            <div class="profiles-section" style="margin-top: 12px;">
-              <div class="profiles-section-label">Default Profile</div>
+            <div class="term-profiles-section" style="margin-top: 12px;">
+              <div class="term-profiles-section-label">Default Profile</div>
               <p class="setting-desc">Profile used when opening new terminal tabs with no specific selection</p>
               <select
                 value={settingsStore.termDefaultProfileId}
