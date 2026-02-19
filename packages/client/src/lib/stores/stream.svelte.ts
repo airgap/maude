@@ -5,6 +5,7 @@ import { primaryPaneStore } from './primaryPane.svelte';
 import { api } from '$lib/api/client';
 import { artifactsStore } from './artifacts.svelte';
 import { agentNotesStore } from './agent-notes.svelte';
+import { handleAgentTerminalEvent, resetAgentTerminal } from '$lib/services/agent-terminal';
 
 // Context key for Svelte 5 context API - ensures proper reactivity tracking
 export const STREAM_CONTEXT_KEY = Symbol('streamStore');
@@ -185,6 +186,9 @@ function createStreamStore() {
     },
 
     handleEvent(event: StreamEvent) {
+      // Forward tool events to the Agent terminal (opt-in via settings)
+      handleAgentTerminalEvent(event);
+
       // console.log('[streamStore.handleEvent] Processing:', event.type);
       switch (event.type) {
         case 'message_start':
@@ -483,6 +487,7 @@ function createStreamStore() {
       abortController = null;
       indexOffset = 0;
       currentParentId = null;
+      resetAgentTerminal();
     },
 
     captureState(): StreamSnapshot {

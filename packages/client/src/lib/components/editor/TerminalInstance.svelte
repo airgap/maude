@@ -353,6 +353,9 @@
     }
   }
 
+  /** Whether this session is a virtual agent session (read-only, no PTY) */
+  const isAgentSession = $derived(terminalStore.isAgentSession(sessionId));
+
   /**
    * Ensure this terminal instance has an active connection.
    *
@@ -363,56 +366,72 @@
    */
   async function ensureSession() {
     if (!terminalConnectionManager.has(sessionId)) {
-      // Check if this session can be reconnected to (server still has it)
-      const serverSession = terminalStore.getReconnectableSession(sessionId);
+      // ── Agent virtual session: no PTY needed ──
+      if (terminalStore.isAgentSession(sessionId)) {
+        terminalConnectionManager.createVirtualSession(sessionId);
+        // Register minimal session metadata for agent sessions
+        terminalStore.registerSession({
+          id: sessionId,
+          shell: 'agent',
+          pid: 0,
+          cwd: '.',
+          exitCode: null,
+          attached: true,
+          logging: false,
+          logFilePath: null,
+        });
+      } else {
+        // Check if this session can be reconnected to (server still has it)
+        const serverSession = terminalStore.getReconnectableSession(sessionId);
 
-      if (serverSession) {
-        // ── Reconnect to existing server session ──
-        try {
-          // Load buffer snapshot from sessionStorage for instant visual re-render
-          const snapshot = terminalConnectionManager.loadSnapshot(sessionId) ?? undefined;
+        if (serverSession) {
+          // ── Reconnect to existing server session ──
+          try {
+            // Load buffer snapshot from sessionStorage for instant visual re-render
+            const snapshot = terminalConnectionManager.loadSnapshot(sessionId) ?? undefined;
 
-          terminalConnectionManager.reconnectSession(sessionId, {
-            cwd: serverSession.cwd,
-            snapshot,
-          });
+            terminalConnectionManager.reconnectSession(sessionId, {
+              cwd: serverSession.cwd,
+              snapshot,
+            });
 
-          // Register session metadata from server data
-          terminalStore.registerSession({
-            id: sessionId,
-            shell: serverSession.shell,
-            pid: serverSession.pid,
-            cwd: serverSession.cwd,
-            exitCode: serverSession.exitCode,
-            attached: true,
-            logging: serverSession.logging ?? false,
-            logFilePath: serverSession.logFilePath ?? null,
-          });
+            // Register session metadata from server data
+            terminalStore.registerSession({
+              id: sessionId,
+              shell: serverSession.shell,
+              pid: serverSession.pid,
+              cwd: serverSession.cwd,
+              exitCode: serverSession.exitCode,
+              attached: true,
+              logging: serverSession.logging ?? false,
+              logFilePath: serverSession.logFilePath ?? null,
+            });
 
-          // Restore logging state if the server session was logging
-          if (serverSession.logging && serverSession.logFilePath) {
-            terminalStore.setLogging(sessionId, serverSession.logFilePath);
+            // Restore logging state if the server session was logging
+            if (serverSession.logging && serverSession.logFilePath) {
+              terminalStore.setLogging(sessionId, serverSession.logFilePath);
+            }
+
+            // Clear the reconnectable flag so we don't try again
+            terminalStore.clearReconnectable(sessionId);
+          } catch (err) {
+            console.error('[TerminalInstance] Failed to reconnect, creating new session:', err);
+            terminalStore.clearReconnectable(sessionId);
+            try {
+              await createFreshSession();
+            } catch (freshErr) {
+              console.error('[TerminalInstance] Failed to create session:', freshErr);
+              return;
+            }
           }
-
-          // Clear the reconnectable flag so we don't try again
-          terminalStore.clearReconnectable(sessionId);
-        } catch (err) {
-          console.error('[TerminalInstance] Failed to reconnect, creating new session:', err);
-          terminalStore.clearReconnectable(sessionId);
+        } else {
+          // ── Create new session (no surviving server session) ──
           try {
             await createFreshSession();
-          } catch (freshErr) {
-            console.error('[TerminalInstance] Failed to create session:', freshErr);
+          } catch (err) {
+            console.error('[TerminalInstance] Failed to create session:', err);
             return;
           }
-        }
-      } else {
-        // ── Create new session (no surviving server session) ──
-        try {
-          await createFreshSession();
-        } catch (err) {
-          console.error('[TerminalInstance] Failed to create session:', err);
-          return;
         }
       }
     }
@@ -421,7 +440,10 @@
     if (mounted && containerEl && active) {
       try {
         terminalConnectionManager.attachToContainer(sessionId, containerEl);
-        terminalConnectionManager.focus(sessionId);
+        // Don't focus agent sessions (they're read-only)
+        if (!terminalStore.isAgentSession(sessionId)) {
+          terminalConnectionManager.focus(sessionId);
+        }
       } catch (err) {
         console.error('[TerminalInstance] Failed to attach:', err);
       }
@@ -431,8 +453,11 @@
     registerKeyHandler();
 
     // Register control message listener for shell integration events
-    cleanupControlListener?.();
-    cleanupControlListener = registerControlListener(sessionId);
+    // (skip for agent sessions — they don't use shell integration)
+    if (!terminalStore.isAgentSession(sessionId)) {
+      cleanupControlListener?.();
+      cleanupControlListener = registerControlListener(sessionId);
+    }
 
     // Check for pending command (task runner) and send it after a short delay
     // to allow the shell prompt to initialize

@@ -139,12 +139,14 @@
       {@const isEditing = tab.id === editingTabId}
       {@const isBroadcasting = terminalStore.isBroadcastActiveForTab(tab.id)}
       {@const isLogging = terminalStore.isLogging(tab.focusedSessionId)}
+      {@const isAgent = terminalStore.isAgentTab(tab.id)}
 
       <!-- svelte-ignore a11y_no_static_element_interactions -->
       <div
         class="term-tab"
         class:active={isActive}
         class:broadcasting={isBroadcasting}
+        class:agent-tab={isAgent}
         onclick={() => activateTab(tab.id)}
         ondblclick={(e) => startRename(e, tab)}
         role="tab"
@@ -184,7 +186,11 @@
           }
         }}
       >
-        {#if isBroadcasting}
+        {#if isAgent}
+          <svg class="agent-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-label="Agent terminal">
+            <rect x="3" y="4" width="18" height="12" rx="2" /><line x1="8" y1="20" x2="16" y2="20" /><line x1="12" y1="16" x2="12" y2="20" /><circle cx="9" cy="10" r="1.5" fill="currentColor" /><circle cx="15" cy="10" r="1.5" fill="currentColor" />
+          </svg>
+        {:else if isBroadcasting}
           <svg class="broadcast-badge" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-label="Broadcast input active">
             <path d="M4.9 19.1C1 15.2 1 8.8 4.9 4.9" />
             <circle cx="12" cy="12" r="2" fill="currentColor" />
@@ -386,6 +392,25 @@
   .term-tab.active .shell-icon {
     opacity: 0.9;
     color: var(--accent-primary);
+  }
+
+  /* ── Agent tab ── */
+  .agent-icon {
+    flex-shrink: 0;
+    color: var(--accent-info, #56d4dd);
+    opacity: 0.9;
+  }
+  .term-tab.agent-tab {
+    border-left: 2px solid var(--accent-info, #56d4dd);
+  }
+  .term-tab.agent-tab.active {
+    border-bottom-color: var(--accent-info, #56d4dd);
+  }
+  .term-tab.agent-tab .tab-label {
+    color: var(--accent-info, #56d4dd);
+  }
+  .term-tab.agent-tab.active .agent-icon {
+    color: var(--accent-info, #56d4dd);
   }
 
   /* ── Broadcast indicator ── */

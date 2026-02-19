@@ -1400,6 +1400,21 @@
             </div>
           {/if}
 
+          <!-- Agent Terminal Integration -->
+          <div class="setting-group">
+            <label class="setting-label">Agent terminal</label>
+            <p class="setting-desc">Show AI tool execution (Bash commands) in a dedicated read-only terminal tab</p>
+            <label class="toggle">
+              <input
+                type="checkbox"
+                checked={settingsStore.agentTerminalEnabled}
+                onchange={() =>
+                  settingsStore.update({ agentTerminalEnabled: !settingsStore.agentTerminalEnabled })}
+              />
+              <span class="toggle-slider"></span>
+            </label>
+          </div>
+
           <!-- ─── Terminal Profiles ─── -->
           <div class="setting-group">
             <label class="setting-label">Terminal profiles</label>
