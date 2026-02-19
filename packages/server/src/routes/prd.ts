@@ -52,9 +52,7 @@ import type {
   PriorityRecommendationBulkResponse,
   StandaloneStoryCreateInput,
 } from '@e/shared';
-import { readFileSync } from 'fs';
-import { join } from 'path';
-import { homedir } from 'os';
+import { callLlm } from '../services/llm-oneshot';
 
 const app = new Hono();
 
@@ -400,34 +398,7 @@ Priority: ${story.priority}
 Provide a complexity estimate with story points, confidence level, and key factors.`;
 
   try {
-    const auth = getAnthropicAuth();
-    const headers: Record<string, string> = {
-      'Content-Type': 'application/json',
-      'anthropic-version': '2023-06-01',
-    };
-    if (auth.type === 'oauth') {
-      headers['Authorization'] = `Bearer ${auth.token}`;
-    } else {
-      headers['x-api-key'] = auth.token;
-    }
-
-    const apiResponse = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers,
-      body: JSON.stringify({
-        model: 'claude-sonnet-4-5-20250929',
-        max_tokens: 2048,
-        system: systemPrompt,
-        messages: [{ role: 'user', content: userPrompt }],
-      }),
-    });
-
-    if (!apiResponse.ok) {
-      throw new Error(`API request failed: ${apiResponse.status}`);
-    }
-
-    const apiData = (await apiResponse.json()) as any;
-    const response = apiData.content?.[0]?.text || '';
+    const response = await callLlm({ system: systemPrompt, user: userPrompt });
     const jsonMatch = response.match(/\{[\s\S]*\}/);
     if (!jsonMatch) throw new Error('No JSON found in response');
     const parsed = JSON.parse(jsonMatch[0]);
@@ -1185,46 +1156,11 @@ Each story object must have this exact shape:
 
 ${description}${body.context ? `\n\n## Additional Context\n${body.context}` : ''}`;
 
-  // Call Anthropic API for generation
   try {
-    const auth = getAnthropicAuth();
-    const headers: Record<string, string> = {
-      'Content-Type': 'application/json',
-      'anthropic-version': '2023-06-01',
-    };
-    if (auth.type === 'oauth') {
-      headers['Authorization'] = `Bearer ${auth.token}`;
-    } else {
-      headers['x-api-key'] = auth.token;
-    }
-
-    const apiResponse = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers,
-      body: JSON.stringify({
-        model: 'claude-sonnet-4-5-20250929',
-        max_tokens: 8192,
-        system: systemPrompt,
-        messages: [{ role: 'user', content: userPrompt }],
-      }),
-    });
-
-    if (!apiResponse.ok) {
-      const errBody = await apiResponse.text().catch(() => 'Unknown error');
-      return c.json(
-        { ok: false, error: `AI generation failed (${apiResponse.status}): ${errBody}` },
-        502,
-      );
-    }
-
-    const result = (await apiResponse.json()) as any;
-    const textContent = result.content?.find((c: any) => c.type === 'text');
-    if (!textContent?.text) {
-      return c.json({ ok: false, error: 'AI returned no text content' }, 502);
-    }
+    const rawResponse = await callLlm({ system: systemPrompt, user: userPrompt });
 
     // Parse the JSON response - handle potential markdown code fences
-    let rawText = textContent.text.trim();
+    let rawText = rawResponse.trim();
     // Strip markdown code fences if present
     if (rawText.startsWith('```')) {
       rawText = rawText.replace(/^```(?:json)?\s*\n?/, '').replace(/\n?```\s*$/, '');
@@ -1490,44 +1426,10 @@ IMPORTANT:
 - Questions should be targeted and specific, not generic${memoryContext}${siblingContext}`;
 
   try {
-    const auth = getAnthropicAuth();
-    const headers: Record<string, string> = {
-      'Content-Type': 'application/json',
-      'anthropic-version': '2023-06-01',
-    };
-    if (auth.type === 'oauth') {
-      headers['Authorization'] = `Bearer ${auth.token}`;
-    } else {
-      headers['x-api-key'] = auth.token;
-    }
-
-    const apiResponse = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers,
-      body: JSON.stringify({
-        model: 'claude-sonnet-4-5-20250929',
-        max_tokens: 4096,
-        system: systemPrompt,
-        messages: [{ role: 'user', content: userPrompt }],
-      }),
-    });
-
-    if (!apiResponse.ok) {
-      const errBody = await apiResponse.text().catch(() => 'Unknown error');
-      return c.json(
-        { ok: false, error: `AI refinement failed (${apiResponse.status}): ${errBody}` },
-        502,
-      );
-    }
-
-    const result = (await apiResponse.json()) as any;
-    const textContent = result.content?.find((ct: any) => ct.type === 'text');
-    if (!textContent?.text) {
-      return c.json({ ok: false, error: 'AI returned no text content' }, 502);
-    }
+    const rawResponse = await callLlm({ system: systemPrompt, user: userPrompt });
 
     // Parse the JSON response
-    let rawText = textContent.text.trim();
+    let rawText = rawResponse.trim();
     if (rawText.startsWith('```')) {
       rawText = rawText.replace(/^```(?:json)?\s*\n?/, '').replace(/\n?```\s*$/, '');
     }
@@ -2024,43 +1926,9 @@ ${storyContext}
 Which stories must be completed before others can start? Return the dependency list as JSON.`;
 
   try {
-    const auth = getAnthropicAuth();
-    const headers: Record<string, string> = {
-      'Content-Type': 'application/json',
-      'anthropic-version': '2023-06-01',
-    };
-    if (auth.type === 'oauth') {
-      headers['Authorization'] = `Bearer ${auth.token}`;
-    } else {
-      headers['x-api-key'] = auth.token;
-    }
+    const rawResponse = await callLlm({ system: systemPrompt, user: userPrompt });
 
-    const apiResponse = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers,
-      body: JSON.stringify({
-        model: 'claude-sonnet-4-5-20250929',
-        max_tokens: 4096,
-        system: systemPrompt,
-        messages: [{ role: 'user', content: userPrompt }],
-      }),
-    });
-
-    if (!apiResponse.ok) {
-      const errBody = await apiResponse.text().catch(() => 'Unknown error');
-      return c.json(
-        { ok: false, error: `AI analysis failed (${apiResponse.status}): ${errBody}` },
-        502,
-      );
-    }
-
-    const result = (await apiResponse.json()) as any;
-    const textContent = result.content?.find((ct: any) => ct.type === 'text');
-    if (!textContent?.text) {
-      return c.json({ ok: false, error: 'AI returned no text content' }, 502);
-    }
-
-    let rawText = textContent.text.trim();
+    let rawText = rawResponse.trim();
     if (rawText.startsWith('```')) {
       rawText = rawText.replace(/^```(?:json)?\s*\n?/, '').replace(/\n?```\s*$/, '');
     }
@@ -2684,44 +2552,10 @@ ${criteriaList}
 Analyze each criterion and identify any issues with specificity, measurability, or testability.`;
 
   try {
-    const auth = getAnthropicAuth();
-    const headers: Record<string, string> = {
-      'Content-Type': 'application/json',
-      'anthropic-version': '2023-06-01',
-    };
-    if (auth.type === 'oauth') {
-      headers['Authorization'] = `Bearer ${auth.token}`;
-    } else {
-      headers['x-api-key'] = auth.token;
-    }
-
-    const apiResponse = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers,
-      body: JSON.stringify({
-        model: 'claude-sonnet-4-5-20250929',
-        max_tokens: 4096,
-        system: systemPrompt,
-        messages: [{ role: 'user', content: userPrompt }],
-      }),
-    });
-
-    if (!apiResponse.ok) {
-      const errBody = await apiResponse.text().catch(() => 'Unknown error');
-      return c.json(
-        { ok: false, error: `AI validation failed (${apiResponse.status}): ${errBody}` },
-        502,
-      );
-    }
-
-    const result = (await apiResponse.json()) as any;
-    const textContent = result.content?.find((ct: any) => ct.type === 'text');
-    if (!textContent?.text) {
-      return c.json({ ok: false, error: 'AI returned no text content' }, 502);
-    }
+    const rawResponse = await callLlm({ system: systemPrompt, user: userPrompt });
 
     // Parse JSON response
-    let rawText = textContent.text.trim();
+    let rawText = rawResponse.trim();
     if (rawText.startsWith('```')) {
       rawText = rawText.replace(/^```(?:json)?\s*\n?/, '').replace(/\n?```\s*$/, '');
     }
@@ -2934,44 +2768,10 @@ ${criteriaText || '(No criteria defined)'}
 Provide a complexity estimate with story points, confidence level, and key factors.`;
 
   try {
-    const auth = getAnthropicAuth();
-    const headers: Record<string, string> = {
-      'Content-Type': 'application/json',
-      'anthropic-version': '2023-06-01',
-    };
-    if (auth.type === 'oauth') {
-      headers['Authorization'] = `Bearer ${auth.token}`;
-    } else {
-      headers['x-api-key'] = auth.token;
-    }
-
-    const apiResponse = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers,
-      body: JSON.stringify({
-        model: 'claude-sonnet-4-5-20250929',
-        max_tokens: 2048,
-        system: systemPrompt,
-        messages: [{ role: 'user', content: userPrompt }],
-      }),
-    });
-
-    if (!apiResponse.ok) {
-      const errBody = await apiResponse.text().catch(() => 'Unknown error');
-      return c.json(
-        { ok: false, error: `AI estimation failed (${apiResponse.status}): ${errBody}` },
-        502,
-      );
-    }
-
-    const result = (await apiResponse.json()) as any;
-    const textContent = result.content?.find((ct: any) => ct.type === 'text');
-    if (!textContent?.text) {
-      return c.json({ ok: false, error: 'AI returned no text content' }, 502);
-    }
+    const rawResponse = await callLlm({ system: systemPrompt, user: userPrompt });
 
     // Parse JSON response
-    let rawText = textContent.text.trim();
+    let rawText = rawResponse.trim();
     if (rawText.startsWith('```')) {
       rawText = rawText.replace(/^```(?:json)?\s*\n?/, '').replace(/\n?```\s*$/, '');
     }
@@ -3224,43 +3024,9 @@ ${storiesContext}
 Provide relative complexity estimates for all stories that need estimation.`;
 
   try {
-    const auth = getAnthropicAuth();
-    const headers: Record<string, string> = {
-      'Content-Type': 'application/json',
-      'anthropic-version': '2023-06-01',
-    };
-    if (auth.type === 'oauth') {
-      headers['Authorization'] = `Bearer ${auth.token}`;
-    } else {
-      headers['x-api-key'] = auth.token;
-    }
+    const rawResponse = await callLlm({ system: systemPrompt, user: userPrompt });
 
-    const apiResponse = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers,
-      body: JSON.stringify({
-        model: 'claude-sonnet-4-5-20250929',
-        max_tokens: 8192,
-        system: systemPrompt,
-        messages: [{ role: 'user', content: userPrompt }],
-      }),
-    });
-
-    if (!apiResponse.ok) {
-      const errBody = await apiResponse.text().catch(() => 'Unknown error');
-      return c.json(
-        { ok: false, error: `AI estimation failed (${apiResponse.status}): ${errBody}` },
-        502,
-      );
-    }
-
-    const result = (await apiResponse.json()) as any;
-    const textContent = result.content?.find((ct: any) => ct.type === 'text');
-    if (!textContent?.text) {
-      return c.json({ ok: false, error: 'AI returned no text content' }, 502);
-    }
-
-    let rawText = textContent.text.trim();
+    let rawText = rawResponse.trim();
     if (rawText.startsWith('```')) {
       rawText = rawText.replace(/^```(?:json)?\s*\n?/, '').replace(/\n?```\s*$/, '');
     }
@@ -3495,44 +3261,10 @@ IMPORTANT:
   const userPrompt = `Analyze this PRD for completeness. Check all ${sectionsToAnalyze.length} standard sections and identify any gaps, weak areas, or missing details that could cause problems during implementation.`;
 
   try {
-    const auth = getAnthropicAuth();
-    const headers: Record<string, string> = {
-      'Content-Type': 'application/json',
-      'anthropic-version': '2023-06-01',
-    };
-    if (auth.type === 'oauth') {
-      headers['Authorization'] = `Bearer ${auth.token}`;
-    } else {
-      headers['x-api-key'] = auth.token;
-    }
-
-    const apiResponse = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers,
-      body: JSON.stringify({
-        model: 'claude-sonnet-4-5-20250929',
-        max_tokens: 4096,
-        system: systemPrompt,
-        messages: [{ role: 'user', content: userPrompt }],
-      }),
-    });
-
-    if (!apiResponse.ok) {
-      const errBody = await apiResponse.text().catch(() => 'Unknown error');
-      return c.json(
-        { ok: false, error: `AI completeness analysis failed (${apiResponse.status}): ${errBody}` },
-        502,
-      );
-    }
-
-    const result = (await apiResponse.json()) as any;
-    const textContent = result.content?.find((ct: any) => ct.type === 'text');
-    if (!textContent?.text) {
-      return c.json({ ok: false, error: 'AI returned no text content' }, 502);
-    }
+    const rawResponse = await callLlm({ system: systemPrompt, user: userPrompt });
 
     // Parse JSON response
-    let rawText = textContent.text.trim();
+    let rawText = rawResponse.trim();
     if (rawText.startsWith('```')) {
       rawText = rawText.replace(/^```(?:json)?\s*\n?/, '').replace(/\n?```\s*$/, '');
     }
@@ -3795,44 +3527,10 @@ IMPORTANT:
   const userPrompt = `Plan sprints for these ${estimatedPending.length} stories with a capacity of ${capacity} ${capacityMode === 'count' ? 'stories' : 'story points'} per sprint. Respect dependencies and prioritize critical/high-priority items first.`;
 
   try {
-    const auth = getAnthropicAuth();
-    const headers: Record<string, string> = {
-      'Content-Type': 'application/json',
-      'anthropic-version': '2023-06-01',
-    };
-    if (auth.type === 'oauth') {
-      headers['Authorization'] = `Bearer ${auth.token}`;
-    } else {
-      headers['x-api-key'] = auth.token;
-    }
-
-    const apiResponse = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers,
-      body: JSON.stringify({
-        model: 'claude-sonnet-4-5-20250929',
-        max_tokens: 4096,
-        system: systemPrompt,
-        messages: [{ role: 'user', content: userPrompt }],
-      }),
-    });
-
-    if (!apiResponse.ok) {
-      const errBody = await apiResponse.text().catch(() => 'Unknown error');
-      return c.json(
-        { ok: false, error: `AI sprint planning failed (${apiResponse.status}): ${errBody}` },
-        502,
-      );
-    }
-
-    const result = (await apiResponse.json()) as any;
-    const textContent = result.content?.find((ct: any) => ct.type === 'text');
-    if (!textContent?.text) {
-      return c.json({ ok: false, error: 'AI returned no text content' }, 502);
-    }
+    const rawResponse = await callLlm({ system: systemPrompt, user: userPrompt });
 
     // Parse JSON response
-    let rawText = textContent.text.trim();
+    let rawText = rawResponse.trim();
     if (rawText.startsWith('```')) {
       rawText = rawText.replace(/^```(?:json)?\s*\n?/, '').replace(/\n?```\s*$/, '');
     }
@@ -4425,47 +4123,10 @@ ${dependencyContext}${siblingContext}
 Recommend a priority level with explanation and supporting factors.`;
 
   try {
-    const auth = getAnthropicAuth();
-    const headers: Record<string, string> = {
-      'Content-Type': 'application/json',
-      'anthropic-version': '2023-06-01',
-    };
-    if (auth.type === 'oauth') {
-      headers['Authorization'] = `Bearer ${auth.token}`;
-    } else {
-      headers['x-api-key'] = auth.token;
-    }
-
-    const apiResponse = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers,
-      body: JSON.stringify({
-        model: 'claude-sonnet-4-5-20250929',
-        max_tokens: 2048,
-        system: systemPrompt,
-        messages: [{ role: 'user', content: userPrompt }],
-      }),
-    });
-
-    if (!apiResponse.ok) {
-      const errBody = await apiResponse.text().catch(() => 'Unknown error');
-      return c.json(
-        {
-          ok: false,
-          error: `AI priority recommendation failed (${apiResponse.status}): ${errBody}`,
-        },
-        502,
-      );
-    }
-
-    const result = (await apiResponse.json()) as any;
-    const textContent = result.content?.find((ct: any) => ct.type === 'text');
-    if (!textContent?.text) {
-      return c.json({ ok: false, error: 'AI returned no text content' }, 502);
-    }
+    const rawResponse = await callLlm({ system: systemPrompt, user: userPrompt });
 
     // Parse JSON response
-    let rawText = textContent.text.trim();
+    let rawText = rawResponse.trim();
     if (rawText.startsWith('```')) {
       rawText = rawText.replace(/^```(?:json)?\s*\n?/, '').replace(/\n?```\s*$/, '');
     }
@@ -4711,47 +4372,10 @@ ${storiesContext}
 Prioritize all stories considering dependencies, risks, scope, and user impact.`;
 
   try {
-    const auth = getAnthropicAuth();
-    const headers: Record<string, string> = {
-      'Content-Type': 'application/json',
-      'anthropic-version': '2023-06-01',
-    };
-    if (auth.type === 'oauth') {
-      headers['Authorization'] = `Bearer ${auth.token}`;
-    } else {
-      headers['x-api-key'] = auth.token;
-    }
-
-    const apiResponse = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers,
-      body: JSON.stringify({
-        model: 'claude-sonnet-4-5-20250929',
-        max_tokens: 4096,
-        system: systemPrompt,
-        messages: [{ role: 'user', content: userPrompt }],
-      }),
-    });
-
-    if (!apiResponse.ok) {
-      const errBody = await apiResponse.text().catch(() => 'Unknown error');
-      return c.json(
-        {
-          ok: false,
-          error: `AI priority recommendation failed (${apiResponse.status}): ${errBody}`,
-        },
-        502,
-      );
-    }
-
-    const result = (await apiResponse.json()) as any;
-    const textContent = result.content?.find((ct: any) => ct.type === 'text');
-    if (!textContent?.text) {
-      return c.json({ ok: false, error: 'AI returned no text content' }, 502);
-    }
+    const rawResponse = await callLlm({ system: systemPrompt, user: userPrompt });
 
     // Parse JSON response
-    let rawText = textContent.text.trim();
+    let rawText = rawResponse.trim();
     if (rawText.startsWith('```')) {
       rawText = rawText.replace(/^```(?:json)?\s*\n?/, '').replace(/\n?```\s*$/, '');
     }
@@ -4903,30 +4527,6 @@ function templateFromRow(row: any): StoryTemplate {
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
-}
-
-// --- Auth helper ---
-
-function getAnthropicAuth(): { token: string; type: 'api-key' | 'oauth' } {
-  // 1. Check ANTHROPIC_API_KEY env var
-  const apiKey = process.env.ANTHROPIC_API_KEY;
-  if (apiKey) {
-    return { token: apiKey, type: 'api-key' };
-  }
-
-  // 2. Fall back to Claude Code OAuth credentials
-  try {
-    const credPath = join(homedir(), '.claude', '.credentials.json');
-    const creds = JSON.parse(readFileSync(credPath, 'utf-8'));
-    const oauthToken = creds?.claudeAiOauth?.accessToken;
-    if (oauthToken) {
-      return { token: oauthToken, type: 'oauth' };
-    }
-  } catch {
-    // Credentials file not found or invalid
-  }
-
-  throw new Error('No Anthropic API key found. Set ANTHROPIC_API_KEY or log in with Claude Code.');
 }
 
 export { app as prdRoutes };

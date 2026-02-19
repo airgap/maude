@@ -5,6 +5,7 @@
   import { settingsStore } from '$lib/stores/settings.svelte';
   import { uiStore } from '$lib/stores/ui.svelte';
   import { workStore } from '$lib/stores/work.svelte';
+  import { primaryPaneStore } from '$lib/stores/primaryPane.svelte';
   import { api } from '$lib/api/client';
   import { sendAndStream } from '$lib/api/sse';
   import { onMount } from 'svelte';
@@ -921,10 +922,21 @@
         <div class="progress-bar-container">
           <div class="progress-bar" style:width="{loopStore.progress}%"></div>
         </div>
-        <span class="progress-text">
-          {loopStore.completedStories}/{loopStore.totalStories} stories • Iteration {loopStore
-            .activeLoop?.currentIteration || 0}
-        </span>
+        <div class="progress-row">
+          <span class="progress-text">
+            {loopStore.completedStories}/{loopStore.totalStories} stories • Iteration {loopStore
+              .activeLoop?.currentIteration || 0}
+          </span>
+          <button
+            class="dashboard-btn"
+            onclick={() => {
+              if (loopStore.activeLoop?.id) primaryPaneStore.openLooperTab(loopStore.activeLoop.id, 'Looper');
+            }}
+          >
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 1l4 4-4 4" /><path d="M3 11V9a4 4 0 0 1 4-4h14" /><path d="M7 23l-4-4 4-4" /><path d="M21 13v2a4 4 0 0 1-4 4H3" /></svg>
+            Dashboard
+          </button>
+        </div>
       </div>
 
       <div class="control-buttons">
@@ -1384,9 +1396,30 @@
     border-radius: 2px;
     transition: width 0.3s ease;
   }
+  .progress-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
   .progress-text {
     font-size: var(--fs-xxs);
     color: var(--text-tertiary);
+  }
+  .dashboard-btn {
+    display: flex;
+    align-items: center;
+    gap: 3px;
+    font-size: var(--fs-xxs);
+    color: var(--accent-primary);
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 2px 6px;
+    border-radius: var(--radius-sm);
+    transition: background var(--transition);
+  }
+  .dashboard-btn:hover {
+    background: var(--bg-hover);
   }
 
   .control-buttons {

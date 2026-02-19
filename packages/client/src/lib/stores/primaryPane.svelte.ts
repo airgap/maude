@@ -1,7 +1,7 @@
 import { uuid } from '$lib/utils/uuid';
 import { api } from '$lib/api/client';
 
-export type PrimaryTabKind = 'chat' | 'diff' | 'file';
+export type PrimaryTabKind = 'chat' | 'diff' | 'file' | 'looper';
 
 export interface PrimaryTab {
   id: string;
@@ -18,6 +18,8 @@ export interface PrimaryTab {
   fileContent?: string;
   /** For kind='file': detected language */
   language?: string;
+  /** For kind='looper': the loop ID to display */
+  loopId?: string;
 }
 
 export interface PrimaryPane {
@@ -245,6 +247,35 @@ function createPrimaryPaneStore() {
         filePath,
         fileContent,
         language,
+      };
+      pane.tabs.push(tab);
+      pane.activeTabId = tab.id;
+      activePaneId = pane.id;
+      persist();
+    },
+
+    /**
+     * Open (or focus) a Looper dashboard tab for the given loop ID.
+     */
+    openLooperTab(loopId: string, title = 'Looper') {
+      const pane = panes.find((p) => p.id === activePaneId) ?? panes[0];
+      if (!pane) return;
+
+      // Reuse existing looper tab for same loop
+      const existing = pane.tabs.find((t) => t.kind === 'looper' && t.loopId === loopId);
+      if (existing) {
+        pane.activeTabId = existing.id;
+        activePaneId = pane.id;
+        persist();
+        return;
+      }
+
+      const tab: PrimaryTab = {
+        id: uuid(),
+        conversationId: null,
+        title,
+        kind: 'looper',
+        loopId,
       };
       pane.tabs.push(tab);
       pane.activeTabId = tab.id;

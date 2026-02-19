@@ -136,6 +136,7 @@
   // ── Tooltip content per tab ──
   function tabTooltip(tab: PrimaryTab): string {
     const parts: string[] = [];
+    if (tab.kind === 'looper') return 'Loop Dashboard';
     if (tab.filePath) parts.push(tab.filePath);
     else if (tab.kind === 'chat') parts.push('Conversation');
     if (tab.language) parts.push(tab.language);
@@ -184,7 +185,20 @@
             }
           }}
         >
-          {#if tab.kind === 'diff'}
+          {#if tab.kind === 'looper'}
+            <svg
+              class="tab-icon looper-icon"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.8"
+            >
+              <path d="M17 1l4 4-4 4" />
+              <path d="M3 11V9a4 4 0 0 1 4-4h14" />
+              <path d="M7 23l-4-4 4-4" />
+              <path d="M21 13v2a4 4 0 0 1-4 4H3" />
+            </svg>
+          {:else if tab.kind === 'diff'}
             <svg
               class="tab-icon diff-icon"
               viewBox="0 0 24 24"
@@ -407,6 +421,10 @@
 
   .diff-icon {
     color: var(--accent-warning, #e5c07b);
+  }
+
+  .looper-icon {
+    color: var(--accent-primary);
   }
 
   .tab-title {

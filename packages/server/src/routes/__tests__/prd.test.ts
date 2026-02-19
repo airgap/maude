@@ -1,4 +1,4 @@
-import { describe, test, expect, beforeEach, mock, afterEach } from 'bun:test';
+import { describe, test, expect, beforeEach, mock } from 'bun:test';
 import { createTestDb } from '../../test-helpers';
 
 const testDb = createTestDb();
@@ -7,9 +7,16 @@ mock.module('../../db/database', () => ({
   initDatabase: () => {},
 }));
 
-// Mock the Anthropic API calls — we don't want real API calls in tests
-let mockFetchResponse: any = null;
-const originalFetch = globalThis.fetch;
+// Mock the LLM one-shot utility — we don't want real CLI/API calls in tests
+let mockCallLlmResponse: string | Error = '';
+let mockCallLlmCapture: any = null;
+mock.module('../../services/llm-oneshot', () => ({
+  callLlm: async (opts: any) => {
+    mockCallLlmCapture = opts;
+    if (mockCallLlmResponse instanceof Error) throw mockCallLlmResponse;
+    return mockCallLlmResponse;
+  },
+}));
 
 import { prdRoutes as app } from '../prd';
 
@@ -149,11 +156,8 @@ function insertMemory(overrides: Record<string, any> = {}) {
 describe('PRD Routes', () => {
   beforeEach(() => {
     clearTables();
-    mockFetchResponse = null;
-  });
-
-  afterEach(() => {
-    globalThis.fetch = originalFetch;
+    mockCallLlmResponse = '';
+    mockCallLlmCapture = null;
   });
 
   // ---------------------------------------------------------------
@@ -914,40 +918,19 @@ describe('PRD Routes', () => {
         },
       ];
 
-      globalThis.fetch = (async (url: string | URL | Request, init?: RequestInit) => {
-        const urlStr =
-          typeof url === 'string' ? url : url instanceof URL ? url.toString() : url.url;
-        if (urlStr.includes('api.anthropic.com')) {
-          return new Response(
-            JSON.stringify({
-              content: [{ type: 'text', text: JSON.stringify(mockStories) }],
-            }),
-            { status: 200, headers: { 'Content-Type': 'application/json' } },
-          );
-        }
-        return originalFetch(url, init);
-      }) as typeof fetch;
+      mockCallLlmResponse = JSON.stringify(mockStories);
 
-      // Set env var for auth
-      const origKey = process.env.ANTHROPIC_API_KEY;
-      process.env.ANTHROPIC_API_KEY = 'test-key';
+      const res = await app.request('/prd-1/generate', {
+        method: 'POST',
+        body: JSON.stringify({}),
+        headers: { 'Content-Type': 'application/json' },
+      });
 
-      try {
-        const res = await app.request('/prd-1/generate', {
-          method: 'POST',
-          body: JSON.stringify({}),
-          headers: { 'Content-Type': 'application/json' },
-        });
-
-        expect(res.status).toBe(200);
-        const json = await res.json();
-        expect(json.ok).toBe(true);
-        expect(json.data.stories).toHaveLength(2);
-        expect(json.data.prdId).toBe('prd-1');
-      } finally {
-        if (origKey) process.env.ANTHROPIC_API_KEY = origKey;
-        else delete process.env.ANTHROPIC_API_KEY;
-      }
+      expect(res.status).toBe(200);
+      const json = await res.json();
+      expect(json.ok).toBe(true);
+      expect(json.data.stories).toHaveLength(2);
+      expect(json.data.prdId).toBe('prd-1');
     });
 
     test('generates stories with valid structure from AI response', async () => {
@@ -968,46 +951,26 @@ describe('PRD Routes', () => {
         },
       ];
 
-      globalThis.fetch = (async (url: string | URL | Request, init?: RequestInit) => {
-        const urlStr =
-          typeof url === 'string' ? url : url instanceof URL ? url.toString() : url.url;
-        if (urlStr.includes('api.anthropic.com')) {
-          return new Response(
-            JSON.stringify({
-              content: [{ type: 'text', text: JSON.stringify(mockStories) }],
-            }),
-            { status: 200, headers: { 'Content-Type': 'application/json' } },
-          );
-        }
-        return originalFetch(url, init);
-      }) as typeof fetch;
+      mockCallLlmResponse = JSON.stringify(mockStories);
 
-      const origKey = process.env.ANTHROPIC_API_KEY;
-      process.env.ANTHROPIC_API_KEY = 'test-key';
+      const res = await app.request('/prd-1/generate', {
+        method: 'POST',
+        body: JSON.stringify({ description: 'Build authentication', count: 5 }),
+        headers: { 'Content-Type': 'application/json' },
+      });
 
-      try {
-        const res = await app.request('/prd-1/generate', {
-          method: 'POST',
-          body: JSON.stringify({ description: 'Build authentication', count: 5 }),
-          headers: { 'Content-Type': 'application/json' },
-        });
+      const json = await res.json();
+      expect(json.ok).toBe(true);
+      expect(json.data.stories).toHaveLength(2);
 
-        const json = await res.json();
-        expect(json.ok).toBe(true);
-        expect(json.data.stories).toHaveLength(2);
+      const story1 = json.data.stories[0];
+      expect(story1.title).toBe('Story One');
+      expect(story1.description).toBe('First story desc');
+      expect(story1.acceptanceCriteria).toEqual(['AC 1', 'AC 2', 'AC 3']);
+      expect(story1.priority).toBe('critical');
 
-        const story1 = json.data.stories[0];
-        expect(story1.title).toBe('Story One');
-        expect(story1.description).toBe('First story desc');
-        expect(story1.acceptanceCriteria).toEqual(['AC 1', 'AC 2', 'AC 3']);
-        expect(story1.priority).toBe('critical');
-
-        const story2 = json.data.stories[1];
-        expect(story2.acceptanceCriteria).toHaveLength(4);
-      } finally {
-        if (origKey) process.env.ANTHROPIC_API_KEY = origKey;
-        else delete process.env.ANTHROPIC_API_KEY;
-      }
+      const story2 = json.data.stories[1];
+      expect(story2.acceptanceCriteria).toHaveLength(4);
     });
 
     test('handles markdown code fences in AI response', async () => {
@@ -1022,39 +985,17 @@ describe('PRD Routes', () => {
         },
       ];
 
-      globalThis.fetch = (async (url: string | URL | Request, init?: RequestInit) => {
-        const urlStr =
-          typeof url === 'string' ? url : url instanceof URL ? url.toString() : url.url;
-        if (urlStr.includes('api.anthropic.com')) {
-          return new Response(
-            JSON.stringify({
-              content: [
-                { type: 'text', text: '```json\n' + JSON.stringify(mockStories) + '\n```' },
-              ],
-            }),
-            { status: 200, headers: { 'Content-Type': 'application/json' } },
-          );
-        }
-        return originalFetch(url, init);
-      }) as typeof fetch;
+      mockCallLlmResponse = '```json\n' + JSON.stringify(mockStories) + '\n```';
 
-      const origKey = process.env.ANTHROPIC_API_KEY;
-      process.env.ANTHROPIC_API_KEY = 'test-key';
+      const res = await app.request('/prd-1/generate', {
+        method: 'POST',
+        body: JSON.stringify({ description: 'Build a thing' }),
+        headers: { 'Content-Type': 'application/json' },
+      });
 
-      try {
-        const res = await app.request('/prd-1/generate', {
-          method: 'POST',
-          body: JSON.stringify({ description: 'Build a thing' }),
-          headers: { 'Content-Type': 'application/json' },
-        });
-
-        const json = await res.json();
-        expect(json.ok).toBe(true);
-        expect(json.data.stories).toHaveLength(1);
-      } finally {
-        if (origKey) process.env.ANTHROPIC_API_KEY = origKey;
-        else delete process.env.ANTHROPIC_API_KEY;
-      }
+      const json = await res.json();
+      expect(json.ok).toBe(true);
+      expect(json.data.stories).toHaveLength(1);
     });
 
     test('ensures minimum 3 acceptance criteria per story', async () => {
@@ -1069,41 +1010,21 @@ describe('PRD Routes', () => {
         },
       ];
 
-      globalThis.fetch = (async (url: string | URL | Request, init?: RequestInit) => {
-        const urlStr =
-          typeof url === 'string' ? url : url instanceof URL ? url.toString() : url.url;
-        if (urlStr.includes('api.anthropic.com')) {
-          return new Response(
-            JSON.stringify({
-              content: [{ type: 'text', text: JSON.stringify(mockStories) }],
-            }),
-            { status: 200, headers: { 'Content-Type': 'application/json' } },
-          );
-        }
-        return originalFetch(url, init);
-      }) as typeof fetch;
+      mockCallLlmResponse = JSON.stringify(mockStories);
 
-      const origKey = process.env.ANTHROPIC_API_KEY;
-      process.env.ANTHROPIC_API_KEY = 'test-key';
+      const res = await app.request('/prd-1/generate', {
+        method: 'POST',
+        body: JSON.stringify({ description: 'Build a thing' }),
+        headers: { 'Content-Type': 'application/json' },
+      });
 
-      try {
-        const res = await app.request('/prd-1/generate', {
-          method: 'POST',
-          body: JSON.stringify({ description: 'Build a thing' }),
-          headers: { 'Content-Type': 'application/json' },
-        });
-
-        const json = await res.json();
-        expect(json.ok).toBe(true);
-        const story = json.data.stories[0];
-        expect(story.acceptanceCriteria.length).toBeGreaterThanOrEqual(3);
-        expect(story.acceptanceCriteria[0]).toBe('Only one');
-        // Placeholder criteria should be added
-        expect(story.acceptanceCriteria[1]).toContain('Needs acceptance criterion');
-      } finally {
-        if (origKey) process.env.ANTHROPIC_API_KEY = origKey;
-        else delete process.env.ANTHROPIC_API_KEY;
-      }
+      const json = await res.json();
+      expect(json.ok).toBe(true);
+      const story = json.data.stories[0];
+      expect(story.acceptanceCriteria.length).toBeGreaterThanOrEqual(3);
+      expect(story.acceptanceCriteria[0]).toBe('Only one');
+      // Placeholder criteria should be added
+      expect(story.acceptanceCriteria[1]).toContain('Needs acceptance criterion');
     });
 
     test('validates and defaults invalid priority', async () => {
@@ -1118,36 +1039,16 @@ describe('PRD Routes', () => {
         },
       ];
 
-      globalThis.fetch = (async (url: string | URL | Request, init?: RequestInit) => {
-        const urlStr =
-          typeof url === 'string' ? url : url instanceof URL ? url.toString() : url.url;
-        if (urlStr.includes('api.anthropic.com')) {
-          return new Response(
-            JSON.stringify({
-              content: [{ type: 'text', text: JSON.stringify(mockStories) }],
-            }),
-            { status: 200, headers: { 'Content-Type': 'application/json' } },
-          );
-        }
-        return originalFetch(url, init);
-      }) as typeof fetch;
+      mockCallLlmResponse = JSON.stringify(mockStories);
 
-      const origKey = process.env.ANTHROPIC_API_KEY;
-      process.env.ANTHROPIC_API_KEY = 'test-key';
+      const res = await app.request('/prd-1/generate', {
+        method: 'POST',
+        body: JSON.stringify({ description: 'Build a thing' }),
+        headers: { 'Content-Type': 'application/json' },
+      });
 
-      try {
-        const res = await app.request('/prd-1/generate', {
-          method: 'POST',
-          body: JSON.stringify({ description: 'Build a thing' }),
-          headers: { 'Content-Type': 'application/json' },
-        });
-
-        const json = await res.json();
-        expect(json.data.stories[0].priority).toBe('medium'); // defaults to medium
-      } finally {
-        if (origKey) process.env.ANTHROPIC_API_KEY = origKey;
-        else delete process.env.ANTHROPIC_API_KEY;
-      }
+      const json = await res.json();
+      expect(json.data.stories[0].priority).toBe('medium'); // defaults to medium
     });
 
     test('filters out stories without titles', async () => {
@@ -1173,157 +1074,75 @@ describe('PRD Routes', () => {
         },
       ];
 
-      globalThis.fetch = (async (url: string | URL | Request, init?: RequestInit) => {
-        const urlStr =
-          typeof url === 'string' ? url : url instanceof URL ? url.toString() : url.url;
-        if (urlStr.includes('api.anthropic.com')) {
-          return new Response(
-            JSON.stringify({
-              content: [{ type: 'text', text: JSON.stringify(mockStories) }],
-            }),
-            { status: 200, headers: { 'Content-Type': 'application/json' } },
-          );
-        }
-        return originalFetch(url, init);
-      }) as typeof fetch;
+      mockCallLlmResponse = JSON.stringify(mockStories);
 
-      const origKey = process.env.ANTHROPIC_API_KEY;
-      process.env.ANTHROPIC_API_KEY = 'test-key';
+      const res = await app.request('/prd-1/generate', {
+        method: 'POST',
+        body: JSON.stringify({ description: 'Build a thing' }),
+        headers: { 'Content-Type': 'application/json' },
+      });
 
-      try {
-        const res = await app.request('/prd-1/generate', {
-          method: 'POST',
-          body: JSON.stringify({ description: 'Build a thing' }),
-          headers: { 'Content-Type': 'application/json' },
-        });
-
-        const json = await res.json();
-        expect(json.data.stories).toHaveLength(1);
-        expect(json.data.stories[0].title).toBe('Good Story');
-      } finally {
-        if (origKey) process.env.ANTHROPIC_API_KEY = origKey;
-        else delete process.env.ANTHROPIC_API_KEY;
-      }
+      const json = await res.json();
+      expect(json.data.stories).toHaveLength(1);
+      expect(json.data.stories[0].title).toBe('Good Story');
     });
 
     test('handles AI API error gracefully', async () => {
       insertPrd({ id: 'prd-1', description: 'Test PRD' });
 
-      globalThis.fetch = (async (url: string | URL | Request, init?: RequestInit) => {
-        const urlStr =
-          typeof url === 'string' ? url : url instanceof URL ? url.toString() : url.url;
-        if (urlStr.includes('api.anthropic.com')) {
-          return new Response('Rate limited', { status: 429 });
-        }
-        return originalFetch(url, init);
-      }) as typeof fetch;
+      mockCallLlmResponse = new Error('LLM call failed (429)');
 
-      const origKey = process.env.ANTHROPIC_API_KEY;
-      process.env.ANTHROPIC_API_KEY = 'test-key';
+      const res = await app.request('/prd-1/generate', {
+        method: 'POST',
+        body: JSON.stringify({ description: 'Build a thing' }),
+        headers: { 'Content-Type': 'application/json' },
+      });
 
-      try {
-        const res = await app.request('/prd-1/generate', {
-          method: 'POST',
-          body: JSON.stringify({ description: 'Build a thing' }),
-          headers: { 'Content-Type': 'application/json' },
-        });
-
-        expect(res.status).toBe(502);
-        const json = await res.json();
-        expect(json.ok).toBe(false);
-        expect(json.error).toContain('AI generation failed');
-      } finally {
-        if (origKey) process.env.ANTHROPIC_API_KEY = origKey;
-        else delete process.env.ANTHROPIC_API_KEY;
-      }
+      expect(res.status).toBe(500);
+      const json = await res.json();
+      expect(json.ok).toBe(false);
+      expect(json.error).toContain('generation failed');
     });
 
     test('handles invalid JSON in AI response', async () => {
       insertPrd({ id: 'prd-1', description: 'Test PRD' });
 
-      globalThis.fetch = (async (url: string | URL | Request, init?: RequestInit) => {
-        const urlStr =
-          typeof url === 'string' ? url : url instanceof URL ? url.toString() : url.url;
-        if (urlStr.includes('api.anthropic.com')) {
-          return new Response(
-            JSON.stringify({
-              content: [{ type: 'text', text: 'This is not valid JSON at all' }],
-            }),
-            { status: 200, headers: { 'Content-Type': 'application/json' } },
-          );
-        }
-        return originalFetch(url, init);
-      }) as typeof fetch;
+      mockCallLlmResponse = 'This is not valid JSON at all';
 
-      const origKey = process.env.ANTHROPIC_API_KEY;
-      process.env.ANTHROPIC_API_KEY = 'test-key';
+      const res = await app.request('/prd-1/generate', {
+        method: 'POST',
+        body: JSON.stringify({ description: 'Build a thing' }),
+        headers: { 'Content-Type': 'application/json' },
+      });
 
-      try {
-        const res = await app.request('/prd-1/generate', {
-          method: 'POST',
-          body: JSON.stringify({ description: 'Build a thing' }),
-          headers: { 'Content-Type': 'application/json' },
-        });
-
-        expect(res.status).toBe(502);
-        const json = await res.json();
-        expect(json.ok).toBe(false);
-        expect(json.error).toContain('Failed to parse');
-      } finally {
-        if (origKey) process.env.ANTHROPIC_API_KEY = origKey;
-        else delete process.env.ANTHROPIC_API_KEY;
-      }
+      expect(res.status).toBe(502);
+      const json = await res.json();
+      expect(json.ok).toBe(false);
+      expect(json.error).toContain('Failed to parse');
     });
 
     test('includes existing stories in prompt context to avoid duplicates', async () => {
       insertPrd({ id: 'prd-1', description: 'Test PRD' });
       insertStory({ id: 'existing-1', prd_id: 'prd-1', title: 'Existing Story' });
 
-      let capturedBody: any = null;
-      globalThis.fetch = (async (url: string | URL | Request, init?: RequestInit) => {
-        const urlStr =
-          typeof url === 'string' ? url : url instanceof URL ? url.toString() : url.url;
-        if (urlStr.includes('api.anthropic.com')) {
-          capturedBody = JSON.parse(init?.body as string);
-          return new Response(
-            JSON.stringify({
-              content: [
-                {
-                  type: 'text',
-                  text: JSON.stringify([
-                    {
-                      title: 'New Story',
-                      description: 'New',
-                      acceptanceCriteria: ['AC1', 'AC2', 'AC3'],
-                      priority: 'medium',
-                    },
-                  ]),
-                },
-              ],
-            }),
-            { status: 200, headers: { 'Content-Type': 'application/json' } },
-          );
-        }
-        return originalFetch(url, init);
-      }) as typeof fetch;
+      mockCallLlmResponse = JSON.stringify([
+      {
+        title: 'New Story',
+        description: 'New',
+        acceptanceCriteria: ['AC1', 'AC2', 'AC3'],
+        priority: 'medium',
+      },
+      ]);
 
-      const origKey = process.env.ANTHROPIC_API_KEY;
-      process.env.ANTHROPIC_API_KEY = 'test-key';
+      await app.request('/prd-1/generate', {
+        method: 'POST',
+        body: JSON.stringify({ description: 'Build a thing' }),
+        headers: { 'Content-Type': 'application/json' },
+      });
 
-      try {
-        await app.request('/prd-1/generate', {
-          method: 'POST',
-          body: JSON.stringify({ description: 'Build a thing' }),
-          headers: { 'Content-Type': 'application/json' },
-        });
-
-        // System prompt should include existing story context
-        expect(capturedBody.system).toContain('Existing Story');
-        expect(capturedBody.system).toContain('avoid duplicating');
-      } finally {
-        if (origKey) process.env.ANTHROPIC_API_KEY = origKey;
-        else delete process.env.ANTHROPIC_API_KEY;
-      }
+      // System prompt should include existing story context
+      expect(mockCallLlmCapture.system).toContain('Existing Story');
+      expect(mockCallLlmCapture.system).toContain('avoid duplicating');
     });
 
     test('includes project memory context in system prompt', async () => {
@@ -1337,51 +1156,24 @@ describe('PRD Routes', () => {
         confidence: 0.9,
       });
 
-      let capturedBody: any = null;
-      globalThis.fetch = (async (url: string | URL | Request, init?: RequestInit) => {
-        const urlStr =
-          typeof url === 'string' ? url : url instanceof URL ? url.toString() : url.url;
-        if (urlStr.includes('api.anthropic.com')) {
-          capturedBody = JSON.parse(init?.body as string);
-          return new Response(
-            JSON.stringify({
-              content: [
-                {
-                  type: 'text',
-                  text: JSON.stringify([
-                    {
-                      title: 'Story',
-                      description: 'Desc',
-                      acceptanceCriteria: ['AC1', 'AC2', 'AC3'],
-                      priority: 'medium',
-                    },
-                  ]),
-                },
-              ],
-            }),
-            { status: 200, headers: { 'Content-Type': 'application/json' } },
-          );
-        }
-        return originalFetch(url, init);
-      }) as typeof fetch;
+      mockCallLlmResponse = JSON.stringify([
+      {
+        title: 'Story',
+        description: 'Desc',
+        acceptanceCriteria: ['AC1', 'AC2', 'AC3'],
+        priority: 'medium',
+      },
+      ]);
 
-      const origKey = process.env.ANTHROPIC_API_KEY;
-      process.env.ANTHROPIC_API_KEY = 'test-key';
+      await app.request('/prd-1/generate', {
+        method: 'POST',
+        body: JSON.stringify({ description: 'Build a thing' }),
+        headers: { 'Content-Type': 'application/json' },
+      });
 
-      try {
-        await app.request('/prd-1/generate', {
-          method: 'POST',
-          body: JSON.stringify({ description: 'Build a thing' }),
-          headers: { 'Content-Type': 'application/json' },
-        });
-
-        // System prompt should include project memory
-        expect(capturedBody.system).toContain('Project Memory');
-        expect(capturedBody.system).toContain('Use TypeScript');
-      } finally {
-        if (origKey) process.env.ANTHROPIC_API_KEY = origKey;
-        else delete process.env.ANTHROPIC_API_KEY;
-      }
+      // System prompt should include project memory
+      expect(mockCallLlmCapture.system).toContain('Project Memory');
+      expect(mockCallLlmCapture.system).toContain('Use TypeScript');
     });
   });
 
@@ -1389,36 +1181,12 @@ describe('PRD Routes', () => {
   // POST /:prdId/stories/:storyId/refine — Story refinement
   // ---------------------------------------------------------------
   describe('POST /:prdId/stories/:storyId/refine — story refinement', () => {
-    function mockAnthropicRefine(response: any, captureBody?: { body: any }) {
-      globalThis.fetch = (async (url: string | URL | Request, init?: RequestInit) => {
-        const urlStr =
-          typeof url === 'string' ? url : url instanceof URL ? url.toString() : url.url;
-        if (urlStr.includes('api.anthropic.com')) {
-          if (captureBody && init?.body) {
-            captureBody.body = JSON.parse(init.body as string);
-          }
-          return new Response(
-            JSON.stringify({
-              content: [{ type: 'text', text: JSON.stringify(response) }],
-            }),
-            { status: 200, headers: { 'Content-Type': 'application/json' } },
-          );
-        }
-        return originalFetch(url, init);
-      }) as typeof fetch;
+    function mockAnthropicRefine(response: any, _captureBody?: { body: any }) {
+      mockCallLlmResponse = JSON.stringify(response);
     }
 
     function withApiKey(fn: () => Promise<void>) {
-      return async () => {
-        const origKey = process.env.ANTHROPIC_API_KEY;
-        process.env.ANTHROPIC_API_KEY = 'test-key';
-        try {
-          await fn();
-        } finally {
-          if (origKey) process.env.ANTHROPIC_API_KEY = origKey;
-          else delete process.env.ANTHROPIC_API_KEY;
-        }
-      };
+      return fn;
     }
 
     test('returns 404 for non-existent PRD', async () => {
@@ -1748,19 +1516,7 @@ describe('PRD Routes', () => {
           questions: [{ id: 'q1', question: 'Q?', context: 'C' }],
         };
 
-        globalThis.fetch = (async (url: string | URL | Request, init?: RequestInit) => {
-          const urlStr =
-            typeof url === 'string' ? url : url instanceof URL ? url.toString() : url.url;
-          if (urlStr.includes('api.anthropic.com')) {
-            return new Response(
-              JSON.stringify({
-                content: [{ type: 'text', text: '```json\n' + JSON.stringify(response) + '\n```' }],
-              }),
-              { status: 200, headers: { 'Content-Type': 'application/json' } },
-            );
-          }
-          return originalFetch(url, init);
-        }) as typeof fetch;
+        mockCallLlmResponse = '```json\n' + JSON.stringify(response) + '\n```';
 
         const res = await app.request('/prd-1/stories/story-1/refine', {
           method: 'POST',
@@ -1830,14 +1586,7 @@ describe('PRD Routes', () => {
         insertPrd({ id: 'prd-1' });
         insertStory({ id: 'story-1', prd_id: 'prd-1' });
 
-        globalThis.fetch = (async (url: string | URL | Request) => {
-          const urlStr =
-            typeof url === 'string' ? url : url instanceof URL ? url.toString() : url.url;
-          if (urlStr.includes('api.anthropic.com')) {
-            return new Response('Rate limited', { status: 429 });
-          }
-          return originalFetch(url);
-        }) as typeof fetch;
+        mockCallLlmResponse = new Error('LLM call failed (429)');
 
         const res = await app.request('/prd-1/stories/story-1/refine', {
           method: 'POST',
@@ -1845,11 +1594,10 @@ describe('PRD Routes', () => {
           headers: { 'Content-Type': 'application/json' },
         });
 
-        expect(res.status).toBe(502);
+        expect(res.status).toBe(500);
         const json = await res.json();
         expect(json.ok).toBe(false);
-        expect(json.error).toContain('AI refinement failed');
-        expect(json.error).toContain('429');
+        expect(json.error).toContain('refinement failed');
       }),
     );
 
@@ -1859,19 +1607,7 @@ describe('PRD Routes', () => {
         insertPrd({ id: 'prd-1' });
         insertStory({ id: 'story-1', prd_id: 'prd-1' });
 
-        globalThis.fetch = (async (url: string | URL | Request) => {
-          const urlStr =
-            typeof url === 'string' ? url : url instanceof URL ? url.toString() : url.url;
-          if (urlStr.includes('api.anthropic.com')) {
-            return new Response(
-              JSON.stringify({
-                content: [{ type: 'text', text: 'This is not valid JSON{' }],
-              }),
-              { status: 200, headers: { 'Content-Type': 'application/json' } },
-            );
-          }
-          return originalFetch(url);
-        }) as typeof fetch;
+        mockCallLlmResponse = 'This is not valid JSON{';
 
         const res = await app.request('/prd-1/stories/story-1/refine', {
           method: 'POST',
@@ -1892,19 +1628,7 @@ describe('PRD Routes', () => {
         insertPrd({ id: 'prd-1' });
         insertStory({ id: 'story-1', prd_id: 'prd-1' });
 
-        globalThis.fetch = (async (url: string | URL | Request) => {
-          const urlStr =
-            typeof url === 'string' ? url : url instanceof URL ? url.toString() : url.url;
-          if (urlStr.includes('api.anthropic.com')) {
-            return new Response(
-              JSON.stringify({
-                content: [{ type: 'tool_use', text: null }],
-              }),
-              { status: 200, headers: { 'Content-Type': 'application/json' } },
-            );
-          }
-          return originalFetch(url);
-        }) as typeof fetch;
+        mockCallLlmResponse = new Error('LLM returned no text content');
 
         const res = await app.request('/prd-1/stories/story-1/refine', {
           method: 'POST',
@@ -1912,10 +1636,10 @@ describe('PRD Routes', () => {
           headers: { 'Content-Type': 'application/json' },
         });
 
-        expect(res.status).toBe(502);
+        expect(res.status).toBe(500);
         const json = await res.json();
         expect(json.ok).toBe(false);
-        expect(json.error).toContain('no text content');
+        expect(json.error).toContain('refinement failed');
       }),
     );
 
@@ -1991,16 +1715,12 @@ describe('PRD Routes', () => {
           confidence: 0.9,
         });
 
-        const captured: { body: any } = { body: null };
-        mockAnthropicRefine(
-          {
-            qualityScore: 60,
-            qualityExplanation: 'Fair',
-            meetsThreshold: false,
-            questions: [{ id: 'q1', question: 'Q?', context: 'C' }],
-          },
-          captured,
-        );
+        mockAnthropicRefine({
+          qualityScore: 60,
+          qualityExplanation: 'Fair',
+          meetsThreshold: false,
+          questions: [{ id: 'q1', question: 'Q?', context: 'C' }],
+        });
 
         await app.request('/prd-1/stories/story-1/refine', {
           method: 'POST',
@@ -2008,8 +1728,8 @@ describe('PRD Routes', () => {
           headers: { 'Content-Type': 'application/json' },
         });
 
-        expect(captured.body.system).toContain('Project Memory');
-        expect(captured.body.system).toContain('Use vitest');
+        expect(mockCallLlmCapture.system).toContain('Project Memory');
+        expect(mockCallLlmCapture.system).toContain('Use vitest');
       }),
     );
 
@@ -2025,16 +1745,12 @@ describe('PRD Routes', () => {
           description: 'User registration flow',
         });
 
-        const captured: { body: any } = { body: null };
-        mockAnthropicRefine(
-          {
-            qualityScore: 60,
-            qualityExplanation: 'Fair',
-            meetsThreshold: false,
-            questions: [{ id: 'q1', question: 'Q?', context: 'C' }],
-          },
-          captured,
-        );
+        mockAnthropicRefine({
+          qualityScore: 60,
+          qualityExplanation: 'Fair',
+          meetsThreshold: false,
+          questions: [{ id: 'q1', question: 'Q?', context: 'C' }],
+        });
 
         await app.request('/prd-1/stories/story-1/refine', {
           method: 'POST',
@@ -2043,8 +1759,8 @@ describe('PRD Routes', () => {
         });
 
         // System prompt should include sibling stories but NOT the story being refined
-        expect(captured.body.system).toContain('Registration Feature');
-        expect(captured.body.system).toContain('Other Stories');
+        expect(mockCallLlmCapture.system).toContain('Registration Feature');
+        expect(mockCallLlmCapture.system).toContain('Other Stories');
       }),
     );
 
@@ -2358,22 +2074,18 @@ describe('PRD Routes', () => {
         insertPrd({ id: 'prd-1' });
         insertStory({ id: 'story-1', prd_id: 'prd-1', title: 'My Story' });
 
-        const captured: { body: any } = { body: null };
-        mockAnthropicRefine(
-          {
-            qualityScore: 80,
-            qualityExplanation: 'Good',
-            meetsThreshold: true,
-            questions: [],
-            updatedStory: {
-              title: 'Updated',
-              description: 'Updated',
-              acceptanceCriteria: ['AC1', 'AC2', 'AC3'],
-              priority: 'medium',
-            },
+        mockAnthropicRefine({
+          qualityScore: 80,
+          qualityExplanation: 'Good',
+          meetsThreshold: true,
+          questions: [],
+          updatedStory: {
+            title: 'Updated',
+            description: 'Updated',
+            acceptanceCriteria: ['AC1', 'AC2', 'AC3'],
+            priority: 'medium',
           },
-          captured,
-        );
+        });
 
         await app.request('/prd-1/stories/story-1/refine', {
           method: 'POST',
@@ -2387,7 +2099,7 @@ describe('PRD Routes', () => {
         });
 
         // The user prompt should contain the answers
-        const userMessage = captured.body.messages[0].content;
+        const userMessage = mockCallLlmCapture.user;
         expect(userMessage).toContain('Use JWT tokens');
         expect(userMessage).toContain('Show toast notifications');
         expect(userMessage).toContain('auth-method');
@@ -2405,16 +2117,12 @@ describe('PRD Routes', () => {
         });
         insertStory({ id: 'story-1', prd_id: 'prd-1', title: 'Login' });
 
-        const captured: { body: any } = { body: null };
-        mockAnthropicRefine(
-          {
-            qualityScore: 55,
-            qualityExplanation: 'Fair',
-            meetsThreshold: false,
-            questions: [{ id: 'q1', question: 'Q?', context: 'C' }],
-          },
-          captured,
-        );
+        mockAnthropicRefine({
+          qualityScore: 55,
+          qualityExplanation: 'Fair',
+          meetsThreshold: false,
+          questions: [{ id: 'q1', question: 'Q?', context: 'C' }],
+        });
 
         await app.request('/prd-1/stories/story-1/refine', {
           method: 'POST',
@@ -2422,7 +2130,7 @@ describe('PRD Routes', () => {
           headers: { 'Content-Type': 'application/json' },
         });
 
-        const userMessage = captured.body.messages[0].content;
+        const userMessage = mockCallLlmCapture.user;
         expect(userMessage).toContain('Auth System PRD');
         expect(userMessage).toContain('Build a complete authentication system');
       }),
@@ -2577,38 +2285,18 @@ describe('PRD Routes', () => {
         ],
       };
 
-      globalThis.fetch = (async (url: string | URL | Request, init?: RequestInit) => {
-        const urlStr =
-          typeof url === 'string' ? url : url instanceof URL ? url.toString() : url.url;
-        if (urlStr.includes('api.anthropic.com')) {
-          return new Response(
-            JSON.stringify({
-              content: [{ type: 'text', text: JSON.stringify(mockValidation) }],
-            }),
-            { status: 200, headers: { 'Content-Type': 'application/json' } },
-          );
-        }
-        return originalFetch(url, init);
-      }) as typeof fetch;
+      mockCallLlmResponse = JSON.stringify(mockValidation);
 
-      const origKey = process.env.ANTHROPIC_API_KEY;
-      process.env.ANTHROPIC_API_KEY = 'test-key';
+      const res = await app.request('/prd-1/stories/story-1/validate-criteria', {
+        method: 'POST',
+        body: JSON.stringify({ storyId: 'story-1' }),
+        headers: { 'Content-Type': 'application/json' },
+      });
 
-      try {
-        const res = await app.request('/prd-1/stories/story-1/validate-criteria', {
-          method: 'POST',
-          body: JSON.stringify({ storyId: 'story-1' }),
-          headers: { 'Content-Type': 'application/json' },
-        });
-
-        expect(res.status).toBe(200);
-        const json = await res.json();
-        expect(json.ok).toBe(true);
-        expect(json.data.criteria).toHaveLength(2);
-      } finally {
-        if (origKey) process.env.ANTHROPIC_API_KEY = origKey;
-        else delete process.env.ANTHROPIC_API_KEY;
-      }
+      expect(res.status).toBe(200);
+      const json = await res.json();
+      expect(json.ok).toBe(true);
+      expect(json.data.criteria).toHaveLength(2);
     });
 
     test('validates criteria and returns issues for vague language', async () => {
@@ -2668,68 +2356,48 @@ describe('PRD Routes', () => {
         ],
       };
 
-      globalThis.fetch = (async (url: string | URL | Request, init?: RequestInit) => {
-        const urlStr =
-          typeof url === 'string' ? url : url instanceof URL ? url.toString() : url.url;
-        if (urlStr.includes('api.anthropic.com')) {
-          return new Response(
-            JSON.stringify({
-              content: [{ type: 'text', text: JSON.stringify(mockValidation) }],
-            }),
-            { status: 200, headers: { 'Content-Type': 'application/json' } },
-          );
-        }
-        return originalFetch(url, init);
-      }) as typeof fetch;
+      mockCallLlmResponse = JSON.stringify(mockValidation);
 
-      const origKey = process.env.ANTHROPIC_API_KEY;
-      process.env.ANTHROPIC_API_KEY = 'test-key';
+      const res = await app.request('/prd-1/stories/story-1/validate-criteria', {
+        method: 'POST',
+        body: JSON.stringify({
+          storyId: 'story-1',
+          criteria: ['The system should work well', 'The UI should be user-friendly'],
+          storyTitle: 'UI Story',
+        }),
+        headers: { 'Content-Type': 'application/json' },
+      });
 
-      try {
-        const res = await app.request('/prd-1/stories/story-1/validate-criteria', {
-          method: 'POST',
-          body: JSON.stringify({
-            storyId: 'story-1',
-            criteria: ['The system should work well', 'The UI should be user-friendly'],
-            storyTitle: 'UI Story',
-          }),
-          headers: { 'Content-Type': 'application/json' },
-        });
+      expect(res.status).toBe(200);
+      const json = await res.json();
+      expect(json.ok).toBe(true);
 
-        expect(res.status).toBe(200);
-        const json = await res.json();
-        expect(json.ok).toBe(true);
+      // AC1: System checks each criterion for specificity (not vague language)
+      expect(json.data.overallScore).toBe(35);
+      expect(json.data.allValid).toBe(false);
+      expect(json.data.storyId).toBe('story-1');
+      expect(json.data.summary).toBeTruthy();
 
-        // AC1: System checks each criterion for specificity (not vague language)
-        expect(json.data.overallScore).toBe(35);
-        expect(json.data.allValid).toBe(false);
-        expect(json.data.storyId).toBe('story-1');
-        expect(json.data.summary).toBeTruthy();
+      // Check criteria structure
+      expect(json.data.criteria).toHaveLength(2);
 
-        // Check criteria structure
-        expect(json.data.criteria).toHaveLength(2);
+      // First criterion — vague language flagged
+      const c0 = json.data.criteria[0];
+      expect(c0.isValid).toBe(false);
+      expect(c0.issues).toHaveLength(1);
+      expect(c0.issues[0].category).toBe('vague');
+      expect(c0.issues[0].severity).toBe('error');
+      expect(c0.issues[0].message).toBeTruthy();
 
-        // First criterion — vague language flagged
-        const c0 = json.data.criteria[0];
-        expect(c0.isValid).toBe(false);
-        expect(c0.issues).toHaveLength(1);
-        expect(c0.issues[0].category).toBe('vague');
-        expect(c0.issues[0].severity).toBe('error');
-        expect(c0.issues[0].message).toBeTruthy();
+      // AC4: AI suggests improved versions of problematic criteria
+      expect(c0.suggestedReplacement).toBeTruthy();
+      expect(c0.issues[0].suggestedReplacement).toBeTruthy();
 
-        // AC4: AI suggests improved versions of problematic criteria
-        expect(c0.suggestedReplacement).toBeTruthy();
-        expect(c0.issues[0].suggestedReplacement).toBeTruthy();
-
-        // Second criterion — multiple issues
-        const c1 = json.data.criteria[1];
-        expect(c1.isValid).toBe(false);
-        expect(c1.issues.length).toBeGreaterThanOrEqual(2);
-        expect(c1.suggestedReplacement).toBeTruthy();
-      } finally {
-        if (origKey) process.env.ANTHROPIC_API_KEY = origKey;
-        else delete process.env.ANTHROPIC_API_KEY;
-      }
+      // Second criterion — multiple issues
+      const c1 = json.data.criteria[1];
+      expect(c1.isValid).toBe(false);
+      expect(c1.issues.length).toBeGreaterThanOrEqual(2);
+      expect(c1.suggestedReplacement).toBeTruthy();
     });
 
     test('validates measurability and testability of criteria', async () => {
@@ -2778,53 +2446,34 @@ describe('PRD Routes', () => {
         ],
       };
 
-      globalThis.fetch = (async (url: string | URL | Request, init?: RequestInit) => {
-        const urlStr =
-          typeof url === 'string' ? url : url instanceof URL ? url.toString() : url.url;
-        if (urlStr.includes('api.anthropic.com')) {
-          return new Response(
-            JSON.stringify({
-              content: [{ type: 'text', text: JSON.stringify(mockValidation) }],
-            }),
-            { status: 200, headers: { 'Content-Type': 'application/json' } },
-          );
-        }
-        return originalFetch(url, init);
-      }) as typeof fetch;
+      mockCallLlmResponse = JSON.stringify(mockValidation);
 
-      const origKey = process.env.ANTHROPIC_API_KEY;
-      process.env.ANTHROPIC_API_KEY = 'test-key';
+      const res = await app.request('/prd-1/stories/story-1/validate-criteria', {
+        method: 'POST',
+        body: JSON.stringify({
+          storyId: 'story-1',
+          criteria: [
+            'API should handle errors properly',
+            'System returns HTTP 200 with user data on successful login',
+          ],
+        }),
+        headers: { 'Content-Type': 'application/json' },
+      });
 
-      try {
-        const res = await app.request('/prd-1/stories/story-1/validate-criteria', {
-          method: 'POST',
-          body: JSON.stringify({
-            storyId: 'story-1',
-            criteria: [
-              'API should handle errors properly',
-              'System returns HTTP 200 with user data on successful login',
-            ],
-          }),
-          headers: { 'Content-Type': 'application/json' },
-        });
+      const json = await res.json();
+      expect(json.ok).toBe(true);
 
-        const json = await res.json();
-        expect(json.ok).toBe(true);
+      // AC2: System validates criteria are measurable/testable
+      const c0 = json.data.criteria[0];
+      expect(c0.isValid).toBe(false);
+      expect(c0.issues.some((i: any) => i.category === 'untestable')).toBe(true);
+      expect(c0.issues.some((i: any) => i.category === 'unmeasurable')).toBe(true);
 
-        // AC2: System validates criteria are measurable/testable
-        const c0 = json.data.criteria[0];
-        expect(c0.isValid).toBe(false);
-        expect(c0.issues.some((i: any) => i.category === 'untestable')).toBe(true);
-        expect(c0.issues.some((i: any) => i.category === 'unmeasurable')).toBe(true);
+      // Valid criterion passes
+      const c1 = json.data.criteria[1];
+      expect(c1.isValid).toBe(true);
+      expect(c1.issues).toHaveLength(0);
 
-        // Valid criterion passes
-        const c1 = json.data.criteria[1];
-        expect(c1.isValid).toBe(true);
-        expect(c1.issues).toHaveLength(0);
-      } finally {
-        if (origKey) process.env.ANTHROPIC_API_KEY = origKey;
-        else delete process.env.ANTHROPIC_API_KEY;
-      }
     });
 
     test('normalizes severity and category values from AI', async () => {
@@ -2856,51 +2505,32 @@ describe('PRD Routes', () => {
         ],
       };
 
-      globalThis.fetch = (async (url: string | URL | Request, init?: RequestInit) => {
-        const urlStr =
-          typeof url === 'string' ? url : url instanceof URL ? url.toString() : url.url;
-        if (urlStr.includes('api.anthropic.com')) {
-          return new Response(
-            JSON.stringify({
-              content: [{ type: 'text', text: JSON.stringify(mockValidation) }],
-            }),
-            { status: 200, headers: { 'Content-Type': 'application/json' } },
-          );
-        }
-        return originalFetch(url, init);
-      }) as typeof fetch;
+      mockCallLlmResponse = JSON.stringify(mockValidation);
 
-      const origKey = process.env.ANTHROPIC_API_KEY;
-      process.env.ANTHROPIC_API_KEY = 'test-key';
+      const res = await app.request('/prd-1/stories/story-1/validate-criteria', {
+        method: 'POST',
+        body: JSON.stringify({ storyId: 'story-1', criteria: ['Some criterion'] }),
+        headers: { 'Content-Type': 'application/json' },
+      });
 
-      try {
-        const res = await app.request('/prd-1/stories/story-1/validate-criteria', {
-          method: 'POST',
-          body: JSON.stringify({ storyId: 'story-1', criteria: ['Some criterion'] }),
-          headers: { 'Content-Type': 'application/json' },
-        });
+      const json = await res.json();
+      expect(json.ok).toBe(true);
 
-        const json = await res.json();
-        expect(json.ok).toBe(true);
+      const issue = json.data.criteria[0].issues[0];
+      // Invalid severity normalized to 'warning'
+      expect(['error', 'warning', 'info']).toContain(issue.severity);
+      expect(issue.severity).toBe('warning');
+      // Invalid category normalized to 'vague'
+      expect([
+        'vague',
+        'unmeasurable',
+        'untestable',
+        'too_broad',
+        'ambiguous',
+        'missing_detail',
+      ]).toContain(issue.category);
+      expect(issue.category).toBe('vague');
 
-        const issue = json.data.criteria[0].issues[0];
-        // Invalid severity normalized to 'warning'
-        expect(['error', 'warning', 'info']).toContain(issue.severity);
-        expect(issue.severity).toBe('warning');
-        // Invalid category normalized to 'vague'
-        expect([
-          'vague',
-          'unmeasurable',
-          'untestable',
-          'too_broad',
-          'ambiguous',
-          'missing_detail',
-        ]).toContain(issue.category);
-        expect(issue.category).toBe('vague');
-      } finally {
-        if (origKey) process.env.ANTHROPIC_API_KEY = origKey;
-        else delete process.env.ANTHROPIC_API_KEY;
-      }
     });
 
     test('clamps overall score to 0-100 range', async () => {
@@ -2916,38 +2546,19 @@ describe('PRD Routes', () => {
         ],
       };
 
-      globalThis.fetch = (async (url: string | URL | Request, init?: RequestInit) => {
-        const urlStr =
-          typeof url === 'string' ? url : url instanceof URL ? url.toString() : url.url;
-        if (urlStr.includes('api.anthropic.com')) {
-          return new Response(
-            JSON.stringify({
-              content: [{ type: 'text', text: JSON.stringify(mockValidation) }],
-            }),
-            { status: 200, headers: { 'Content-Type': 'application/json' } },
-          );
-        }
-        return originalFetch(url, init);
-      }) as typeof fetch;
+      mockCallLlmResponse = JSON.stringify(mockValidation);
 
-      const origKey = process.env.ANTHROPIC_API_KEY;
-      process.env.ANTHROPIC_API_KEY = 'test-key';
+      const res = await app.request('/prd-1/stories/story-1/validate-criteria', {
+        method: 'POST',
+        body: JSON.stringify({ storyId: 'story-1', criteria: ['Criterion'] }),
+        headers: { 'Content-Type': 'application/json' },
+      });
 
-      try {
-        const res = await app.request('/prd-1/stories/story-1/validate-criteria', {
-          method: 'POST',
-          body: JSON.stringify({ storyId: 'story-1', criteria: ['Criterion'] }),
-          headers: { 'Content-Type': 'application/json' },
-        });
+      const json = await res.json();
+      expect(json.ok).toBe(true);
+      expect(json.data.overallScore).toBeLessThanOrEqual(100);
+      expect(json.data.overallScore).toBeGreaterThanOrEqual(0);
 
-        const json = await res.json();
-        expect(json.ok).toBe(true);
-        expect(json.data.overallScore).toBeLessThanOrEqual(100);
-        expect(json.data.overallScore).toBeGreaterThanOrEqual(0);
-      } finally {
-        if (origKey) process.env.ANTHROPIC_API_KEY = origKey;
-        else delete process.env.ANTHROPIC_API_KEY;
-      }
     });
 
     test('handles markdown code fences in AI response', async () => {
@@ -2969,146 +2580,75 @@ describe('PRD Routes', () => {
         ],
       };
 
-      globalThis.fetch = (async (url: string | URL | Request, init?: RequestInit) => {
-        const urlStr =
-          typeof url === 'string' ? url : url instanceof URL ? url.toString() : url.url;
-        if (urlStr.includes('api.anthropic.com')) {
-          return new Response(
-            JSON.stringify({
-              content: [
-                { type: 'text', text: '```json\n' + JSON.stringify(mockValidation) + '\n```' },
-              ],
-            }),
-            { status: 200, headers: { 'Content-Type': 'application/json' } },
-          );
-        }
-        return originalFetch(url, init);
-      }) as typeof fetch;
+      mockCallLlmResponse = '```json\n' + JSON.stringify(mockValidation) + '\n```';
 
-      const origKey = process.env.ANTHROPIC_API_KEY;
-      process.env.ANTHROPIC_API_KEY = 'test-key';
+      const res = await app.request('/prd-1/stories/story-1/validate-criteria', {
+        method: 'POST',
+        body: JSON.stringify({ storyId: 'story-1', criteria: ['Test criterion'] }),
+        headers: { 'Content-Type': 'application/json' },
+      });
 
-      try {
-        const res = await app.request('/prd-1/stories/story-1/validate-criteria', {
-          method: 'POST',
-          body: JSON.stringify({ storyId: 'story-1', criteria: ['Test criterion'] }),
-          headers: { 'Content-Type': 'application/json' },
-        });
+      const json = await res.json();
+      expect(json.ok).toBe(true);
+      expect(json.data.overallScore).toBe(90);
 
-        const json = await res.json();
-        expect(json.ok).toBe(true);
-        expect(json.data.overallScore).toBe(90);
-      } finally {
-        if (origKey) process.env.ANTHROPIC_API_KEY = origKey;
-        else delete process.env.ANTHROPIC_API_KEY;
-      }
     });
 
     test('returns 502 when AI returns non-JSON response', async () => {
       insertPrd({ id: 'prd-1' });
       insertStory({ id: 'story-1', prd_id: 'prd-1' });
 
-      globalThis.fetch = (async (url: string | URL | Request, init?: RequestInit) => {
-        const urlStr =
-          typeof url === 'string' ? url : url instanceof URL ? url.toString() : url.url;
-        if (urlStr.includes('api.anthropic.com')) {
-          return new Response(
-            JSON.stringify({
-              content: [{ type: 'text', text: 'This is not valid JSON at all' }],
-            }),
-            { status: 200, headers: { 'Content-Type': 'application/json' } },
-          );
-        }
-        return originalFetch(url, init);
-      }) as typeof fetch;
+      mockCallLlmResponse = 'This is not valid JSON at all';
 
-      const origKey = process.env.ANTHROPIC_API_KEY;
-      process.env.ANTHROPIC_API_KEY = 'test-key';
+      const res = await app.request('/prd-1/stories/story-1/validate-criteria', {
+        method: 'POST',
+        body: JSON.stringify({ storyId: 'story-1', criteria: ['Test criterion'] }),
+        headers: { 'Content-Type': 'application/json' },
+      });
 
-      try {
-        const res = await app.request('/prd-1/stories/story-1/validate-criteria', {
-          method: 'POST',
-          body: JSON.stringify({ storyId: 'story-1', criteria: ['Test criterion'] }),
-          headers: { 'Content-Type': 'application/json' },
-        });
+      expect(res.status).toBe(502);
+      const json = await res.json();
+      expect(json.ok).toBe(false);
+      expect(json.error).toContain('parse');
 
-        expect(res.status).toBe(502);
-        const json = await res.json();
-        expect(json.ok).toBe(false);
-        expect(json.error).toContain('parse');
-      } finally {
-        if (origKey) process.env.ANTHROPIC_API_KEY = origKey;
-        else delete process.env.ANTHROPIC_API_KEY;
-      }
     });
 
-    test('returns 502 when AI API returns error status', async () => {
+    test('returns 500 when AI API returns error status', async () => {
       insertPrd({ id: 'prd-1' });
       insertStory({ id: 'story-1', prd_id: 'prd-1' });
 
-      globalThis.fetch = (async (url: string | URL | Request, init?: RequestInit) => {
-        const urlStr =
-          typeof url === 'string' ? url : url instanceof URL ? url.toString() : url.url;
-        if (urlStr.includes('api.anthropic.com')) {
-          return new Response('Rate limited', { status: 429 });
-        }
-        return originalFetch(url, init);
-      }) as typeof fetch;
+      mockCallLlmResponse = new Error('LLM call failed (429)');
 
-      const origKey = process.env.ANTHROPIC_API_KEY;
-      process.env.ANTHROPIC_API_KEY = 'test-key';
+      const res = await app.request('/prd-1/stories/story-1/validate-criteria', {
+        method: 'POST',
+        body: JSON.stringify({ storyId: 'story-1', criteria: ['Test criterion'] }),
+        headers: { 'Content-Type': 'application/json' },
+      });
 
-      try {
-        const res = await app.request('/prd-1/stories/story-1/validate-criteria', {
-          method: 'POST',
-          body: JSON.stringify({ storyId: 'story-1', criteria: ['Test criterion'] }),
-          headers: { 'Content-Type': 'application/json' },
-        });
+      expect(res.status).toBe(500);
+      const json = await res.json();
+      expect(json.ok).toBe(false);
+      expect(json.error).toContain('validation failed');
 
-        expect(res.status).toBe(502);
-        const json = await res.json();
-        expect(json.ok).toBe(false);
-        expect(json.error).toContain('429');
-      } finally {
-        if (origKey) process.env.ANTHROPIC_API_KEY = origKey;
-        else delete process.env.ANTHROPIC_API_KEY;
-      }
     });
 
-    test('returns 502 when AI returns no text content', async () => {
+    test('returns 500 when AI returns no text content', async () => {
       insertPrd({ id: 'prd-1' });
       insertStory({ id: 'story-1', prd_id: 'prd-1' });
 
-      globalThis.fetch = (async (url: string | URL | Request, init?: RequestInit) => {
-        const urlStr =
-          typeof url === 'string' ? url : url instanceof URL ? url.toString() : url.url;
-        if (urlStr.includes('api.anthropic.com')) {
-          return new Response(JSON.stringify({ content: [] }), {
-            status: 200,
-            headers: { 'Content-Type': 'application/json' },
-          });
-        }
-        return originalFetch(url, init);
-      }) as typeof fetch;
+      mockCallLlmResponse = new Error('LLM returned no text content');
 
-      const origKey = process.env.ANTHROPIC_API_KEY;
-      process.env.ANTHROPIC_API_KEY = 'test-key';
+      const res = await app.request('/prd-1/stories/story-1/validate-criteria', {
+        method: 'POST',
+        body: JSON.stringify({ storyId: 'story-1', criteria: ['Test criterion'] }),
+        headers: { 'Content-Type': 'application/json' },
+      });
 
-      try {
-        const res = await app.request('/prd-1/stories/story-1/validate-criteria', {
-          method: 'POST',
-          body: JSON.stringify({ storyId: 'story-1', criteria: ['Test criterion'] }),
-          headers: { 'Content-Type': 'application/json' },
-        });
+      expect(res.status).toBe(500);
+      const json = await res.json();
+      expect(json.ok).toBe(false);
+      expect(json.error).toContain('validation failed');
 
-        expect(res.status).toBe(502);
-        const json = await res.json();
-        expect(json.ok).toBe(false);
-        expect(json.error).toContain('no text content');
-      } finally {
-        if (origKey) process.env.ANTHROPIC_API_KEY = origKey;
-        else delete process.env.ANTHROPIC_API_KEY;
-      }
     });
 
     test('correctly determines allValid based on individual criteria validity', async () => {
@@ -3140,38 +2680,19 @@ describe('PRD Routes', () => {
         ],
       };
 
-      globalThis.fetch = (async (url: string | URL | Request, init?: RequestInit) => {
-        const urlStr =
-          typeof url === 'string' ? url : url instanceof URL ? url.toString() : url.url;
-        if (urlStr.includes('api.anthropic.com')) {
-          return new Response(
-            JSON.stringify({
-              content: [{ type: 'text', text: JSON.stringify(mockValidation) }],
-            }),
-            { status: 200, headers: { 'Content-Type': 'application/json' } },
-          );
-        }
-        return originalFetch(url, init);
-      }) as typeof fetch;
+      mockCallLlmResponse = JSON.stringify(mockValidation);
 
-      const origKey = process.env.ANTHROPIC_API_KEY;
-      process.env.ANTHROPIC_API_KEY = 'test-key';
+      const res = await app.request('/prd-1/stories/story-1/validate-criteria', {
+        method: 'POST',
+        body: JSON.stringify({ storyId: 'story-1', criteria: ['Criterion A', 'Criterion B'] }),
+        headers: { 'Content-Type': 'application/json' },
+      });
 
-      try {
-        const res = await app.request('/prd-1/stories/story-1/validate-criteria', {
-          method: 'POST',
-          body: JSON.stringify({ storyId: 'story-1', criteria: ['Criterion A', 'Criterion B'] }),
-          headers: { 'Content-Type': 'application/json' },
-        });
+      const json = await res.json();
+      expect(json.ok).toBe(true);
+      // Server recomputes allValid from individual criteria, so it should be false
+      expect(json.data.allValid).toBe(false);
 
-        const json = await res.json();
-        expect(json.ok).toBe(true);
-        // Server recomputes allValid from individual criteria, so it should be false
-        expect(json.data.allValid).toBe(false);
-      } finally {
-        if (origKey) process.env.ANTHROPIC_API_KEY = origKey;
-        else delete process.env.ANTHROPIC_API_KEY;
-      }
     });
 
     test('provides suggested improvements for each problematic criterion', async () => {
@@ -3238,57 +2759,38 @@ describe('PRD Routes', () => {
         ],
       };
 
-      globalThis.fetch = (async (url: string | URL | Request, init?: RequestInit) => {
-        const urlStr =
-          typeof url === 'string' ? url : url instanceof URL ? url.toString() : url.url;
-        if (urlStr.includes('api.anthropic.com')) {
-          return new Response(
-            JSON.stringify({
-              content: [{ type: 'text', text: JSON.stringify(mockValidation) }],
-            }),
-            { status: 200, headers: { 'Content-Type': 'application/json' } },
-          );
+      mockCallLlmResponse = JSON.stringify(mockValidation);
+
+      const res = await app.request('/prd-1/stories/story-1/validate-criteria', {
+        method: 'POST',
+        body: JSON.stringify({
+          storyId: 'story-1',
+          criteria: [
+            'System should be fast',
+            'Data should be handled efficiently',
+            'Error messages should be appropriate',
+          ],
+          storyTitle: 'Perf Story',
+          storyDescription: 'Performance optimization story',
+        }),
+        headers: { 'Content-Type': 'application/json' },
+      });
+
+      const json = await res.json();
+      expect(json.ok).toBe(true);
+
+      // AC4: AI suggests improved versions for ALL problematic criteria
+      for (const criterion of json.data.criteria) {
+        expect(criterion.isValid).toBe(false);
+        expect(criterion.suggestedReplacement).toBeTruthy();
+        expect(criterion.suggestedReplacement.length).toBeGreaterThan(10);
+
+        // Each issue also has a suggested replacement
+        for (const issue of criterion.issues) {
+          expect(issue.suggestedReplacement).toBeTruthy();
         }
-        return originalFetch(url, init);
-      }) as typeof fetch;
-
-      const origKey = process.env.ANTHROPIC_API_KEY;
-      process.env.ANTHROPIC_API_KEY = 'test-key';
-
-      try {
-        const res = await app.request('/prd-1/stories/story-1/validate-criteria', {
-          method: 'POST',
-          body: JSON.stringify({
-            storyId: 'story-1',
-            criteria: [
-              'System should be fast',
-              'Data should be handled efficiently',
-              'Error messages should be appropriate',
-            ],
-            storyTitle: 'Perf Story',
-            storyDescription: 'Performance optimization story',
-          }),
-          headers: { 'Content-Type': 'application/json' },
-        });
-
-        const json = await res.json();
-        expect(json.ok).toBe(true);
-
-        // AC4: AI suggests improved versions for ALL problematic criteria
-        for (const criterion of json.data.criteria) {
-          expect(criterion.isValid).toBe(false);
-          expect(criterion.suggestedReplacement).toBeTruthy();
-          expect(criterion.suggestedReplacement.length).toBeGreaterThan(10);
-
-          // Each issue also has a suggested replacement
-          for (const issue of criterion.issues) {
-            expect(issue.suggestedReplacement).toBeTruthy();
-          }
-        }
-      } finally {
-        if (origKey) process.env.ANTHROPIC_API_KEY = origKey;
-        else delete process.env.ANTHROPIC_API_KEY;
       }
+
     });
 
     test('uses story title and description for context when provided', async () => {
@@ -3300,8 +2802,6 @@ describe('PRD Routes', () => {
         description: 'Implement user authentication',
       });
 
-      let capturedBody: any = null;
-
       const mockValidation = {
         overallScore: 80,
         allValid: true,
@@ -3311,48 +2811,28 @@ describe('PRD Routes', () => {
         ],
       };
 
-      globalThis.fetch = (async (url: string | URL | Request, init?: RequestInit) => {
-        const urlStr =
-          typeof url === 'string' ? url : url instanceof URL ? url.toString() : url.url;
-        if (urlStr.includes('api.anthropic.com')) {
-          capturedBody = JSON.parse((init?.body as string) || '{}');
-          return new Response(
-            JSON.stringify({
-              content: [{ type: 'text', text: JSON.stringify(mockValidation) }],
-            }),
-            { status: 200, headers: { 'Content-Type': 'application/json' } },
-          );
-        }
-        return originalFetch(url, init);
-      }) as typeof fetch;
+      mockCallLlmResponse = JSON.stringify(mockValidation);
 
-      const origKey = process.env.ANTHROPIC_API_KEY;
-      process.env.ANTHROPIC_API_KEY = 'test-key';
+      const res = await app.request('/prd-1/stories/story-1/validate-criteria', {
+        method: 'POST',
+        body: JSON.stringify({
+          storyId: 'story-1',
+          criteria: ['Login works'],
+          storyTitle: 'Custom Title Override',
+          storyDescription: 'Custom description override',
+        }),
+        headers: { 'Content-Type': 'application/json' },
+      });
 
-      try {
-        const res = await app.request('/prd-1/stories/story-1/validate-criteria', {
-          method: 'POST',
-          body: JSON.stringify({
-            storyId: 'story-1',
-            criteria: ['Login works'],
-            storyTitle: 'Custom Title Override',
-            storyDescription: 'Custom description override',
-          }),
-          headers: { 'Content-Type': 'application/json' },
-        });
+      const json = await res.json();
+      expect(json.ok).toBe(true);
 
-        const json = await res.json();
-        expect(json.ok).toBe(true);
+      // Verify the AI was sent the proper context
+      expect(mockCallLlmCapture).toBeTruthy();
+      const userMessage = mockCallLlmCapture.user;
+      expect(userMessage).toContain('Custom Title Override');
+      expect(userMessage).toContain('Custom description override');
 
-        // Verify the AI was sent the proper context
-        expect(capturedBody).toBeTruthy();
-        const userMessage = capturedBody.messages[0].content;
-        expect(userMessage).toContain('Custom Title Override');
-        expect(userMessage).toContain('Custom description override');
-      } finally {
-        if (origKey) process.env.ANTHROPIC_API_KEY = origKey;
-        else delete process.env.ANTHROPIC_API_KEY;
-      }
     });
 
     test('treats info-only issues as valid criteria', async () => {
@@ -3385,46 +2865,27 @@ describe('PRD Routes', () => {
         ],
       };
 
-      globalThis.fetch = (async (url: string | URL | Request, init?: RequestInit) => {
-        const urlStr =
-          typeof url === 'string' ? url : url instanceof URL ? url.toString() : url.url;
-        if (urlStr.includes('api.anthropic.com')) {
-          return new Response(
-            JSON.stringify({
-              content: [{ type: 'text', text: JSON.stringify(mockValidation) }],
-            }),
-            { status: 200, headers: { 'Content-Type': 'application/json' } },
-          );
-        }
-        return originalFetch(url, init);
-      }) as typeof fetch;
+      mockCallLlmResponse = JSON.stringify(mockValidation);
 
-      const origKey = process.env.ANTHROPIC_API_KEY;
-      process.env.ANTHROPIC_API_KEY = 'test-key';
+      const res = await app.request('/prd-1/stories/story-1/validate-criteria', {
+        method: 'POST',
+        body: JSON.stringify({
+          storyId: 'story-1',
+          criteria: ['User receives email notification within 5 minutes'],
+        }),
+        headers: { 'Content-Type': 'application/json' },
+      });
 
-      try {
-        const res = await app.request('/prd-1/stories/story-1/validate-criteria', {
-          method: 'POST',
-          body: JSON.stringify({
-            storyId: 'story-1',
-            criteria: ['User receives email notification within 5 minutes'],
-          }),
-          headers: { 'Content-Type': 'application/json' },
-        });
+      const json = await res.json();
+      expect(json.ok).toBe(true);
 
-        const json = await res.json();
-        expect(json.ok).toBe(true);
+      // Criterion with only info-level issues should be considered valid
+      const c0 = json.data.criteria[0];
+      expect(c0.isValid).toBe(true);
+      expect(c0.issues).toHaveLength(1);
+      expect(c0.issues[0].severity).toBe('info');
+      expect(json.data.allValid).toBe(true);
 
-        // Criterion with only info-level issues should be considered valid
-        const c0 = json.data.criteria[0];
-        expect(c0.isValid).toBe(true);
-        expect(c0.issues).toHaveLength(1);
-        expect(c0.issues[0].severity).toBe('info');
-        expect(json.data.allValid).toBe(true);
-      } finally {
-        if (origKey) process.env.ANTHROPIC_API_KEY = origKey;
-        else delete process.env.ANTHROPIC_API_KEY;
-      }
     });
 
     test('handles missing overallScore with default of 50', async () => {
@@ -3440,44 +2901,23 @@ describe('PRD Routes', () => {
         ],
       };
 
-      globalThis.fetch = (async (url: string | URL | Request, init?: RequestInit) => {
-        const urlStr =
-          typeof url === 'string' ? url : url instanceof URL ? url.toString() : url.url;
-        if (urlStr.includes('api.anthropic.com')) {
-          return new Response(
-            JSON.stringify({
-              content: [{ type: 'text', text: JSON.stringify(mockValidation) }],
-            }),
-            { status: 200, headers: { 'Content-Type': 'application/json' } },
-          );
-        }
-        return originalFetch(url, init);
-      }) as typeof fetch;
+      mockCallLlmResponse = JSON.stringify(mockValidation);
 
-      const origKey = process.env.ANTHROPIC_API_KEY;
-      process.env.ANTHROPIC_API_KEY = 'test-key';
+      const res = await app.request('/prd-1/stories/story-1/validate-criteria', {
+        method: 'POST',
+        body: JSON.stringify({ storyId: 'story-1', criteria: ['Test'] }),
+        headers: { 'Content-Type': 'application/json' },
+      });
 
-      try {
-        const res = await app.request('/prd-1/stories/story-1/validate-criteria', {
-          method: 'POST',
-          body: JSON.stringify({ storyId: 'story-1', criteria: ['Test'] }),
-          headers: { 'Content-Type': 'application/json' },
-        });
+      const json = await res.json();
+      expect(json.ok).toBe(true);
+      expect(json.data.overallScore).toBe(50); // Default when missing
 
-        const json = await res.json();
-        expect(json.ok).toBe(true);
-        expect(json.data.overallScore).toBe(50); // Default when missing
-      } finally {
-        if (origKey) process.env.ANTHROPIC_API_KEY = origKey;
-        else delete process.env.ANTHROPIC_API_KEY;
-      }
     });
 
     test('includes system prompt checking for all six validation categories', async () => {
       insertPrd({ id: 'prd-1' });
       insertStory({ id: 'story-1', prd_id: 'prd-1' });
-
-      let capturedSystem = '';
 
       const mockValidation = {
         overallScore: 80,
@@ -3488,56 +2928,35 @@ describe('PRD Routes', () => {
         ],
       };
 
-      globalThis.fetch = (async (url: string | URL | Request, init?: RequestInit) => {
-        const urlStr =
-          typeof url === 'string' ? url : url instanceof URL ? url.toString() : url.url;
-        if (urlStr.includes('api.anthropic.com')) {
-          const body = JSON.parse((init?.body as string) || '{}');
-          capturedSystem = body.system || '';
-          return new Response(
-            JSON.stringify({
-              content: [{ type: 'text', text: JSON.stringify(mockValidation) }],
-            }),
-            { status: 200, headers: { 'Content-Type': 'application/json' } },
-          );
-        }
-        return originalFetch(url, init);
-      }) as typeof fetch;
+      mockCallLlmResponse = JSON.stringify(mockValidation);
 
-      const origKey = process.env.ANTHROPIC_API_KEY;
-      process.env.ANTHROPIC_API_KEY = 'test-key';
+      const res = await app.request('/prd-1/stories/story-1/validate-criteria', {
+        method: 'POST',
+        body: JSON.stringify({ storyId: 'story-1', criteria: ['Test'] }),
+        headers: { 'Content-Type': 'application/json' },
+      });
 
-      try {
-        const res = await app.request('/prd-1/stories/story-1/validate-criteria', {
-          method: 'POST',
-          body: JSON.stringify({ storyId: 'story-1', criteria: ['Test'] }),
-          headers: { 'Content-Type': 'application/json' },
-        });
+      const json = await res.json();
+      expect(json.ok).toBe(true);
 
-        const json = await res.json();
-        expect(json.ok).toBe(true);
+      // AC1 + AC2: System prompt should reference all validation categories
+      const capturedSystem = mockCallLlmCapture.system;
+      expect(capturedSystem).toContain('vague');
+      expect(capturedSystem).toContain('unmeasurable');
+      expect(capturedSystem).toContain('untestable');
+      expect(capturedSystem).toContain('too_broad');
+      expect(capturedSystem).toContain('ambiguous');
+      expect(capturedSystem).toContain('missing_detail');
 
-        // AC1 + AC2: System prompt should reference all validation categories
-        expect(capturedSystem).toContain('vague');
-        expect(capturedSystem).toContain('unmeasurable');
-        expect(capturedSystem).toContain('untestable');
-        expect(capturedSystem).toContain('too_broad');
-        expect(capturedSystem).toContain('ambiguous');
-        expect(capturedSystem).toContain('missing_detail');
+      // Should also mention specificity, measurability, testability
+      expect(capturedSystem).toContain('Specificity');
+      expect(capturedSystem).toContain('Measurability');
+      expect(capturedSystem).toContain('Testability');
 
-        // Should also mention specificity, measurability, testability
-        expect(capturedSystem).toContain('Specificity');
-        expect(capturedSystem).toContain('Measurability');
-        expect(capturedSystem).toContain('Testability');
-
-        // Should define severity levels
-        expect(capturedSystem).toContain('error');
-        expect(capturedSystem).toContain('warning');
-        expect(capturedSystem).toContain('info');
-      } finally {
-        if (origKey) process.env.ANTHROPIC_API_KEY = origKey;
-        else delete process.env.ANTHROPIC_API_KEY;
-      }
+      // Should define severity levels
+      expect(capturedSystem).toContain('error');
+      expect(capturedSystem).toContain('warning');
+      expect(capturedSystem).toContain('info');
     });
   });
 
@@ -3920,32 +3339,11 @@ describe('PRD Routes', () => {
   // ---------------------------------------------------------------
   describe('Priority Recommendation Engine', () => {
     function withApiKey(fn: () => Promise<void>) {
-      return async () => {
-        const origKey = process.env.ANTHROPIC_API_KEY;
-        process.env.ANTHROPIC_API_KEY = 'test-key';
-        try {
-          await fn();
-        } finally {
-          if (origKey) process.env.ANTHROPIC_API_KEY = origKey;
-          else delete process.env.ANTHROPIC_API_KEY;
-        }
-      };
+      return fn;
     }
 
     function mockAiPriorityResponse(response: any) {
-      globalThis.fetch = (async (url: string | URL | Request, init?: RequestInit) => {
-        const urlStr =
-          typeof url === 'string' ? url : url instanceof URL ? url.toString() : url.url;
-        if (urlStr.includes('api.anthropic.com')) {
-          return new Response(
-            JSON.stringify({
-              content: [{ type: 'text', text: JSON.stringify(response) }],
-            }),
-            { status: 200, headers: { 'Content-Type': 'application/json' } },
-          );
-        }
-        return originalFetch(url, init);
-      }) as typeof fetch;
+      mockCallLlmResponse = JSON.stringify(response);
     }
 
     function setPriorityRecommendation(storyId: string, rec: any) {
@@ -4160,39 +3558,19 @@ describe('PRD Routes', () => {
             sort_order: 2,
           });
 
-          let capturedPrompt = '';
-          globalThis.fetch = (async (url: string | URL | Request, init?: RequestInit) => {
-            const urlStr =
-              typeof url === 'string' ? url : url instanceof URL ? url.toString() : url.url;
-            if (urlStr.includes('api.anthropic.com')) {
-              const body = JSON.parse(init?.body as string);
-              capturedPrompt = body.messages[0].content;
-              return new Response(
-                JSON.stringify({
-                  content: [
-                    {
-                      type: 'text',
-                      text: JSON.stringify({
-                        suggestedPriority: 'high',
-                        confidence: 80,
-                        factors: [
-                          {
-                            factor: 'Blocks downstream',
-                            category: 'dependency',
-                            impact: 'increases',
-                            weight: 'major',
-                          },
-                        ],
-                        explanation: 'Story blocks other work.',
-                      }),
-                    },
-                  ],
-                }),
-                { status: 200, headers: { 'Content-Type': 'application/json' } },
-              );
-            }
-            return originalFetch(url, init);
-          }) as typeof fetch;
+          mockCallLlmResponse = JSON.stringify({
+            suggestedPriority: 'high',
+            confidence: 80,
+            factors: [
+              {
+                factor: 'Blocks downstream',
+                category: 'dependency',
+                impact: 'increases',
+                weight: 'major',
+              },
+            ],
+            explanation: 'Story blocks other work.',
+          });
 
           await app.request('/prd-pri-5/stories/story-blocker/priority', {
             method: 'POST',
@@ -4201,8 +3579,8 @@ describe('PRD Routes', () => {
           });
 
           // The prompt should include dependency info — story-blocker blocks story-blocked
-          expect(capturedPrompt).toContain('BLOCKS');
-          expect(capturedPrompt).toContain('User CRUD');
+          expect(mockCallLlmCapture.user).toContain('BLOCKS');
+          expect(mockCallLlmCapture.user).toContain('User CRUD');
         }),
       );
     });
@@ -4717,22 +4095,7 @@ describe('PRD Routes', () => {
             },
           ];
 
-          mockAiPriorityResponse(mockStories); // Same mock works since structure matches
-
-          // Override fetch for the generation endpoint
-          globalThis.fetch = (async (url: string | URL | Request, init?: RequestInit) => {
-            const urlStr =
-              typeof url === 'string' ? url : url instanceof URL ? url.toString() : url.url;
-            if (urlStr.includes('api.anthropic.com')) {
-              return new Response(
-                JSON.stringify({
-                  content: [{ type: 'text', text: JSON.stringify(mockStories) }],
-                }),
-                { status: 200, headers: { 'Content-Type': 'application/json' } },
-              );
-            }
-            return originalFetch(url, init);
-          }) as typeof fetch;
+          mockCallLlmResponse = JSON.stringify(mockStories);
 
           const res = await app.request('/prd-gen-pri/generate', {
             method: 'POST',
@@ -4765,19 +4128,7 @@ describe('PRD Routes', () => {
             },
           ];
 
-          globalThis.fetch = (async (url: string | URL | Request, init?: RequestInit) => {
-            const urlStr =
-              typeof url === 'string' ? url : url instanceof URL ? url.toString() : url.url;
-            if (urlStr.includes('api.anthropic.com')) {
-              return new Response(
-                JSON.stringify({
-                  content: [{ type: 'text', text: JSON.stringify(mockStories) }],
-                }),
-                { status: 200, headers: { 'Content-Type': 'application/json' } },
-              );
-            }
-            return originalFetch(url, init);
-          }) as typeof fetch;
+          mockCallLlmResponse = JSON.stringify(mockStories);
 
           const res = await app.request('/prd-gen-pri2/generate', {
             method: 'POST',
@@ -5397,49 +4748,30 @@ describe('PRD Routes', () => {
         reasoning: 'OAuth integration is moderately complex',
       };
 
-      globalThis.fetch = (async (url: string | URL | Request, init?: RequestInit) => {
-        const urlStr =
-          typeof url === 'string' ? url : url instanceof URL ? url.toString() : url.url;
-        if (urlStr.includes('api.anthropic.com')) {
-          return new Response(
-            JSON.stringify({
-              content: [{ type: 'text', text: JSON.stringify(mockEstimate) }],
-            }),
-            { status: 200, headers: { 'Content-Type': 'application/json' } },
-          );
-        }
-        return originalFetch(url, init);
-      }) as typeof fetch;
+      mockCallLlmResponse = JSON.stringify(mockEstimate);
 
-      const origKey = process.env.ANTHROPIC_API_KEY;
-      process.env.ANTHROPIC_API_KEY = 'test-key';
+      const res = await app.request('/stories/standalone-1/estimate', {
+        method: 'POST',
+        body: JSON.stringify({}),
+        headers: { 'Content-Type': 'application/json' },
+      });
 
-      try {
-        const res = await app.request('/stories/standalone-1/estimate', {
-          method: 'POST',
-          body: JSON.stringify({}),
-          headers: { 'Content-Type': 'application/json' },
-        });
+      expect(res.status).toBe(200);
+      const json = await res.json();
+      expect(json.ok).toBe(true);
+      expect(json.data.storyId).toBe('standalone-1');
+      expect(json.data.estimate.size).toBe('medium');
+      expect(json.data.estimate.storyPoints).toBe(5);
+      expect(json.data.estimate.confidence).toBe('high');
+      expect(json.data.estimate.isManualOverride).toBe(false);
 
-        expect(res.status).toBe(200);
-        const json = await res.json();
-        expect(json.ok).toBe(true);
-        expect(json.data.storyId).toBe('standalone-1');
-        expect(json.data.estimate.size).toBe('medium');
-        expect(json.data.estimate.storyPoints).toBe(5);
-        expect(json.data.estimate.confidence).toBe('high');
-        expect(json.data.estimate.isManualOverride).toBe(false);
+      // Verify DB was updated
+      const row = testDb
+        .query('SELECT estimate FROM prd_stories WHERE id = ?')
+        .get('standalone-1') as any;
+      const saved = JSON.parse(row.estimate);
+      expect(saved.storyPoints).toBe(5);
 
-        // Verify DB was updated
-        const row = testDb
-          .query('SELECT estimate FROM prd_stories WHERE id = ?')
-          .get('standalone-1') as any;
-        const saved = JSON.parse(row.estimate);
-        expect(saved.storyPoints).toBe(5);
-      } finally {
-        if (origKey) process.env.ANTHROPIC_API_KEY = origKey;
-        else delete process.env.ANTHROPIC_API_KEY;
-      }
     });
 
     test('handles AI API error gracefully', async () => {
@@ -5450,33 +4782,19 @@ describe('PRD Routes', () => {
         title: 'Test Story',
       });
 
-      globalThis.fetch = (async (url: string | URL | Request, init?: RequestInit) => {
-        const urlStr =
-          typeof url === 'string' ? url : url instanceof URL ? url.toString() : url.url;
-        if (urlStr.includes('api.anthropic.com')) {
-          return new Response('Internal Error', { status: 500 });
-        }
-        return originalFetch(url, init);
-      }) as typeof fetch;
+      mockCallLlmResponse = new Error('LLM call failed (500)');
 
-      const origKey = process.env.ANTHROPIC_API_KEY;
-      process.env.ANTHROPIC_API_KEY = 'test-key';
+      const res = await app.request('/stories/standalone-1/estimate', {
+        method: 'POST',
+        body: JSON.stringify({}),
+        headers: { 'Content-Type': 'application/json' },
+      });
 
-      try {
-        const res = await app.request('/stories/standalone-1/estimate', {
-          method: 'POST',
-          body: JSON.stringify({}),
-          headers: { 'Content-Type': 'application/json' },
-        });
+      expect(res.status).toBe(500);
+      const json = await res.json();
+      expect(json.ok).toBe(false);
+      expect(json.error).toContain('Estimation failed');
 
-        expect(res.status).toBe(500);
-        const json = await res.json();
-        expect(json.ok).toBe(false);
-        expect(json.error).toContain('Estimation failed');
-      } finally {
-        if (origKey) process.env.ANTHROPIC_API_KEY = origKey;
-        else delete process.env.ANTHROPIC_API_KEY;
-      }
     });
   });
 });

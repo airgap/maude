@@ -10,6 +10,7 @@
   import PrimaryTabBar from './PrimaryTabBar.svelte';
   import UnifiedDiffView from '../editor/UnifiedDiffView.svelte';
   import CodeEditor from '../editor/CodeEditor.svelte';
+  import LooperView from '../loop/LooperView.svelte';
 
   let { children }: { children: Snippet } = $props();
 
@@ -32,7 +33,7 @@
     lastAppliedTabId = tab.id;
 
     // Non-chat tabs don't affect conversation state
-    if (tab.kind === 'diff' || tab.kind === 'file') return;
+    if (tab.kind === 'diff' || tab.kind === 'file' || tab.kind === 'looper') return;
 
     if (tab.conversationId === null) {
       conversationStore.setActive(null);
@@ -183,7 +184,11 @@
       {#if i === 0}
         <!-- Primary pane: renders chat, diff, or file based on active tab kind -->
         {@const activeTab = primaryActiveTab}
-        {#if activeTab?.kind === 'diff'}
+        {#if activeTab?.kind === 'looper'}
+          <div class="pane-content">
+            <LooperView loopId={activeTab.loopId ?? ''} />
+          </div>
+        {:else if activeTab?.kind === 'diff'}
           <div class="pane-content">
             <UnifiedDiffView
               diffContent={activeTab.diffContent ?? ''}

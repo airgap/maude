@@ -9,9 +9,7 @@
  */
 
 import { getDb } from '../db/database';
-import { readFileSync } from 'fs';
-import { join } from 'path';
-import { homedir } from 'os';
+import { callLlm } from './llm-oneshot';
 import type { Message } from '@e/shared';
 
 export interface CompactionOptions {
@@ -159,24 +157,6 @@ export function getAutoCompactThreshold(model: string): number {
   return effectiveWindow - SAFETY_BUFFER;
 }
 
-/** The Anthropic API URL used for LLM-based summarization. */
-const ANTHROPIC_API_URL = 'https://api.anthropic.com/v1/messages';
-
-/** Read Anthropic auth token from env or Claude Code credentials. */
-function getAnthropicAuth(): { token: string; type: 'api-key' | 'oauth' } | null {
-  const apiKey = process.env.ANTHROPIC_API_KEY;
-  if (apiKey) return { token: apiKey, type: 'api-key' };
-  try {
-    const creds = JSON.parse(
-      readFileSync(join(homedir(), '.claude', '.credentials.json'), 'utf-8'),
-    );
-    const oauthToken = creds?.claudeAiOauth?.accessToken;
-    if (oauthToken) return { token: oauthToken, type: 'oauth' };
-  } catch {
-    /* not available */
-  }
-  return null;
-}
 
 /**
  * Claude Code's exact compaction prompt (DCI function in their source).
@@ -202,16 +182,15 @@ IMPORTANT: Do NOT use any tools. Respond with ONLY a <summary>...</summary> bloc
 
 /**
  * Produce an LLM-generated summary of the dropped messages.
- * Falls back to the rule-based summary if the API call fails.
+ * Routes through the configured CLI provider via callLlm.
+ * Falls back to the rule-based summary if the call fails.
  */
 export async function summarizeWithLLM(
   droppedMessages: any[],
   keptMessages: any[],
   model: string,
 ): Promise<LLMSummaryResult> {
-  const auth = getAnthropicAuth();
-  if (!auth || droppedMessages.length === 0) {
-    // Fall back to rule-based
+  if (droppedMessages.length === 0) {
     const summary = buildRuleBasedSummary(droppedMessages);
     return {
       summaryText: summary,
@@ -221,51 +200,33 @@ export async function summarizeWithLLM(
   }
 
   try {
-    // Build the message array: the dropped conversation + the summarization request
-    // Normalize nudge content blocks → text so unknown types don't cause API errors
-    const conversationMessages = droppedMessages.map((m: any) => ({
-      role: m.role as 'user' | 'assistant',
-      content: Array.isArray(m.content)
-        ? m.content.map((block: any) =>
-            block.type === 'nudge' ? { type: 'text', text: `[User nudge]: ${block.text}` } : block,
-          )
-        : [{ type: 'text', text: String(m.content) }],
-    }));
+    // Serialize the dropped conversation into a text block for the user prompt.
+    // CLI providers only accept a single prompt string, so we flatten the
+    // multi-message conversation into a readable format.
+    const conversationText = droppedMessages
+      .map((m: any) => {
+        const text = Array.isArray(m.content)
+          ? m.content
+              .map((block: any) => {
+                if (block.type === 'nudge') return `[User nudge]: ${block.text}`;
+                if (block.type === 'text') return block.text;
+                return '';
+              })
+              .filter(Boolean)
+              .join('\n')
+          : String(m.content);
+        return `[${m.role}]: ${text}`;
+      })
+      .join('\n\n');
 
-    // Add the summarization request as the final user message
-    conversationMessages.push({
-      role: 'user',
-      content: [{ type: 'text', text: COMPACTION_USER_PROMPT }],
+    const userPrompt = `Here is the conversation to summarize:\n\n${conversationText}\n\n${COMPACTION_USER_PROMPT}`;
+
+    let summaryText = await callLlm({
+      system: COMPACTION_SYSTEM_PROMPT,
+      user: userPrompt,
+      model,
+      timeoutMs: 60_000,
     });
-
-    const headers: Record<string, string> = {
-      'Content-Type': 'application/json',
-      'anthropic-version': '2023-06-01',
-    };
-    if (auth.type === 'oauth') {
-      headers['Authorization'] = `Bearer ${auth.token}`;
-    } else {
-      headers['x-api-key'] = auth.token;
-    }
-
-    const response = await fetch(ANTHROPIC_API_URL, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify({
-        model,
-        max_tokens: 8192,
-        system: COMPACTION_SYSTEM_PROMPT,
-        messages: conversationMessages,
-      }),
-      signal: AbortSignal.timeout(60_000),
-    });
-
-    if (!response.ok) {
-      throw new Error(`API ${response.status}: ${await response.text().catch(() => '')}`);
-    }
-
-    const result = (await response.json()) as any;
-    let summaryText: string = result?.content?.[0]?.text || '';
 
     // Extract content from <summary>...</summary> tags if present
     const match = summaryText.match(/<summary>([\s\S]*?)<\/summary>/i);
