@@ -5,6 +5,7 @@ import type {
   PermissionMode,
   TerminalCommandPolicy,
   PermissionRule,
+  ShellProfile,
 } from '@e/shared';
 import { convertVsCodeSnippets, type ConvertedSnippet } from '$lib/utils/vscode-snippet-converter';
 import { convertVsCodeTheme, type ConvertedTheme } from '$lib/utils/vscode-theme-converter';
@@ -69,6 +70,9 @@ interface SettingsState {
   termRightClickPaste: boolean;
   termDefaultShell: string;
   termEnableShellIntegration: boolean;
+  // Terminal profiles
+  terminalProfiles: ShellProfile[];
+  termDefaultProfileId: string;
 }
 
 const defaults: SettingsState = {
@@ -132,6 +136,8 @@ const defaults: SettingsState = {
   termRightClickPaste: false,
   termDefaultShell: '',
   termEnableShellIntegration: true,
+  terminalProfiles: [],
+  termDefaultProfileId: '',
 };
 
 function loadFromStorage(): SettingsState {
@@ -395,6 +401,12 @@ function createSettingsStore() {
     get termEnableShellIntegration() {
       return state.termEnableShellIntegration;
     },
+    get terminalProfiles() {
+      return state.terminalProfiles;
+    },
+    get termDefaultProfileId() {
+      return state.termDefaultProfileId;
+    },
     get all() {
       return state;
     },
@@ -478,6 +490,30 @@ function createSettingsStore() {
       if (state.theme === id) {
         state.theme = 'dark';
       }
+      persist();
+    },
+
+    // --- Terminal profiles ---
+    addTerminalProfile(profile: ShellProfile) {
+      state.terminalProfiles = [...state.terminalProfiles, profile];
+      persist();
+    },
+    updateTerminalProfile(id: string, updates: Partial<ShellProfile>) {
+      state.terminalProfiles = state.terminalProfiles.map((p) =>
+        p.id === id ? { ...p, ...updates } : p,
+      );
+      persist();
+    },
+    deleteTerminalProfile(id: string) {
+      state.terminalProfiles = state.terminalProfiles.filter((p) => p.id !== id);
+      // If the deleted profile was the default, clear it
+      if (state.termDefaultProfileId === id) {
+        state.termDefaultProfileId = '';
+      }
+      persist();
+    },
+    setDefaultProfileId(id: string) {
+      state.termDefaultProfileId = id;
       persist();
     },
   };

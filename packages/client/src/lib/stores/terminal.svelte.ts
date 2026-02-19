@@ -5,6 +5,7 @@ import type {
   TerminalBranch,
   TerminalLeaf,
   TerminalPreferences,
+  TerminalSessionMeta,
   SplitDirection,
 } from '@e/shared';
 import { DEFAULT_TERMINAL_PREFERENCES } from '@e/shared';
@@ -39,6 +40,7 @@ export interface PersistedTerminalTab {
   label: string;
   layout: TerminalLayout;
   focusedSessionId: string;
+  profileId?: string;
 }
 
 // ── Navigation direction for split pane focus ──
@@ -90,6 +92,7 @@ function saveTabState(tabs: TerminalTab[], activeTabId: string | null) {
       label: t.label,
       layout: t.layout,
       focusedSessionId: t.focusedSessionId,
+      profileId: t.profileId,
     }));
     localStorage.setItem(TABS_KEY, JSON.stringify({ tabs: persisted, activeTabId }));
   } catch {
@@ -227,6 +230,25 @@ function setBranchRatio(
   ratio: number,
 ): TerminalLayout {
   return setRatioInLayout(layout, branchFirstSessionId, branchSecondSessionId, ratio);
+}
+
+/**
+ * Replace a session ID in a layout tree (used when a fresh server session
+ * is created to replace a stale persisted session reference).
+ */
+function replaceSessionInLayout(
+  layout: TerminalLayout,
+  oldId: string,
+  newId: string,
+): TerminalLayout {
+  if (layout.type === 'leaf') {
+    return layout.sessionId === oldId ? { type: 'leaf', sessionId: newId } : layout;
+  }
+  return {
+    ...layout,
+    first: replaceSessionInLayout(layout.first, oldId, newId),
+    second: replaceSessionInLayout(layout.second, oldId, newId),
+  };
 }
 
 /** Collect all leaf nodes in order (left-to-right, top-to-bottom depth-first) */
@@ -479,15 +501,22 @@ function createTerminalStore() {
       const sessionId = uid();
       const tabId = uid();
       const tabIndex = tabs.length + 1;
-      const label = profileId
-        ? `${profileId} ${tabIndex}`
-        : `Terminal ${tabIndex}`;
+
+      // Use profile name for label if available
+      let label = `Terminal ${tabIndex}`;
+      if (profileId) {
+        const profile = profiles.find((p) => p.id === profileId);
+        if (profile) {
+          label = profile.name;
+        }
+      }
 
       const tab: TerminalTab = {
         id: tabId,
         label,
         layout: makeLeaf(sessionId),
         focusedSessionId: sessionId,
+        profileId,
       };
 
       tabs = [...tabs, tab];
@@ -733,6 +762,11 @@ function createTerminalStore() {
       profiles = p;
     },
 
+    /** Get a profile by its ID */
+    getProfile(profileId: string): ShellProfile | undefined {
+      return profiles.find((p) => p.id === profileId);
+    },
+
     // ── Preferences ──
 
     updatePreferences(partial: Partial<TerminalPreferences>) {
@@ -849,6 +883,7 @@ function createTerminalStore() {
           label: t.label,
           layout: t.layout,
           focusedSessionId: t.focusedSessionId,
+          profileId: t.profileId,
         })),
         activeTabId,
         preferences: { ...preferences },
@@ -873,6 +908,7 @@ function createTerminalStore() {
           label: t.label,
           layout: t.layout,
           focusedSessionId: t.focusedSessionId,
+          profileId: t.profileId,
         }));
         activeTabId = state.activeTabId ?? state.tabs[0].id;
       } else {
@@ -905,6 +941,7 @@ function createTerminalStore() {
           label: t.label,
           layout: t.layout,
           focusedSessionId: t.focusedSessionId,
+          profileId: t.profileId,
         }));
         activeTabId = savedTabs.activeTabId ?? savedTabs.tabs[0].id;
       }

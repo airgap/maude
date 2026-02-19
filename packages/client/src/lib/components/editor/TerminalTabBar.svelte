@@ -79,11 +79,13 @@
     {#each terminalStore.tabs as tab (tab.id)}
       {@const isActive = tab.id === terminalStore.activeTabId}
       {@const isEditing = tab.id === editingTabId}
+      {@const isBroadcasting = terminalStore.isBroadcastActiveForTab(tab.id)}
 
       <!-- svelte-ignore a11y_no_static_element_interactions -->
       <div
         class="term-tab"
         class:active={isActive}
+        class:broadcasting={isBroadcasting}
         onclick={() => activateTab(tab.id)}
         ondblclick={(e) => startRename(e, tab)}
         role="tab"
@@ -96,9 +98,17 @@
           }
         }}
       >
-        <svg class="shell-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <polyline points="4 17 10 11 4 5" /><line x1="12" y1="19" x2="20" y2="19" />
-        </svg>
+        {#if isBroadcasting}
+          <svg class="broadcast-badge" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-label="Broadcast input active">
+            <path d="M4.9 19.1C1 15.2 1 8.8 4.9 4.9" />
+            <circle cx="12" cy="12" r="2" fill="currentColor" />
+            <path d="M19.1 4.9C23 8.8 23 15.2 19.1 19.1" />
+          </svg>
+        {:else}
+          <svg class="shell-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="4 17 10 11 4 5" /><line x1="12" y1="19" x2="20" y2="19" />
+          </svg>
+        {/if}
 
         {#if isEditing}
           <!-- svelte-ignore a11y_autofocus -->
@@ -218,6 +228,19 @@
   .term-tab.active .shell-icon {
     opacity: 0.9;
     color: var(--accent-primary);
+  }
+
+  /* ── Broadcast indicator ── */
+  .broadcast-badge {
+    flex-shrink: 0;
+    color: var(--accent-warning, #ffaa00);
+    opacity: 0.9;
+  }
+  .term-tab.broadcasting {
+    border-left: 2px solid var(--accent-warning, #ffaa00);
+  }
+  .term-tab.broadcasting.active {
+    border-bottom-color: var(--accent-warning, #ffaa00);
   }
 
   .tab-label {

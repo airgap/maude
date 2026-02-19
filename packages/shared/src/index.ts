@@ -235,3 +235,10 @@ export type {
 } from './terminal.js';
 
 export { TERMINAL_PROTOCOL, DEFAULT_TERMINAL_PREFERENCES } from './terminal.js';
+
+export type {
+  PackageManager,
+  TaskSource,
+  WorkspaceTask,
+  TaskDiscoveryResponse,
+} from './task-runner.js';

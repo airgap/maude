@@ -7,12 +7,13 @@
  * recreating the Terminal).
  *
  * Addons loaded per terminal:
- *   - @xterm/addon-search   (full-text search)
+ *   - @xterm/addon-search    (full-text search)
  *   - @xterm/addon-web-links (clickable URLs)
  *   - @xterm/addon-unicode11 (emoji & wide chars)
  *   - @xterm/addon-clipboard (OSC 52 clipboard)
- *   - @xterm/addon-webgl    (WebGL renderer, canvas fallback)
- *   - @xterm/addon-fit      (auto-fit to container)
+ *   - @xterm/addon-webgl     (WebGL renderer, canvas fallback)
+ *   - @xterm/addon-fit       (auto-fit to container)
+ *   - @xterm/addon-serialize (buffer snapshot for session persistence)
  *
  * Binary-prefix protocol:
  *   0x00 — raw PTY data (default)
@@ -26,6 +27,7 @@ import { SearchAddon, type ISearchOptions } from '@xterm/addon-search';
 import { WebLinksAddon } from '@xterm/addon-web-links';
 import { Unicode11Addon } from '@xterm/addon-unicode11';
 import { ClipboardAddon } from '@xterm/addon-clipboard';
+import { SerializeAddon } from '@xterm/addon-serialize';
 import { getBaseUrl, getWsBase, getAuthToken } from '$lib/api/client';
 import {
   createUrlClickHandler,
@@ -55,12 +57,16 @@ export type TerminalControlEventType = TerminalControlMessage['type'];
 /** A typed listener for control messages */
 export type TerminalControlListener = (msg: TerminalControlMessage) => void;
 
+/** sessionStorage key prefix for buffer snapshots */
+const BUFFER_SNAPSHOT_PREFIX = 'e-terminal-buffer-';
+
 /** Internal bookkeeping for a single terminal connection */
 interface TerminalConnection {
   sessionId: string;
   terminal: Terminal;
   fitAddon: FitAddon;
   searchAddon: SearchAddon;
+  serializeAddon: SerializeAddon;
   ws: WebSocket | null;
   /** The DOM element the terminal is currently mounted to, or null if detached */
   container: HTMLElement | null;
@@ -81,6 +87,14 @@ interface TerminalConnection {
   linkProviderDisposable: IDisposable | null;
   /** CWD used when the session was created (fallback for link resolution) */
   initialCwd: string;
+  /** Whether this connection is a reconnection to an existing server session */
+  reconnecting: boolean;
+  /** Whether we loaded a serialized buffer for instant visual restore */
+  hasSerializedBuffer: boolean;
+  /** Suppressing replay data from server (we already have serialized buffer) */
+  suppressingReplay: boolean;
+  /** Serialized buffer content to write after terminal.open() for instant restore */
+  pendingRestore: string | null;
 }
 
 /** Fallback theme colours (used when CSS custom properties aren't available) */
@@ -182,10 +196,17 @@ export class TerminalConnectionManager {
   private prefs: TerminalPreferences = { ...DEFAULT_TERMINAL_PREFERENCES };
 
   /**
+   * Guard flag to prevent recursive broadcast writes.
+   * When the broadcast handler fans out input to sibling sessions,
+   * write() should not re-enter the broadcast path.
+   */
+  private broadcasting = false;
+
+  /**
    * Optional broadcast handler: called whenever a terminal receives keyboard
    * input via onData. The handler receives the source sessionId and the raw
-   * input string.  The UI layer uses this to fan out input to sibling sessions
-   * when broadcast mode is active.
+   * input string. The UI layer uses this to fan out input to sibling sessions
+   * when broadcast mode is active for the source session's tab.
    */
   private broadcastHandler:
     | ((sourceSessionId: string, data: string) => void)
@@ -226,6 +247,7 @@ export class TerminalConnectionManager {
     // 3. Create addons
     const fitAddon = new FitAddon();
     const searchAddon = new SearchAddon();
+    const serializeAddon = new SerializeAddon();
     const webLinksAddon = new WebLinksAddon(
       createUrlClickHandler(),
       createUrlLinkOptions(terminal),
@@ -235,6 +257,7 @@ export class TerminalConnectionManager {
 
     terminal.loadAddon(fitAddon);
     terminal.loadAddon(searchAddon);
+    terminal.loadAddon(serializeAddon);
     terminal.loadAddon(webLinksAddon);
     terminal.loadAddon(unicode11Addon);
     terminal.loadAddon(clipboardAddon);
@@ -254,6 +277,7 @@ export class TerminalConnectionManager {
       terminal,
       fitAddon,
       searchAddon,
+      serializeAddon,
       ws: null,
       container: null,
       resizeObserver: null,
@@ -265,6 +289,10 @@ export class TerminalConnectionManager {
       hasConnected: false,
       linkProviderDisposable,
       initialCwd,
+      reconnecting: false,
+      hasSerializedBuffer: false,
+      suppressingReplay: false,
+      pendingRestore: null,
     };
 
     this.connections.set(sessionId, conn);
@@ -277,9 +305,15 @@ export class TerminalConnectionManager {
       if (conn.ws?.readyState === WebSocket.OPEN) {
         conn.ws.send(input);
       }
-      // Notify broadcast handler so it can replicate input to sibling sessions
-      if (this.broadcastHandler) {
-        this.broadcastHandler(sessionId, input);
+      // Notify broadcast handler so it can replicate input to sibling sessions.
+      // The broadcasting guard prevents re-entry when write() is called for siblings.
+      if (this.broadcastHandler && !this.broadcasting) {
+        this.broadcasting = true;
+        try {
+          this.broadcastHandler(sessionId, input);
+        } finally {
+          this.broadcasting = false;
+        }
       }
     });
 
@@ -328,6 +362,14 @@ export class TerminalConnectionManager {
     } else {
       // First time opening — let xterm create its DOM
       conn.terminal.open(el);
+
+      // If we have a serialized buffer snapshot (from a previous session),
+      // write it immediately for instant visual feedback before the server
+      // replays its scrollback.
+      if (conn.pendingRestore) {
+        conn.terminal.write(conn.pendingRestore);
+        conn.pendingRestore = null;
+      }
 
       // Try loading WebGL addon (with canvas fallback)
       this.loadWebGLAddon(conn);
@@ -413,6 +455,153 @@ export class TerminalConnectionManager {
   destroyAll(): void {
     for (const sessionId of Array.from(this.connections.keys())) {
       this.destroySession(sessionId);
+    }
+  }
+
+  /**
+   * Reconnect to an existing server session without creating a new PTY.
+   *
+   * Used after page reload to reattach to server-side sessions that
+   * survived the disconnect.  Creates a local Terminal + addons,
+   * restores a serialized buffer snapshot for instant visual feedback,
+   * then opens a WebSocket.  The server replays its scrollback buffer;
+   * if a serialized snapshot was restored, replay data is suppressed to
+   * avoid duplication.
+   */
+  reconnectSession(
+    sessionId: string,
+    opts?: { cwd?: string },
+  ): void {
+    if (this.connections.has(sessionId)) return;
+
+    // 1. Create Terminal instance
+    const terminal = this.createTerminalInstance();
+
+    // 2. Load addons
+    const fitAddon = new FitAddon();
+    const searchAddon = new SearchAddon();
+    const serializeAddon = new SerializeAddon();
+    const webLinksAddon = new WebLinksAddon(
+      createUrlClickHandler(),
+      createUrlLinkOptions(terminal),
+    );
+    const unicode11Addon = new Unicode11Addon();
+    const clipboardAddon = new ClipboardAddon();
+
+    terminal.loadAddon(fitAddon);
+    terminal.loadAddon(searchAddon);
+    terminal.loadAddon(serializeAddon);
+    terminal.loadAddon(webLinksAddon);
+    terminal.loadAddon(unicode11Addon);
+    terminal.loadAddon(clipboardAddon);
+    terminal.unicode.activeVersion = '11';
+
+    // 3. File-path link provider
+    const initialCwd = opts?.cwd ?? '.';
+    const linkProviderDisposable = terminal.registerLinkProvider(
+      createFilePathLinkProvider(terminal, sessionId, initialCwd),
+    );
+
+    // 4. Attempt to load serialized buffer snapshot from sessionStorage
+    const serializedBuffer = this.loadBufferSnapshot(sessionId);
+
+    // 5. Build connection record
+    const conn: TerminalConnection = {
+      sessionId,
+      terminal,
+      fitAddon,
+      searchAddon,
+      serializeAddon,
+      ws: null,
+      container: null,
+      resizeObserver: null,
+      messageBuffer: [],
+      ready: false,
+      readyTimeout: null,
+      controlListeners: new Set(),
+      webglAddon: null,
+      hasConnected: false,
+      linkProviderDisposable,
+      initialCwd,
+      reconnecting: true,
+      hasSerializedBuffer: !!serializedBuffer,
+      suppressingReplay: false,
+      pendingRestore: serializedBuffer,
+    };
+
+    this.connections.set(sessionId, conn);
+
+    // 6. Open WebSocket — server will replay scrollback + send exit status
+    this.openWebSocket(conn);
+
+    // 7. Wire terminal input → WebSocket (+ broadcast fan-out)
+    terminal.onData((input) => {
+      if (conn.ws?.readyState === WebSocket.OPEN) {
+        conn.ws.send(input);
+      }
+      if (this.broadcastHandler && !this.broadcasting) {
+        this.broadcasting = true;
+        try {
+          this.broadcastHandler(sessionId, input);
+        } finally {
+          this.broadcasting = false;
+        }
+      }
+    });
+
+    terminal.onResize(({ cols, rows }) => {
+      if (conn.ws?.readyState === WebSocket.OPEN) {
+        conn.ws.send(`${String.fromCharCode(TERMINAL_PROTOCOL.RESIZE)}${cols},${rows}`);
+      }
+    });
+  }
+
+  // -----------------------------------------------------------------------
+  // Buffer snapshot persistence (for session restore across page reload)
+  // -----------------------------------------------------------------------
+
+  /**
+   * Save all terminal buffer snapshots to sessionStorage.
+   * Called on `beforeunload` so buffers survive a page refresh.
+   * Uses @xterm/addon-serialize for a faithful escape-sequence dump
+   * that can be replayed to reproduce the visual state.
+   */
+  saveAllBufferSnapshots(): void {
+    if (typeof sessionStorage === 'undefined') return;
+
+    for (const [sessionId, conn] of this.connections) {
+      try {
+        const serialized = conn.serializeAddon.serialize({
+          scrollback: this.prefs.scrollback,
+        });
+        if (serialized) {
+          sessionStorage.setItem(`${BUFFER_SNAPSHOT_PREFIX}${sessionId}`, serialized);
+        }
+      } catch {
+        // Serialization may fail if terminal was never opened — ignore
+      }
+    }
+  }
+
+  /**
+   * Remove buffer snapshots from sessionStorage that don't correspond to
+   * any of the given valid session IDs (post-reconciliation cleanup).
+   */
+  cleanupStaleSnapshots(validSessionIds: Set<string>): void {
+    if (typeof sessionStorage === 'undefined') return;
+
+    const toRemove: string[] = [];
+    for (let i = 0; i < sessionStorage.length; i++) {
+      const key = sessionStorage.key(i);
+      if (key?.startsWith(BUFFER_SNAPSHOT_PREFIX)) {
+        const sid = key.slice(BUFFER_SNAPSHOT_PREFIX.length);
+        if (!validSessionIds.has(sid)) {
+          toRemove.push(key);
+        }
+      }
+    }
+    for (const key of toRemove) {
+      sessionStorage.removeItem(key);
     }
   }
 
@@ -552,8 +741,9 @@ export class TerminalConnectionManager {
 
   /**
    * Set or clear the broadcast handler. When set, the handler is called
-   * whenever any terminal receives keyboard input, allowing the UI layer
-   * to replicate that input to sibling sessions in the same tab group.
+   * whenever any terminal receives keyboard input (via onData), allowing
+   * the UI layer to replicate that input to sibling sessions in the same
+   * tab group. Resize events are never broadcast.
    */
   setBroadcastHandler(
     handler: ((sourceSessionId: string, data: string) => void) | null,
@@ -681,6 +871,23 @@ export class TerminalConnectionManager {
     }
   }
 
+  /**
+   * Load a buffer snapshot from sessionStorage for a given session ID.
+   * Returns the serialized escape-sequence string, or null if none found.
+   * Removes the snapshot after loading (one-shot restore).
+   */
+  private loadBufferSnapshot(sessionId: string): string | null {
+    if (typeof sessionStorage === 'undefined') return null;
+    try {
+      const key = `${BUFFER_SNAPSHOT_PREFIX}${sessionId}`;
+      const data = sessionStorage.getItem(key);
+      sessionStorage.removeItem(key);
+      return data;
+    } catch {
+      return null;
+    }
+  }
+
   /** Open a WebSocket for a connection */
   private openWebSocket(conn: TerminalConnection): void {
     const wsUrl = `${getWsBase()}/terminal/ws?sessionId=${encodeURIComponent(conn.sessionId)}`;
@@ -706,6 +913,19 @@ export class TerminalConnectionManager {
         const json = raw.slice(1);
         try {
           const msg = JSON.parse(json) as TerminalControlMessage;
+
+          // Track replay boundaries for reconnecting sessions.
+          // When we have a serialized buffer, suppress replay data
+          // to avoid duplication (the serialized snapshot is already displayed).
+          if (msg.type === 'replay_start' && conn.hasSerializedBuffer) {
+            conn.suppressingReplay = true;
+          } else if (msg.type === 'replay_end' && conn.suppressingReplay) {
+            conn.suppressingReplay = false;
+            conn.reconnecting = false;
+          } else if (msg.type === 'replay_end' && conn.reconnecting) {
+            conn.reconnecting = false;
+          }
+
           this.emitControlMessage(conn, msg);
         } catch {
           // Malformed control message — ignore
@@ -714,6 +934,9 @@ export class TerminalConnectionManager {
       }
 
       // --- Normal PTY data ---
+      // Suppress replay data when a serialized buffer was restored
+      if (conn.suppressingReplay) return;
+
       if (conn.ready) {
         conn.terminal.write(raw);
       } else {
@@ -774,3 +997,11 @@ export class TerminalConnectionManager {
  *   import { terminalConnectionManager } from '$lib/services/terminal-connection';
  */
 export const terminalConnectionManager = new TerminalConnectionManager();
+
+// Save buffer snapshots to sessionStorage before the page unloads so that
+// reconnecting sessions can instantly restore the visual terminal state.
+if (typeof window !== 'undefined') {
+  window.addEventListener('beforeunload', () => {
+    terminalConnectionManager.saveAllBufferSnapshots();
+  });
+}

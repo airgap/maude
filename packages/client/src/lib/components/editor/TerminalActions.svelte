@@ -53,6 +53,22 @@
   </button>
 
   <button
+    class="action-btn broadcast-btn"
+    class:broadcast-active={terminalStore.broadcastInput}
+    onclick={toggleBroadcast}
+    title={terminalStore.broadcastInput ? 'Disable broadcast input (currently sending to all terminals in this tab)' : 'Enable broadcast input (send input to all terminals in this tab)'}
+    aria-label={terminalStore.broadcastInput ? 'Disable broadcast input' : 'Enable broadcast input'}
+  >
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <path d="M4.9 19.1C1 15.2 1 8.8 4.9 4.9" />
+      <path d="M7.8 16.2c-2.3-2.3-2.3-6.1 0-8.4" />
+      <circle cx="12" cy="12" r="2" fill="currentColor" />
+      <path d="M16.2 7.8c2.3 2.3 2.3 6.1 0 8.4" />
+      <path d="M19.1 4.9C23 8.8 23 15.2 19.1 19.1" />
+    </svg>
+  </button>
+
+  <button
     class="action-btn"
     onclick={splitHorizontal}
     title="Split horizontal (side by side)"
@@ -148,6 +164,23 @@
   .action-btn.active {
     color: var(--accent-primary);
     background: var(--bg-active);
+  }
+  .action-btn.broadcast-active {
+    color: var(--accent-warning, #ffaa00);
+    background: color-mix(in srgb, var(--accent-warning, #ffaa00) 15%, var(--bg-active));
+    box-shadow: 0 0 6px color-mix(in srgb, var(--accent-warning, #ffaa00) 50%, transparent),
+                0 0 12px color-mix(in srgb, var(--accent-warning, #ffaa00) 25%, transparent);
+    animation: broadcast-pulse 2s ease-in-out infinite;
+  }
+  .action-btn.broadcast-active:hover {
+    color: var(--accent-warning, #ffaa00);
+    background: color-mix(in srgb, var(--accent-warning, #ffaa00) 22%, var(--bg-hover));
+    box-shadow: 0 0 8px color-mix(in srgb, var(--accent-warning, #ffaa00) 60%, transparent),
+                0 0 16px color-mix(in srgb, var(--accent-warning, #ffaa00) 30%, transparent);
+  }
+  @keyframes broadcast-pulse {
+    0%, 100% { box-shadow: 0 0 6px color-mix(in srgb, var(--accent-warning, #ffaa00) 50%, transparent), 0 0 12px color-mix(in srgb, var(--accent-warning, #ffaa00) 25%, transparent); }
+    50% { box-shadow: 0 0 8px color-mix(in srgb, var(--accent-warning, #ffaa00) 70%, transparent), 0 0 18px color-mix(in srgb, var(--accent-warning, #ffaa00) 35%, transparent); }
   }
   .action-btn:disabled {
     opacity: 0.3;

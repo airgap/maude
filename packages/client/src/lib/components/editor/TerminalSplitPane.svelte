@@ -38,11 +38,13 @@
 
 {#if layout.type === 'leaf'}
   {@const cmdStatus = terminalStore.getCommandStatus(layout.sessionId)}
+  {@const isBroadcasting = terminalStore.isBroadcastActiveForSession(layout.sessionId)}
   <!-- Leaf node: render a TerminalInstance with focus indicator -->
   <!-- svelte-ignore a11y_no_static_element_interactions -->
   <div
     class="split-leaf"
     class:focused={focusedSessionId === layout.sessionId}
+    class:broadcasting={isBroadcasting}
     onmousedown={() => handlePaneClick(layout.sessionId)}
     onfocusin={() => handlePaneFocus(layout.sessionId)}
   >
@@ -105,6 +107,16 @@
   .split-leaf.focused {
     border-color: color-mix(in srgb, var(--accent-primary) 50%, transparent);
     box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent-primary) 20%, transparent);
+  }
+
+  .split-leaf.broadcasting {
+    border-color: color-mix(in srgb, var(--accent-warning, #ffaa00) 40%, transparent);
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent-warning, #ffaa00) 15%, transparent);
+  }
+
+  .split-leaf.broadcasting.focused {
+    border-color: color-mix(in srgb, var(--accent-warning, #ffaa00) 60%, transparent);
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent-warning, #ffaa00) 25%, transparent);
   }
 
   /* ── Exit code badge (gutter) ── */
