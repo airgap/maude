@@ -1,0 +1,169 @@
+// --- Terminal Types ---
+
+/** Available shell profile for terminal sessions */
+export interface ShellProfile {
+  id: string;
+  name: string;
+  shellPath: string;
+  args: string[];
+  env: Record<string, string>;
+  cwd?: string;
+  icon?: string;
+}
+
+/** Detected shell on the system */
+export interface ShellInfo {
+  path: string;
+  name: string;
+  version: string;
+}
+
+/** Metadata for a terminal session (client-facing) */
+export interface TerminalSessionMeta {
+  id: string;
+  shell: string;
+  pid: number;
+  cwd: string;
+  cols: number;
+  rows: number;
+  createdAt: number;
+  lastActivity: number;
+  exitCode: number | null;
+  attached: boolean;
+}
+
+/** Request to create a new terminal session */
+export interface TerminalCreateRequest {
+  shell?: string;
+  args?: string[];
+  cwd?: string;
+  env?: Record<string, string>;
+  cols?: number;
+  rows?: number;
+}
+
+/** Response from creating a terminal session */
+export interface TerminalCreateResponse {
+  sessionId: string;
+  shell: string;
+  pid: number;
+  cwd: string;
+}
+
+// --- WebSocket Control Messages (0x02 prefix) ---
+
+export type TerminalControlMessage =
+  | TerminalReplayStart
+  | TerminalReplayEnd
+  | TerminalSessionExit
+  | TerminalCwdChanged
+  | TerminalCommandStart
+  | TerminalCommandEnd;
+
+export interface TerminalReplayStart {
+  type: 'replay_start';
+  bytes: number;
+}
+
+export interface TerminalReplayEnd {
+  type: 'replay_end';
+}
+
+export interface TerminalSessionExit {
+  type: 'session_exit';
+  exitCode: number;
+  signal?: number;
+}
+
+export interface TerminalCwdChanged {
+  type: 'cwd_changed';
+  cwd: string;
+}
+
+export interface TerminalCommandStart {
+  type: 'command_start';
+  id: string;
+}
+
+export interface TerminalCommandEnd {
+  type: 'command_end';
+  id: string;
+  exitCode: number;
+}
+
+// --- Protocol Constants ---
+
+/** Binary prefix bytes for the terminal WebSocket protocol */
+export const TERMINAL_PROTOCOL = {
+  /** Raw PTY data (default / no prefix) */
+  DATA: 0x00,
+  /** Resize command: payload is "cols,rows" in ASCII */
+  RESIZE: 0x01,
+  /** JSON control message */
+  CONTROL: 0x02,
+} as const;
+
+// --- Split Layout Types ---
+
+export type SplitDirection = 'horizontal' | 'vertical';
+
+export interface TerminalLeaf {
+  type: 'leaf';
+  sessionId: string;
+}
+
+export interface TerminalBranch {
+  type: 'split';
+  direction: SplitDirection;
+  ratio: number;
+  first: TerminalLayout;
+  second: TerminalLayout;
+}
+
+export type TerminalLayout = TerminalLeaf | TerminalBranch;
+
+// --- Tab Types ---
+
+export interface TerminalTab {
+  id: string;
+  label: string;
+  layout: TerminalLayout;
+  focusedSessionId: string;
+}
+
+// --- Preferences ---
+
+export type CursorStyle = 'block' | 'underline' | 'bar';
+export type BellStyle = 'none' | 'visual' | 'audio' | 'both';
+
+export interface TerminalPreferences {
+  fontFamily: string;
+  fontSize: number;
+  fontWeight: number;
+  lineHeight: number;
+  cursorStyle: CursorStyle;
+  cursorBlink: boolean;
+  scrollback: number;
+  bellStyle: BellStyle;
+  copyOnSelect: boolean;
+  rightClickPaste: boolean;
+  defaultShell: string;
+  enableShellIntegration: boolean;
+  enableImages: boolean;
+}
+
+export const DEFAULT_TERMINAL_PREFERENCES: TerminalPreferences = {
+  fontFamily: 'var(--font-family-mono, monospace)',
+  fontSize: 13,
+  fontWeight: 400,
+  lineHeight: 1.2,
+  cursorStyle: 'block',
+  cursorBlink: true,
+  scrollback: 5000,
+  bellStyle: 'visual',
+  copyOnSelect: false,
+  rightClickPaste: false,
+  defaultShell: '',
+  enableShellIntegration: true,
+  enableImages: false,
+};

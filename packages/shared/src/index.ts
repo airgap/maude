@@ -210,3 +210,28 @@ export type {
   AgentNoteCreateInput,
   AgentNoteUpdateInput,
 } from './agent-notes.js';
+
+export type {
+  ShellProfile,
+  ShellInfo,
+  TerminalSessionMeta,
+  TerminalCreateRequest,
+  TerminalCreateResponse,
+  TerminalControlMessage,
+  TerminalReplayStart,
+  TerminalReplayEnd,
+  TerminalSessionExit,
+  TerminalCwdChanged,
+  TerminalCommandStart,
+  TerminalCommandEnd,
+  SplitDirection,
+  TerminalLeaf,
+  TerminalBranch,
+  TerminalLayout,
+  TerminalTab,
+  CursorStyle,
+  BellStyle,
+  TerminalPreferences,
+} from './terminal.js';
+
+export { TERMINAL_PROTOCOL, DEFAULT_TERMINAL_PREFERENCES } from './terminal.js';

@@ -527,9 +527,13 @@
 
   async function send() {
     const text = inputText.trim();
-    // Block sending if this conversation has an active stream
+    // Block sending if this conversation has an active stream.
+    // Only block when there's an actual conversation with an active stream —
+    // null === null must not count (no conversation selected, no stream target).
     const isStreamingHere =
-      streamStore.isStreaming && streamStore.conversationId === conversationStore.activeId;
+      streamStore.isStreaming &&
+      conversationStore.activeId != null &&
+      streamStore.conversationId === conversationStore.activeId;
     if ((!text && pendingAttachments.length === 0) || isStreamingHere) return;
 
     // Intercept `cd` as directory navigation
@@ -1175,7 +1179,7 @@
 
       <VoiceButton onTranscript={handleVoiceTranscript} />
 
-      {#if streamStore.isStreaming && streamStore.conversationId === conversationStore.activeId}
+      {#if streamStore.isStreaming && conversationStore.activeId != null && streamStore.conversationId === conversationStore.activeId}
         <button
           class="btn-action cancel"
           onclick={() => conversationStore.activeId && cancelStream(conversationStore.activeId)}

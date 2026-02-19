@@ -197,6 +197,41 @@ app.post('/stories/reorder', async (c) => {
     return c.json({ ok: false, error: 'storyIds array is required' }, 400);
   }
 
+  // Validate that proposed order doesn't violate dependency constraints
+  const storyRows = db
+    .query(
+      `SELECT id, depends_on FROM prd_stories WHERE id IN (${body.storyIds.map(() => '?').join(',')})`,
+    )
+    .all(...body.storyIds) as Array<{ id: string; depends_on: string }>;
+
+  const positionMap = new Map(body.storyIds.map((id, i) => [id, i]));
+  const violations: string[] = [];
+
+  for (const row of storyRows) {
+    const deps = JSON.parse(row.depends_on || '[]') as string[];
+    const myPos = positionMap.get(row.id);
+    if (myPos === undefined) continue;
+    for (const depId of deps) {
+      const depPos = positionMap.get(depId);
+      if (depPos !== undefined && depPos > myPos) {
+        const depRow = storyRows.find((r) => r.id === depId);
+        violations.push(
+          `Story at position ${myPos} depends on story at position ${depPos}`,
+        );
+      }
+    }
+  }
+
+  if (violations.length > 0) {
+    return c.json(
+      {
+        ok: false,
+        error: `Reorder violates dependency constraints: ${violations.join('; ')}. Dependencies must appear before the stories that depend on them.`,
+      },
+      400,
+    );
+  }
+
   const now = Date.now();
 
   // Update sort_order for each story based on position in the array
@@ -676,6 +711,11 @@ app.post('/', async (c) => {
     );
   }
 
+  // Reorder stories so sort_order respects dependency constraints
+  if (storyIds.length > 0) {
+    reorderStoriesByDependencies(db, prdId);
+  }
+
   return c.json({ ok: true, data: { id: prdId, storyIds } }, 201);
 });
 
@@ -763,6 +803,11 @@ app.post('/:id/stories', async (c) => {
     now,
   );
 
+  // Reorder so new story (and any it depends on) are in correct topological order
+  if ((body.dependsOn || []).length > 0) {
+    reorderStoriesByDependencies(db, prdId);
+  }
+
   // Touch PRD updated_at
   db.query('UPDATE prds SET updated_at = ? WHERE id = ?').run(now, prdId);
 
@@ -845,8 +890,13 @@ app.patch('/:prdId/stories/:storyId', async (c) => {
   const prdId = c.req.param('prdId');
   db.query('UPDATE prds SET updated_at = ? WHERE id = ?').run(now, prdId);
 
-  // Invalidate priority recommendations when dependencies change
+  // Reorder and invalidate priority recommendations when dependencies change
   if (body.dependsOn !== undefined) {
+    // Reorder stories to respect updated dependency constraints
+    if (existing.prd_id) {
+      reorderStoriesByDependencies(db, existing.prd_id);
+    }
+
     // Invalidate this story's recommendation since its dependencies changed
     db.query(
       'UPDATE prd_stories SET priority_recommendation = NULL, updated_at = ? WHERE id = ?',
@@ -1276,6 +1326,9 @@ app.post('/:id/generate/accept', async (c) => {
       now,
     );
   }
+
+  // Reorder stories so sort_order respects dependency constraints
+  reorderStoriesByDependencies(db, prdId);
 
   // Touch PRD updated_at
   db.query('UPDATE prds SET updated_at = ? WHERE id = ?').run(now, prdId);
@@ -2169,6 +2222,122 @@ app.get('/:id/dependencies/validate', (c) => {
   return c.json({ ok: true, data: validation });
 });
 
+// --- Topological Sort for Dependency-Aware Ordering ---
+
+/**
+ * Computes sort_order values that respect dependency constraints.
+ * Stories with no dependencies come first; stories that depend on others
+ * are placed after all their dependencies. Within the same dependency depth,
+ * original insertion order is preserved as a stable tiebreaker.
+ *
+ * Uses Kahn's algorithm (BFS topological sort) with stable ordering.
+ * Handles cycles gracefully by appending cycle participants at the end.
+ *
+ * @param items - Array of { id, dependsOn, originalIndex } objects
+ * @returns Map from item ID to its computed sort_order
+ */
+function computeTopologicalSortOrder(
+  items: Array<{ id: string; dependsOn: string[]; originalIndex: number }>,
+): Map<string, number> {
+  const itemIds = new Set(items.map((i) => i.id));
+  const indexById = new Map(items.map((i) => [i.id, i.originalIndex]));
+
+  // Build adjacency: inDegree and adjacency list (only for deps within the set)
+  const inDegree = new Map<string, number>();
+  const dependents = new Map<string, string[]>(); // depId -> [items that depend on it]
+
+  for (const item of items) {
+    inDegree.set(item.id, 0);
+    dependents.set(item.id, []);
+  }
+
+  for (const item of items) {
+    for (const depId of item.dependsOn) {
+      if (itemIds.has(depId)) {
+        inDegree.set(item.id, (inDegree.get(item.id) || 0) + 1);
+        dependents.get(depId)!.push(item.id);
+      }
+    }
+  }
+
+  // Kahn's algorithm with stable ordering (sort queue by originalIndex)
+  const queue: string[] = [];
+  for (const item of items) {
+    if (inDegree.get(item.id) === 0) {
+      queue.push(item.id);
+    }
+  }
+  // Stable sort: process items with no deps in their original order
+  queue.sort((a, b) => (indexById.get(a) || 0) - (indexById.get(b) || 0));
+
+  const sorted: string[] = [];
+  while (queue.length > 0) {
+    const current = queue.shift()!;
+    sorted.push(current);
+
+    const deps = dependents.get(current) || [];
+    // Sort dependents by originalIndex for stable tiebreaking
+    deps.sort((a, b) => (indexById.get(a) || 0) - (indexById.get(b) || 0));
+    for (const depId of deps) {
+      const newDeg = (inDegree.get(depId) || 1) - 1;
+      inDegree.set(depId, newDeg);
+      if (newDeg === 0) {
+        queue.push(depId);
+        // Re-sort to maintain stable order in the queue
+        queue.sort((a, b) => (indexById.get(a) || 0) - (indexById.get(b) || 0));
+      }
+    }
+  }
+
+  // Append any cycle participants (not reached by Kahn's) in original order
+  if (sorted.length < items.length) {
+    const sortedSet = new Set(sorted);
+    const remaining = items
+      .filter((i) => !sortedSet.has(i.id))
+      .sort((a, b) => a.originalIndex - b.originalIndex);
+    for (const item of remaining) {
+      sorted.push(item.id);
+    }
+  }
+
+  // Build sort_order map
+  const result = new Map<string, number>();
+  for (let i = 0; i < sorted.length; i++) {
+    result.set(sorted[i], i);
+  }
+  return result;
+}
+
+/**
+ * Reorders all stories within a PRD (or standalone set) so that sort_order
+ * respects dependency constraints. Call after bulk story creation or
+ * when dependencies change.
+ */
+function reorderStoriesByDependencies(db: ReturnType<typeof getDb>, prdId: string): void {
+  const rows = db
+    .query('SELECT id, depends_on, sort_order FROM prd_stories WHERE prd_id = ? ORDER BY sort_order ASC')
+    .all(prdId) as Array<{ id: string; depends_on: string; sort_order: number }>;
+
+  if (rows.length === 0) return;
+
+  const items = rows.map((r, i) => ({
+    id: r.id,
+    dependsOn: JSON.parse(r.depends_on || '[]') as string[],
+    originalIndex: i,
+  }));
+
+  const sortOrderMap = computeTopologicalSortOrder(items);
+  const now = Date.now();
+
+  for (const [storyId, order] of sortOrderMap) {
+    db.query('UPDATE prd_stories SET sort_order = ?, updated_at = ? WHERE id = ?').run(
+      order,
+      now,
+      storyId,
+    );
+  }
+}
+
 // --- Dependency Graph Builder ---
 
 function buildDependencyGraph(stories: UserStory[], prdId: string): DependencyGraph {
@@ -2273,16 +2442,17 @@ function buildDependencyGraph(stories: UserStory[], prdId: string): DependencyGr
     }
   }
 
-  // Unresolved blockers (pending/in_progress stories that have uncompleted dependencies)
+  // Unresolved blockers — only warn for stories actively in progress with unmet deps.
+  // Pending stories with unmet deps are just waiting their turn, not a problem.
   for (const story of stories) {
-    if (story.status === 'pending' || story.status === 'in_progress') {
+    if (story.status === 'in_progress') {
       const unresolvedDeps = story.dependsOn.filter(
         (depId) => storyMap.has(depId) && !completedIds.has(depId),
       );
       if (unresolvedDeps.length > 0) {
         warnings.push({
           type: 'unresolved_blocker',
-          message: `Story "${story.title}" is blocked by: ${unresolvedDeps.map((id) => storyMap.get(id)?.title || id).join(', ')}`,
+          message: `Story "${story.title}" is in progress but blocked by: ${unresolvedDeps.map((id) => storyMap.get(id)?.title || id).join(', ')}`,
           storyIds: [story.id, ...unresolvedDeps],
         });
       }
@@ -2365,15 +2535,18 @@ function validateSprintPlan(stories: UserStory[]): SprintValidation {
         });
       }
 
-      // Always warn about blocked stories
-      warnings.push({
-        type: 'blocked_story',
-        message: `Story "${story.title}" is blocked by: ${blockingStories.map((s) => s.title).join(', ')}. Ensure these are completed first.`,
-        storyId: story.id,
-        storyTitle: story.title,
-        blockedByStoryIds: blockingStories.map((s) => s.id),
-        blockedByStoryTitles: blockingStories.map((s) => s.title),
-      });
+      // Only warn if the story is actively in progress with unmet deps —
+      // pending stories with unmet deps are just waiting their turn, not a problem
+      if (story.status === 'in_progress') {
+        warnings.push({
+          type: 'blocked_story',
+          message: `Story "${story.title}" is in progress but blocked by: ${blockingStories.map((s) => s.title).join(', ')}. Ensure these are completed first.`,
+          storyId: story.id,
+          storyTitle: story.title,
+          blockedByStoryIds: blockingStories.map((s) => s.id),
+          blockedByStoryTitles: blockingStories.map((s) => s.title),
+        });
+      }
     }
   }
 

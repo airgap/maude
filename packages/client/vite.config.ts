@@ -7,6 +7,7 @@ export default defineConfig({
     format: 'es',
   },
   server: {
+    host: true,
     port: 5173,
     proxy: {
       '/api/stream': {
