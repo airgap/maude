@@ -22,6 +22,28 @@
     );
   }
 
+  /** Register keyboard handler for search shortcuts on the terminal */
+  function registerSearchKeyHandler() {
+    terminalConnectionManager.attachCustomKeyHandler(sessionId, (ev: KeyboardEvent) => {
+      // Ctrl+Shift+F: open terminal search for this instance
+      if ((ev.ctrlKey || ev.metaKey) && ev.shiftKey && ev.key === 'F') {
+        ev.preventDefault();
+        ev.stopPropagation();
+        terminalStore.openSearchForSession(sessionId);
+        return false;
+      }
+      // Escape: close search if open for this instance
+      if (ev.key === 'Escape' && terminalStore.isSearchOpen(sessionId)) {
+        ev.preventDefault();
+        ev.stopPropagation();
+        terminalStore.closeSearchForSession(sessionId);
+        terminalConnectionManager.clearSearch(sessionId);
+        return false;
+      }
+      return true;
+    });
+  }
+
   /** Create or reconnect a session via the ConnectionManager */
   async function ensureSession() {
     if (!terminalConnectionManager.has(sessionId)) {
@@ -70,6 +92,9 @@
         console.error('[TerminalInstance] Failed to attach:', err);
       }
     }
+
+    // Register custom key handler for search shortcuts
+    registerSearchKeyHandler();
   }
 
   // Re-derive and apply theme when settings change

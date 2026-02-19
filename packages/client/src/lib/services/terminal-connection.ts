@@ -435,6 +435,38 @@ export class TerminalConnectionManager {
     conn.searchAddon.clearDecorations();
   }
 
+  /**
+   * Register a listener for search result changes (fires when match count/index updates).
+   * Returns an unsubscribe function.
+   */
+  onSearchResults(
+    sessionId: string,
+    callback: (results: { resultIndex: number; resultCount: number }) => void,
+  ): () => void {
+    const conn = this.connections.get(sessionId);
+    if (!conn) return () => {};
+    try {
+      const disposable = conn.searchAddon.onDidChangeResults(callback);
+      return () => disposable.dispose();
+    } catch {
+      return () => {};
+    }
+  }
+
+  /**
+   * Attach a custom key event handler to a terminal instance.
+   * The handler runs before xterm processes the key. Return `false` to prevent
+   * xterm from handling the key.
+   */
+  attachCustomKeyHandler(
+    sessionId: string,
+    handler: (ev: KeyboardEvent) => boolean,
+  ): void {
+    const conn = this.connections.get(sessionId);
+    if (!conn) return;
+    conn.terminal.attachCustomKeyEventHandler(handler);
+  }
+
   // -----------------------------------------------------------------------
   // Control message events
   // -----------------------------------------------------------------------

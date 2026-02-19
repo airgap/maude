@@ -346,7 +346,7 @@ function createTerminalStore() {
   let preferences = $state<TerminalPreferences>(loadPreferences());
 
   // --- UI toggles ---
-  let searchOpen = $state(false);
+  let searchOpenSessions = $state<Set<string>>(new Set());
   let broadcastInput = $state(false);
 
   // --- Derived state ---
@@ -409,7 +409,7 @@ function createTerminalStore() {
       return preferences;
     },
     get searchOpen() {
-      return searchOpen;
+      return activeSessionId ? searchOpenSessions.has(activeSessionId) : false;
     },
     get broadcastInput() {
       return broadcastInput;
@@ -705,11 +705,39 @@ function createTerminalStore() {
     // ── Search & broadcast toggles ──
 
     toggleSearch() {
-      searchOpen = !searchOpen;
+      const sid = activeSessionId;
+      if (!sid) return;
+      if (searchOpenSessions.has(sid)) {
+        this.closeSearchForSession(sid);
+      } else {
+        this.openSearchForSession(sid);
+      }
     },
 
     setSearchOpen(v: boolean) {
-      searchOpen = v;
+      const sid = activeSessionId;
+      if (!sid) return;
+      if (v) {
+        this.openSearchForSession(sid);
+      } else {
+        this.closeSearchForSession(sid);
+      }
+    },
+
+    isSearchOpen(sessionId: string): boolean {
+      return searchOpenSessions.has(sessionId);
+    },
+
+    openSearchForSession(sessionId: string) {
+      const next = new Set(searchOpenSessions);
+      next.add(sessionId);
+      searchOpenSessions = next;
+    },
+
+    closeSearchForSession(sessionId: string) {
+      const next = new Set(searchOpenSessions);
+      next.delete(sessionId);
+      searchOpenSessions = next;
     },
 
     toggleBroadcast() {
@@ -770,7 +798,7 @@ function createTerminalStore() {
 
       // Clear live session state — sessions will be re-registered by terminal components
       sessions = new Map();
-      searchOpen = false;
+      searchOpenSessions = new Set();
       broadcastInput = false;
 
       persistTabs();

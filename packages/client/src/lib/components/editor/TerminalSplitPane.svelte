@@ -4,6 +4,7 @@
   import { terminalConnectionManager } from '$lib/services/terminal-connection';
   import SplitPane from '../layout/SplitPane.svelte';
   import TerminalInstance from './TerminalInstance.svelte';
+  import TerminalSearchBar from './TerminalSearchBar.svelte';
 
   let {
     layout,
@@ -45,6 +46,9 @@
     onmousedown={() => handlePaneClick(layout.sessionId)}
     onfocusin={() => handlePaneFocus(layout.sessionId)}
   >
+    {#if terminalStore.isSearchOpen(layout.sessionId)}
+      <TerminalSearchBar sessionId={layout.sessionId} />
+    {/if}
     <TerminalInstance sessionId={layout.sessionId} {active} />
   </div>
 {:else}
