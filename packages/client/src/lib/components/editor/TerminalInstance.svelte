@@ -203,42 +203,84 @@
     }
   }
 
-  /** Create or reconnect a session via the ConnectionManager */
+  /**
+   * Create a brand new server session (the original flow).
+   * Used when no surviving server session matches this session ID.
+   */
+  async function createFreshSession(): Promise<void> {
+    const createdId = await terminalConnectionManager.createSession({
+      cwd: getCwd(),
+      cols: 80,
+      rows: 24,
+    });
+
+    terminalStore.registerSession({
+      id: createdId,
+      shell: 'sh',
+      pid: 0,
+      cwd: getCwd(),
+      exitCode: null,
+      attached: true,
+    });
+
+    // If the server assigned a different ID than the store's placeholder,
+    // update the tab layout tree to point to the real session ID.
+    if (createdId !== sessionId) {
+      terminalStore.updateSessionId(sessionId, createdId);
+      sessionId = createdId;
+    }
+  }
+
+  /**
+   * Ensure this terminal instance has an active connection.
+   *
+   * On page reload the tab layout is restored from localStorage with the
+   * original server session IDs.  If those sessions are still alive on
+   * the server (reconciliation happened in TerminalPanel), we reconnect
+   * instead of creating a fresh PTY.
+   */
   async function ensureSession() {
     if (!terminalConnectionManager.has(sessionId)) {
-      // Session doesn't exist in ConnectionManager — create it
-      try {
-        const createdId = await terminalConnectionManager.createSession({
-          cwd: getCwd(),
-          cols: 80,
-          rows: 24,
-        });
+      // Check if this session can be reconnected to (server still has it)
+      const serverSession = terminalStore.getReconnectableSession(sessionId);
 
-        // Register session in the store
-        terminalStore.registerSession({
-          id: createdId,
-          shell: 'sh',
-          pid: 0,
-          cwd: getCwd(),
-          exitCode: null,
-          attached: true,
-        });
+      if (serverSession) {
+        // ── Reconnect to existing server session ──
+        try {
+          terminalConnectionManager.reconnectSession(sessionId, {
+            cwd: serverSession.cwd,
+          });
 
-        // If the store's session ID differs from what the connection manager created,
-        // we need to update the tab's layout to point to the actual session ID.
-        // For now, both should match via the store's createTab flow.
-        if (createdId !== sessionId) {
-          // Update the tab layout to use the real session ID
-          const tab = terminalStore.activeTab;
-          if (tab && tab.focusedSessionId === sessionId) {
-            tab.focusedSessionId = createdId;
-            tab.layout = { type: 'leaf', sessionId: createdId };
+          // Register session metadata from server data
+          terminalStore.registerSession({
+            id: sessionId,
+            shell: serverSession.shell,
+            pid: serverSession.pid,
+            cwd: serverSession.cwd,
+            exitCode: serverSession.exitCode,
+            attached: true,
+          });
+
+          // Clear the reconnectable flag so we don't try again
+          terminalStore.clearReconnectable(sessionId);
+        } catch (err) {
+          console.error('[TerminalInstance] Failed to reconnect, creating new session:', err);
+          terminalStore.clearReconnectable(sessionId);
+          try {
+            await createFreshSession();
+          } catch (freshErr) {
+            console.error('[TerminalInstance] Failed to create session:', freshErr);
+            return;
           }
-          sessionId = createdId;
         }
-      } catch (err) {
-        console.error('[TerminalInstance] Failed to create session:', err);
-        return;
+      } else {
+        // ── Create new session (no surviving server session) ──
+        try {
+          await createFreshSession();
+        } catch (err) {
+          console.error('[TerminalInstance] Failed to create session:', err);
+          return;
+        }
       }
     }
 

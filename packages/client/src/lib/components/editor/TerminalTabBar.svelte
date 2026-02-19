@@ -1,5 +1,6 @@
 <script lang="ts">
   import { terminalStore } from '$lib/stores/terminal.svelte';
+  import { settingsStore } from '$lib/stores/settings.svelte';
   import type { TerminalTab } from '@e/shared';
 
   /** Get the display label for a tab — use CWD directory name if available */
@@ -17,6 +18,15 @@
   let dropdownOpen = $state(false);
   let editingTabId = $state<string | null>(null);
   let editValue = $state('');
+
+  // Split profiles into auto-detected and custom
+  const autoProfiles = $derived(
+    terminalStore.profiles.filter((p) => p.isAutoDetected),
+  );
+  const customProfiles = $derived(
+    terminalStore.profiles.filter((p) => !p.isAutoDetected),
+  );
+  const defaultProfileId = $derived(settingsStore.termDefaultProfileId);
 
   function activateTab(tabId: string) {
     terminalStore.activateTab(tabId);
@@ -60,6 +70,15 @@
   function addTab(profileId?: string) {
     terminalStore.createTab(profileId);
     dropdownOpen = false;
+  }
+
+  function addDefaultTab() {
+    // Use the default profile if one is set
+    if (defaultProfileId) {
+      addTab(defaultProfileId);
+    } else {
+      addTab();
+    }
   }
 
   function toggleDropdown(e: MouseEvent) {
@@ -153,20 +172,56 @@
     {#if dropdownOpen}
       <!-- svelte-ignore a11y_no_static_element_interactions -->
       <div class="shell-dropdown" onclick={(e) => e.stopPropagation()}>
-        <button class="shell-option" onclick={() => addTab()}>
+        <!-- Default / plain shell -->
+        <button class="shell-option" onclick={() => addDefaultTab()}>
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <polyline points="4 17 10 11 4 5" /><line x1="12" y1="19" x2="20" y2="19" />
           </svg>
-          Default Shell
+          <span class="option-label">Default Shell</span>
+          {#if !defaultProfileId}
+            <span class="default-badge">default</span>
+          {/if}
         </button>
-        {#each terminalStore.profiles as profile (profile.id)}
-          <button class="shell-option" onclick={() => addTab(profile.id)}>
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <polyline points="4 17 10 11 4 5" /><line x1="12" y1="19" x2="20" y2="19" />
-            </svg>
-            {profile.name}
-          </button>
-        {/each}
+
+        <!-- Auto-detected shells -->
+        {#if autoProfiles.length > 0}
+          <div class="dropdown-separator"></div>
+          <div class="dropdown-section-label">Detected Shells</div>
+          {#each autoProfiles as profile (profile.id)}
+            <button class="shell-option" onclick={() => addTab(profile.id)}>
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="4 17 10 11 4 5" /><line x1="12" y1="19" x2="20" y2="19" />
+              </svg>
+              <span class="option-label">{profile.name}</span>
+              {#if defaultProfileId === profile.id}
+                <span class="default-badge">default</span>
+              {/if}
+            </button>
+          {/each}
+        {/if}
+
+        <!-- Custom profiles -->
+        {#if customProfiles.length > 0}
+          <div class="dropdown-separator"></div>
+          <div class="dropdown-section-label">Custom Profiles</div>
+          {#each customProfiles as profile (profile.id)}
+            <button class="shell-option" onclick={() => addTab(profile.id)}>
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                {#if profile.icon === 'code'}
+                  <polyline points="16 18 22 12 16 6" /><polyline points="8 6 2 12 8 18" />
+                {:else if profile.icon === 'server'}
+                  <rect x="2" y="2" width="20" height="8" rx="2" /><rect x="2" y="14" width="20" height="8" rx="2" /><circle cx="6" cy="6" r="1" fill="currentColor" /><circle cx="6" cy="18" r="1" fill="currentColor" />
+                {:else}
+                  <polyline points="4 17 10 11 4 5" /><line x1="12" y1="19" x2="20" y2="19" />
+                {/if}
+              </svg>
+              <span class="option-label">{profile.name}</span>
+              {#if defaultProfileId === profile.id}
+                <span class="default-badge">default</span>
+              {/if}
+            </button>
+          {/each}
+        {/if}
       </div>
     {/if}
   </div>
@@ -323,7 +378,7 @@
     top: 100%;
     left: 0;
     z-index: 100;
-    min-width: 160px;
+    min-width: 200px;
     background: var(--bg-elevated);
     border: 1px solid var(--border-primary);
     border-radius: var(--radius);
@@ -351,5 +406,38 @@
   .shell-option:hover {
     background: var(--bg-hover);
     color: var(--text-primary);
+  }
+
+  .option-label {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .default-badge {
+    font-size: 9px;
+    padding: 1px 5px;
+    border-radius: var(--radius-sm);
+    background: color-mix(in srgb, var(--accent-primary) 20%, transparent);
+    color: var(--accent-primary);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    flex-shrink: 0;
+  }
+
+  .dropdown-separator {
+    height: 1px;
+    background: var(--border-secondary);
+    margin: 4px 6px;
+  }
+
+  .dropdown-section-label {
+    font-size: 9px;
+    color: var(--text-tertiary);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    padding: 4px 10px 2px;
+    user-select: none;
   }
 </style>

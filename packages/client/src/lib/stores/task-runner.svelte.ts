@@ -6,6 +6,7 @@
  */
 
 import type { WorkspaceTask, TaskDiscoveryResponse, PackageManager } from '@e/shared';
+import { getAuthToken } from '$lib/api/client';
 
 // ── localStorage keys ──
 const RECENT_TASKS_KEY = 'e-task-runner-recent';
@@ -101,7 +102,7 @@ function createTaskRunnerStore() {
       return hasTasks;
     },
     get sortedTasks() {
-      return sortedTasks();
+      return sortedTasks;
     },
     get packageTasks() {
       return packageTasks;
@@ -122,11 +123,13 @@ function createTaskRunnerStore() {
       error = null;
 
       try {
+        const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+        const token = getAuthToken();
+        if (token) headers['Authorization'] = `Bearer ${token}`;
+
         const res = await fetch(
           `/api/task-runner/discover?workspacePath=${encodeURIComponent(wsPath)}`,
-          {
-            headers: { 'Content-Type': 'application/json' },
-          },
+          { headers },
         );
 
         if (!res.ok) {
@@ -156,12 +159,13 @@ function createTaskRunnerStore() {
       error = null;
 
       try {
+        const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+        const token = getAuthToken();
+        if (token) headers['Authorization'] = `Bearer ${token}`;
+
         const res = await fetch(
           `/api/task-runner/refresh?workspacePath=${encodeURIComponent(workspacePath)}`,
-          {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-          },
+          { method: 'POST', headers },
         );
 
         if (!res.ok) {
