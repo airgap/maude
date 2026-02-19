@@ -875,6 +875,64 @@ function createTerminalStore() {
       return collectSessionIds(tab.layout).filter((id) => id !== sessionId);
     },
 
+    // ── Session reconnection (page reload persistence) ──
+
+    /**
+     * Get all session IDs referenced across all tabs.
+     * Used during reconciliation to match server sessions with tab layouts.
+     */
+    getAllSessionIds(): string[] {
+      const ids: string[] = [];
+      for (const tab of tabs) {
+        ids.push(...collectSessionIds(tab.layout));
+      }
+      return ids;
+    },
+
+    /**
+     * Store the set of server sessions that can be reconnected to.
+     * Called by TerminalPanel after querying the server for surviving sessions.
+     */
+    setReconnectableSessions(sessionMap: Map<string, TerminalSessionMeta>) {
+      reconnectableSessions = sessionMap;
+    },
+
+    /** Check if a session can be reconnected to (exists on the server) */
+    isReconnectable(sessionId: string): boolean {
+      return reconnectableSessions.has(sessionId);
+    },
+
+    /** Get the server metadata for a reconnectable session */
+    getReconnectableSession(sessionId: string): TerminalSessionMeta | undefined {
+      return reconnectableSessions.get(sessionId);
+    },
+
+    /** Remove a session from the reconnectable set after it has been reconnected */
+    clearReconnectable(sessionId: string) {
+      const next = new Map(reconnectableSessions);
+      next.delete(sessionId);
+      reconnectableSessions = next;
+    },
+
+    /**
+     * Replace a session ID in all tab layouts.
+     * Used when a fresh server session is created to replace a stale persisted ID.
+     * Works correctly with split layouts (updates the correct leaf in the tree).
+     */
+    updateSessionId(oldId: string, newId: string) {
+      for (const tab of tabs) {
+        const ids = collectSessionIds(tab.layout);
+        if (ids.includes(oldId)) {
+          tab.layout = replaceSessionInLayout(tab.layout, oldId, newId);
+          if (tab.focusedSessionId === oldId) {
+            tab.focusedSessionId = newId;
+          }
+        }
+      }
+      tabs = [...tabs]; // trigger reactivity
+      persistTabs();
+    },
+
     // ── State capture / restore (for workspace snapshots) ──
 
     captureState() {

@@ -4,10 +4,13 @@
   import { terminalConnectionManager } from '$lib/services/terminal-connection';
   import { settingsStore } from '$lib/stores/settings.svelte';
   import { getBaseUrl, getAuthToken } from '$lib/api/client';
-  import type { ShellProfile } from '@e/shared';
+  import type { ShellProfile, TerminalSessionMeta } from '@e/shared';
   import TerminalHeader from './TerminalHeader.svelte';
   import TerminalContent from './TerminalContent.svelte';
   import '@xterm/xterm/css/xterm.css';
+
+  /** Whether reconciliation with the server is complete (gates TerminalContent rendering) */
+  let reconciled = $state(false);
 
   /** Fetch available shell profiles from the server and merge with custom profiles */
   async function loadShellProfiles() {
@@ -36,7 +39,8 @@
       // Shell profiles are optional — terminal will use defaults
     }
 
-    // Merge auto-detected with custom profiles from settings
+    // Save for reactive merging and merge with custom profiles
+    autoDetectedProfiles = autoDetected;
     mergeProfiles(autoDetected);
   }
 
@@ -107,6 +111,16 @@
     terminalStore.updatePreferences(prefs);
     // Apply immediately to all open terminals
     terminalConnectionManager.updatePreferences(prefs);
+  });
+
+  // Track auto-detected profiles so we can merge them reactively
+  let autoDetectedProfiles: ShellProfile[] = [];
+
+  // Reactively re-merge profiles when custom profiles change in settingsStore
+  $effect(() => {
+    const _custom = settingsStore.terminalProfiles;
+    // Re-merge whenever custom profiles change
+    mergeProfiles(autoDetectedProfiles);
   });
 
   // Panel height — default 250px, resizable 100-600px (AC #10)
