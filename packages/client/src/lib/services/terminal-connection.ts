@@ -845,6 +845,29 @@ export class TerminalConnectionManager {
     conn.terminal.selectAll();
   }
 
+  /**
+   * Extract text content from the terminal buffer for a range of rows.
+   * Used by CommandBlockOverlay to copy actual command output.
+   * Returns the text content of the buffer between startRow and endRow (inclusive).
+   */
+  getBufferText(sessionId: string, startRow: number, endRow: number): string {
+    const conn = this.connections.get(sessionId);
+    if (!conn) return '';
+
+    const buf = conn.terminal.buffer.active;
+    const lines: string[] = [];
+    const actualEnd = endRow >= 0 ? endRow : buf.baseY + conn.terminal.rows;
+
+    for (let row = startRow; row <= actualEnd; row++) {
+      const line = buf.getLine(row);
+      if (line) {
+        lines.push(line.translateToString(true));
+      }
+    }
+
+    return lines.join('\n');
+  }
+
   /** Clear the terminal viewport (reset + clear scrollback) and flush image cache */
   clearTerminal(sessionId: string): void {
     const conn = this.connections.get(sessionId);

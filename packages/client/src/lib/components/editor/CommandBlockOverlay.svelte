@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { TerminalCommandBlock } from '@e/shared';
   import { terminalStore } from '$lib/stores/terminal.svelte';
+  import { terminalConnectionManager } from '$lib/services/terminal-connection';
 
   let {
     sessionId,
@@ -20,23 +21,45 @@
     terminalElement: HTMLElement | null;
   }>();
 
-  /** Copy command output text to clipboard */
-  async function copyBlockOutput(block: TerminalCommandBlock) {
-    if (!terminalElement) return;
+  /** Track which blocks just had their output copied (for visual feedback) */
+  let copiedBlockId = $state<string | null>(null);
+  let copyTimeout: ReturnType<typeof setTimeout> | null = null;
 
-    // Build output text from the block's command + exit info
-    let text = `$ ${block.commandText}\n`;
-    // We can't easily extract output from xterm buffer here,
-    // so we copy the command text and exit code as a summary
-    if (block.exitCode !== null) {
-      text += `[exit code: ${block.exitCode}]`;
+  /** Copy command output text from the xterm.js buffer to clipboard */
+  async function copyBlockOutput(block: TerminalCommandBlock) {
+    // Extract actual output from xterm.js buffer
+    const outputStartRow = block.startRow + 1; // Skip the command line itself
+    const outputEndRow = block.endRow >= 0 ? block.endRow : -1;
+
+    let text = '';
+
+    if (outputEndRow >= outputStartRow) {
+      // Extract buffer text between command start and command end
+      text = terminalConnectionManager.getBufferText(sessionId, outputStartRow, outputEndRow);
+    }
+
+    // If no output text, fall back to command text
+    if (!text.trim()) {
+      text = `$ ${block.commandText}`;
     }
 
     try {
       await navigator.clipboard.writeText(text);
+      // Show visual feedback
+      copiedBlockId = block.id;
+      if (copyTimeout) clearTimeout(copyTimeout);
+      copyTimeout = setTimeout(() => {
+        copiedBlockId = null;
+      }, 1500);
     } catch {
-      // Clipboard API may fail
+      // Clipboard API may fail in some contexts
     }
+  }
+
+  /** Count the number of output lines in a block */
+  function getOutputLineCount(block: TerminalCommandBlock): number {
+    if (block.endRow < 0) return 0; // Still running
+    return Math.max(0, block.endRow - block.startRow);
   }
 
   /** Blocks that are visible in the current viewport */
@@ -56,50 +79,64 @@
           return null;
         }
 
-        // Calculate pixel positions relative to viewport
-        const topRow = Math.max(blockStart, viewportTopRow);
-        const bottomRow = Math.min(blockEnd, vpBottom);
-        const topPx = (topRow - viewportTopRow) * cellHeight;
-        const heightPx = (bottomRow - topRow) * cellHeight;
-
-        // Header is above the output area (at the command line)
+        // Header position (the command line row)
         const headerTopPx = (blockStart - viewportTopRow) * cellHeight;
         const isHeaderVisible = blockStart >= viewportTopRow && blockStart <= vpBottom;
 
+        // Output area (rows after the command line up to endRow)
+        const outputStartRow = blockStart + 1;
+        const outputEndRow = blockEnd;
+        const outputLines = Math.max(0, outputEndRow - outputStartRow);
+
+        // Visible output area clipped to viewport
+        const visOutputStart = Math.max(outputStartRow, viewportTopRow);
+        const visOutputEnd = Math.min(outputEndRow, vpBottom);
+        const outputTopPx = (visOutputStart - viewportTopRow) * cellHeight;
+        const outputHeightPx = Math.max(0, (visOutputEnd - visOutputStart)) * cellHeight;
+
+        const isRunning = block.exitCode === null;
+        const isCopied = copiedBlockId === block.id;
+
         return {
           block,
-          topPx,
-          heightPx,
           headerTopPx,
           isHeaderVisible,
-          isRunning: block.exitCode === null,
+          outputTopPx,
+          outputHeightPx,
+          outputLines,
+          isRunning,
+          isCopied,
         };
       })
       .filter(Boolean) as Array<{
       block: TerminalCommandBlock;
-      topPx: number;
-      heightPx: number;
       headerTopPx: number;
       isHeaderVisible: boolean;
+      outputTopPx: number;
+      outputHeightPx: number;
+      outputLines: number;
       isRunning: boolean;
+      isCopied: boolean;
     }>;
   });
 </script>
 
 {#if visibleBlocks.length > 0}
   <div class="command-block-overlay" aria-hidden="true">
-    {#each visibleBlocks as { block, headerTopPx, isHeaderVisible, isRunning }}
-      {#if isHeaderVisible}
+    {#each visibleBlocks as vb (vb.block.id)}
+      {@const block = vb.block}
+
+      <!-- Block header: always shown when visible -->
+      {#if vb.isHeaderVisible}
         <div
-          class="command-block"
+          class="command-block-header"
           class:collapsed={block.collapsed}
-          class:running={isRunning}
+          class:running={vb.isRunning}
           class:success={block.exitCode === 0}
           class:failure={block.exitCode !== null && block.exitCode !== 0}
-          style="top: {headerTopPx}px"
+          style="top: {vb.headerTopPx}px; height: {cellHeight}px"
         >
-          <!-- Block header -->
-          <div class="block-header">
+          <div class="block-header-inner">
             <button
               class="collapse-toggle"
               onclick={() => terminalStore.toggleBlockCollapse(sessionId, block.id)}
@@ -124,6 +161,13 @@
               <span class="prompt-symbol">$</span>
               {block.commandText || '...'}
             </span>
+
+            <!-- Collapsed line count -->
+            {#if block.collapsed && vb.outputLines > 0}
+              <span class="line-count" title="{vb.outputLines} lines hidden">
+                {vb.outputLines} line{vb.outputLines !== 1 ? 's' : ''}
+              </span>
+            {/if}
 
             <!-- Exit code badge -->
             {#if block.exitCode !== null}
@@ -154,17 +198,62 @@
             <!-- Copy button -->
             <button
               class="copy-btn"
+              class:copied={vb.isCopied}
               onclick={() => copyBlockOutput(block)}
-              title="Copy command"
-              aria-label="Copy command to clipboard"
+              title={vb.isCopied ? 'Copied!' : 'Copy output'}
+              aria-label="Copy command output to clipboard"
             >
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <rect x="9" y="9" width="13" height="13" rx="2" />
-                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
-              </svg>
+              {#if vb.isCopied}
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                  <polyline points="20 6 9 17 4 12" />
+                </svg>
+              {:else}
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <rect x="9" y="9" width="13" height="13" rx="2" />
+                  <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+                </svg>
+              {/if}
             </button>
           </div>
         </div>
+      {/if}
+
+      <!-- Collapsed output mask: covers output rows with opaque background -->
+      {#if block.collapsed && vb.outputHeightPx > 0}
+        <div
+          class="collapsed-mask"
+          class:success={block.exitCode === 0}
+          class:failure={block.exitCode !== null && block.exitCode !== 0}
+          class:running={vb.isRunning}
+          style="top: {vb.outputTopPx}px; height: {vb.outputHeightPx}px"
+        >
+          <div class="collapsed-mask-inner">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="collapsed-icon">
+              <polyline points="6 9 12 15 18 9" />
+            </svg>
+            <span class="collapsed-label">
+              {vb.outputLines} line{vb.outputLines !== 1 ? 's' : ''} collapsed
+            </span>
+            <button
+              class="expand-btn"
+              onclick={() => terminalStore.toggleBlockCollapse(sessionId, block.id)}
+              title="Expand output"
+            >
+              Show
+            </button>
+          </div>
+        </div>
+      {/if}
+
+      <!-- Block border gutter: left accent border along the output area (expanded only) -->
+      {#if !block.collapsed && vb.outputHeightPx > 0}
+        <div
+          class="block-gutter"
+          class:success={block.exitCode === 0}
+          class:failure={block.exitCode !== null && block.exitCode !== 0}
+          class:running={vb.isRunning}
+          style="top: {vb.outputTopPx}px; height: {vb.outputHeightPx}px"
+        ></div>
       {/if}
     {/each}
   </div>
@@ -182,45 +271,49 @@
     overflow: hidden;
   }
 
-  .command-block {
+  /* ── Block header ── */
+
+  .command-block-header {
     position: absolute;
     left: 0;
     right: 0;
     pointer-events: auto;
     display: flex;
-    flex-direction: column;
+    align-items: stretch;
   }
 
-  .block-header {
+  .block-header-inner {
     display: flex;
     align-items: center;
     gap: 6px;
-    padding: 1px 8px;
-    height: 20px;
-    background: color-mix(in srgb, var(--bg-secondary, #161b22) 85%, transparent);
+    padding: 0 8px;
+    width: 100%;
+    background: color-mix(in srgb, var(--bg-secondary, #161b22) 88%, transparent);
     border-left: 2px solid transparent;
     border-radius: 0 var(--radius-sm, 4px) var(--radius-sm, 4px) 0;
     font-family: var(--font-family-mono, monospace);
     font-size: 11px;
     line-height: 1;
-    transition: background var(--transition), border-color var(--transition);
+    transition: background 0.15s ease, border-color 0.15s ease;
   }
 
-  .command-block.success .block-header {
+  .command-block-header.success .block-header-inner {
     border-left-color: var(--accent-secondary, #00ff88);
   }
 
-  .command-block.failure .block-header {
+  .command-block-header.failure .block-header-inner {
     border-left-color: var(--accent-error, #ff3344);
   }
 
-  .command-block.running .block-header {
+  .command-block-header.running .block-header-inner {
     border-left-color: var(--accent-primary, #00b4ff);
   }
 
-  .block-header:hover {
+  .block-header-inner:hover {
     background: color-mix(in srgb, var(--bg-secondary, #161b22) 95%, transparent);
   }
+
+  /* ── Collapse toggle ── */
 
   .collapse-toggle {
     display: flex;
@@ -235,7 +328,7 @@
     cursor: pointer;
     border-radius: var(--radius-sm, 4px);
     flex-shrink: 0;
-    transition: color var(--transition), background var(--transition);
+    transition: color 0.15s ease, background 0.15s ease;
   }
 
   .collapse-toggle:hover {
@@ -251,6 +344,8 @@
     transform: rotate(90deg);
   }
 
+  /* ── Command text ── */
+
   .command-text {
     flex: 1;
     min-width: 0;
@@ -265,6 +360,19 @@
     margin-right: 4px;
     font-weight: 600;
   }
+
+  /* ── Line count (collapsed state) ── */
+
+  .line-count {
+    color: var(--text-tertiary, #6e7681);
+    font-size: 10px;
+    flex-shrink: 0;
+    padding: 1px 6px;
+    border-radius: var(--radius-sm, 4px);
+    background: color-mix(in srgb, var(--text-tertiary, #6e7681) 10%, transparent);
+  }
+
+  /* ── Exit code badge ── */
 
   .exit-badge {
     display: flex;
@@ -291,6 +399,8 @@
     font-size: 9px;
   }
 
+  /* ── Running indicator ── */
+
   .running-indicator {
     display: flex;
     align-items: center;
@@ -311,6 +421,8 @@
     50% { opacity: 1; }
   }
 
+  /* ── Copy button ── */
+
   .copy-btn {
     display: flex;
     align-items: center;
@@ -325,15 +437,107 @@
     border-radius: var(--radius-sm, 4px);
     flex-shrink: 0;
     opacity: 0;
-    transition: opacity var(--transition), color var(--transition), background var(--transition);
+    transition: opacity 0.15s ease, color 0.15s ease, background 0.15s ease;
   }
 
-  .block-header:hover .copy-btn {
+  .block-header-inner:hover .copy-btn {
     opacity: 1;
   }
 
   .copy-btn:hover {
     color: var(--text-primary, #c9d1d9);
     background: color-mix(in srgb, var(--text-primary, #c9d1d9) 10%, transparent);
+  }
+
+  .copy-btn.copied {
+    opacity: 1;
+    color: var(--accent-secondary, #00ff88);
+  }
+
+  /* ── Collapsed output mask ── */
+
+  .collapsed-mask {
+    position: absolute;
+    left: 0;
+    right: 0;
+    pointer-events: auto;
+    background: var(--bg-primary, #0d1117);
+    border-left: 2px solid transparent;
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    overflow: hidden;
+  }
+
+  .collapsed-mask.success {
+    border-left-color: color-mix(in srgb, var(--accent-secondary, #00ff88) 30%, transparent);
+  }
+
+  .collapsed-mask.failure {
+    border-left-color: color-mix(in srgb, var(--accent-error, #ff3344) 30%, transparent);
+  }
+
+  .collapsed-mask.running {
+    border-left-color: color-mix(in srgb, var(--accent-primary, #00b4ff) 30%, transparent);
+  }
+
+  .collapsed-mask-inner {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 12px;
+    font-family: var(--font-family-mono, monospace);
+    font-size: 11px;
+    color: var(--text-tertiary, #6e7681);
+  }
+
+  .collapsed-icon {
+    opacity: 0.5;
+    flex-shrink: 0;
+  }
+
+  .collapsed-label {
+    white-space: nowrap;
+  }
+
+  .expand-btn {
+    border: none;
+    background: color-mix(in srgb, var(--accent-primary, #00b4ff) 15%, transparent);
+    color: var(--accent-primary, #00b4ff);
+    font-family: var(--font-family-mono, monospace);
+    font-size: 10px;
+    font-weight: 600;
+    padding: 1px 8px;
+    border-radius: var(--radius-sm, 4px);
+    cursor: pointer;
+    transition: background 0.15s ease;
+    white-space: nowrap;
+  }
+
+  .expand-btn:hover {
+    background: color-mix(in srgb, var(--accent-primary, #00b4ff) 25%, transparent);
+  }
+
+  /* ── Block gutter (left border along expanded output) ── */
+
+  .block-gutter {
+    position: absolute;
+    left: 0;
+    width: 2px;
+    pointer-events: none;
+    opacity: 0.25;
+    transition: opacity 0.15s ease;
+  }
+
+  .block-gutter.success {
+    background: var(--accent-secondary, #00ff88);
+  }
+
+  .block-gutter.failure {
+    background: var(--accent-error, #ff3344);
+  }
+
+  .block-gutter.running {
+    background: var(--accent-primary, #00b4ff);
   }
 </style>
