@@ -1,6 +1,5 @@
 <script lang="ts">
   import { settingsStore } from '$lib/stores/settings.svelte';
-  import { terminalStore } from '$lib/stores/terminal.svelte';
   import { uiStore } from '$lib/stores/ui.svelte';
   import { api, getBaseUrl } from '$lib/api/client';
   import { onMount } from 'svelte';
@@ -14,8 +13,6 @@
     AgentProfile,
     AgentProfileCreateInput,
     ShellInfo,
-    CursorStyle,
-    BellStyle,
   } from '@e/shared';
   import { PERMISSION_PRESETS } from '@e/shared';
   import { profilesStore } from '$lib/stores/profiles.svelte';
@@ -1686,7 +1683,8 @@
               </div>
             {/if}
           </div>
-        {:else if activeTab === 'keybindings'}
+        {:else}
+          <!-- keybindings (last branch — no explicit type check needed) -->
           <div class="keybindings-list">
             {#each settingsStore.keybindings as binding}
               <div class="keybinding-row">

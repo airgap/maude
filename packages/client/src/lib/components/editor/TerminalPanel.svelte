@@ -48,9 +48,24 @@
       terminalStore.createTab();
     }
 
+    // Set up broadcast handler: when broadcast mode is active for a tab,
+    // replicate keyboard input to all sibling sessions in the same tab.
+    terminalConnectionManager.setBroadcastHandler((sourceSessionId, data) => {
+      // Check if broadcast is enabled for the tab containing this session
+      if (!terminalStore.isBroadcastActiveForSession(sourceSessionId)) return;
+
+      // Get all sibling sessions (same tab, excluding the source)
+      const siblings = terminalStore.getSiblingSessionIds(sourceSessionId);
+      for (const siblingId of siblings) {
+        terminalConnectionManager.write(siblingId, data);
+      }
+    });
+
     // Closing the panel does NOT kill sessions (AC #9).
     // On unmount, we just detach terminals from DOM.
     return () => {
+      // Clear the broadcast handler on unmount
+      terminalConnectionManager.setBroadcastHandler(null);
       // Sessions stay alive in ConnectionManager memory.
       // When panel reopens, TerminalInstance will reattach.
     };

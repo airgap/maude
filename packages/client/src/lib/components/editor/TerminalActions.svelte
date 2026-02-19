@@ -26,6 +26,10 @@
     }
   }
 
+  function toggleBroadcast() {
+    terminalStore.toggleBroadcast();
+  }
+
   function toggleMaximize() {
     terminalStore.toggleMaximize();
   }

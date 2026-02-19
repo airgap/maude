@@ -181,6 +181,16 @@ export class TerminalConnectionManager {
   /** User preferences (can be updated at runtime) */
   private prefs: TerminalPreferences = { ...DEFAULT_TERMINAL_PREFERENCES };
 
+  /**
+   * Optional broadcast handler: called whenever a terminal receives keyboard
+   * input via onData. The handler receives the source sessionId and the raw
+   * input string.  The UI layer uses this to fan out input to sibling sessions
+   * when broadcast mode is active.
+   */
+  private broadcastHandler:
+    | ((sourceSessionId: string, data: string) => void)
+    | null = null;
+
   // -----------------------------------------------------------------------
   // Lifecycle
   // -----------------------------------------------------------------------
@@ -262,10 +272,14 @@ export class TerminalConnectionManager {
     // 6. Open WebSocket
     this.openWebSocket(conn);
 
-    // 7. Wire terminal input → WebSocket
+    // 7. Wire terminal input → WebSocket (+ broadcast fan-out)
     terminal.onData((input) => {
       if (conn.ws?.readyState === WebSocket.OPEN) {
         conn.ws.send(input);
+      }
+      // Notify broadcast handler so it can replicate input to sibling sessions
+      if (this.broadcastHandler) {
+        this.broadcastHandler(sessionId, input);
       }
     });
 
@@ -530,6 +544,21 @@ export class TerminalConnectionManager {
     for (const conn of this.connections.values()) {
       this.applyPreferences(conn);
     }
+  }
+
+  // -----------------------------------------------------------------------
+  // Broadcast
+  // -----------------------------------------------------------------------
+
+  /**
+   * Set or clear the broadcast handler. When set, the handler is called
+   * whenever any terminal receives keyboard input, allowing the UI layer
+   * to replicate that input to sibling sessions in the same tab group.
+   */
+  setBroadcastHandler(
+    handler: ((sourceSessionId: string, data: string) => void) | null,
+  ): void {
+    this.broadcastHandler = handler;
   }
 
   // -----------------------------------------------------------------------

@@ -360,7 +360,7 @@ function createTerminalStore() {
 
   // --- UI toggles ---
   let searchOpenSessions = $state<Set<string>>(new Set());
-  let broadcastInput = $state(false);
+  let broadcastTabIds = $state<Set<string>>(new Set());
 
   // --- Derived state ---
   const activeTab = $derived(tabs.find((t) => t.id === activeTabId) ?? null);
@@ -425,7 +425,7 @@ function createTerminalStore() {
       return activeSessionId ? searchOpenSessions.has(activeSessionId) : false;
     },
     get broadcastInput() {
-      return broadcastInput;
+      return activeTabId ? broadcastTabIds.has(activeTabId) : false;
     },
     get connected() {
       return connected;
@@ -510,6 +510,13 @@ function createTerminalStore() {
       sessions = newSessions;
 
       tabs = tabs.filter((t) => t.id !== tabId);
+
+      // Clean up broadcast state for closed tab
+      if (broadcastTabIds.has(tabId)) {
+        const next = new Set(broadcastTabIds);
+        next.delete(tabId);
+        broadcastTabIds = next;
+      }
 
       // If we closed the active tab, pick an adjacent one
       if (activeTabId === tabId) {
@@ -777,11 +784,57 @@ function createTerminalStore() {
     },
 
     toggleBroadcast() {
-      broadcastInput = !broadcastInput;
+      if (!activeTabId) return;
+      const next = new Set(broadcastTabIds);
+      if (next.has(activeTabId)) {
+        next.delete(activeTabId);
+      } else {
+        next.add(activeTabId);
+      }
+      broadcastTabIds = next;
     },
 
     setBroadcast(v: boolean) {
-      broadcastInput = v;
+      if (!activeTabId) return;
+      const next = new Set(broadcastTabIds);
+      if (v) {
+        next.add(activeTabId);
+      } else {
+        next.delete(activeTabId);
+      }
+      broadcastTabIds = next;
+    },
+
+    /** Check if broadcast is active for a specific tab */
+    isBroadcastActiveForTab(tabId: string): boolean {
+      return broadcastTabIds.has(tabId);
+    },
+
+    /** Get all session IDs in the active tab's layout tree */
+    getActiveTabSessionIds(): string[] {
+      if (!activeTab) return [];
+      return collectSessionIds(activeTab.layout);
+    },
+
+    /** Get all session IDs in a specific tab's layout tree */
+    getTabSessionIds(tabId: string): string[] {
+      const tab = tabs.find((t) => t.id === tabId);
+      if (!tab) return [];
+      return collectSessionIds(tab.layout);
+    },
+
+    /** Find which tab a session belongs to, and check if broadcast is active for that tab */
+    isBroadcastActiveForSession(sessionId: string): boolean {
+      const tab = findTabBySession(sessionId);
+      if (!tab) return false;
+      return broadcastTabIds.has(tab.id);
+    },
+
+    /** Get all sibling session IDs for a given session (same tab, excluding the given session) */
+    getSiblingSessionIds(sessionId: string): string[] {
+      const tab = findTabBySession(sessionId);
+      if (!tab) return [];
+      return collectSessionIds(tab.layout).filter((id) => id !== sessionId);
     },
 
     // ── State capture / restore (for workspace snapshots) ──
@@ -835,7 +888,7 @@ function createTerminalStore() {
       // Clear live session state — sessions will be re-registered by terminal components
       sessions = new Map();
       searchOpenSessions = new Set();
-      broadcastInput = false;
+      broadcastTabIds = new Set();
 
       persistTabs();
     },
