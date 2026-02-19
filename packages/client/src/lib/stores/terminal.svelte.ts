@@ -6,6 +6,7 @@ import type {
   TerminalLeaf,
   TerminalPreferences,
   TerminalSessionMeta,
+  TerminalCommandBlock,
   SplitDirection,
 } from '@e/shared';
 import { DEFAULT_TERMINAL_PREFERENCES } from '@e/shared';
@@ -401,6 +402,14 @@ function createTerminalStore() {
   // --- Pending commands (for task runner) ---
   /** Commands to send to a session after it is created (keyed by sessionId) */
   let pendingCommands = $state<Map<string, string>>(new Map());
+
+  // --- Command blocks (Warp-style block-based output) ---
+  /** Per-session list of command blocks, keyed by session ID */
+  let commandBlocks = $state<Map<string, TerminalCommandBlock[]>>(new Map());
+  /** Pending command text keyed by command ID (received before command_start) */
+  let pendingCommandTexts = $state<Map<string, string>>(new Map());
+  /** Whether block rendering is enabled (requires shell integration) */
+  let blockRenderingEnabled = $state<Set<string>>(new Set());
 
   // --- Screen reader announcements ---
   /** Message to be announced to screen readers via aria-live region */
@@ -831,6 +840,125 @@ function createTerminalStore() {
       const newMap = new Map(lastCommandStatus);
       newMap.delete(sessionId);
       lastCommandStatus = newMap;
+    },
+
+    // ── Command blocks (Warp-style) ──
+
+    /** Get command blocks for a session */
+    getCommandBlocks(sessionId: string): TerminalCommandBlock[] {
+      return commandBlocks.get(sessionId) ?? [];
+    },
+
+    /** Check if block rendering is enabled for a session */
+    isBlockRenderingEnabled(sessionId: string): boolean {
+      return blockRenderingEnabled.has(sessionId);
+    },
+
+    /** Enable block rendering for a session (called when shell integration is detected) */
+    enableBlockRendering(sessionId: string) {
+      const next = new Set(blockRenderingEnabled);
+      next.add(sessionId);
+      blockRenderingEnabled = next;
+    },
+
+    /** Store pending command text (arrives before command_start) */
+    setPendingCommandText(commandId: string, text: string) {
+      const next = new Map(pendingCommandTexts);
+      next.set(commandId, text);
+      pendingCommandTexts = next;
+    },
+
+    /** Start a new command block */
+    startCommandBlock(sessionId: string, commandId: string, startRow: number) {
+      const blocks = commandBlocks.get(sessionId) ?? [];
+      const pendingText = pendingCommandTexts.get(commandId) ?? '';
+
+      // Clean up pending text
+      if (pendingText) {
+        const nextPending = new Map(pendingCommandTexts);
+        nextPending.delete(commandId);
+        pendingCommandTexts = nextPending;
+      }
+
+      const block: TerminalCommandBlock = {
+        id: commandId,
+        commandText: pendingText,
+        startRow,
+        endRow: -1,
+        exitCode: null,
+        collapsed: false,
+        startedAt: Date.now(),
+        finishedAt: 0,
+      };
+
+      const newBlocks = new Map(commandBlocks);
+      newBlocks.set(sessionId, [...blocks, block]);
+      commandBlocks = newBlocks;
+    },
+
+    /** End a command block with exit code and end row */
+    endCommandBlock(sessionId: string, commandId: string, exitCode: number, endRow: number) {
+      const blocks = commandBlocks.get(sessionId);
+      if (!blocks) return;
+
+      const newBlocks = new Map(commandBlocks);
+      newBlocks.set(
+        sessionId,
+        blocks.map((b) =>
+          b.id === commandId
+            ? { ...b, exitCode, endRow, finishedAt: Date.now() }
+            : b,
+        ),
+      );
+      commandBlocks = newBlocks;
+    },
+
+    /** Toggle collapse state of a command block */
+    toggleBlockCollapse(sessionId: string, commandId: string) {
+      const blocks = commandBlocks.get(sessionId);
+      if (!blocks) return;
+
+      const newBlocks = new Map(commandBlocks);
+      newBlocks.set(
+        sessionId,
+        blocks.map((b) =>
+          b.id === commandId ? { ...b, collapsed: !b.collapsed } : b,
+        ),
+      );
+      commandBlocks = newBlocks;
+    },
+
+    /** Collapse all blocks for a session */
+    collapseAllBlocks(sessionId: string) {
+      const blocks = commandBlocks.get(sessionId);
+      if (!blocks) return;
+
+      const newBlocks = new Map(commandBlocks);
+      newBlocks.set(
+        sessionId,
+        blocks.map((b) => ({ ...b, collapsed: true })),
+      );
+      commandBlocks = newBlocks;
+    },
+
+    /** Expand all blocks for a session */
+    expandAllBlocks(sessionId: string) {
+      const blocks = commandBlocks.get(sessionId);
+      if (!blocks) return;
+
+      const newBlocks = new Map(commandBlocks);
+      newBlocks.set(
+        sessionId,
+        blocks.map((b) => ({ ...b, collapsed: false })),
+      );
+      commandBlocks = newBlocks;
+    },
+
+    /** Clear all command blocks for a session */
+    clearCommandBlocks(sessionId: string) {
+      const newBlocks = new Map(commandBlocks);
+      newBlocks.delete(sessionId);
+      commandBlocks = newBlocks;
     },
 
     /** @deprecated use registerSession/unregisterSession instead */

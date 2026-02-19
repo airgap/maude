@@ -67,6 +67,8 @@ interface OscParseResult {
   commandStart: boolean;
   /** Exit code from command_end, or null if no command_end detected */
   commandEndExitCode: number | null;
+  /** Command line text from OSC 633;E, if any */
+  commandText: string | null;
 }
 
 // Regex for OSC sequences terminated by BEL (\x07) or ST (\x1b\\)
@@ -78,6 +80,7 @@ function parseOscSequences(data: string): OscParseResult {
   let cwd: string | null = null;
   let commandStart = false;
   let commandEndExitCode: number | null = null;
+  let commandText: string | null = null;
 
   // Extract info from OSC sequences
   let match: RegExpExecArray | null;
@@ -108,6 +111,8 @@ function parseOscSequences(data: string): OscParseResult {
         commandEndExitCode = isNaN(code) ? 0 : code;
       } else if (osc633Payload === 'D') {
         commandEndExitCode = 0;
+      } else if (osc633Payload.startsWith('E;')) {
+        commandText = osc633Payload.slice(2);
       }
     }
   }
@@ -115,7 +120,7 @@ function parseOscSequences(data: string): OscParseResult {
   // Strip all OSC sequences from the data before forwarding to clients
   const cleanData = data.replace(OSC_RE, '');
 
-  return { cleanData, cwd, commandStart, commandEndExitCode };
+  return { cleanData, cwd, commandStart, commandEndExitCode, commandText };
 }
 
 // --- Session Logging ---
@@ -381,6 +386,16 @@ class TerminalSessionManager {
         if (result.cwd) {
           session.cwd = result.cwd;
           this.sendControl(session, { type: 'cwd_changed', cwd: result.cwd });
+        }
+
+        if (result.commandText !== null) {
+          // Command text arrives before command_start; use next command ID
+          const nextCmdId = `${session.id}_cmd_${session.commandCounter + 1}`;
+          this.sendControl(session, {
+            type: 'command_text',
+            id: nextCmdId,
+            text: result.commandText,
+          });
         }
 
         if (result.commandStart) {

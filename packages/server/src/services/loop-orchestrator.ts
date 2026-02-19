@@ -231,6 +231,11 @@ class LoopOrchestrator {
       label = 'Standalone stories';
     }
 
+    // Refuse to start if the working tree has uncommitted changes.
+    // Dirty state causes cascading quality-check failures — one story's
+    // leftover changes break every subsequent story's build.
+    await this.ensureCleanWorkingTree(workspacePath);
+
     const loopId = nanoid(12);
     const now = Date.now();
 
@@ -338,6 +343,42 @@ class LoopOrchestrator {
       rows = db.query('SELECT * FROM loops ORDER BY started_at DESC LIMIT 50').all();
     }
     return rows.map(loopFromRow);
+  }
+
+  /**
+   * Refuse to start a loop if git reports uncommitted changes.
+   * Dirty working trees cause cascading quality-check failures.
+   */
+  private async ensureCleanWorkingTree(workspacePath: string): Promise<void> {
+    try {
+      const checkProc = Bun.spawn(['git', 'rev-parse', '--is-inside-work-tree'], {
+        cwd: workspacePath,
+        stdout: 'pipe',
+        stderr: 'pipe',
+      });
+      const isRepo = (await new Response(checkProc.stdout).text()).trim() === 'true';
+      if (!isRepo) return; // Not a git repo — nothing to check
+
+      const statusProc = Bun.spawn(['git', 'status', '--porcelain'], {
+        cwd: workspacePath,
+        stdout: 'pipe',
+        stderr: 'pipe',
+      });
+      const output = (await new Response(statusProc.stdout).text()).trim();
+      if (output.length > 0) {
+        const changedFiles = output.split('\n').length;
+        throw new Error(
+          `Cannot start loop: working tree has ${changedFiles} uncommitted change${changedFiles === 1 ? '' : 's'}. ` +
+            `Please commit or stash your changes first. Dirty state causes cascading build failures across stories.`,
+        );
+      }
+    } catch (err) {
+      // Re-throw our own Error, but swallow git failures (e.g. git not installed)
+      if (err instanceof Error && err.message.startsWith('Cannot start loop:')) {
+        throw err;
+      }
+      console.warn(`[loop] ensureCleanWorkingTree check failed (non-fatal):`, err);
+    }
   }
 
   private updateStatus(loopId: string, status: LoopStatus): void {
@@ -503,6 +544,8 @@ class LoopRunner {
 
       try {
         // === Begin iteration try block ===
+        const checksToRun = this.config.qualityChecks.filter((c) => c.enabled);
+
         this.updateLoopDb({
           current_iteration: iteration,
           current_story_id: story.id,
@@ -536,6 +579,33 @@ class LoopRunner {
             await this.createGitSnapshot(story.id, assistantMsgId);
           } catch (err) {
             console.error(`[loop:${this.loopId}] Git snapshot failed:`, err);
+          }
+        }
+
+        // Pre-story quality gate: if the build is already broken (e.g. from a
+        // previous story's uncommitted failure), clean the working tree before
+        // the agent starts. This prevents cascading failures where story B gets
+        // blamed for story A's broken code.
+        if (checksToRun.length > 0) {
+          const preCheckResults = await runAllQualityChecks(checksToRun, this.workspacePath);
+          const preBuildBroken = preCheckResults.some((qr) => {
+            const cfg = checksToRun.find((c) => c.id === qr.checkId);
+            return cfg?.required && !qr.passed;
+          });
+          if (preBuildBroken) {
+            console.warn(
+              `[loop:${this.loopId}] Pre-story quality gate failed — build is already broken. Reverting uncommitted changes.`,
+            );
+            this.addLogEntry({
+              iteration,
+              storyId: story.id,
+              storyTitle: story.title,
+              action: 'quality_check',
+              detail: `Pre-story gate: build already broken, reverting uncommitted changes`,
+              timestamp: Date.now(),
+              qualityResults: preCheckResults,
+            });
+            await this.revertUncommittedChanges();
           }
         }
 
@@ -632,7 +702,6 @@ class LoopRunner {
 
         // Run quality checks
         let qualityResults: QualityCheckResult[] = [];
-        const checksToRun = this.config.qualityChecks.length > 0 ? this.config.qualityChecks : [];
 
         if (checksToRun.length > 0) {
           qualityResults = await runAllQualityChecks(checksToRun, this.workspacePath);
@@ -733,6 +802,24 @@ class LoopRunner {
 
           // Create agent note with failure report for the user
           this.createAgentNote(story, conversationId, 'failed', agentResult, qualityResults, failReason);
+
+          // Post-failure rollback: revert uncommitted changes so the next story
+          // starts from a clean (passing) build state. Without this, one story's
+          // broken code poisons every subsequent story's quality check.
+          if (requiredChecksFailed) {
+            console.log(
+              `[loop:${this.loopId}] Rolling back uncommitted changes after failed quality checks for "${story.title}"`,
+            );
+            this.addLogEntry({
+              iteration,
+              storyId: story.id,
+              storyTitle: story.title,
+              action: 'quality_check',
+              detail: `Post-failure rollback: reverting uncommitted changes to prevent cascading failures`,
+              timestamp: Date.now(),
+            });
+            await this.revertUncommittedChanges();
+          }
 
           // Check if retries exhausted
           const updatedStory = this.getStory(story.id);
@@ -1339,6 +1426,43 @@ ${criteria}
   }
 
   // --- Git operations ---
+
+  /**
+   * Revert all uncommitted changes (tracked modifications + untracked files)
+   * so the working tree matches the last commit. Used to clean up after a
+   * story fails quality checks, preventing cascading failures.
+   */
+  private async revertUncommittedChanges(): Promise<void> {
+    try {
+      const checkProc = Bun.spawn(['git', 'rev-parse', '--is-inside-work-tree'], {
+        cwd: this.workspacePath,
+        stdout: 'pipe',
+        stderr: 'pipe',
+      });
+      const isRepo = (await new Response(checkProc.stdout).text()).trim() === 'true';
+      if (!isRepo) return;
+
+      // Revert tracked file modifications
+      const checkoutProc = Bun.spawn(['git', 'checkout', '.'], {
+        cwd: this.workspacePath,
+        stdout: 'pipe',
+        stderr: 'pipe',
+      });
+      await checkoutProc.exited;
+
+      // Remove untracked files and directories added by the failed story
+      const cleanProc = Bun.spawn(['git', 'clean', '-fd'], {
+        cwd: this.workspacePath,
+        stdout: 'pipe',
+        stderr: 'pipe',
+      });
+      await cleanProc.exited;
+
+      console.log(`[loop:${this.loopId}] Reverted uncommitted changes`);
+    } catch (err) {
+      console.error(`[loop:${this.loopId}] Failed to revert uncommitted changes:`, err);
+    }
+  }
 
   private async createGitSnapshot(storyId: string, messageId?: string): Promise<void> {
     try {

@@ -9,6 +9,7 @@
   import type { ContextMenuItem } from '$lib/components/ui/ContextMenu.svelte';
   import { shellEscapePath } from '$lib/utils/shell-escape';
   import { editorStore } from '$lib/stores/editor.svelte';
+  import CommandBlockOverlay from './CommandBlockOverlay.svelte';
   import '@xterm/xterm/css/xterm.css';
 
   let { sessionId, active = true } = $props<{ sessionId: string; active?: boolean }>();
@@ -23,6 +24,44 @@
 
   // ── Drag-and-drop state ──
   let dragOver = $state(false);
+
+  // ── Command block overlay state ──
+  let cellHeight = $state(0);
+  let cellWidth = $state(0);
+  let viewportTopRow = $state(0);
+  let viewportRows = $state(0);
+  let terminalElement = $state<HTMLElement | null>(null);
+
+  /** Get the current absolute cursor row from xterm.js buffer */
+  function getAbsoluteCursorRow(): number {
+    const terminal = terminalConnectionManager.getTerminal(sessionId);
+    if (!terminal) return 0;
+    const buf = terminal.buffer.active;
+    return buf.baseY + buf.cursorY;
+  }
+
+  /** Update viewport tracking info from the terminal */
+  function updateViewportInfo() {
+    const terminal = terminalConnectionManager.getTerminal(sessionId);
+    if (!terminal) return;
+
+    // Get cell dimensions from the terminal's renderer
+    const core = (terminal as any)._core;
+    if (core?._renderService?.dimensions) {
+      const dims = core._renderService.dimensions;
+      cellHeight = dims.css.cell.height ?? 0;
+      cellWidth = dims.css.cell.width ?? 0;
+    }
+
+    const buf = terminal.buffer.active;
+    viewportTopRow = buf.viewportY;
+    viewportRows = terminal.rows;
+    terminalElement = terminal.element ?? null;
+  }
+
+  /** Command blocks for this session */
+  const commandBlocks = $derived(terminalStore.getCommandBlocks(sessionId));
+  const blockRenderingEnabled = $derived(terminalStore.isBlockRenderingEnabled(sessionId));
 
   /** Accessible label describing this terminal session */
   const terminalAriaLabel = $derived.by(() => {
@@ -433,20 +472,39 @@
 
   let cleanupCopyOnSelect: (() => void) | undefined;
   let cleanupControlListener: (() => void) | undefined;
+  let cleanupScrollTracking: (() => void) | undefined;
 
   /** Register control message listener for shell integration events */
   function registerControlListener(sid: string): () => void {
+    // Enable block rendering when we receive any shell integration message
+    let blockRenderingActivated = false;
+
     return terminalConnectionManager.onControlMessage(sid, (msg) => {
       switch (msg.type) {
         case 'cwd_changed':
           terminalStore.setCwd(sid, msg.cwd);
+          // Enable block rendering on first shell integration message
+          if (!blockRenderingActivated) {
+            blockRenderingActivated = true;
+            terminalStore.enableBlockRendering(sid);
+          }
+          break;
+        case 'command_text':
+          // Store pending command text (arrives before command_start)
+          terminalStore.setPendingCommandText(msg.id, msg.text);
           break;
         case 'command_start':
           // Clear previous exit code badge when a new command starts
           terminalStore.clearCommandStatus(sid);
+          // Start a new command block at current cursor position
+          updateViewportInfo();
+          terminalStore.startCommandBlock(sid, msg.id, getAbsoluteCursorRow());
           break;
         case 'command_end':
           terminalStore.setCommandStatus(sid, msg.id, msg.exitCode);
+          // End the command block with exit code
+          updateViewportInfo();
+          terminalStore.endCommandBlock(sid, msg.id, msg.exitCode, getAbsoluteCursorRow());
           break;
         case 'session_exit':
           terminalStore.setExitCode(sid, msg.exitCode);
@@ -461,15 +519,43 @@
     });
   }
 
+  /** Set up viewport scroll tracking for command block overlay */
+  function setupScrollTracking(): (() => void) | undefined {
+    const terminal = terminalConnectionManager.getTerminal(sessionId);
+    if (!terminal) return undefined;
+
+    // Update viewport info on scroll
+    const scrollDisposable = terminal.onScroll(() => {
+      updateViewportInfo();
+    });
+
+    // Update on render
+    const renderDisposable = terminal.onRender(() => {
+      updateViewportInfo();
+    });
+
+    // Initial update
+    updateViewportInfo();
+
+    return () => {
+      scrollDisposable.dispose();
+      renderDisposable.dispose();
+    };
+  }
+
   onMount(() => {
     mounted = true;
-    ensureSession();
+    ensureSession().then(() => {
+      // Set up scroll tracking after session is established
+      cleanupScrollTracking = setupScrollTracking();
+    });
     cleanupCopyOnSelect = registerCopyOnSelect();
 
     return () => {
       mounted = false;
       cleanupCopyOnSelect?.();
       cleanupControlListener?.();
+      cleanupScrollTracking?.();
       // Detach from DOM but keep session alive (AC #9)
       if (terminalConnectionManager.has(sessionId)) {
         terminalConnectionManager.detachFromContainer(sessionId);
@@ -492,19 +578,45 @@
 
 <!-- svelte-ignore a11y_no_static_element_interactions -->
 <div
-  class="terminal-instance"
+  class="terminal-instance-wrapper"
   class:hidden={!active}
-  class:drag-over={dragOver}
-  bind:this={containerEl}
-  oncontextmenu={handleContextMenu}
-  ondragover={handleDragOver}
-  ondragleave={handleDragLeave}
-  ondrop={handleDrop}
-  role="group"
-  aria-label={terminalAriaLabel}
-></div>
+>
+  <div
+    class="terminal-instance"
+    class:drag-over={dragOver}
+    bind:this={containerEl}
+    oncontextmenu={handleContextMenu}
+    ondragover={handleDragOver}
+    ondragleave={handleDragLeave}
+    ondrop={handleDrop}
+    role="group"
+    aria-label={terminalAriaLabel}
+  ></div>
+
+  {#if blockRenderingEnabled && commandBlocks.length > 0}
+    <CommandBlockOverlay
+      {sessionId}
+      blocks={commandBlocks}
+      {cellHeight}
+      {cellWidth}
+      {viewportTopRow}
+      {viewportRows}
+      {terminalElement}
+    />
+  {/if}
+</div>
 
 <style>
+  .terminal-instance-wrapper {
+    flex: 1;
+    min-height: 0;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+  }
+  .terminal-instance-wrapper.hidden {
+    display: none;
+  }
   .terminal-instance {
     flex: 1;
     min-height: 0;
@@ -513,9 +625,6 @@
   }
   .terminal-instance :global(.xterm) {
     height: 100%;
-  }
-  .terminal-instance.hidden {
-    display: none;
   }
   .terminal-instance.drag-over {
     outline: 2px solid var(--accent-primary);

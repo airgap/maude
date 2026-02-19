@@ -67,6 +67,7 @@ export type TerminalControlMessage =
   | TerminalCwdChanged
   | TerminalCommandStart
   | TerminalCommandEnd
+  | TerminalCommandText
   | TerminalLoggingStarted
   | TerminalLoggingStopped;
 
@@ -99,6 +100,12 @@ export interface TerminalCommandEnd {
   type: 'command_end';
   id: string;
   exitCode: number;
+}
+
+export interface TerminalCommandText {
+  type: 'command_text';
+  id: string;
+  text: string;
 }
 
 export interface TerminalLoggingStarted {
@@ -178,6 +185,26 @@ export interface TerminalPreferences {
   imageMaxHeight: number;
   /** Image storage cache limit in MB (default 64) */
   imageStorageLimit: number;
+}
+
+/** A command block representing a single command and its output in the terminal */
+export interface TerminalCommandBlock {
+  /** Unique command ID from shell integration */
+  id: string;
+  /** The command text typed by the user */
+  commandText: string;
+  /** The buffer row (absolute) where the command output starts */
+  startRow: number;
+  /** The buffer row (absolute) where the command output ends (-1 if still running) */
+  endRow: number;
+  /** Exit code of the command (null if still running) */
+  exitCode: number | null;
+  /** Whether the block is collapsed (showing only header) */
+  collapsed: boolean;
+  /** Timestamp when the command started */
+  startedAt: number;
+  /** Timestamp when the command finished (0 if still running) */
+  finishedAt: number;
 }
 
 export const DEFAULT_TERMINAL_PREFERENCES: TerminalPreferences = {
