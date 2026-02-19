@@ -4,12 +4,14 @@
   import { terminalConnectionManager } from '$lib/services/terminal-connection';
   import { settingsStore } from '$lib/stores/settings.svelte';
   import { getBaseUrl, getAuthToken } from '$lib/api/client';
+  import type { ShellProfile } from '@e/shared';
   import TerminalHeader from './TerminalHeader.svelte';
   import TerminalContent from './TerminalContent.svelte';
   import '@xterm/xterm/css/xterm.css';
 
-  /** Fetch available shell profiles from the server */
+  /** Fetch available shell profiles from the server and merge with custom profiles */
   async function loadShellProfiles() {
+    let autoDetected: ShellProfile[] = [];
     try {
       const headers: Record<string, string> = { 'Content-Type': 'application/json' };
       const token = getAuthToken();
@@ -19,21 +21,32 @@
       if (res.ok) {
         const { data } = await res.json();
         if (Array.isArray(data)) {
-          terminalStore.setProfiles(
-            data.map((s: { path: string; name: string; version: string }) => ({
-              id: s.name.toLowerCase(),
-              name: `${s.name}${s.version ? ` (${s.version})` : ''}`,
-              shellPath: s.path,
-              args: [],
-              env: {},
-              icon: 'terminal',
-            })),
-          );
+          autoDetected = data.map((s: { path: string; name: string; version: string }) => ({
+            id: `auto-${s.name.toLowerCase()}`,
+            name: `${s.name}${s.version ? ` (${s.version})` : ''}`,
+            shellPath: s.path,
+            args: [],
+            env: {},
+            icon: 'terminal',
+            isAutoDetected: true,
+          }));
         }
       }
     } catch {
       // Shell profiles are optional — terminal will use defaults
     }
+
+    // Merge auto-detected with custom profiles from settings
+    mergeProfiles(autoDetected);
+  }
+
+  /** Merge auto-detected and custom profiles into the terminal store */
+  function mergeProfiles(autoDetected: ShellProfile[]) {
+    const custom = settingsStore.terminalProfiles.map((p) => ({
+      ...p,
+      isAutoDetected: false,
+    }));
+    terminalStore.setProfiles([...autoDetected, ...custom]);
   }
 
   onMount(() => {
@@ -43,9 +56,10 @@
     // Load shell profiles
     loadShellProfiles();
 
-    // If no tabs exist, create one
+    // If no tabs exist, create one (using default profile if set)
     if (terminalStore.tabs.length === 0) {
-      terminalStore.createTab();
+      const defaultProfileId = settingsStore.termDefaultProfileId;
+      terminalStore.createTab(defaultProfileId || undefined);
     }
 
     // Set up broadcast handler: when broadcast mode is active for a tab,

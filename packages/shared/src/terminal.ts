@@ -173,33 +173,3 @@ export const DEFAULT_TERMINAL_PREFERENCES: TerminalPreferences = {
   enableShellIntegration: true,
   enableImages: false,
 };
-
-// --- Task Runner Types ---
-
-/** Detected package manager in the workspace */
-export type PackageManager = 'npm' | 'yarn' | 'pnpm' | 'bun';
-
-/** Source of a discovered task */
-export type TaskSource = 'package.json' | 'makefile';
-
-/** A workspace task discovered from package.json or Makefile */
-export interface WorkspaceTask {
-  /** Unique key: source:name (e.g. "package.json:dev" or "makefile:build") */
-  id: string;
-  /** Human-readable task name (e.g. "dev", "build", "test") */
-  name: string;
-  /** The full command to run (e.g. "npm run dev", "make build") */
-  command: string;
-  /** Where the task was discovered */
-  source: TaskSource;
-  /** The script body from package.json (if applicable) */
-  script?: string;
-}
-
-/** Response from the task discovery endpoint */
-export interface TaskDiscoveryResponse {
-  /** Detected package manager */
-  packageManager: PackageManager;
-  /** All discovered tasks */
-  tasks: WorkspaceTask[];
-}

@@ -384,6 +384,10 @@ function createTerminalStore() {
   let searchOpenSessions = $state<Set<string>>(new Set());
   let broadcastTabIds = $state<Set<string>>(new Set());
 
+  // --- Session reconnection (for page reload persistence) ---
+  /** Server sessions available for reconnection (populated during reconciliation) */
+  let reconnectableSessions = $state<Map<string, TerminalSessionMeta>>(new Map());
+
   // --- Derived state ---
   const activeTab = $derived(tabs.find((t) => t.id === activeTabId) ?? null);
   const activeSessionId = $derived(activeTab?.focusedSessionId ?? null);
