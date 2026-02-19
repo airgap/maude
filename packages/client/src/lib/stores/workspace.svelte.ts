@@ -2,7 +2,7 @@ import { editorStore, type EditorTab, type LayoutMode } from './editor.svelte';
 import { uiStore, type SidebarTab } from './ui.svelte';
 import { streamStore, type StreamSnapshot } from './stream.svelte';
 import { searchStore } from './search.svelte';
-import { terminalStore } from './terminal.svelte';
+import { terminalStore, type PersistedTerminalTab } from './terminal.svelte';
 import { workspaceListStore } from './projects.svelte';
 import { conversationStore } from './conversation.svelte';
 import { gitStore } from './git.svelte';
@@ -12,6 +12,7 @@ import {
   type FloatingPanelState,
   type PanelColumn,
 } from './sidebarLayout.svelte';
+import type { TerminalPreferences } from '@e/shared';
 
 const STORAGE_KEY = 'e-workspaces';
 
@@ -39,6 +40,10 @@ export interface WorkspaceSnapshot {
   searchIsRegex: boolean;
   terminalOpen: boolean;
   terminalHeight: number;
+  terminalTabs?: PersistedTerminalTab[];
+  terminalActiveTabId?: string | null;
+  terminalPreferences?: TerminalPreferences;
+  terminalMaximized?: boolean;
   sidebarLayout?: SidebarLayoutSnapshot;
 }
 
@@ -84,6 +89,10 @@ interface PersistedWorkspace {
     searchIsRegex: boolean;
     terminalOpen: boolean;
     terminalHeight: number;
+    terminalTabs?: PersistedTerminalTab[];
+    terminalActiveTabId?: string | null;
+    terminalPreferences?: TerminalPreferences;
+    terminalMaximized?: boolean;
     sidebarLayout?: SidebarLayoutSnapshot;
   };
 }
@@ -125,6 +134,10 @@ function saveToStorage(workspaces: WorkspaceTab[], activeId: string | null) {
           searchIsRegex: w.snapshot.searchIsRegex,
           terminalOpen: w.snapshot.terminalOpen,
           terminalHeight: w.snapshot.terminalHeight,
+          terminalTabs: w.snapshot.terminalTabs,
+          terminalActiveTabId: w.snapshot.terminalActiveTabId,
+          terminalPreferences: w.snapshot.terminalPreferences,
+          terminalMaximized: w.snapshot.terminalMaximized,
           sidebarLayout: w.snapshot.sidebarLayout,
         },
       })),
@@ -144,6 +157,7 @@ function createWorkspaceStore() {
 
   function captureSnapshot(): WorkspaceSnapshot {
     const layoutState = sidebarLayoutStore.captureState();
+    const termState = terminalStore.captureState();
     return {
       editorTabs: [...editorStore.tabs],
       activeEditorTabId: editorStore.activeTabId,
@@ -156,8 +170,12 @@ function createWorkspaceStore() {
       streamSnapshot: streamStore.isStreaming ? streamStore.captureState() : null,
       searchQuery: searchStore.query,
       searchIsRegex: searchStore.isRegex,
-      terminalOpen: terminalStore.isOpen,
-      terminalHeight: terminalStore.panelHeight,
+      terminalOpen: termState.isOpen,
+      terminalHeight: termState.panelHeight,
+      terminalTabs: termState.tabs,
+      terminalActiveTabId: termState.activeTabId,
+      terminalPreferences: termState.preferences,
+      terminalMaximized: termState.maximized,
       sidebarLayout: {
         version: 2,
         leftColumn: layoutState.leftColumn,
@@ -191,6 +209,10 @@ function createWorkspaceStore() {
     terminalStore.restoreState({
       isOpen: snapshot.terminalOpen,
       panelHeight: snapshot.terminalHeight,
+      maximized: snapshot.terminalMaximized,
+      tabs: snapshot.terminalTabs,
+      activeTabId: snapshot.terminalActiveTabId,
+      preferences: snapshot.terminalPreferences,
     });
 
     // Restore sidebar layout if present (backward compatible with old V1 snapshots)
