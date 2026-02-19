@@ -3,6 +3,7 @@
   import { settingsStore } from '$lib/stores/settings.svelte';
   import { conversationStore } from '$lib/stores/conversation.svelte';
   import { editorStore } from '$lib/stores/editor.svelte';
+  import { terminalStore } from '$lib/stores/terminal.svelte';
   import { api } from '$lib/api/client';
 
   let query = $state('');
@@ -169,6 +170,38 @@
       category: 'Editor',
       action: () => {
         editorStore.toggleFollowAlong();
+        close();
+      },
+    },
+    {
+      id: 'toggle-terminal',
+      label: 'Toggle Terminal',
+      category: 'Terminal',
+      shortcut: 'Ctrl+`',
+      action: () => {
+        terminalStore.toggle();
+        close();
+      },
+    },
+    {
+      id: 'new-terminal',
+      label: 'New Terminal Tab',
+      category: 'Terminal',
+      shortcut: 'Ctrl+Shift+`',
+      action: () => {
+        terminalStore.open();
+        terminalStore.createTab();
+        close();
+      },
+    },
+    {
+      id: 'split-terminal',
+      label: 'Split Terminal',
+      category: 'Terminal',
+      shortcut: 'Ctrl+Shift+5',
+      action: () => {
+        terminalStore.open();
+        terminalStore.createTab();
         close();
       },
     },

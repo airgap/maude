@@ -232,18 +232,30 @@
         editorStore.cycleTab(e.shiftKey ? -1 : 1);
       }
     }
-    // Ctrl+1..9: Switch to nth tab
-    if ((e.ctrlKey || e.metaKey) && e.key >= '1' && e.key <= '9') {
+    // Ctrl+1..9: Switch to nth tab (without Shift — Shift combos reserved for terminal)
+    if ((e.ctrlKey || e.metaKey) && !e.shiftKey && e.key >= '1' && e.key <= '9') {
       const idx = parseInt(e.key) - 1;
       if (idx < editorStore.tabs.length) {
         e.preventDefault();
         editorStore.activateTabByIndex(idx);
       }
     }
-    // Ctrl+`: Toggle terminal
-    if ((e.ctrlKey || e.metaKey) && e.key === '`') {
+    // Ctrl+`: Toggle terminal (without Shift)
+    if ((e.ctrlKey || e.metaKey) && !e.shiftKey && e.key === '`') {
       e.preventDefault();
       terminalStore.toggle();
+    }
+    // Ctrl+Shift+`: New terminal tab
+    if ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === '~' || e.key === '`')) {
+      e.preventDefault();
+      terminalStore.open();
+      terminalStore.createTab();
+    }
+    // Ctrl+Shift+5: Split active terminal (new tab)
+    if ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === '%' || e.key === '5')) {
+      e.preventDefault();
+      terminalStore.open();
+      terminalStore.createTab();
     }
     // Ctrl+Alt+Left: Previous workspace
     if ((e.ctrlKey || e.metaKey) && e.altKey && e.key === 'ArrowLeft') {
