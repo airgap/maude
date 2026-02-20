@@ -8,6 +8,9 @@
   import { onMount } from 'svelte';
   import LoopPanel from './LoopPanel.svelte';
 
+  let resettingStoryId = $state<string | null>(null);
+  let resettingAllFailed = $state(false);
+
   let workspacePath = $derived(settingsStore.workspacePath || '');
   let newStoryTitle = $state('');
   let estimatingStoryId = $state<string | null>(null);
@@ -166,6 +169,37 @@
   }
 
   // --- Move up/down with keyboard for accessibility ---
+
+  async function handleResetStory(storyId: string) {
+    resettingStoryId = storyId;
+    try {
+      const result = await loopStore.resetStory(storyId);
+      if (result.ok) {
+        await workStore.loadStandaloneStories(workspacePath);
+        uiStore.toast('Story reset to pending', 'success');
+      } else {
+        uiStore.toast(result.error || 'Failed to reset story', 'error');
+      }
+    } finally {
+      resettingStoryId = null;
+    }
+  }
+
+  async function handleResetAllFailed() {
+    if (!workspacePath) return;
+    resettingAllFailed = true;
+    try {
+      const result = await loopStore.resetFailedAndRestart(null, workspacePath);
+      if (result.ok) {
+        await workStore.loadStandaloneStories(workspacePath);
+        uiStore.toast(`Reset ${result.resetCount ?? 0} failed stories`, 'success');
+      } else {
+        uiStore.toast(result.error || 'Failed to reset stories', 'error');
+      }
+    } finally {
+      resettingAllFailed = false;
+    }
+  }
 
   async function moveStory(storyId: string, direction: 'up' | 'down') {
     const pending = [...workStore.pendingStories];
@@ -383,6 +417,86 @@
                   {#if priorityLabel(story.priority)}
                     <span class="priority-badge">{priorityLabel(story.priority)}</span>
                   {/if}
+                </div>
+              </div>
+            {/each}
+          </div>
+        {/if}
+
+        {#if workStore.failedStories.length > 0}
+          <div class="section">
+            <div class="section-label-row">
+              <span class="section-label">Failed ({workStore.failedStories.length})</span>
+              <button
+                class="reset-all-btn"
+                title="Reset all failed stories to pending"
+                disabled={resettingAllFailed}
+                onclick={handleResetAllFailed}
+              >
+                {#if resettingAllFailed}
+                  <span class="spinner-sm"></span>
+                {:else}
+                  <svg
+                    width="12"
+                    height="12"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <path d="M9 14 4 9l5-5" /><path
+                      d="M4 9h10.5a5.5 5.5 0 0 1 5.5 5.5a5.5 5.5 0 0 1-5.5 5.5H11"
+                    />
+                  </svg>
+                  Reset all
+                {/if}
+              </button>
+            </div>
+            {#each workStore.failedStories as story (story.id)}
+              <div class="story-item failed">
+                <div class="story-header">
+                  <span class="story-status status-failed">
+                    {statusIcon(story.status)}
+                  </span>
+                  <span class="story-title">{story.title}</span>
+                  {#if story.attempts > 0}
+                    <span class="attempts-badge">{story.attempts}/{story.maxAttempts}</span>
+                  {/if}
+                  <button
+                    class="reset-badge-btn"
+                    title="Reset attempts and set back to pending"
+                    disabled={resettingStoryId === story.id}
+                    onclick={() => handleResetStory(story.id)}
+                  >
+                    {#if resettingStoryId === story.id}
+                      <span class="spinner-sm"></span>
+                    {:else}
+                      <svg
+                        width="10"
+                        height="10"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2.5"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                      >
+                        <path d="M9 14 4 9l5-5" /><path
+                          d="M4 9h10.5a5.5 5.5 0 0 1 5.5 5.5a5.5 5.5 0 0 1-5.5 5.5H11"
+                        />
+                      </svg>
+                      Reset
+                    {/if}
+                  </button>
+                  <button
+                    class="delete-btn"
+                    title="Delete"
+                    onclick={() => workStore.deleteStandaloneStory(story.id)}
+                  >
+                    ×
+                  </button>
                 </div>
               </div>
             {/each}
@@ -1095,6 +1209,80 @@
   .archive-all-btn:hover {
     color: var(--accent-primary);
     background: var(--bg-hover);
+  }
+
+  .story-item.failed {
+    border-left: 2px solid var(--accent-error);
+  }
+
+  .reset-badge-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    font-size: var(--fs-xxs);
+    padding: 1px 6px;
+    border-radius: 3px;
+    background: rgba(239, 68, 68, 0.12);
+    color: var(--accent-error);
+    border: none;
+    cursor: pointer;
+    font-weight: 600;
+    transition: all var(--transition);
+  }
+  .reset-badge-btn:hover:not(:disabled) {
+    background: rgba(239, 68, 68, 0.25);
+  }
+  .reset-badge-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  .reset-all-btn {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-size: var(--fs-xxs);
+    padding: 2px 6px;
+    border-radius: var(--radius-sm);
+    background: none;
+    border: none;
+    color: var(--text-tertiary);
+    cursor: pointer;
+    transition: all var(--transition);
+  }
+  .reset-all-btn:hover:not(:disabled) {
+    color: var(--accent-primary);
+    background: var(--bg-hover);
+  }
+  .reset-all-btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+  }
+
+  .attempts-badge {
+    font-size: var(--fs-xxs);
+    color: var(--text-tertiary);
+    padding: 0 3px;
+    border-radius: 2px;
+    background: var(--bg-hover);
+    font-weight: 600;
+    flex-shrink: 0;
+  }
+
+  .spinner-sm {
+    display: inline-block;
+    width: 10px;
+    height: 10px;
+    border: 2px solid transparent;
+    border-top-color: var(--accent-primary);
+    border-radius: 50%;
+    animation: spin 0.6s linear infinite;
+  }
+
+  @keyframes spin {
+    to {
+      transform: rotate(360deg);
+    }
   }
 
   .empty-stories {

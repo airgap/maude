@@ -883,6 +883,58 @@ function createLoopStore() {
       await api.loops.cancel(activeLoop.id);
     },
 
+    /** Reset a single story's attempts back to 0, status to pending */
+    async resetStory(storyId: string): Promise<{ ok: boolean; error?: string }> {
+      try {
+        const res = await api.loops.resetStory(storyId);
+        if (res.ok) {
+          // Update local state
+          this.updateStoryInPrds(storyId, 'pending');
+          this.updateStandaloneStory(storyId, 'pending');
+          // Refresh PRDs to get updated attempt counts
+          if (activeLoop?.workspacePath) await this.loadPrds(activeLoop.workspacePath);
+          return { ok: true };
+        }
+        return { ok: false, error: (res as any).error || 'Failed to reset story' };
+      } catch (err) {
+        return { ok: false, error: String(err) };
+      }
+    },
+
+    /** Reset all failed stories in a PRD/workspace and optionally restart the loop */
+    async resetFailedAndRestart(
+      prdId: string | null,
+      workspacePath: string,
+      config?: LoopConfig,
+    ): Promise<{ ok: boolean; resetCount?: number; error?: string }> {
+      try {
+        const res = await api.loops.resetFailed({
+          prdId,
+          workspacePath,
+          restart: !!config,
+          config,
+        });
+        if (res.ok) {
+          // Refresh story state
+          if (workspacePath) await this.loadPrds(workspacePath);
+
+          // If a new loop was started, connect to it
+          if (res.data.loopId) {
+            const loopRes = await api.loops.get(res.data.loopId);
+            if (loopRes.ok) {
+              activeLoop = loopRes.data;
+              log = [];
+              this.connectEvents(res.data.loopId);
+            }
+          }
+          return { ok: true, resetCount: res.data.resetCount };
+        }
+        return { ok: false, error: (res as any).error || 'Failed to reset stories' };
+      } catch (err) {
+        return { ok: false, error: String(err) };
+      }
+    },
+
     // --- Story generation ---
 
     setGeneratedStories(stories: GeneratedStory[]) {

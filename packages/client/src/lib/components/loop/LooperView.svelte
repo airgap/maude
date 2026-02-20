@@ -165,6 +165,24 @@
     primaryPaneStore.openConversation(conversationId, title);
   }
 
+  async function handleResetStory(storyId: string, title: string) {
+    const res = await loopStore.resetStory(storyId);
+    if (!res.ok) {
+      console.error(`Failed to reset story "${title}":`, res.error);
+    }
+  }
+
+  async function handleRetryAllFailed() {
+    if (!loop) return;
+    const count = grouped.failed.length;
+    if (!confirm(`Reset ${count} failed stor${count === 1 ? 'y' : 'ies'} and restart the loop?`))
+      return;
+    const res = await loopStore.resetFailedAndRestart(loop.prdId, loop.workspacePath, config);
+    if (!res.ok) {
+      console.error('Failed to retry all:', res.error);
+    }
+  }
+
   // --- Timeline grouped by story ---
   interface StoryLogGroup {
     storyId: string;
@@ -520,30 +538,54 @@
 
         {#if grouped.failed.length > 0}
           <div class="pipeline-group">
-            <span class="pipeline-group-label">Failed ({grouped.failed.length})</span>
+            <div class="pipeline-group-header">
+              <span class="pipeline-group-label">Failed ({grouped.failed.length})</span>
+              {#if !loopStore.isActive}
+                <button
+                  class="retry-all-btn"
+                  onclick={handleRetryAllFailed}
+                  title="Reset all failed stories and restart the loop"
+                >
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <polyline points="23 4 23 10 17 10" />
+                    <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" />
+                  </svg>
+                  Retry all
+                </button>
+              {/if}
+            </div>
             {#each grouped.failed as story (story.id)}
-              <div
-                class="pipeline-row failed-row"
-                role="button"
-                tabindex="0"
-                onclick={() => openConversation(story.conversationId, story.title)}
-                onkeydown={(e) =>
-                  e.key === 'Enter' && openConversation(story.conversationId, story.title)}
-              >
-                <span class="pl-icon failed">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
-                    ><path d="M18 6L6 18M6 6l12 12" /></svg
-                  >
-                </span>
-                <span class="pl-title">{story.title}</span>
-                <span class="pl-attempts fail">{story.attempts}/{story.maxAttempts}</span>
-                {#if story.learnings.length > 0}
-                  <span class="pl-learnings"
-                    >{story.learnings.length} learning{story.learnings.length !== 1
-                      ? 's'
-                      : ''}</span
-                  >
-                {/if}
+              <div class="pipeline-row failed-row">
+                <!-- svelte-ignore a11y_no_static_element_interactions a11y_click_events_have_key_events -->
+                <div
+                  class="failed-row-main"
+                  onclick={() => openConversation(story.conversationId, story.title)}
+                >
+                  <span class="pl-icon failed">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
+                      ><path d="M18 6L6 18M6 6l12 12" /></svg
+                    >
+                  </span>
+                  <span class="pl-title">{story.title}</span>
+                  <span class="pl-attempts fail">{story.attempts}/{story.maxAttempts}</span>
+                  {#if story.learnings.length > 0}
+                    <span class="pl-learnings"
+                      >{story.learnings.length} learning{story.learnings.length !== 1
+                        ? 's'
+                        : ''}</span
+                    >
+                  {/if}
+                </div>
+                <button
+                  class="retry-btn"
+                  onclick={() => handleResetStory(story.id, story.title)}
+                  title="Reset attempts and move back to pending"
+                >
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <polyline points="23 4 23 10 17 10" />
+                    <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" />
+                  </svg>
+                </button>
               </div>
             {/each}
           </div>
@@ -1093,6 +1135,76 @@
     font-size: var(--fs-xxs);
     color: var(--accent-warning);
     flex-shrink: 0;
+  }
+
+  /* ── Failed story reset buttons ── */
+  .pipeline-group-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 2px;
+  }
+  .failed-row-main {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex: 1;
+    min-width: 0;
+    cursor: pointer;
+  }
+  .retry-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 22px;
+    height: 22px;
+    padding: 0;
+    border: none;
+    background: none;
+    color: var(--text-muted);
+    cursor: pointer;
+    border-radius: var(--radius-sm);
+    flex-shrink: 0;
+    opacity: 0;
+    transition:
+      opacity var(--transition),
+      color var(--transition),
+      background var(--transition);
+  }
+  .retry-btn svg {
+    width: 13px;
+    height: 13px;
+  }
+  .pipeline-row:hover .retry-btn {
+    opacity: 1;
+  }
+  .retry-btn:hover {
+    color: var(--accent-primary);
+    background: var(--bg-hover);
+  }
+  .retry-all-btn {
+    display: flex;
+    align-items: center;
+    gap: 3px;
+    padding: 2px 7px;
+    font-size: var(--fs-xxs);
+    font-weight: 600;
+    color: var(--accent-primary);
+    background: none;
+    border: 1px solid color-mix(in srgb, var(--accent-primary) 30%, transparent);
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    transition:
+      background var(--transition),
+      border-color var(--transition);
+  }
+  .retry-all-btn svg {
+    width: 11px;
+    height: 11px;
+  }
+  .retry-all-btn:hover {
+    background: color-mix(in srgb, var(--accent-primary) 10%, transparent);
+    border-color: var(--accent-primary);
   }
 
   /* ── Timeline ── */

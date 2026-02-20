@@ -395,6 +395,8 @@
   let estimatingAll = $state(false);
   let recommendingAllPriorities = $state(false);
   let showStoriesMenu = $state(false);
+  let resettingStoryId = $state<string | null>(null);
+  let resettingAllFailed = $state(false);
 
   function closeStoriesMenu() {
     showStoriesMenu = false;
@@ -449,6 +451,42 @@
       }
     } finally {
       estimatingAll = false;
+    }
+  }
+
+  let prdFailedStories = $derived(
+    (loopStore.selectedPrd?.stories || []).filter((s: any) => s.status === 'failed'),
+  );
+
+  async function handleResetStory(storyId: string) {
+    resettingStoryId = storyId;
+    try {
+      const result = await loopStore.resetStory(storyId);
+      if (result.ok) {
+        if (loopStore.selectedPrdId) await loopStore.loadPrd(loopStore.selectedPrdId);
+        uiStore.toast('Story reset to pending', 'success');
+      } else {
+        uiStore.toast(result.error || 'Failed to reset story', 'error');
+      }
+    } finally {
+      resettingStoryId = null;
+    }
+  }
+
+  async function handleResetAllFailed() {
+    const prdId = loopStore.selectedPrdId;
+    if (!prdId || !workspacePath) return;
+    resettingAllFailed = true;
+    try {
+      const result = await loopStore.resetFailedAndRestart(prdId, workspacePath);
+      if (result.ok) {
+        await loopStore.loadPrd(prdId);
+        uiStore.toast(`Reset ${result.resetCount ?? 0} failed stories`, 'success');
+      } else {
+        uiStore.toast(result.error || 'Failed to reset stories', 'error');
+      }
+    } finally {
+      resettingAllFailed = false;
     }
   }
 
@@ -784,6 +822,23 @@
                 >
                   {showDependencies ? 'Hide dependencies' : 'Dependencies'}
                 </button>
+                {#if prdFailedStories.length > 0}
+                  <div class="menu-divider"></div>
+                  <button
+                    class="menu-item menu-item-warning"
+                    disabled={resettingAllFailed}
+                    onclick={() => {
+                      closeStoriesMenu();
+                      handleResetAllFailed();
+                    }}
+                  >
+                    {#if resettingAllFailed}
+                      <span class="spinner-sm"></span>
+                    {:else}
+                      Reset {prdFailedStories.length} failed
+                    {/if}
+                  </button>
+                {/if}
                 <div class="menu-divider"></div>
                 <button
                   class="menu-item menu-item-danger"
@@ -857,6 +912,34 @@
                           height="5"
                         /><line x1="10" y1="12" x2="14" y2="12" />
                       </svg>
+                    </button>
+                  {/if}
+                  {#if story.status === 'failed' || story.attempts > 0}
+                    <button
+                      class="reset-badge-btn"
+                      title="Reset attempts and set back to pending"
+                      disabled={resettingStoryId === story.id}
+                      onclick={() => handleResetStory(story.id)}
+                    >
+                      {#if resettingStoryId === story.id}
+                        <span class="spinner-sm"></span>
+                      {:else}
+                        <svg
+                          width="10"
+                          height="10"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          stroke-width="2.5"
+                          stroke-linecap="round"
+                          stroke-linejoin="round"
+                        >
+                          <path d="M9 14 4 9l5-5" /><path
+                            d="M4 9h10.5a5.5 5.5 0 0 1 5.5 5.5a5.5 5.5 0 0 1-5.5 5.5H11"
+                          />
+                        </svg>
+                        Reset
+                      {/if}
                     </button>
                   {/if}
                   <button
@@ -1185,6 +1268,9 @@
   .menu-item-danger:hover:not(:disabled) {
     color: var(--accent-error);
   }
+  .menu-item-warning:hover:not(:disabled) {
+    color: var(--accent-warning, #e6a817);
+  }
   .menu-divider {
     height: 1px;
     margin: 4px 8px;
@@ -1433,6 +1519,28 @@
     font-size: var(--fs-xxs);
     color: var(--text-tertiary);
     margin-left: 20px;
+  }
+
+  .reset-badge-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    font-size: var(--fs-xxs);
+    padding: 1px 6px;
+    border-radius: 3px;
+    background: rgba(239, 68, 68, 0.12);
+    color: var(--accent-error);
+    border: none;
+    cursor: pointer;
+    font-weight: 600;
+    transition: all var(--transition);
+  }
+  .reset-badge-btn:hover:not(:disabled) {
+    background: rgba(239, 68, 68, 0.25);
+  }
+  .reset-badge-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
   }
 
   .sprint-warnings {

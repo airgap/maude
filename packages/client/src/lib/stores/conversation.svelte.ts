@@ -10,6 +10,14 @@ function createConversationStore() {
   let draft = $state<ConversationSummary | null>(null);
   let onActiveChangeCallbacks: Array<(conv: Conversation | null) => void> = [];
 
+  /**
+   * Conversations currently being written to by an active stream.
+   * When navigating back to a conversation with an in-flight stream,
+   * we use this reference instead of loading from DB (which wouldn't
+   * have the partial assistant response yet).
+   */
+  let inflightConversations = new Map<string, Conversation>();
+
   return {
     get list() {
       return conversations;
@@ -44,6 +52,19 @@ function createConversationStore() {
     },
     setLoading(v: boolean) {
       loading = v;
+    },
+
+    /** Register a conversation being actively written to by a stream. */
+    setInflight(id: string, conv: Conversation) {
+      inflightConversations.set(id, conv);
+    },
+    /** Unregister when stream completes. */
+    clearInflight(id: string) {
+      inflightConversations.delete(id);
+    },
+    /** Get the in-flight conversation reference, if any. */
+    getInflight(id: string): Conversation | undefined {
+      return inflightConversations.get(id);
     },
 
     /** Create a draft placeholder that appears in the conversation list. */

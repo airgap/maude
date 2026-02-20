@@ -1106,6 +1106,18 @@ export const api = {
       return request<{ ok: boolean; data: any[] }>(`/loops${q}`);
     },
     log: (id: string) => request<{ ok: boolean; data: any[] }>(`/loops/${id}/log`),
+    resetStory: (storyId: string) =>
+      request<{ ok: boolean; data: any }>(`/loops/stories/${storyId}/reset`, { method: 'POST' }),
+    resetFailed: (body: {
+      prdId: string | null;
+      workspacePath: string;
+      restart?: boolean;
+      config?: any;
+    }) =>
+      request<{
+        ok: boolean;
+        data: { resetCount: number; loopId: string | null; restartError?: string };
+      }>('/loops/stories/reset-failed', { method: 'POST', body: JSON.stringify(body) }),
   },
 
   // --- External Providers (Jira, Linear, Asana) ---

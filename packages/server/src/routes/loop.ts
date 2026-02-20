@@ -1,5 +1,6 @@
 import { Hono } from 'hono';
 import { loopOrchestrator } from '../services/loop-orchestrator';
+import { getDb } from '../db/database';
 import type { StreamLoopEvent } from '@e/shared';
 
 const app = new Hono();
@@ -135,6 +136,66 @@ app.get('/:id/events', (c) => {
       Connection: 'keep-alive',
     },
   });
+});
+
+// Reset attempts on a single story (set status=pending, attempts=0, clear learnings)
+app.post('/stories/:storyId/reset', (c) => {
+  const db = getDb();
+  const storyId = c.req.param('storyId');
+
+  const story = db.query('SELECT * FROM prd_stories WHERE id = ?').get(storyId) as any;
+  if (!story) return c.json({ ok: false, error: 'Story not found' }, 404);
+
+  db.query(
+    `UPDATE prd_stories SET status = 'pending', attempts = 0, learnings = '[]', agent_id = NULL, conversation_id = NULL, commit_sha = NULL, updated_at = ? WHERE id = ?`,
+  ).run(Date.now(), storyId);
+
+  const updated = db.query('SELECT * FROM prd_stories WHERE id = ?').get(storyId) as any;
+  return c.json({ ok: true, data: updated });
+});
+
+// Reset all failed stories in a PRD (or standalone) and optionally restart loop
+app.post('/stories/reset-failed', async (c) => {
+  const db = getDb();
+  const body = await c.req.json();
+  const { prdId, workspacePath, restart, config } = body;
+
+  if (!workspacePath) {
+    return c.json({ ok: false, error: 'workspacePath is required' }, 400);
+  }
+
+  // Reset failed stories
+  let result;
+  if (prdId) {
+    result = db
+      .query(
+        `UPDATE prd_stories SET status = 'pending', attempts = 0, learnings = '[]', agent_id = NULL, conversation_id = NULL, commit_sha = NULL, updated_at = ? WHERE prd_id = ? AND status = 'failed'`,
+      )
+      .run(Date.now(), prdId);
+  } else {
+    result = db
+      .query(
+        `UPDATE prd_stories SET status = 'pending', attempts = 0, learnings = '[]', agent_id = NULL, conversation_id = NULL, commit_sha = NULL, updated_at = ? WHERE prd_id IS NULL AND workspace_path = ? AND status = 'failed'`,
+      )
+      .run(Date.now(), workspacePath);
+  }
+
+  const resetCount = result.changes;
+
+  // Optionally restart the loop
+  let loopId: string | undefined;
+  if (restart && config && resetCount > 0) {
+    try {
+      loopId = await loopOrchestrator.startLoop(prdId || null, workspacePath, config);
+    } catch (err) {
+      return c.json({
+        ok: true,
+        data: { resetCount, loopId: null, restartError: String(err) },
+      });
+    }
+  }
+
+  return c.json({ ok: true, data: { resetCount, loopId: loopId ?? null } });
 });
 
 export { app as loopRoutes };

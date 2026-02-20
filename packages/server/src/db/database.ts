@@ -279,9 +279,6 @@ export function initDatabase(): void {
       FOREIGN KEY (conversation_id) REFERENCES conversations(id) ON DELETE CASCADE
     );
 
-    CREATE INDEX IF NOT EXISTS idx_commentary_workspace ON commentary_history(workspace_id, created_at DESC);
-    CREATE INDEX IF NOT EXISTS idx_commentary_conversation ON commentary_history(conversation_id, created_at DESC);
-    CREATE INDEX IF NOT EXISTS idx_commentary_timestamp ON commentary_history(timestamp DESC);
   `);
 
   // Migrate: add new conversation columns (safe ALTER TABLE — no-ops if already exist)
@@ -302,6 +299,8 @@ export function initDatabase(): void {
     `ALTER TABLE prd_stories ADD COLUMN research_only INTEGER NOT NULL DEFAULT 0`,
     `ALTER TABLE git_snapshots ADD COLUMN message_id TEXT`,
     `ALTER TABLE conversations ADD COLUMN profile_id TEXT`,
+    `ALTER TABLE commentary_history ADD COLUMN created_at INTEGER`,
+    `UPDATE commentary_history SET created_at = timestamp WHERE created_at IS NULL`,
   ];
   for (const sql of alterColumns) {
     try {
@@ -338,6 +337,9 @@ export function initDatabase(): void {
     CREATE INDEX IF NOT EXISTS idx_workspace_memories_path ON workspace_memories(workspace_path);
     CREATE INDEX IF NOT EXISTS idx_workspace_memories_category ON workspace_memories(workspace_path, category);
     CREATE INDEX IF NOT EXISTS idx_prds_workspace_path ON prds(workspace_path);
+    CREATE INDEX IF NOT EXISTS idx_commentary_workspace ON commentary_history(workspace_id, created_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_commentary_conversation ON commentary_history(conversation_id, created_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_commentary_timestamp ON commentary_history(timestamp DESC);
   `);
 
   // --- Work pane unification migrations ---

@@ -62,6 +62,9 @@ export async function sendAndStream(
     return;
   }
 
+  // Track as in-flight so navigating back finds the partial response
+  conversationStore.setInflight(conversationId, targetConversation);
+
   // Pre-generate the assistant message ID so snapshots can link to it
   const assistantMsgIdForSnapshot = uuid();
 
@@ -218,6 +221,10 @@ export async function sendAndStream(
       streamStore.handleEvent({ type: 'message_stop' } as any);
     }
 
+    // Stream complete — clear the in-flight reference before reloading from DB.
+    // The server has persisted the full message now, so the DB version is authoritative.
+    conversationStore.clearInflight(conversationId);
+
     // Reload conversation from DB to pick up server-persisted messages.
     // This handles cases where the stream produced no content_block events
     // (e.g. /compact, /init) but the server still saved an assistant message.
@@ -254,6 +261,8 @@ export async function sendAndStream(
     if (myGeneration !== streamGeneration) return;
 
     if ((err as Error).name === 'AbortError') {
+      // User cancelled — server persists partial content, clear in-flight
+      conversationStore.clearInflight(conversationId);
       streamStore.handleEvent({ type: 'message_stop' } as any);
     } else {
       streamStore.handleEvent({
@@ -372,14 +381,22 @@ export async function reconnectActiveStream(): Promise<string | null> {
       return null;
     }
 
-    // Add empty assistant message placeholder that we'll build up from replayed events
-    conversationStore.addMessageTo(targetConversation, {
-      id: uuid(),
-      role: 'assistant',
-      content: [],
-      timestamp: Date.now(),
-      model: targetConversation.model,
-    });
+    // Track as in-flight so navigating back finds the partial response
+    conversationStore.setInflight(target.conversationId, targetConversation);
+
+    // Check if the conversation already has a partial assistant message at the end
+    // (from periodic DB flushes during streaming). If so, reuse it; otherwise add
+    // an empty placeholder that we'll build up from replayed events.
+    const lastMsg = targetConversation.messages?.[targetConversation.messages.length - 1];
+    if (!lastMsg || lastMsg.role !== 'assistant') {
+      conversationStore.addMessageTo(targetConversation, {
+        id: uuid(),
+        role: 'assistant',
+        content: [],
+        timestamp: Date.now(),
+        model: targetConversation.model,
+      });
+    }
 
     const reader = response.body.getReader();
     const decoder = new TextDecoder();
@@ -443,6 +460,9 @@ export async function reconnectActiveStream(): Promise<string | null> {
     if (s === 'streaming' || s === 'connecting') {
       streamStore.handleEvent({ type: 'message_stop' } as any);
     }
+
+    // Stream complete — clear in-flight before reloading the authoritative DB version.
+    conversationStore.clearInflight(target.conversationId);
 
     // Reload conversation from DB for the authoritative server-saved version.
     // By this point the stream has completed and the server has persisted the

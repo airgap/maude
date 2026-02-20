@@ -99,6 +99,9 @@ function createWorkStore() {
     get completedStories() {
       return this.filteredStories.filter((s) => s.status === 'completed');
     },
+    get failedStories() {
+      return this.filteredStories.filter((s) => s.status === 'failed');
+    },
     get archivedStories() {
       return this.filteredStories.filter((s) => s.status === 'archived');
     },

@@ -42,8 +42,14 @@
         if (savedId && res.data.some((c: any) => c.id === savedId)) {
           conversationStore.setLoading(true);
           try {
-            const convRes = await api.conversations.get(savedId);
-            conversationStore.setActive(convRes.data);
+            // Use in-flight reference if an active stream is writing to this conversation
+            const inflight = conversationStore.getInflight(savedId);
+            if (inflight) {
+              conversationStore.setActive({ ...inflight });
+            } else {
+              const convRes = await api.conversations.get(savedId);
+              conversationStore.setActive(convRes.data);
+            }
             streamStore.reset();
           } finally {
             conversationStore.setLoading(false);
@@ -60,11 +66,20 @@
     conversationStore.clearDraft();
     conversationStore.setLoading(true);
     try {
-      const res = await api.conversations.get(id);
-      conversationStore.setActive(res.data);
-      // Explicitly open the conversation tab (bypasses the "don't override file/diff" guard
-      // in PrimaryPane's reactive effect, which is meant for automatic updates, not user clicks)
-      primaryPaneStore.openConversation(res.data.id, res.data.title ?? 'Conversation');
+      // If there's an active stream writing to this conversation, use its
+      // in-flight reference instead of loading from DB. The DB won't have the
+      // partial assistant response yet — it's only persisted on stream completion.
+      const inflight = conversationStore.getInflight(id);
+      if (inflight) {
+        conversationStore.setActive({ ...inflight });
+        primaryPaneStore.openConversation(inflight.id, inflight.title ?? 'Conversation');
+      } else {
+        const res = await api.conversations.get(id);
+        conversationStore.setActive(res.data);
+        // Explicitly open the conversation tab (bypasses the "don't override file/diff" guard
+        // in PrimaryPane's reactive effect, which is meant for automatic updates, not user clicks)
+        primaryPaneStore.openConversation(res.data.id, res.data.title ?? 'Conversation');
+      }
       // Only reset stream state if there's no active stream, or the stream
       // belongs to the conversation we're switching TO (so UI syncs up).
       // If the stream is for a different conversation, leave it running —

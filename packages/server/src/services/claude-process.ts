@@ -649,6 +649,58 @@ class ClaudeProcessManager {
     let assistantContent: any[] | null = null;
     let assistantModel: string | null = null;
 
+    // Periodic flush: persist partial assistant messages to DB every few seconds
+    // so they survive browser reloads.
+    const assistantMsgId = nanoid();
+    let assistantMsgPersisted = false;
+    let lastFlushTime = 0;
+    const FLUSH_INTERVAL_MS = 2000;
+
+    const flushAssistantContent = () => {
+      if (!assistantContent || assistantContent.length === 0) return;
+      try {
+        const db = getDb();
+        const now = Date.now();
+        if (!assistantMsgPersisted) {
+          db.query(
+            `INSERT INTO messages (id, conversation_id, role, content, model, timestamp)
+             VALUES (?, ?, 'assistant', ?, ?, ?)`,
+          ).run(
+            assistantMsgId,
+            session.conversationId,
+            JSON.stringify(assistantContent),
+            assistantModel,
+            now,
+          );
+          db.query('UPDATE conversations SET updated_at = ? WHERE id = ?').run(
+            now,
+            session.conversationId,
+          );
+          assistantMsgPersisted = true;
+        } else {
+          db.query(`UPDATE messages SET content = ?, model = ?, timestamp = ? WHERE id = ?`).run(
+            JSON.stringify(assistantContent),
+            assistantModel,
+            now,
+            assistantMsgId,
+          );
+          db.query('UPDATE conversations SET updated_at = ? WHERE id = ?').run(
+            now,
+            session.conversationId,
+          );
+        }
+        lastFlushTime = now;
+      } catch (dbErr) {
+        console.error('[claude] Failed to flush assistant content:', dbErr);
+      }
+    };
+
+    const maybeFlush = () => {
+      if (Date.now() - lastFlushTime >= FLUSH_INTERVAL_MS) {
+        flushAssistantContent();
+      }
+    };
+
     const scheduleCleanup = () => this.scheduleCleanup(session.id);
 
     return new ReadableStream({
@@ -706,29 +758,14 @@ class ClaudeProcessManager {
           clearInterval(pingInterval);
           proc.kill('SIGINT');
 
-          // Save any assistant content accumulated before cancellation
+          // Final flush of assistant content on cancellation
           if (assistantContent && assistantContent.length > 0) {
+            flushAssistantContent();
+            // Extract artifacts from partial content on cancel too
             try {
-              const db = getDb();
-              const msgId = nanoid();
-              db.query(
-                `INSERT INTO messages (id, conversation_id, role, content, model, timestamp)
-                 VALUES (?, ?, 'assistant', ?, ?, ?)`,
-              ).run(
-                msgId,
-                session.conversationId,
-                JSON.stringify(assistantContent),
-                assistantModel,
-                Date.now(),
-              );
-              db.query('UPDATE conversations SET updated_at = ? WHERE id = ?').run(
-                Date.now(),
-                session.conversationId,
-              );
-              // Extract artifacts from partial content on cancel too
-              extractAndStoreArtifacts(session.conversationId, msgId, assistantContent);
+              extractAndStoreArtifacts(session.conversationId, assistantMsgId, assistantContent);
             } catch (dbErr) {
-              console.error('[claude] Failed to save assistant message on cancel:', dbErr);
+              console.error('[claude] Failed to extract artifacts on cancel:', dbErr);
             }
           }
 
@@ -847,6 +884,9 @@ class ClaudeProcessManager {
                     if (!assistantContent) assistantContent = [];
                     assistantContent.push(...cliEvent.message.content);
                     assistantModel = cliEvent.message.model || session.model || null;
+
+                    // Periodically flush partial content to DB so it survives browser reloads
+                    maybeFlush();
 
                     // Track file-writing tool calls for verification + approval
                     const fileWriteTools = [
@@ -1233,33 +1273,15 @@ class ClaudeProcessManager {
               }
             }
 
-            // Save assistant message to DB (skip if cancel handler already saved it)
+            // Final flush of assistant message to DB (skip if cancel handler already saved it)
             if (!cancelled && assistantContent && assistantContent.length > 0) {
               try {
-                const db = getDb();
-                const msgId = nanoid();
-                db.query(
-                  `
-                INSERT INTO messages (id, conversation_id, role, content, model, timestamp)
-                VALUES (?, ?, 'assistant', ?, ?, ?)
-              `,
-                ).run(
-                  msgId,
-                  session.conversationId,
-                  JSON.stringify(assistantContent),
-                  assistantModel,
-                  Date.now(),
-                );
-
-                db.query('UPDATE conversations SET updated_at = ? WHERE id = ?').run(
-                  Date.now(),
-                  session.conversationId,
-                );
+                flushAssistantContent();
 
                 // Extract <artifact> blocks from text content and store them
                 const artifactEvents = extractAndStoreArtifacts(
                   session.conversationId,
-                  msgId,
+                  assistantMsgId,
                   assistantContent,
                 );
                 for (const evt of artifactEvents) {
@@ -1287,31 +1309,10 @@ class ClaudeProcessManager {
             clearContentTimeout();
             clearInterval(pingInterval);
 
-            // Save any accumulated assistant content even on error/disconnect.
-            // This is critical for page reloads — the client drops the connection
-            // causing controller.enqueue to throw, but we still want to persist
-            // whatever content was already received from the CLI.
+            // Final flush on error/disconnect — the periodic flush may have already
+            // saved most of the content, this ensures the latest state is persisted.
             if (!cancelled && assistantContent && assistantContent.length > 0) {
-              try {
-                const db = getDb();
-                const msgId = nanoid();
-                db.query(
-                  `INSERT INTO messages (id, conversation_id, role, content, model, timestamp)
-                 VALUES (?, ?, 'assistant', ?, ?, ?)`,
-                ).run(
-                  msgId,
-                  session.conversationId,
-                  JSON.stringify(assistantContent),
-                  assistantModel,
-                  Date.now(),
-                );
-                db.query('UPDATE conversations SET updated_at = ? WHERE id = ?').run(
-                  Date.now(),
-                  session.conversationId,
-                );
-              } catch (dbErr) {
-                console.error('[claude] Failed to save assistant message on error:', dbErr);
-              }
+              flushAssistantContent();
             }
 
             if (!cancelled) {

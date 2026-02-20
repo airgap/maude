@@ -25,6 +25,9 @@ const { mockStreamStore, mockConversationStore, mockSend, mockCancel } = vi.hois
     reloadById: vi.fn().mockResolvedValue(undefined),
     setActive: vi.fn(),
     onActiveChange: vi.fn(),
+    setInflight: vi.fn(),
+    clearInflight: vi.fn(),
+    getInflight: vi.fn().mockReturnValue(undefined),
     active: {
       id: 'conv-1',
       model: 'claude-sonnet-4-5-20250929',
