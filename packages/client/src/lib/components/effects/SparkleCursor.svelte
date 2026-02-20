@@ -30,6 +30,7 @@
     let lastMoveX = 0;
     let lastMoveY = 0;
     let animId: number;
+    let isHoveringClickable = false;
 
     // Hide the system cursor globally
     document.documentElement.style.cursor = 'none';
@@ -86,8 +87,10 @@
     }
 
     function update() {
-      // Update main cursor position
-      cursorEl.style.transform = `translate(${mouseX}px, ${mouseY}px)`;
+      // Update main cursor position with scale for Wizard's Study when hovering clickable
+      const isStudyTheme = document.documentElement.getAttribute('data-hypertheme') === 'study';
+      const scale = isStudyTheme && isHoveringClickable ? 1.25 : 1;
+      cursorEl.style.transform = `translate(${mouseX}px, ${mouseY}px) scale(${scale})`;
 
       // Update trail sparkles
       for (let i = sparkles.length - 1; i >= 0; i--) {
@@ -118,6 +121,20 @@
     function onMouseMove(e: MouseEvent) {
       mouseX = e.clientX;
       mouseY = e.clientY;
+
+      // Check if hovering over a clickable element
+      const target = e.target as HTMLElement;
+      isHoveringClickable =
+        target?.tagName === 'BUTTON' ||
+        target?.tagName === 'A' ||
+        target?.tagName === 'SELECT' ||
+        target?.role === 'button' ||
+        target?.type === 'checkbox' ||
+        target?.type === 'radio' ||
+        target?.classList?.contains('clickable') ||
+        target?.closest(
+          'button, a, [role="button"], select, input[type="checkbox"], input[type="radio"], .clickable',
+        ) !== null;
 
       const dx = mouseX - lastMoveX;
       const dy = mouseY - lastMoveY;
@@ -191,6 +208,8 @@
     /* offset so the center of the main star is at the cursor tip */
     margin-left: -10px;
     margin-top: -10px;
+    /* anchor scale at the cursor point (center of main star) */
+    transform-origin: 10px 10px;
   }
 
   .star {

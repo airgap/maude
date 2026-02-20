@@ -47,7 +47,8 @@
         .get(tab.conversationId)
         .then((res) => {
           conversationStore.setActive(res.data);
-          if (!streamStore.isStreaming || streamStore.conversationId === tab.conversationId) {
+          // Only reset if not streaming, or if streaming to a different conversation
+          if (!streamStore.isStreaming || streamStore.conversationId !== tab.conversationId) {
             streamStore.reset();
           }
         })

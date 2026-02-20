@@ -358,14 +358,6 @@ function createStreamStore() {
                     }
                   }
                 }
-                // Set the follow-along scroll target *before* refreshing so that
-                // the CodeEditor can scroll after the content sync completes.
-                if (editLine) {
-                  editorStore.setFollowAlongTarget({
-                    filePath: event.filePath,
-                    line: editLine,
-                  });
-                }
                 // Open the file as a tab in the primary pane (standard tab split)
                 const filePath = event.filePath;
                 const fileName = filePath.split('/').pop() ?? filePath;
@@ -374,14 +366,24 @@ function createStreamStore() {
                   .read(filePath)
                   .then((res) => {
                     primaryPaneStore.openFileTab(filePath, res.data.content, language);
+                    // Refresh the file content first
+                    editorStore.refreshFile(filePath);
+                    primaryPaneStore.refreshFileTab(filePath);
+                    // Set the follow-along scroll target *after* refreshing so content is loaded
+                    if (editLine) {
+                      // Use a small delay to ensure the refresh completes
+                      setTimeout(() => {
+                        editorStore.setFollowAlongTarget({
+                          filePath: filePath,
+                          line: editLine,
+                        });
+                      }, 100);
+                    }
                   })
                   .catch(() => {
                     // File may not be readable — skip
                   });
               }
-              // Refresh both editor-pane tabs and primary-pane file tabs
-              editorStore.refreshFile(event.filePath);
-              primaryPaneStore.refreshFileTab(event.filePath);
             }
           }
 

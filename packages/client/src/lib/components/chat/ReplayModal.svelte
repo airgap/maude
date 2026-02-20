@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount, onDestroy } from 'svelte';
+  import { onMount, onDestroy, untrack } from 'svelte';
   import { api } from '$lib/api/client';
 
   let { conversationId, onClose } = $props<{
@@ -35,10 +35,10 @@
   let currentEventIndex = $state(0);
   let playing = $state(false);
   let speed = $state(1);
-  let intervalId: ReturnType<typeof setInterval> | null = null;
+  let timeoutId: ReturnType<typeof setTimeout> | null = null;
   let eventListEl = $state<HTMLDivElement | null>(null);
 
-  const EVENT_BASE_DELAY = 200; // ms per event at 1x speed
+  const EVENT_BASE_DELAY = 200; // Fallback delay if event.delay is missing or 0
 
   const TYPE_ICON_PATHS: Record<string, string> = {
     narration: 'M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z',
@@ -91,23 +91,35 @@
   function startPlayback() {
     if (!timeline || timeline.events.length === 0) return;
     playing = true;
-    const delay = Math.round(EVENT_BASE_DELAY / speed);
-    intervalId = setInterval(() => {
+    scheduleNextEvent();
+  }
+
+  function scheduleNextEvent() {
+    if (!timeline || currentEventIndex >= timeline.events.length - 1) {
+      stopPlayback();
+      return;
+    }
+
+    // Get the delay for the next event, or use base delay as fallback
+    const nextEvent = timeline.events[currentEventIndex + 1];
+    const eventDelay = nextEvent?.delay || EVENT_BASE_DELAY;
+    const scaledDelay = Math.round(eventDelay / speed);
+
+    timeoutId = setTimeout(() => {
       if (!timeline) return;
-      if (currentEventIndex < timeline.events.length - 1) {
-        currentEventIndex++;
-        scrollEventIntoView(currentEventIndex);
-      } else {
-        stopPlayback();
+      currentEventIndex++;
+      scrollEventIntoView(currentEventIndex);
+      if (playing) {
+        scheduleNextEvent();
       }
-    }, delay);
+    }, scaledDelay);
   }
 
   function stopPlayback() {
     playing = false;
-    if (intervalId !== null) {
-      clearInterval(intervalId);
-      intervalId = null;
+    if (timeoutId !== null) {
+      clearTimeout(timeoutId);
+      timeoutId = null;
     }
   }
 
@@ -154,13 +166,17 @@
     return () => window.removeEventListener('keydown', handleKeydown);
   });
 
-  // When speed changes and we're playing, restart the interval
+  // When speed changes and we're playing, restart playback
   $effect(() => {
-    const _speed = speed;
-    if (playing) {
-      stopPlayback();
-      startPlayback();
-    }
+    speed; // Track speed changes
+    // Use untrack to check if playing without subscribing to it
+    untrack(() => {
+      if (timeoutId !== null) {
+        // If currently playing, restart with new speed
+        stopPlayback();
+        startPlayback();
+      }
+    });
   });
 
   let progressPercent = $derived(

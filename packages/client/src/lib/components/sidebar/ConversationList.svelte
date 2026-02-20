@@ -62,6 +62,9 @@
     try {
       const res = await api.conversations.get(id);
       conversationStore.setActive(res.data);
+      // Explicitly open the conversation tab (bypasses the "don't override file/diff" guard
+      // in PrimaryPane's reactive effect, which is meant for automatic updates, not user clicks)
+      primaryPaneStore.openConversation(res.data.id, res.data.title ?? 'Conversation');
       // Only reset stream state if there's no active stream, or the stream
       // belongs to the conversation we're switching TO (so UI syncs up).
       // If the stream is for a different conversation, leave it running —

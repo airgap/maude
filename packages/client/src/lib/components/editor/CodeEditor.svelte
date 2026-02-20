@@ -52,7 +52,7 @@
 
   let container: HTMLDivElement;
   let view: EditorView | null = null;
-  let currentTabId = '';
+  let currentTabId = tab.id;
   // Track whether the update is coming from our own sync (to prevent loops)
   let updatingFromStore = false;
 
@@ -300,22 +300,25 @@
   // (e.g. a Write that produces identical content, or the tab was just opened).
   $effect(() => {
     const faTarget = editorStore.followAlongTarget;
-    if (faTarget && faTarget.filePath === tab.filePath && view && currentTabId === tab.id) {
-      // Use requestAnimationFrame to let any pending content sync settle first
-      requestAnimationFrame(() => {
+    const editorView = view; // Explicitly track view as a dependency
+    const tabId = currentTabId; // Explicitly track currentTabId
+
+    if (faTarget && faTarget.filePath === tab.filePath && editorView && tabId === tab.id) {
+      // Use a small delay to ensure the editor view is fully initialized and content is loaded
+      setTimeout(() => {
         const target = editorStore.consumeFollowAlongTarget();
-        if (target && view) {
-          const lineCount = view.state.doc.lines;
+        if (target && editorView && editorView.state.doc.lines > 0) {
+          const lineCount = editorView.state.doc.lines;
           const targetLine = Math.min(target.line, lineCount);
           if (targetLine >= 1) {
-            const docLine = view.state.doc.line(targetLine);
-            view.dispatch({
+            const docLine = editorView.state.doc.line(targetLine);
+            editorView.dispatch({
               selection: { anchor: docLine.from },
               scrollIntoView: true,
             });
           }
         }
-      });
+      }, 50);
     }
   });
 

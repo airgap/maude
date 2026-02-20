@@ -70,15 +70,20 @@
             <p>Type <code>/</code> in the chat input to open the slash command menu. Available commands:</p>
             <ul>
               <li><code>/clear</code> — Clear the current conversation</li>
-              <li><code>/new</code> — Start a new conversation</li>
-              <li><code>/plan</code> — Toggle plan mode (Claude thinks before acting)</li>
-              <li><code>/teach</code> — Toggle Teach Me mode (Socratic responses)</li>
-              <li><code>/fork</code> — Branch the conversation at this point</li>
-              <li><code>/replay</code> — Open session replay for the current conversation</li>
-              <li><code>/digest</code> — Show today's digest</li>
-              <li><code>/cost</code> — Jump to the cost dashboard</li>
+              <li><code>/plan</code> — Toggle plan mode (AI creates a plan before executing)</li>
+              <li><code>/help</code> — Show list of available commands</li>
+              <li><code>/memory</code> — Open the Memory panel</li>
+              <li><code>/config</code> — Open settings</li>
+              <li><code>/model [name]</code> — Switch AI model (opus, sonnet, haiku)</li>
+              <li><code>/theme [name]</code> — Change theme</li>
+              <li><code>/cost</code> — Show token usage and estimated cost</li>
+              <li><code>/status</code> — Display session information</li>
+              <li><code>/mcp</code> — Manage MCP servers</li>
+              <li><code>/work</code> — Open work panel for PRDs and tasks</li>
+              <li><code>/commit</code> — Create a git commit</li>
+              <li><code>/review-pr [number]</code> — Review a pull request</li>
             </ul>
-            <p>Slash commands can also be run from the <strong>Command Palette</strong> (<kbd>Ctrl+K</kbd>).</p>
+            <p>Type <code>/help</code> in the chat to see the full list. Commands can also be run from the <strong>Command Palette</strong> (<kbd>Ctrl+K</kbd>).</p>
           `,
         },
       ],
