@@ -13,6 +13,8 @@ export interface WorkspaceSettings {
   systemPrompt?: string;
   effort?: string;
   commentaryPersonality?: string;
+  commentaryMuted?: boolean;
+  commentaryVerbosity?: 'low' | 'medium' | 'high';
 }
 
 export interface WorkspaceSummary {
