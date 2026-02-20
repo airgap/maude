@@ -90,7 +90,16 @@ export type {
   RuleFile,
 } from './memory.js';
 
-export type { Workspace, WorkspaceSettings, WorkspaceSummary } from './projects.js';
+export type {
+  Workspace,
+  WorkspaceSettings,
+  WorkspaceSummary,
+  CommentaryPersonality,
+  CommentaryVerbosity,
+  CommentarySettings,
+} from './projects.js';
+
+export { DEFAULT_COMMENTARY_SETTINGS } from './projects.js';
 
 export type { EditorConfigProps } from './editorconfig.js';
 

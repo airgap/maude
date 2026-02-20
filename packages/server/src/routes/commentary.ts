@@ -1,20 +1,21 @@
 import { Hono } from 'hono';
-import {
-  commentatorService,
-  type CommentaryPersonality,
-  PERSONALITY_PROMPTS,
-} from '../services/commentator';
+import { commentatorService, PERSONALITY_PROMPTS } from '../services/commentator';
 import { eventBridge } from '../services/event-bridge';
 import { getDb } from '../db/database';
-import type { StreamCommentary } from '@e/shared';
+import type {
+  StreamCommentary,
+  CommentaryPersonality,
+  CommentaryVerbosity,
+  CommentarySettings,
+} from '@e/shared';
+import { DEFAULT_COMMENTARY_SETTINGS } from '@e/shared';
 
 const app = new Hono();
 
 /** All valid personality values (used for query-param validation). */
 const VALID_PERSONALITIES = Object.keys(PERSONALITY_PROMPTS) as CommentaryPersonality[];
-const FALLBACK_PERSONALITY: CommentaryPersonality = 'sports_announcer';
 
-/** Read the user's preferred commentary personality from settings, if any. */
+/** Read the user's preferred commentary personality from global settings, if any. */
 function getUserPreferredPersonality(): CommentaryPersonality | undefined {
   try {
     const db = getDb();
@@ -33,8 +34,13 @@ function getUserPreferredPersonality(): CommentaryPersonality | undefined {
   return undefined;
 }
 
-/** Read verbosity setting for a workspace from the database. */
-function getWorkspaceVerbosity(workspaceId: string): 'low' | 'medium' | 'high' {
+/**
+ * Resolve the full commentary settings for a workspace.
+ * Reads from the workspace's JSON settings column and applies defaults.
+ *
+ * Defaults: enabled=false, personality='technical_analyst', verbosity='medium'
+ */
+function getWorkspaceCommentarySettings(workspaceId: string): CommentarySettings {
   try {
     const db = getDb();
     const row = db.query('SELECT settings FROM workspaces WHERE id = ?').get(workspaceId) as {
@@ -42,16 +48,137 @@ function getWorkspaceVerbosity(workspaceId: string): 'low' | 'medium' | 'high' {
     } | null;
     if (row && row.settings) {
       const settings = JSON.parse(row.settings);
-      const verbosity = settings.commentaryVerbosity;
-      if (verbosity === 'low' || verbosity === 'medium' || verbosity === 'high') {
-        return verbosity;
-      }
+      return {
+        enabled:
+          settings.commentaryEnabled !== undefined
+            ? Boolean(settings.commentaryEnabled)
+            : DEFAULT_COMMENTARY_SETTINGS.enabled,
+        personality:
+          settings.commentaryPersonality &&
+          VALID_PERSONALITIES.includes(settings.commentaryPersonality)
+            ? (settings.commentaryPersonality as CommentaryPersonality)
+            : DEFAULT_COMMENTARY_SETTINGS.personality,
+        verbosity:
+          settings.commentaryVerbosity &&
+          ['low', 'medium', 'high'].includes(settings.commentaryVerbosity)
+            ? (settings.commentaryVerbosity as CommentaryVerbosity)
+            : DEFAULT_COMMENTARY_SETTINGS.verbosity,
+      };
     }
   } catch {
     /* DB unavailable or parse error — fall through */
   }
-  return 'medium'; // Default to medium (strategic mode)
+  return { ...DEFAULT_COMMENTARY_SETTINGS };
 }
+
+// ---------------------------------------------------------------------------
+// Commentary Settings Endpoints
+// ---------------------------------------------------------------------------
+
+/**
+ * GET /commentary/:workspaceId/settings — Get commentary preferences for a workspace.
+ *
+ * Returns the resolved commentary settings with defaults applied:
+ *   { ok: true, data: { enabled: bool, personality: string, verbosity: string } }
+ */
+app.get('/:workspaceId/settings', (c) => {
+  const workspaceId = c.req.param('workspaceId');
+
+  try {
+    // Verify workspace exists
+    const db = getDb();
+    const workspace = db.query('SELECT id FROM workspaces WHERE id = ?').get(workspaceId) as any;
+    if (!workspace) {
+      return c.json({ ok: false, error: 'Workspace not found' }, 404);
+    }
+
+    const commentarySettings = getWorkspaceCommentarySettings(workspaceId);
+    return c.json({ ok: true, data: commentarySettings });
+  } catch (err) {
+    console.error('[commentary] Failed to get settings:', err);
+    return c.json({ ok: false, error: 'Failed to get commentary settings' }, 500);
+  }
+});
+
+/**
+ * PUT /commentary/:workspaceId/settings — Set commentary preferences for a workspace.
+ *
+ * Accepts a JSON body with any subset of: { enabled, personality, verbosity }
+ * Merges with existing workspace settings. Returns the updated commentary settings.
+ */
+app.put('/:workspaceId/settings', async (c) => {
+  const workspaceId = c.req.param('workspaceId');
+
+  try {
+    const body = await c.req.json();
+    const db = getDb();
+
+    // Verify workspace exists
+    const workspace = db
+      .query('SELECT id, settings FROM workspaces WHERE id = ?')
+      .get(workspaceId) as any;
+    if (!workspace) {
+      return c.json({ ok: false, error: 'Workspace not found' }, 404);
+    }
+
+    // Build the settings update
+    const settingsUpdate: Record<string, unknown> = {};
+
+    if (body.enabled !== undefined) {
+      settingsUpdate.commentaryEnabled = Boolean(body.enabled);
+    }
+
+    if (body.personality !== undefined) {
+      if (!VALID_PERSONALITIES.includes(body.personality as CommentaryPersonality)) {
+        return c.json(
+          {
+            ok: false,
+            error: `Invalid personality. Valid values: ${VALID_PERSONALITIES.join(', ')}`,
+          },
+          400,
+        );
+      }
+      settingsUpdate.commentaryPersonality = body.personality;
+    }
+
+    if (body.verbosity !== undefined) {
+      if (!['low', 'medium', 'high'].includes(body.verbosity)) {
+        return c.json(
+          { ok: false, error: 'Invalid verbosity. Valid values: low, medium, high' },
+          400,
+        );
+      }
+      settingsUpdate.commentaryVerbosity = body.verbosity;
+    }
+
+    if (Object.keys(settingsUpdate).length === 0) {
+      // No updates provided — return current settings
+      const current = getWorkspaceCommentarySettings(workspaceId);
+      return c.json({ ok: true, data: current });
+    }
+
+    // Merge with existing settings
+    const existingSettings = workspace.settings ? JSON.parse(workspace.settings) : {};
+    const mergedSettings = { ...existingSettings, ...settingsUpdate };
+
+    db.query('UPDATE workspaces SET settings = ? WHERE id = ?').run(
+      JSON.stringify(mergedSettings),
+      workspaceId,
+    );
+
+    // Return the updated commentary settings
+    const updatedSettings = getWorkspaceCommentarySettings(workspaceId);
+    return c.json({ ok: true, data: updatedSettings });
+  } catch (err) {
+    console.error('[commentary] Failed to update settings:', err);
+    return c.json({ ok: false, error: 'Failed to update commentary settings' }, 500);
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Commentary History Endpoints
+// ---------------------------------------------------------------------------
+
 /**
  * GET /commentary/conversation/:conversationId — Fetch commentary for a conversation.
  *
@@ -154,40 +281,50 @@ app.delete('/:workspaceId/history', (c) => {
   }
 });
 
+// ---------------------------------------------------------------------------
+// SSE Commentary Stream
+// ---------------------------------------------------------------------------
+
 /**
  * GET /commentary/:workspaceId — SSE stream of commentary events.
  *
  * Query params:
  *   personality — one of CommentaryPersonality values
- *                 (defaults to user preference, then falls back to sports_announcer)
+ *                 (defaults to workspace setting → user preference → technical_analyst)
  *   conversationId — optional conversation ID to link commentary to
  *
  * The endpoint starts the commentator for the given workspace when the client
  * connects and stops it when the client disconnects.
+ *
+ * If the workspace has commentary disabled (commentaryEnabled=false), the stream
+ * still connects but the commentator will not be started until commentary is enabled.
  */
 app.get('/:workspaceId', (c) => {
   const workspaceId = c.req.param('workspaceId');
 
-  // Resolve personality: query param → user preference → fallback
+  // Resolve commentary settings for this workspace
+  const commentarySettings = getWorkspaceCommentarySettings(workspaceId);
+
+  // Resolve personality: query param → workspace setting → user preference → default
   const rawPersonality = c.req.query('personality');
   let personality: CommentaryPersonality;
   if (rawPersonality && VALID_PERSONALITIES.includes(rawPersonality as CommentaryPersonality)) {
     personality = rawPersonality as CommentaryPersonality;
   } else {
-    personality = getUserPreferredPersonality() ?? FALLBACK_PERSONALITY;
+    personality =
+      commentarySettings.personality ??
+      getUserPreferredPersonality() ??
+      DEFAULT_COMMENTARY_SETTINGS.personality;
   }
 
   // Get optional conversation ID
   const conversationId = c.req.query('conversationId') || undefined;
 
-  // Get verbosity setting from workspace configuration
-
-  // Start (or restart) commentary for this workspace
-  commentatorService.startCommentary(workspaceId, personality, conversationId);
-
-  // Subscribe this workspace to the event bridge so stream events are
-  // automatically mirrored to the commentator (AC 1, 4)
-  eventBridge.subscribe(workspaceId);
+  // Only start the commentator if commentary is enabled for this workspace
+  if (commentarySettings.enabled) {
+    commentatorService.startCommentary(workspaceId, personality, conversationId);
+    eventBridge.subscribe(workspaceId);
+  }
 
   const encoder = new TextEncoder();
 
@@ -215,7 +352,6 @@ app.get('/:workspaceId', (c) => {
       }, 15000);
 
       // Clean up on client disconnect — stop the commentator and unsubscribe
-      // from the event bridge for this workspace (AC 4: dynamic unsubscribe)
       c.req.raw.signal.addEventListener('abort', () => {
         commentatorService.events.off('commentary', handler);
         clearInterval(pingInterval);

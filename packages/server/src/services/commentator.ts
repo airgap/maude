@@ -10,23 +10,17 @@
 import { EventEmitter } from 'events';
 import { callLlm as defaultCallLlm } from './llm-oneshot';
 import type { CallLlmOptions } from './llm-oneshot';
-import type { StreamEvent, StreamCommentary } from '@e/shared';
+import type {
+  StreamEvent,
+  StreamCommentary,
+  CommentaryPersonality,
+  CommentaryVerbosity,
+} from '@e/shared';
 import { getDb } from '../db/database';
 import { nanoid } from 'nanoid';
 
-// ---------------------------------------------------------------------------
-// Personality system
-// ---------------------------------------------------------------------------
-
-export type CommentaryPersonality =
-  | 'sports_announcer'
-  | 'documentary_narrator'
-  | 'technical_analyst'
-  | 'comedic_observer'
-  | 'project_lead'
-  | 'wizard';
-
-export type CommentaryVerbosity = 'low' | 'medium' | 'high';
+// Re-export shared types for backward compatibility
+export type { CommentaryPersonality, CommentaryVerbosity };
 
 export const PERSONALITY_PROMPTS: Record<CommentaryPersonality, string> = {
   sports_announcer: `You are a fast-paced, energetic sports announcer providing play-by-play commentary on an AI coding agent's work. Use 3rd person. Be exciting and dramatic. Use short, punchy sentences. Reference specific actions (file reads, edits, tool calls) like they're strategic plays. Treat tool invocations as power moves, errors as fumbles, and successful completions as touchdowns. Keep each commentary to 1-3 sentences maximum.
