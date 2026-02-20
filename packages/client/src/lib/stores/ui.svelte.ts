@@ -19,7 +19,8 @@ export type SidebarTab =
   | 'git'
   | 'artifacts'
   | 'notes'
-  | 'manager';
+  | 'manager'
+  | 'commentary';
 type ModalId =
   | 'settings'
   | 'command-palette'

@@ -102,6 +102,11 @@ export const SIDEBAR_TABS: TabDefinition[] = [
     label: 'Manager',
     icon: 'M3 3h18v4H3zM3 10h18v4H3zM3 17h18v4H3zM7 5v14M17 5v14',
   },
+  {
+    id: 'commentary',
+    label: 'Commentary',
+    icon: 'M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3zM19 10v2a7 7 0 0 1-14 0v-2M12 19v4M8 23h8',
+  },
 ];
 
 export function getTabDef(id: SidebarTab): TabDefinition {

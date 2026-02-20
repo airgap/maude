@@ -12,6 +12,7 @@ export interface WorkspaceSettings {
   defaultPermissionMode?: string;
   systemPrompt?: string;
   effort?: string;
+  commentaryPersonality?: string;
 }
 
 export interface WorkspaceSummary {

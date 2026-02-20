@@ -76,8 +76,15 @@ app.patch('/:id', async (c) => {
     values.push(body.name);
   }
   if (body.settings !== undefined) {
+    // Merge settings with existing settings instead of replacing
+    const workspace = db.query('SELECT settings FROM workspaces WHERE id = ?').get(id) as any;
+    if (!workspace) return c.json({ ok: false, error: 'Workspace not found' }, 404);
+
+    const existingSettings = workspace.settings ? JSON.parse(workspace.settings) : {};
+    const mergedSettings = { ...existingSettings, ...body.settings };
+
     sets.push('settings = ?');
-    values.push(JSON.stringify(body.settings));
+    values.push(JSON.stringify(mergedSettings));
   }
   if (sets.length === 0) return c.json({ ok: true });
 
