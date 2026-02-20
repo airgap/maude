@@ -32,6 +32,7 @@ export type {
   StreamVerificationResult,
   StreamArtifactCreated,
   StreamAgentNoteCreated,
+  StreamCommentary,
 } from './streaming.js';
 
 export type {

@@ -129,8 +129,8 @@
         target?.tagName === 'A' ||
         target?.tagName === 'SELECT' ||
         target?.role === 'button' ||
-        target?.type === 'checkbox' ||
-        target?.type === 'radio' ||
+        (target as HTMLInputElement)?.type === 'checkbox' ||
+        (target as HTMLInputElement)?.type === 'radio' ||
         target?.classList?.contains('clickable') ||
         target?.closest(
           'button, a, [role="button"], select, input[type="checkbox"], input[type="radio"], .clickable',

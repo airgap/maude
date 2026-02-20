@@ -25,7 +25,8 @@ export type StreamEvent =
   | StreamContextWarning
   | StreamCompactBoundary
   | StreamArtifactCreated
-  | StreamAgentNoteCreated;
+  | StreamAgentNoteCreated
+  | StreamCommentary;
 
 export interface StreamMessageStart {
   type: 'message_start';
@@ -210,4 +211,16 @@ export interface StreamArtifactCreated {
 export interface StreamAgentNoteCreated {
   type: 'agent_note_created';
   note: AgentNote;
+}
+
+/**
+ * Emitted as color-commentary during agent work — personality-flavored
+ * observations about what the agent is doing, intended for ambient display.
+ */
+export interface StreamCommentary {
+  type: 'commentary';
+  text: string;
+  timestamp: number;
+  personality: string;
+  workspaceId: string;
 }
