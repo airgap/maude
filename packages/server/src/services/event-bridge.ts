@@ -6,6 +6,7 @@
  *   1. Never slow down the primary stream (all forwarding is fire-and-forget).
  *   2. Support dynamic subscribe/unsubscribe for multiple concurrent workspaces.
  *   3. Resolve workspace filesystem paths to database IDs with caching.
+ *   4. Reference-counted subscriptions so multiple SSE clients per workspace work correctly.
  *
  * Usage:
  *   - Commentary route calls `subscribe(workspaceId)` on connect, `unsubscribe` on disconnect.
@@ -38,8 +39,13 @@ const BRIDGED_EVENT_TYPES = new Set<string>([
 ]);
 
 export class EventBridge {
-  /** Workspace IDs that have active commentary subscriptions. */
-  private subscriptions = new Set<string>();
+  /**
+   * Reference-counted workspace subscriptions. Each SSE client that connects
+   * increments the count; when the last client disconnects, the workspace is
+   * fully unsubscribed. This prevents premature unsubscription when multiple
+   * clients monitor the same workspace (e.g. commentary panel + Manager View).
+   */
+  private subscriptionRefs = new Map<string, number>();
 
   /** Cache: workspace filesystem path → database workspace ID. */
   private pathToIdCache = new Map<string, string>();
@@ -51,36 +57,91 @@ export class EventBridge {
   // Subscription management (AC 4: dynamic subscribe/unsubscribe)
   // ---------------------------------------------------------------------------
 
-  /** Subscribe a workspace to receive bridged stream events. */
-  subscribe(workspaceId: string): void {
-    this.subscriptions.add(workspaceId);
+  /**
+   * Subscribe a workspace to receive bridged stream events.
+   * Reference-counted — multiple clients can subscribe to the same workspace.
+   * Returns the new reference count.
+   */
+  subscribe(workspaceId: string): number {
+    const current = this.subscriptionRefs.get(workspaceId) ?? 0;
+    const next = current + 1;
+    this.subscriptionRefs.set(workspaceId, next);
     console.log(
-      `[event-bridge] Subscribed workspace ${workspaceId} (${this.subscriptions.size} active)`,
+      `[event-bridge] Subscribed workspace ${workspaceId} (refs: ${next}, workspaces: ${this.subscriptionRefs.size})`,
     );
+    return next;
   }
 
-  /** Unsubscribe a workspace from bridged stream events. */
-  unsubscribe(workspaceId: string): void {
-    this.subscriptions.delete(workspaceId);
-    // Also evict any cached conversationId mappings pointing to this workspace
+  /**
+   * Unsubscribe a workspace from bridged stream events.
+   * Decrements the reference count; only fully removes the subscription when
+   * the last client disconnects (count reaches 0).
+   * Returns the remaining reference count.
+   */
+  unsubscribe(workspaceId: string): number {
+    const current = this.subscriptionRefs.get(workspaceId) ?? 0;
+    const next = Math.max(0, current - 1);
+    if (next === 0) {
+      this.subscriptionRefs.delete(workspaceId);
+      // Evict cached conversationId mappings pointing to this workspace
+      for (const [convId, wsId] of this.convToWorkspaceCache) {
+        if (wsId === workspaceId) {
+          this.convToWorkspaceCache.delete(convId);
+        }
+      }
+    } else {
+      this.subscriptionRefs.set(workspaceId, next);
+    }
+    console.log(
+      `[event-bridge] Unsubscribed workspace ${workspaceId} (refs: ${next}, workspaces: ${this.subscriptionRefs.size})`,
+    );
+    return next;
+  }
+
+  /**
+   * Force-unsubscribe a workspace, ignoring reference counts.
+   * Used for administrative cleanup (workspace deleted, commentary disabled).
+   */
+  forceUnsubscribe(workspaceId: string): void {
+    this.subscriptionRefs.delete(workspaceId);
     for (const [convId, wsId] of this.convToWorkspaceCache) {
       if (wsId === workspaceId) {
         this.convToWorkspaceCache.delete(convId);
       }
     }
-    console.log(
-      `[event-bridge] Unsubscribed workspace ${workspaceId} (${this.subscriptions.size} active)`,
-    );
+    console.log(`[event-bridge] Force-unsubscribed workspace ${workspaceId}`);
+  }
+
+  /**
+   * Unsubscribe all workspaces. Use for server shutdown or bulk cleanup.
+   * Returns the number of workspaces that were unsubscribed.
+   */
+  unsubscribeAll(): number {
+    const count = this.subscriptionRefs.size;
+    this.subscriptionRefs.clear();
+    this.convToWorkspaceCache.clear();
+    console.log(`[event-bridge] Unsubscribed all workspaces (${count} total)`);
+    return count;
   }
 
   /** Check whether a workspace is currently subscribed. */
   isSubscribed(workspaceId: string): boolean {
-    return this.subscriptions.has(workspaceId);
+    return this.subscriptionRefs.has(workspaceId);
   }
 
-  /** Return the number of active subscriptions. */
+  /** Get the reference count for a specific workspace subscription. */
+  getSubscriptionRefCount(workspaceId: string): number {
+    return this.subscriptionRefs.get(workspaceId) ?? 0;
+  }
+
+  /** Return the number of active workspace subscriptions (unique workspaces). */
   get subscriberCount(): number {
-    return this.subscriptions.size;
+    return this.subscriptionRefs.size;
+  }
+
+  /** Return all currently subscribed workspace IDs. */
+  getSubscribedWorkspaces(): string[] {
+    return [...this.subscriptionRefs.keys()];
   }
 
   // ---------------------------------------------------------------------------
@@ -163,7 +224,7 @@ export class EventBridge {
   emit(workspacePath: string, event: StreamEvent): void {
     try {
       // Fast path: skip if no subscriptions at all
-      if (this.subscriptions.size === 0) return;
+      if (this.subscriptionRefs.size === 0) return;
 
       // Skip event types that don't carry useful signal for commentary
       if (!BRIDGED_EVENT_TYPES.has(event.type)) return;
@@ -172,7 +233,7 @@ export class EventBridge {
       if (!workspaceId) return;
 
       // Only forward if this workspace is subscribed AND has an active commentator
-      if (!this.subscriptions.has(workspaceId)) return;
+      if (!this.subscriptionRefs.has(workspaceId)) return;
       if (!commentatorService.isActive(workspaceId)) return;
 
       commentatorService.pushEvent(workspaceId, event);
@@ -187,13 +248,13 @@ export class EventBridge {
    */
   emitByConversation(conversationId: string, event: StreamEvent): void {
     try {
-      if (this.subscriptions.size === 0) return;
+      if (this.subscriptionRefs.size === 0) return;
       if (!BRIDGED_EVENT_TYPES.has(event.type)) return;
 
       const workspaceId = this.resolveWorkspaceIdFromConversation(conversationId);
       if (!workspaceId) return;
 
-      if (!this.subscriptions.has(workspaceId)) return;
+      if (!this.subscriptionRefs.has(workspaceId)) return;
       if (!commentatorService.isActive(workspaceId)) return;
 
       commentatorService.pushEvent(workspaceId, event);
@@ -213,7 +274,7 @@ export class EventBridge {
   emitRaw(workspacePath: string, sseData: string): void {
     try {
       // Fast path: skip if no subscriptions
-      if (this.subscriptions.size === 0) return;
+      if (this.subscriptionRefs.size === 0) return;
 
       // Strip SSE framing: "data: {...}\n\n" → "{...}"
       let json = sseData;

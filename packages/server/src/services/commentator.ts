@@ -5,6 +5,10 @@
  * Each workspace can have its own active commentator with a distinct personality.
  * Commentary is emitted as StreamCommentary events via EventEmitter so that route
  * handlers can forward them to clients via SSE.
+ *
+ * Supports multiple concurrent commentators with reference counting for SSE clients.
+ * When multiple clients connect to the same workspace's commentary, the commentator
+ * stays alive until the last client disconnects.
  */
 
 import { EventEmitter } from 'events';
@@ -376,21 +380,42 @@ export class CommentatorService {
   private commentators = new Map<string, WorkspaceCommentator>();
   private callLlm: LlmCaller;
 
+  /**
+   * Reference counts for each workspace — tracks how many SSE clients are
+   * connected to a workspace's commentary stream. The commentator is only
+   * stopped when the last client disconnects (refCount drops to 0).
+   */
+  private refCounts = new Map<string, number>();
+
   constructor(callLlmFn?: LlmCaller) {
     this.callLlm = callLlmFn ?? defaultCallLlm;
   }
 
   /**
-   * Start (or restart) commentary for a workspace.
-   * If commentary is already active for the workspace, it is stopped first.
+   * Start commentary for a workspace. Idempotent if the same personality is
+   * already active — won't restart the commentator or lose buffered events.
+   * If a different personality is requested, the existing commentator is
+   * force-stopped and a new one created.
    */
   startCommentary(
     workspaceId: string,
     personality: CommentaryPersonality,
     conversationId?: string,
   ): void {
-    // Stop existing commentator if any
-    this.stopCommentary(workspaceId);
+    const existing = this.commentators.get(workspaceId);
+
+    // If already running with the same personality, just update conversationId if needed
+    if (existing && existing.active && existing.personality === personality) {
+      if (conversationId && existing.conversationId !== conversationId) {
+        existing.conversationId = conversationId;
+      }
+      return;
+    }
+
+    // Stop existing commentator if personality changed
+    if (existing) {
+      this.forceStopCommentary(workspaceId);
+    }
 
     const commentator: WorkspaceCommentator = {
       personality,
@@ -406,10 +431,63 @@ export class CommentatorService {
     console.log(`[commentator] Started ${personality} commentary for workspace ${workspaceId}`);
   }
 
-  /** Stop commentary for a workspace and clean up timers. */
-  stopCommentary(workspaceId: string): void {
+  /**
+   * Acquire a reference for a workspace. Call this when an SSE client connects.
+   * Returns the current ref count after incrementing.
+   */
+  acquireRef(workspaceId: string): number {
+    const current = this.refCounts.get(workspaceId) ?? 0;
+    const next = current + 1;
+    this.refCounts.set(workspaceId, next);
+    console.log(`[commentator] Ref acquired for ${workspaceId} (count: ${next})`);
+    return next;
+  }
+
+  /**
+   * Release a reference for a workspace. Call this when an SSE client disconnects.
+   * Returns the remaining ref count. When it reaches 0, the commentator should be stopped.
+   */
+  releaseRef(workspaceId: string): number {
+    const current = this.refCounts.get(workspaceId) ?? 0;
+    const next = Math.max(0, current - 1);
+    if (next === 0) {
+      this.refCounts.delete(workspaceId);
+    } else {
+      this.refCounts.set(workspaceId, next);
+    }
+    console.log(`[commentator] Ref released for ${workspaceId} (count: ${next})`);
+    return next;
+  }
+
+  /** Get the current reference count for a workspace. */
+  getRefCount(workspaceId: string): number {
+    return this.refCounts.get(workspaceId) ?? 0;
+  }
+
+  /**
+   * Stop commentary for a workspace only if no references remain.
+   * This is the safe way to stop — it respects reference counting.
+   * Returns true if the commentator was actually stopped.
+   */
+  stopCommentary(workspaceId: string): boolean {
+    const refCount = this.refCounts.get(workspaceId) ?? 0;
+    if (refCount > 0) {
+      console.log(
+        `[commentator] Skipping stop for ${workspaceId} — ${refCount} client(s) still connected`,
+      );
+      return false;
+    }
+    return this.forceStopCommentary(workspaceId);
+  }
+
+  /**
+   * Unconditionally stop commentary for a workspace, ignoring reference counts.
+   * Use this for administrative cleanup (e.g., workspace deleted, commentary disabled).
+   * Returns true if a commentator was actually stopped.
+   */
+  forceStopCommentary(workspaceId: string): boolean {
     const commentator = this.commentators.get(workspaceId);
-    if (!commentator) return;
+    if (!commentator) return false;
 
     commentator.active = false;
     if (commentator.batchTimer) {
@@ -417,7 +495,25 @@ export class CommentatorService {
       commentator.batchTimer = null;
     }
     this.commentators.delete(workspaceId);
+    this.refCounts.delete(workspaceId);
     console.log(`[commentator] Stopped commentary for workspace ${workspaceId}`);
+    return true;
+  }
+
+  /**
+   * Stop all active commentators. Use for server shutdown or bulk cleanup.
+   * Returns the number of commentators that were stopped.
+   */
+  stopAll(): number {
+    const workspaceIds = [...this.commentators.keys()];
+    let count = 0;
+    for (const wsId of workspaceIds) {
+      if (this.forceStopCommentary(wsId)) {
+        count++;
+      }
+    }
+    console.log(`[commentator] Stopped all commentators (${count} total)`);
+    return count;
   }
 
   /** Whether commentary is active for a workspace. */
@@ -428,6 +524,46 @@ export class CommentatorService {
   /** Get the personality for an active commentator, or undefined. */
   getPersonality(workspaceId: string): CommentaryPersonality | undefined {
     return this.commentators.get(workspaceId)?.personality;
+  }
+
+  /** Get all workspace IDs with active commentators. */
+  getActiveWorkspaces(): string[] {
+    return [...this.commentators.keys()];
+  }
+
+  /** Get the number of active commentators. */
+  get activeCount(): number {
+    return this.commentators.size;
+  }
+
+  /**
+   * Get status information for all active commentators.
+   * Useful for the Manager View dashboard.
+   */
+  getStatus(): Array<{
+    workspaceId: string;
+    personality: CommentaryPersonality;
+    refCount: number;
+    generating: boolean;
+    bufferedEvents: number;
+  }> {
+    const result: Array<{
+      workspaceId: string;
+      personality: CommentaryPersonality;
+      refCount: number;
+      generating: boolean;
+      bufferedEvents: number;
+    }> = [];
+    for (const [wsId, c] of this.commentators) {
+      result.push({
+        workspaceId: wsId,
+        personality: c.personality,
+        refCount: this.refCounts.get(wsId) ?? 0,
+        generating: c.generating,
+        bufferedEvents: c.eventBuffer.length,
+      });
+    }
+    return result;
   }
 
   /**

@@ -62,14 +62,14 @@ describe('EventBridge — subscription management', () => {
     expect(bridge.isSubscribed('ws-1')).toBe(true);
   });
 
-  test('unsubscribe removes workspace from subscriptions', () => {
+  test('unsubscribe removes workspace when ref count reaches 0', () => {
     bridge.subscribe('ws-1');
     expect(bridge.isSubscribed('ws-1')).toBe(true);
     bridge.unsubscribe('ws-1');
     expect(bridge.isSubscribed('ws-1')).toBe(false);
   });
 
-  test('subscriberCount tracks active subscriptions', () => {
+  test('subscriberCount tracks unique workspace subscriptions', () => {
     expect(bridge.subscriberCount).toBe(0);
     bridge.subscribe('ws-1');
     expect(bridge.subscriberCount).toBe(1);
@@ -79,14 +79,45 @@ describe('EventBridge — subscription management', () => {
     expect(bridge.subscriberCount).toBe(1);
   });
 
-  test('duplicate subscribe is idempotent', () => {
+  test('subscribe is ref-counted — multiple calls increment count', () => {
     bridge.subscribe('ws-1');
     bridge.subscribe('ws-1');
+    // Still 1 unique workspace
     expect(bridge.subscriberCount).toBe(1);
+    // But ref count is 2
+    expect(bridge.getSubscriptionRefCount('ws-1')).toBe(2);
+  });
+
+  test('unsubscribe decrements ref count — does not remove until 0', () => {
+    bridge.subscribe('ws-1');
+    bridge.subscribe('ws-1');
+    expect(bridge.getSubscriptionRefCount('ws-1')).toBe(2);
+
+    bridge.unsubscribe('ws-1');
+    expect(bridge.isSubscribed('ws-1')).toBe(true);
+    expect(bridge.getSubscriptionRefCount('ws-1')).toBe(1);
+
+    bridge.unsubscribe('ws-1');
+    expect(bridge.isSubscribed('ws-1')).toBe(false);
+    expect(bridge.getSubscriptionRefCount('ws-1')).toBe(0);
+  });
+
+  test('subscribe returns new ref count', () => {
+    expect(bridge.subscribe('ws-1')).toBe(1);
+    expect(bridge.subscribe('ws-1')).toBe(2);
+    expect(bridge.subscribe('ws-2')).toBe(1);
+  });
+
+  test('unsubscribe returns remaining ref count', () => {
+    bridge.subscribe('ws-1');
+    bridge.subscribe('ws-1');
+    expect(bridge.unsubscribe('ws-1')).toBe(1);
+    expect(bridge.unsubscribe('ws-1')).toBe(0);
   });
 
   test('unsubscribe on non-existent workspace is safe', () => {
     expect(() => bridge.unsubscribe('nonexistent')).not.toThrow();
+    expect(bridge.unsubscribe('nonexistent')).toBe(0);
   });
 
   test('multiple concurrent subscriptions (multi-workspace)', () => {
@@ -97,6 +128,43 @@ describe('EventBridge — subscription management', () => {
     expect(bridge.isSubscribed('ws-2')).toBe(true);
     expect(bridge.isSubscribed('ws-3')).toBe(true);
     expect(bridge.subscriberCount).toBe(3);
+  });
+
+  test('forceUnsubscribe removes regardless of ref count', () => {
+    bridge.subscribe('ws-1');
+    bridge.subscribe('ws-1');
+    bridge.subscribe('ws-1');
+    expect(bridge.getSubscriptionRefCount('ws-1')).toBe(3);
+
+    bridge.forceUnsubscribe('ws-1');
+    expect(bridge.isSubscribed('ws-1')).toBe(false);
+    expect(bridge.getSubscriptionRefCount('ws-1')).toBe(0);
+  });
+
+  test('unsubscribeAll removes all subscriptions', () => {
+    bridge.subscribe('ws-1');
+    bridge.subscribe('ws-1');
+    bridge.subscribe('ws-2');
+    bridge.subscribe('ws-3');
+
+    const count = bridge.unsubscribeAll();
+    expect(count).toBe(3); // 3 unique workspaces
+    expect(bridge.subscriberCount).toBe(0);
+    expect(bridge.isSubscribed('ws-1')).toBe(false);
+    expect(bridge.isSubscribed('ws-2')).toBe(false);
+    expect(bridge.isSubscribed('ws-3')).toBe(false);
+  });
+
+  test('getSubscribedWorkspaces returns all active workspace IDs', () => {
+    bridge.subscribe('ws-1');
+    bridge.subscribe('ws-2');
+    bridge.subscribe('ws-3');
+
+    const workspaces = bridge.getSubscribedWorkspaces();
+    expect(workspaces).toContain('ws-1');
+    expect(workspaces).toContain('ws-2');
+    expect(workspaces).toContain('ws-3');
+    expect(workspaces.length).toBe(3);
   });
 });
 
@@ -120,8 +188,8 @@ describe('EventBridge — event emission', () => {
   });
 
   afterEach(() => {
-    commentator.stopCommentary('ws-1');
-    commentator.stopCommentary('ws-2');
+    commentator.forceStopCommentary('ws-1');
+    commentator.forceStopCommentary('ws-2');
   });
 
   test('emit skips when no subscriptions exist', () => {

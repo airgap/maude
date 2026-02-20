@@ -72,6 +72,36 @@ function getWorkspaceCommentarySettings(workspaceId: string): CommentarySettings
 }
 
 // ---------------------------------------------------------------------------
+// Commentary Status Endpoint (for multi-workspace monitoring)
+// ---------------------------------------------------------------------------
+
+/**
+ * GET /commentary/status — Get the status of all active commentators.
+ *
+ * Returns per-workspace status including personality, client count, and
+ * generation state. Useful for the Manager View dashboard.
+ */
+app.get('/status', (c) => {
+  try {
+    const commentators = commentatorService.getStatus();
+    const subscribedWorkspaces = eventBridge.getSubscribedWorkspaces();
+
+    return c.json({
+      ok: true,
+      data: {
+        activeCommentators: commentators,
+        subscribedWorkspaces,
+        totalActive: commentatorService.activeCount,
+        totalSubscribed: eventBridge.subscriberCount,
+      },
+    });
+  } catch (err) {
+    console.error('[commentary] Failed to get status:', err);
+    return c.json({ ok: false, error: 'Failed to get commentary status' }, 500);
+  }
+});
+
+// ---------------------------------------------------------------------------
 // Commentary Settings Endpoints
 // ---------------------------------------------------------------------------
 
@@ -105,6 +135,9 @@ app.get('/:workspaceId/settings', (c) => {
  *
  * Accepts a JSON body with any subset of: { enabled, personality, verbosity }
  * Merges with existing workspace settings. Returns the updated commentary settings.
+ *
+ * When commentary is disabled via settings, any active commentator for this workspace
+ * is force-stopped and the event bridge subscription is removed.
  */
 app.put('/:workspaceId/settings', async (c) => {
   const workspaceId = c.req.param('workspaceId');
@@ -165,6 +198,12 @@ app.put('/:workspaceId/settings', async (c) => {
       JSON.stringify(mergedSettings),
       workspaceId,
     );
+
+    // AC 5: If commentary was just disabled, force-stop and cleanup
+    if (settingsUpdate.commentaryEnabled === false) {
+      commentatorService.forceStopCommentary(workspaceId);
+      eventBridge.forceUnsubscribe(workspaceId);
+    }
 
     // Return the updated commentary settings
     const updatedSettings = getWorkspaceCommentarySettings(workspaceId);
@@ -296,6 +335,10 @@ app.delete('/:workspaceId/history', (c) => {
  * The endpoint starts the commentator for the given workspace when the client
  * connects and stops it when the client disconnects.
  *
+ * Uses reference counting so multiple SSE clients can connect to the same
+ * workspace without interfering with each other. The commentator stays alive
+ * until the last client disconnects.
+ *
  * If the workspace has commentary disabled (commentaryEnabled=false), the stream
  * still connects but the commentator will not be started until commentary is enabled.
  */
@@ -320,10 +363,18 @@ app.get('/:workspaceId', (c) => {
   // Get optional conversation ID
   const conversationId = c.req.query('conversationId') || undefined;
 
-  // Only start the commentator if commentary is enabled for this workspace
+  // Track whether this client acquired refs (only true if commentary is enabled).
+  // This prevents the disconnect handler from releasing refs that were never acquired.
+  let refsAcquired = false;
+
+  // Only start the commentator if commentary is enabled for this workspace.
+  // startCommentary is idempotent for the same personality — it won't restart
+  // or discard buffered events when another client is already connected.
   if (commentarySettings.enabled) {
     commentatorService.startCommentary(workspaceId, personality, conversationId);
+    commentatorService.acquireRef(workspaceId);
     eventBridge.subscribe(workspaceId);
+    refsAcquired = true;
   }
 
   const encoder = new TextEncoder();
@@ -331,6 +382,7 @@ app.get('/:workspaceId', (c) => {
   const stream = new ReadableStream({
     start(controller) {
       const handler = (commentary: StreamCommentary) => {
+        // AC 3: Only forward commentary for THIS workspace — no crosstalk
         if (commentary.workspaceId === workspaceId) {
           try {
             controller.enqueue(encoder.encode(`data: ${JSON.stringify(commentary)}\n\n`));
@@ -351,12 +403,22 @@ app.get('/:workspaceId', (c) => {
         }
       }, 15000);
 
-      // Clean up on client disconnect — stop the commentator and unsubscribe
+      // Clean up on client disconnect — ref-counted so multiple clients work
       c.req.raw.signal.addEventListener('abort', () => {
         commentatorService.events.off('commentary', handler);
         clearInterval(pingInterval);
-        eventBridge.unsubscribe(workspaceId);
-        commentatorService.stopCommentary(workspaceId);
+
+        // Only release refs if this client actually acquired them
+        if (refsAcquired) {
+          eventBridge.unsubscribe(workspaceId);
+          const remainingRefs = commentatorService.releaseRef(workspaceId);
+
+          // AC 5: Only stop the commentator when the last client disconnects
+          if (remainingRefs === 0) {
+            commentatorService.stopCommentary(workspaceId);
+          }
+        }
+
         try {
           controller.close();
         } catch {

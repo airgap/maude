@@ -1664,5 +1664,21 @@ export const api = {
         `/commentary/${encodeURIComponent(workspaceId)}/history`,
         { method: 'DELETE' },
       ),
+    getSettings: (workspaceId: string) =>
+      request<{
+        ok: boolean;
+        data: { enabled: boolean; personality: string; verbosity: string };
+      }>(`/commentary/${encodeURIComponent(workspaceId)}/settings`),
+    updateSettings: (
+      workspaceId: string,
+      settings: { enabled?: boolean; personality?: string; verbosity?: string },
+    ) =>
+      request<{
+        ok: boolean;
+        data: { enabled: boolean; personality: string; verbosity: string };
+      }>(`/commentary/${encodeURIComponent(workspaceId)}/settings`, {
+        method: 'PUT',
+        body: JSON.stringify(settings),
+      }),
   },
 };

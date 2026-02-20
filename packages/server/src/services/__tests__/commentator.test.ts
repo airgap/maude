@@ -260,8 +260,7 @@ describe('CommentatorService — lifecycle', () => {
   });
 
   afterEach(() => {
-    service.stopCommentary('ws-1');
-    service.stopCommentary('ws-2');
+    service.stopAll();
   });
 
   test('startCommentary makes the workspace active', () => {
@@ -271,22 +270,31 @@ describe('CommentatorService — lifecycle', () => {
     expect(service.getPersonality('ws-1')).toBe('sports_announcer');
   });
 
-  test('stopCommentary deactivates the workspace', () => {
+  test('forceStopCommentary deactivates the workspace', () => {
     service.startCommentary('ws-1', 'technical_analyst');
     expect(service.isActive('ws-1')).toBe(true);
-    service.stopCommentary('ws-1');
+    service.forceStopCommentary('ws-1');
     expect(service.isActive('ws-1')).toBe(false);
     expect(service.getPersonality('ws-1')).toBeUndefined();
   });
 
-  test('startCommentary replaces existing commentator', () => {
+  test('startCommentary is idempotent for same personality', () => {
+    service.startCommentary('ws-1', 'sports_announcer');
+    // Push an event to verify buffer is preserved
+    service.pushEvent('ws-1', makeMessageStart());
+    // Starting again with same personality should NOT restart
+    service.startCommentary('ws-1', 'sports_announcer');
+    expect(service.getPersonality('ws-1')).toBe('sports_announcer');
+  });
+
+  test('startCommentary replaces existing commentator when personality changes', () => {
     service.startCommentary('ws-1', 'sports_announcer');
     service.startCommentary('ws-1', 'comedic_observer');
     expect(service.getPersonality('ws-1')).toBe('comedic_observer');
   });
 
-  test('stopCommentary is safe for non-existent workspace', () => {
-    expect(() => service.stopCommentary('nonexistent')).not.toThrow();
+  test('forceStopCommentary is safe for non-existent workspace', () => {
+    expect(() => service.forceStopCommentary('nonexistent')).not.toThrow();
   });
 
   test('pushEvent ignores events for inactive workspaces', () => {
@@ -297,6 +305,171 @@ describe('CommentatorService — lifecycle', () => {
     service.startCommentary('ws-1', 'sports_announcer');
     service.pushEvent('ws-1', makePing());
     // No errors, ping is silently dropped
+  });
+});
+
+// ---------------------------------------------------------------------------
+// CommentatorService — reference counting
+// ---------------------------------------------------------------------------
+
+describe('CommentatorService — reference counting', () => {
+  let service: CommentatorService;
+  const mockLlm: LlmCaller = async () => 'mock response';
+
+  beforeEach(() => {
+    service = new CommentatorService(mockLlm);
+  });
+
+  afterEach(() => {
+    service.stopAll();
+  });
+
+  test('acquireRef increments ref count', () => {
+    expect(service.getRefCount('ws-1')).toBe(0);
+    expect(service.acquireRef('ws-1')).toBe(1);
+    expect(service.getRefCount('ws-1')).toBe(1);
+    expect(service.acquireRef('ws-1')).toBe(2);
+    expect(service.getRefCount('ws-1')).toBe(2);
+  });
+
+  test('releaseRef decrements ref count', () => {
+    service.acquireRef('ws-1');
+    service.acquireRef('ws-1');
+    expect(service.getRefCount('ws-1')).toBe(2);
+    expect(service.releaseRef('ws-1')).toBe(1);
+    expect(service.getRefCount('ws-1')).toBe(1);
+    expect(service.releaseRef('ws-1')).toBe(0);
+    expect(service.getRefCount('ws-1')).toBe(0);
+  });
+
+  test('releaseRef does not go below zero', () => {
+    expect(service.releaseRef('ws-1')).toBe(0);
+    expect(service.getRefCount('ws-1')).toBe(0);
+  });
+
+  test('stopCommentary respects ref counting — does not stop while refs remain', () => {
+    service.startCommentary('ws-1', 'sports_announcer');
+    service.acquireRef('ws-1');
+    service.acquireRef('ws-1');
+
+    // Should not stop because refCount > 0
+    const stopped = service.stopCommentary('ws-1');
+    expect(stopped).toBe(false);
+    expect(service.isActive('ws-1')).toBe(true);
+  });
+
+  test('stopCommentary stops when ref count is zero', () => {
+    service.startCommentary('ws-1', 'sports_announcer');
+    // No refs acquired → refCount is 0
+
+    const stopped = service.stopCommentary('ws-1');
+    expect(stopped).toBe(true);
+    expect(service.isActive('ws-1')).toBe(false);
+  });
+
+  test('stopCommentary stops after all refs released', () => {
+    service.startCommentary('ws-1', 'sports_announcer');
+    service.acquireRef('ws-1');
+    service.acquireRef('ws-1');
+
+    // Release both refs
+    service.releaseRef('ws-1');
+    service.releaseRef('ws-1');
+
+    // Now stopCommentary should work
+    const stopped = service.stopCommentary('ws-1');
+    expect(stopped).toBe(true);
+    expect(service.isActive('ws-1')).toBe(false);
+  });
+
+  test('forceStopCommentary ignores ref count', () => {
+    service.startCommentary('ws-1', 'sports_announcer');
+    service.acquireRef('ws-1');
+    service.acquireRef('ws-1');
+
+    const stopped = service.forceStopCommentary('ws-1');
+    expect(stopped).toBe(true);
+    expect(service.isActive('ws-1')).toBe(false);
+    // Ref counts should also be cleared
+    expect(service.getRefCount('ws-1')).toBe(0);
+  });
+
+  test('stopAll clears all commentators and ref counts', () => {
+    service.startCommentary('ws-1', 'sports_announcer');
+    service.startCommentary('ws-2', 'documentary_narrator');
+    service.startCommentary('ws-3', 'technical_analyst');
+    service.acquireRef('ws-1');
+    service.acquireRef('ws-2');
+
+    const count = service.stopAll();
+    expect(count).toBe(3);
+    expect(service.isActive('ws-1')).toBe(false);
+    expect(service.isActive('ws-2')).toBe(false);
+    expect(service.isActive('ws-3')).toBe(false);
+    expect(service.getRefCount('ws-1')).toBe(0);
+    expect(service.getRefCount('ws-2')).toBe(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// CommentatorService — multi-workspace status
+// ---------------------------------------------------------------------------
+
+describe('CommentatorService — status and listing', () => {
+  let service: CommentatorService;
+  const mockLlm: LlmCaller = async () => 'mock response';
+
+  beforeEach(() => {
+    service = new CommentatorService(mockLlm);
+  });
+
+  afterEach(() => {
+    service.stopAll();
+  });
+
+  test('getActiveWorkspaces returns all active workspace IDs', () => {
+    expect(service.getActiveWorkspaces()).toEqual([]);
+
+    service.startCommentary('ws-1', 'sports_announcer');
+    service.startCommentary('ws-2', 'documentary_narrator');
+
+    const active = service.getActiveWorkspaces();
+    expect(active).toContain('ws-1');
+    expect(active).toContain('ws-2');
+    expect(active.length).toBe(2);
+  });
+
+  test('activeCount tracks the number of active commentators', () => {
+    expect(service.activeCount).toBe(0);
+    service.startCommentary('ws-1', 'sports_announcer');
+    expect(service.activeCount).toBe(1);
+    service.startCommentary('ws-2', 'documentary_narrator');
+    expect(service.activeCount).toBe(2);
+    service.forceStopCommentary('ws-1');
+    expect(service.activeCount).toBe(1);
+  });
+
+  test('getStatus returns detailed info for all commentators', () => {
+    service.startCommentary('ws-1', 'sports_announcer');
+    service.startCommentary('ws-2', 'documentary_narrator');
+    service.acquireRef('ws-1');
+    service.acquireRef('ws-1');
+    service.acquireRef('ws-2');
+
+    const statuses = service.getStatus();
+    expect(statuses.length).toBe(2);
+
+    const ws1Status = statuses.find((s) => s.workspaceId === 'ws-1');
+    expect(ws1Status).toBeDefined();
+    expect(ws1Status!.personality).toBe('sports_announcer');
+    expect(ws1Status!.refCount).toBe(2);
+    expect(ws1Status!.generating).toBe(false);
+    expect(ws1Status!.bufferedEvents).toBe(0);
+
+    const ws2Status = statuses.find((s) => s.workspaceId === 'ws-2');
+    expect(ws2Status).toBeDefined();
+    expect(ws2Status!.personality).toBe('documentary_narrator');
+    expect(ws2Status!.refCount).toBe(1);
   });
 });
 
@@ -314,7 +487,7 @@ describe('CommentatorService — event batching', () => {
   });
 
   afterEach(() => {
-    service.stopCommentary('ws-1');
+    service.stopAll();
   });
 
   test('batches events and calls LLM after MIN_BATCH_MS', async () => {
@@ -460,7 +633,7 @@ describe('CommentatorService — event batching', () => {
     expect(pendingMock).toHaveBeenCalledTimes(1);
 
     // Stop commentary while LLM is in-flight
-    service.stopCommentary('ws-1');
+    service.forceStopCommentary('ws-1');
 
     // Resolve LLM call
     resolveLlm('Should not be emitted');
@@ -472,7 +645,7 @@ describe('CommentatorService — event batching', () => {
 });
 
 // ---------------------------------------------------------------------------
-// CommentatorService — multiple workspaces
+// CommentatorService — multiple workspaces (AC 1, 2, 3)
 // ---------------------------------------------------------------------------
 
 describe('CommentatorService — multiple workspaces', () => {
@@ -485,11 +658,10 @@ describe('CommentatorService — multiple workspaces', () => {
   });
 
   afterEach(() => {
-    service.stopCommentary('ws-1');
-    service.stopCommentary('ws-2');
+    service.stopAll();
   });
 
-  test('independent commentators for different workspaces', async () => {
+  test('AC 1+2: independent commentators with different personalities', async () => {
     const received: StreamCommentary[] = [];
     service.events.on('commentary', (evt: StreamCommentary) => {
       received.push(evt);
@@ -512,4 +684,77 @@ describe('CommentatorService — multiple workspaces', () => {
     expect(ws1Commentary?.personality).toBe('sports_announcer');
     expect(ws2Commentary?.personality).toBe('documentary_narrator');
   }, 10_000);
+
+  test('AC 3: events for one workspace do not affect another (no crosstalk)', async () => {
+    const received: StreamCommentary[] = [];
+    service.events.on('commentary', (evt: StreamCommentary) => {
+      received.push(evt);
+    });
+
+    service.startCommentary('ws-1', 'sports_announcer');
+    service.startCommentary('ws-2', 'documentary_narrator');
+
+    // Only push events to ws-1
+    service.pushEvent('ws-1', makeMessageStart());
+    service.pushEvent('ws-1', makeToolUseStart('Read'));
+
+    await new Promise((resolve) => setTimeout(resolve, MIN_BATCH_MS + 1_000));
+
+    // Only ws-1 should have generated commentary
+    expect(received.length).toBe(1);
+    expect(received[0].workspaceId).toBe('ws-1');
+    expect(received[0].personality).toBe('sports_announcer');
+  }, 10_000);
+
+  test('three simultaneous workspaces with different personalities', async () => {
+    const received: StreamCommentary[] = [];
+    service.events.on('commentary', (evt: StreamCommentary) => {
+      received.push(evt);
+    });
+
+    service.startCommentary('ws-1', 'sports_announcer');
+    service.startCommentary('ws-2', 'documentary_narrator');
+    service.startCommentary('ws-3', 'comedic_observer');
+
+    service.pushEvent('ws-1', makeMessageStart());
+    service.pushEvent('ws-2', makeToolUseStart('Edit'));
+    service.pushEvent('ws-3', makeToolResult('Bash', true));
+
+    await new Promise((resolve) => setTimeout(resolve, MIN_BATCH_MS + 1_000));
+
+    expect(mockCallLlm.mock.calls.length).toBe(3);
+    expect(received.length).toBe(3);
+
+    const personalities = received.map((c) => c.personality).sort();
+    expect(personalities).toEqual(['comedic_observer', 'documentary_narrator', 'sports_announcer']);
+  }, 10_000);
+
+  test('stopping one workspace does not affect others', () => {
+    service.startCommentary('ws-1', 'sports_announcer');
+    service.startCommentary('ws-2', 'documentary_narrator');
+    service.startCommentary('ws-3', 'technical_analyst');
+
+    service.forceStopCommentary('ws-2');
+
+    expect(service.isActive('ws-1')).toBe(true);
+    expect(service.isActive('ws-2')).toBe(false);
+    expect(service.isActive('ws-3')).toBe(true);
+    expect(service.activeCount).toBe(2);
+  });
+
+  test('ref counting works independently per workspace', () => {
+    service.startCommentary('ws-1', 'sports_announcer');
+    service.startCommentary('ws-2', 'documentary_narrator');
+
+    service.acquireRef('ws-1');
+    service.acquireRef('ws-1');
+    service.acquireRef('ws-2');
+
+    expect(service.getRefCount('ws-1')).toBe(2);
+    expect(service.getRefCount('ws-2')).toBe(1);
+
+    service.releaseRef('ws-1');
+    expect(service.getRefCount('ws-1')).toBe(1);
+    expect(service.getRefCount('ws-2')).toBe(1);
+  });
 });

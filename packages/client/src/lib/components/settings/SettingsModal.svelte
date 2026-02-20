@@ -13,11 +13,14 @@
     AgentProfile,
     AgentProfileCreateInput,
     ShellInfo,
+    CommentaryPersonality,
+    CommentaryVerbosity,
   } from '@e/shared';
   import { PERMISSION_PRESETS } from '@e/shared';
   import { profilesStore } from '$lib/stores/profiles.svelte';
   import { MONO_FONTS, SANS_FONTS, findFont } from '$lib/config/fonts';
   import { HYPERTHEMES } from '$lib/config/hyperthemes';
+  import { workspaceStore } from '$lib/stores/workspace.svelte';
 
   const cliProviders: { id: CliProvider; label: string; desc: string }[] = [
     { id: 'claude', label: 'Claude Code', desc: 'Anthropic Claude CLI' },
@@ -31,6 +34,7 @@
     | 'general'
     | 'appearance'
     | 'audio'
+    | 'commentary'
     | 'editor'
     | 'terminal'
     | 'permissions'
@@ -52,6 +56,7 @@
     | 'general'
     | 'appearance'
     | 'audio'
+    | 'commentary'
     | 'editor'
     | 'terminal'
     | 'permissions'
@@ -116,6 +121,115 @@
       uiStore.toast('Failed to save budget', 'error');
     }
     budgetLoading = false;
+  }
+
+  // --- Commentary settings state ---
+  const commentaryPersonalities: {
+    id: CommentaryPersonality;
+    label: string;
+    description: string;
+  }[] = [
+    {
+      id: 'sports_announcer',
+      label: 'Sports Announcer',
+      description: 'Fast-paced, energetic play-by-play of your coding session',
+    },
+    {
+      id: 'documentary_narrator',
+      label: 'Documentary Narrator',
+      description: 'Calm, thoughtful observations on developer behavior',
+    },
+    {
+      id: 'technical_analyst',
+      label: 'Technical Analyst',
+      description: 'Strategic, engineering-focused analysis',
+    },
+    {
+      id: 'comedic_observer',
+      label: 'Comedic Observer',
+      description: 'Witty, playful commentary with self-aware humor',
+    },
+    {
+      id: 'project_lead',
+      label: 'Project Lead',
+      description: 'First-person, authoritative progress updates',
+    },
+    {
+      id: 'wizard',
+      label: 'Wizard',
+      description: 'Mystical, arcane commentary on the craft of code',
+    },
+  ];
+
+  const verbosityOptions: { value: CommentaryVerbosity; label: string; description: string }[] = [
+    { value: 'high', label: 'Frequent', description: 'Commentary on most events' },
+    { value: 'medium', label: 'Strategic Milestones', description: 'Key moments and transitions' },
+    { value: 'low', label: 'Minimal', description: 'Only major events' },
+  ];
+
+  let commentaryEnabled = $state(false);
+  let commentaryPersonality = $state<CommentaryPersonality>('technical_analyst');
+  let commentaryVerbosity = $state<CommentaryVerbosity>('medium');
+  let commentaryLoading = $state(false);
+  let commentaryPreviewText = $state('');
+  let commentaryPreviewLoading = $state(false);
+
+  async function loadCommentarySettings() {
+    const wsId = workspaceStore.activeWorkspaceId;
+    if (!wsId) return;
+    commentaryLoading = true;
+    try {
+      const res = await api.commentary.getSettings(wsId);
+      if (res.ok && res.data) {
+        commentaryEnabled = res.data.enabled;
+        commentaryPersonality = res.data.personality as CommentaryPersonality;
+        commentaryVerbosity = res.data.verbosity as CommentaryVerbosity;
+      }
+    } catch {
+      /* settings unavailable — keep defaults */
+    }
+    commentaryLoading = false;
+  }
+
+  async function saveCommentarySetting(update: {
+    enabled?: boolean;
+    personality?: string;
+    verbosity?: string;
+  }) {
+    const wsId = workspaceStore.activeWorkspaceId;
+    if (!wsId) return;
+    try {
+      const res = await api.commentary.updateSettings(wsId, update);
+      if (res.ok && res.data) {
+        commentaryEnabled = res.data.enabled;
+        commentaryPersonality = res.data.personality as CommentaryPersonality;
+        commentaryVerbosity = res.data.verbosity as CommentaryVerbosity;
+      }
+    } catch {
+      uiStore.toast('Failed to save commentary settings', 'error');
+    }
+  }
+
+  async function previewCommentary() {
+    commentaryPreviewLoading = true;
+    commentaryPreviewText = '';
+    const personality = commentaryPersonalities.find((p) => p.id === commentaryPersonality);
+    const sampleTexts: Record<CommentaryPersonality, string> = {
+      sports_announcer:
+        "AND WE'RE OFF! The developer has just opened a new file — looks like we're heading into some serious refactoring territory, folks! The cursor is moving with PURPOSE today!",
+      documentary_narrator:
+        'Here we observe the developer in their natural habitat, methodically restructuring the codebase. Notice the careful, deliberate keystrokes — each one a small step in the eternal dance of software evolution.',
+      technical_analyst:
+        'Interesting architectural decision here. The developer is extracting shared logic into a utility module — this should reduce coupling between the service layer and the route handlers. Clean separation of concerns.',
+      comedic_observer:
+        "Oh look, another TODO comment. I'm sure that'll get addressed right after the heat death of the universe. Meanwhile, our hero boldly copy-pastes from Stack Overflow — as the ancients intended.",
+      project_lead:
+        "Good progress on the settings module. We're on track to have the commentary system fully integrated by end of sprint. The architecture is solid and the team's velocity is looking strong.",
+      wizard:
+        'The arcane runes take shape upon the screen... A new incantation is being woven into the great tapestry of code. The developer channels ancient wisdom through their mechanical familiar.',
+    };
+    commentaryPreviewText = sampleTexts[commentaryPersonality] || sampleTexts.technical_analyst;
+    commentaryPreviewLoading = false;
   }
 
   // --- Sandbox state ---
@@ -432,6 +546,7 @@
     loadSandbox();
     loadPermissionRules();
     loadDetectedShells();
+    loadCommentarySettings();
     profilesStore.load();
   });
 
@@ -636,7 +751,7 @@
     <div class="modal-body">
       <nav class="settings-tabs">
         <span class="settings-section-header">Interface</span>
-        {#each ['general', 'appearance', 'audio', 'editor', 'terminal', 'keybindings'] as tab}
+        {#each ['general', 'appearance', 'audio', 'commentary', 'editor', 'terminal', 'keybindings'] as tab}
           <button
             class="settings-tab"
             class:active={activeTab === tab}
@@ -1198,6 +1313,114 @@
               {/each}
             </div>
           </div>
+        {:else if activeTab === 'commentary'}
+          <div class="setting-group">
+            <label class="setting-label">AI Commentary</label>
+            <p class="setting-desc">
+              Live AI-generated commentary on your coding sessions. An AI personality watches stream
+              events and provides entertaining or insightful narration.
+            </p>
+            {#if !workspaceStore.activeWorkspaceId}
+              <p class="commentary-no-workspace">
+                Open a workspace to configure commentary settings.
+              </p>
+            {:else}
+              <div class="audio-toggle-row">
+                <label class="toggle">
+                  <input
+                    type="checkbox"
+                    checked={commentaryEnabled}
+                    disabled={commentaryLoading}
+                    onchange={() => {
+                      commentaryEnabled = !commentaryEnabled;
+                      saveCommentarySetting({ enabled: commentaryEnabled });
+                    }}
+                  />
+                  <span class="toggle-slider"></span>
+                </label>
+                <span class="audio-toggle-label">
+                  {commentaryEnabled ? 'Enabled' : 'Disabled'}
+                </span>
+              </div>
+            {/if}
+          </div>
+
+          {#if workspaceStore.activeWorkspaceId}
+            <div class="setting-group" class:muted={!commentaryEnabled}>
+              <label class="setting-label">Personality</label>
+              <p class="setting-hint">Choose the style and tone of your AI commentator</p>
+              <div class="commentary-personality-grid">
+                {#each commentaryPersonalities as p}
+                  <button
+                    class="commentary-personality-option"
+                    class:active={commentaryPersonality === p.id}
+                    disabled={!commentaryEnabled}
+                    onclick={() => {
+                      commentaryPersonality = p.id;
+                      saveCommentarySetting({ personality: p.id });
+                    }}
+                  >
+                    <span class="commentary-personality-name">{p.label}</span>
+                    <span class="commentary-personality-desc">{p.description}</span>
+                  </button>
+                {/each}
+              </div>
+            </div>
+
+            <div class="setting-group" class:muted={!commentaryEnabled}>
+              <label class="setting-label">Verbosity</label>
+              <p class="setting-hint">How often the commentator chimes in</p>
+              <div class="commentary-verbosity-options">
+                {#each verbosityOptions as opt}
+                  <label
+                    class="commentary-verbosity-option"
+                    class:active={commentaryVerbosity === opt.value}
+                  >
+                    <input
+                      type="radio"
+                      name="commentary-verbosity"
+                      value={opt.value}
+                      checked={commentaryVerbosity === opt.value}
+                      disabled={!commentaryEnabled}
+                      onchange={() => {
+                        commentaryVerbosity = opt.value;
+                        saveCommentarySetting({ verbosity: opt.value });
+                      }}
+                    />
+                    <div class="commentary-verbosity-content">
+                      <span class="commentary-verbosity-label">{opt.label}</span>
+                      <span class="commentary-verbosity-desc">{opt.description}</span>
+                    </div>
+                  </label>
+                {/each}
+              </div>
+            </div>
+
+            <div class="setting-group" class:muted={!commentaryEnabled}>
+              <label class="setting-label">Preview</label>
+              <p class="setting-hint">
+                Test what commentary sounds like with the selected personality
+              </p>
+              <button
+                class="btn-secondary commentary-preview-btn"
+                disabled={!commentaryEnabled || commentaryPreviewLoading}
+                onclick={previewCommentary}
+              >
+                {commentaryPreviewLoading ? 'Generating...' : 'Preview Commentary'}
+              </button>
+              {#if commentaryPreviewText}
+                <div class="commentary-preview-box">
+                  <div class="commentary-preview-header">
+                    <span class="commentary-preview-personality">
+                      {commentaryPersonalities.find((p) => p.id === commentaryPersonality)?.label ??
+                        commentaryPersonality}
+                    </span>
+                  </div>
+                  <p class="commentary-preview-text">{commentaryPreviewText}</p>
+                </div>
+              {/if}
+            </div>
+          {/if}
         {:else if activeTab === 'editor'}
           <div class="setting-group">
             <label class="setting-label">Import VS Code Snippets</label>
@@ -3089,6 +3312,139 @@
     font-size: var(--fs-sm);
     font-weight: 600;
     color: var(--text-secondary);
+  }
+
+  /* Commentary settings */
+  .commentary-no-workspace {
+    font-size: var(--fs-sm);
+    color: var(--text-tertiary);
+    font-style: italic;
+    padding: 12px;
+    background: var(--bg-tertiary);
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border-secondary);
+  }
+  .commentary-personality-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .commentary-personality-option {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 3px;
+    padding: 10px 12px;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-secondary);
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    text-align: left;
+    transition:
+      border-color 0.15s,
+      background 0.15s;
+  }
+  .commentary-personality-option:hover:not(:disabled) {
+    border-color: var(--accent-primary);
+    background: var(--bg-secondary);
+  }
+  .commentary-personality-option.active {
+    border-color: var(--accent-primary);
+    background: color-mix(in srgb, var(--accent-primary) 10%, var(--bg-tertiary));
+  }
+  .commentary-personality-option:disabled {
+    cursor: not-allowed;
+  }
+  .commentary-personality-name {
+    font-size: var(--fs-sm);
+    font-weight: 700;
+    color: var(--text-primary);
+    font-family: var(--font-family-sans);
+  }
+  .commentary-personality-option.active .commentary-personality-name {
+    color: var(--accent-primary);
+  }
+  .commentary-personality-desc {
+    font-size: var(--fs-xs);
+    color: var(--text-secondary);
+    line-height: 1.4;
+  }
+  .commentary-verbosity-options {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .commentary-verbosity-option {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 12px;
+    border: 1px solid var(--border-secondary);
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    transition:
+      border-color 0.15s,
+      background 0.15s;
+  }
+  .commentary-verbosity-option:hover {
+    border-color: var(--border-primary);
+    background: var(--bg-hover);
+  }
+  .commentary-verbosity-option.active {
+    border-color: var(--accent-primary);
+    background: color-mix(in srgb, var(--accent-primary) 10%, var(--bg-tertiary));
+  }
+  .commentary-verbosity-option input[type='radio'] {
+    width: auto;
+    accent-color: var(--accent-primary);
+    flex-shrink: 0;
+  }
+  .commentary-verbosity-content {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+  .commentary-verbosity-label {
+    font-size: var(--fs-sm);
+    font-weight: 700;
+    color: var(--text-primary);
+  }
+  .commentary-verbosity-option.active .commentary-verbosity-label {
+    color: var(--accent-primary);
+  }
+  .commentary-verbosity-desc {
+    font-size: var(--fs-xs);
+    color: var(--text-tertiary);
+  }
+  .commentary-preview-btn {
+    margin-bottom: 10px;
+  }
+  .commentary-preview-box {
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-secondary);
+    border-radius: var(--radius-sm);
+    padding: 12px;
+    margin-top: 8px;
+  }
+  .commentary-preview-header {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 8px;
+  }
+  .commentary-preview-personality {
+    font-size: var(--fs-xs);
+    font-weight: 700;
+    color: var(--accent-primary);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+  .commentary-preview-text {
+    font-size: var(--fs-sm);
+    color: var(--text-secondary);
+    line-height: 1.6;
+    font-style: italic;
+    margin: 0;
   }
 
   /* Terminal command policy */
