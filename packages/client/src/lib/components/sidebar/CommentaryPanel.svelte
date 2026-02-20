@@ -10,7 +10,8 @@
     | 'documentary_narrator'
     | 'technical_analyst'
     | 'comedic_observer'
-    | 'project_lead';
+    | 'project_lead'
+    | 'wizard';
 
   interface PersonalityOption {
     id: CommentaryPersonality;
@@ -50,6 +51,12 @@
       icon: 'M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75',
       description: 'First-person, authoritative',
     },
+    {
+      id: 'wizard',
+      label: 'Wizard',
+      icon: 'M12 2L9.19 8.63 2 9.24l5.46 4.73L5.82 21 12 17.27 18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2z',
+      description: 'Mystical, arcane commentary',
+    },
   ];
 
   let workspacePath = $derived(workspaceStore.activeWorkspace?.workspacePath);
@@ -57,6 +64,9 @@
   let isActive = $derived(commentaryStore.isActive);
   let currentPersonality = $derived(
     (commentaryStore.personality as CommentaryPersonality) || 'sports_announcer',
+  );
+  let currentPersonalityOption = $derived(
+    personalities.find((p) => p.id === currentPersonality) || personalities[0],
   );
   let commentaryText = $derived(commentaryStore.commentaryText);
   let history = $derived(commentaryStore.commentaryHistory);
@@ -68,6 +78,32 @@
   let showPersonalityDropdown = $state(false);
   let savedPersonality = $state<CommentaryPersonality | null>(null);
   let showExportModal = $state(false);
+  let autoScroll = $state(true);
+  let contentEl = $state<HTMLDivElement | null>(null);
+
+  // Auto-scroll to bottom when new commentary arrives
+  $effect(() => {
+    // Track history length to trigger on new entries
+    const _len = history.length;
+    const _text = commentaryText;
+
+    if (autoScroll && contentEl) {
+      // Use requestAnimationFrame so the DOM has been updated
+      requestAnimationFrame(() => {
+        if (contentEl) {
+          contentEl.scrollTop = contentEl.scrollHeight;
+        }
+      });
+    }
+  });
+
+  // Detect manual scroll to disable auto-scroll
+  function handleScroll() {
+    if (!contentEl) return;
+    const { scrollTop, scrollHeight, clientHeight } = contentEl;
+    // If user is within 40px of bottom, re-enable auto-scroll
+    autoScroll = scrollHeight - scrollTop - clientHeight < 40;
+  }
 
   // Load workspace settings to get saved personality preference
   $effect(() => {
@@ -146,6 +182,16 @@
     }
   }
 
+  function clearHistory() {
+    commentaryStore.clearHistory();
+    // Also clear server-side history if workspace is active
+    if (workspaceId) {
+      commentaryStore.clearWorkspaceHistory(workspaceId).catch((err: unknown) => {
+        console.error('[commentary] Failed to clear server history:', err);
+      });
+    }
+  }
+
   function formatTime(timestamp: number): string {
     const date = new Date(timestamp);
     return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
@@ -202,7 +248,26 @@
 
 <div class="commentary-panel">
   <div class="panel-header">
-    <span class="panel-title">Live Commentary</span>
+    <!-- Personality indicator with icon and name -->
+    <div class="personality-indicator">
+      <svg
+        width="14"
+        height="14"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+        class="personality-indicator-icon"
+      >
+        <path d={currentPersonalityOption.icon} />
+      </svg>
+      <span class="personality-indicator-name">{currentPersonalityOption.label}</span>
+      {#if isActive}
+        <span class="live-dot" title="Live"></span>
+      {/if}
+    </div>
     <div class="header-actions">
       <!-- Personality Selector -->
       <div class="personality-dropdown-container">
@@ -221,7 +286,7 @@
             stroke-linecap="round"
             stroke-linejoin="round"
           >
-            <path d={personalities.find((p) => p.id === currentPersonality)?.icon || ''} />
+            <path d={currentPersonalityOption.icon} />
           </svg>
           <svg
             width="10"
@@ -279,6 +344,29 @@
           </div>
         {/if}
       </div>
+
+      <!-- Clear History Button -->
+      <button
+        class="clear-btn"
+        onclick={clearHistory}
+        title="Clear commentary history"
+        disabled={history.length === 0}
+      >
+        <svg
+          width="14"
+          height="14"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <polyline points="3 6 5 6 21 6"></polyline>
+          <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"
+          ></path>
+        </svg>
+      </button>
 
       <!-- Export Button -->
       <button
@@ -343,12 +431,12 @@
         {/if}
       </button>
 
-      <!-- Toggle Commentary -->
+      <!-- Toggle Commentary (Pause/Resume) -->
       <button
         class="toggle-btn"
         class:active={isActive}
         onclick={toggleCommentary}
-        title={isActive ? 'Stop commentary' : 'Start commentary'}
+        title={isActive ? 'Pause commentary' : 'Resume commentary'}
       >
         {#if isActive}
           <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" stroke="none">
@@ -395,7 +483,8 @@
     </div>
   {/if}
 
-  <div class="commentary-content">
+  <!-- svelte-ignore a11y_no_static_element_interactions -->
+  <div class="commentary-content" bind:this={contentEl} onscroll={handleScroll}>
     {#if !workspacePath}
       <div class="empty-state">
         <div class="empty-icon">
@@ -460,7 +549,7 @@
             {commentaryText}
           </div>
           {#if !isActive}
-            <div class="status-badge stopped">Stopped</div>
+            <div class="status-badge stopped">Paused</div>
           {/if}
         </div>
       {/if}
@@ -481,6 +570,32 @@
       {/if}
     {/if}
   </div>
+
+  <!-- Auto-scroll indicator (shown when user scrolled up) -->
+  {#if !autoScroll && history.length > 0}
+    <button
+      class="scroll-to-bottom"
+      onclick={() => {
+        autoScroll = true;
+        if (contentEl) contentEl.scrollTop = contentEl.scrollHeight;
+      }}
+      title="Scroll to latest"
+    >
+      <svg
+        width="12"
+        height="12"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <polyline points="6 9 12 15 18 9"></polyline>
+      </svg>
+      New commentary
+    </button>
+  {/if}
 </div>
 
 <CommentaryExportModal
@@ -496,6 +611,7 @@
     flex-direction: column;
     height: 100%;
     overflow: hidden;
+    position: relative;
   }
 
   .panel-header {
@@ -508,19 +624,54 @@
     flex-shrink: 0;
   }
 
-  .panel-title {
+  .personality-indicator {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+  }
+
+  .personality-indicator-icon {
+    flex-shrink: 0;
+    color: var(--accent-primary);
+  }
+
+  .personality-indicator-name {
     font-size: var(--fs-sm);
     font-weight: 700;
     text-transform: uppercase;
     letter-spacing: 0.08em;
     color: var(--text-secondary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .live-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--accent-primary);
+    flex-shrink: 0;
+    animation: pulse 2s ease-in-out infinite;
+  }
+
+  @keyframes pulse {
+    0%,
+    100% {
+      opacity: 1;
+    }
+    50% {
+      opacity: 0.3;
+    }
   }
 
   .header-actions {
     display: flex;
     align-items: center;
-    gap: 6px;
+    gap: 4px;
     margin-left: auto;
+    flex-shrink: 0;
   }
 
   .personality-dropdown-container {
@@ -629,6 +780,32 @@
   .check-icon {
     flex-shrink: 0;
     color: var(--accent-primary);
+  }
+
+  .clear-btn {
+    width: 26px;
+    height: 26px;
+    border-radius: var(--radius-sm);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: transparent;
+    border: 1px solid var(--border-secondary);
+    cursor: pointer;
+    color: var(--text-tertiary);
+    transition: all var(--transition);
+    padding: 0;
+  }
+
+  .clear-btn:hover:not(:disabled) {
+    color: var(--accent-error);
+    border-color: var(--accent-error);
+    background: color-mix(in srgb, var(--accent-error) 8%, transparent);
+  }
+
+  .clear-btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
   }
 
   .export-btn {
@@ -780,6 +957,7 @@
     flex: 1;
     overflow-y: auto;
     padding: 12px;
+    scroll-behavior: smooth;
   }
 
   .empty-state {
@@ -878,5 +1056,31 @@
     font-size: var(--fs-xs);
     color: var(--text-secondary);
     line-height: 1.5;
+  }
+
+  .scroll-to-bottom {
+    position: absolute;
+    bottom: 12px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 12px;
+    border-radius: 12px;
+    background: var(--accent-primary);
+    color: white;
+    border: none;
+    cursor: pointer;
+    font-size: var(--fs-xxs);
+    font-weight: 600;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+    transition: all var(--transition);
+    z-index: 10;
+  }
+
+  .scroll-to-bottom:hover {
+    background: color-mix(in srgb, var(--accent-primary) 90%, black);
+    box-shadow: 0 3px 12px rgba(0, 0, 0, 0.3);
   }
 </style>
