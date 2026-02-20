@@ -792,6 +792,18 @@
   }
 
   function handleKeydown(e: KeyboardEvent) {
+    // Musical typing — play a pentatonic note for each printable keystroke
+    if (
+      settingsStore.soundEnabled &&
+      settingsStore.keyboardSounds &&
+      e.key.length === 1 &&
+      !e.ctrlKey &&
+      !e.metaKey &&
+      !e.altKey
+    ) {
+      chirpEngine.playKeystroke();
+    }
+
     // Send: Enter (default) or Ctrl+Enter depending on setting
     if (e.key === 'Enter') {
       if (settingsStore.sendWithEnter) {

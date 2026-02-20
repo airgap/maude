@@ -100,6 +100,7 @@
           // Register name for result lookup, then chirp with tool-specific sound
           if (block.id && block.name) toolNames.set(block.id, block.name);
           if (settingsStore.soundEnabled) chirpEngine.toolStart(block.name ?? '');
+          chirpEngine.trackToolCall();
         }
       }
       prevBlockCount = blocks.length;

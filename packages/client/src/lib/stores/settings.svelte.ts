@@ -65,6 +65,7 @@ interface SettingsState {
   soundEnabled: boolean;
   soundVolume: number;
   soundStyle: 'classic' | 'melodic' | 'whimsy' | 'forest' | 'wind-chime';
+  keyboardSounds: boolean;
   // Desktop notification settings
   notifyOnCompletion: boolean;
   notifyOnFailure: boolean;
@@ -140,6 +141,7 @@ const defaults: SettingsState = {
   soundEnabled: true,
   soundVolume: 80,
   soundStyle: 'melodic',
+  keyboardSounds: false,
   notifyOnCompletion: true,
   notifyOnFailure: true,
   notifyOnApproval: true,
@@ -377,6 +379,9 @@ function createSettingsStore() {
     },
     get soundStyle() {
       return state.soundStyle;
+    },
+    get keyboardSounds() {
+      return state.keyboardSounds;
     },
     get notifyOnCompletion() {
       return state.notifyOnCompletion;

@@ -1675,6 +1675,133 @@ const EVENT_COOLDOWNS: Partial<Record<ChirpEvent, number>> = {
 };
 
 // ---------------------------------------------------------------------------
+// Ambient soundscape definitions — per-hypertheme generative drones
+// ---------------------------------------------------------------------------
+
+interface AmbientVoice {
+  freq: number;
+  gain: number;
+  type: OscillatorType;
+}
+interface AmbientDef {
+  voices: AmbientVoice[];
+  lfoRate: number;
+  lfoDepth: number;
+  gain: number;
+}
+
+const AMBIENT_DEFS: Record<string, AmbientDef> = {
+  // Dark electronic hum — A1 fundamental with fifth
+  tech: {
+    voices: [
+      { freq: 55, gain: 0.35, type: 'sine' },
+      { freq: 82.4, gain: 0.15, type: 'sine' },
+      { freq: 165, gain: 0.06, type: 'triangle' },
+    ],
+    lfoRate: 0.07,
+    lfoDepth: 0.15,
+    gain: 0.04,
+  },
+  // Mysterious D2 drone with distant overtones
+  arcane: {
+    voices: [
+      { freq: 73.4, gain: 0.3, type: 'sine' },
+      { freq: 110, gain: 0.2, type: 'sine' },
+      { freq: 220, gain: 0.05, type: 'triangle' },
+    ],
+    lfoRate: 0.04,
+    lfoDepth: 0.25,
+    gain: 0.035,
+  },
+  // Floating C2 pad, very slow modulation
+  ethereal: {
+    voices: [
+      { freq: 65.4, gain: 0.25, type: 'sine' },
+      { freq: 98, gain: 0.2, type: 'sine' },
+      { freq: 196, gain: 0.08, type: 'sine' },
+    ],
+    lfoRate: 0.03,
+    lfoDepth: 0.3,
+    gain: 0.03,
+  },
+  // Warm Bb1 study drone, minimal movement
+  study: {
+    voices: [
+      { freq: 61.7, gain: 0.3, type: 'sine' },
+      { freq: 92.5, gain: 0.12, type: 'sine' },
+    ],
+    lfoRate: 0.06,
+    lfoDepth: 0.1,
+    gain: 0.03,
+  },
+  // Deep cosmic G1 with wide harmonic spread
+  astral: {
+    voices: [
+      { freq: 49, gain: 0.3, type: 'sine' },
+      { freq: 73.4, gain: 0.2, type: 'sine' },
+      { freq: 147, gain: 0.1, type: 'sine' },
+      { freq: 294, gain: 0.03, type: 'sine' },
+    ],
+    lfoRate: 0.02,
+    lfoDepth: 0.35,
+    gain: 0.035,
+  },
+  // Deepest E1 drone, very slow ebb
+  'astral-midnight': {
+    voices: [
+      { freq: 41.2, gain: 0.35, type: 'sine' },
+      { freq: 61.7, gain: 0.2, type: 'sine' },
+      { freq: 123.5, gain: 0.08, type: 'sine' },
+    ],
+    lfoRate: 0.015,
+    lfoDepth: 0.4,
+    gain: 0.03,
+  },
+  // Dark Bb1 sawtooth buzz, industrial undertone
+  goth: {
+    voices: [
+      { freq: 46.2, gain: 0.35, type: 'sawtooth' },
+      { freq: 69.3, gain: 0.15, type: 'sine' },
+      { freq: 138.6, gain: 0.06, type: 'sine' },
+    ],
+    lfoRate: 0.05,
+    lfoDepth: 0.2,
+    gain: 0.025,
+  },
+  // Enchanted D2 forest hum with triangle shimmer
+  'magic-forest': {
+    voices: [
+      { freq: 73.4, gain: 0.25, type: 'sine' },
+      { freq: 110, gain: 0.18, type: 'sine' },
+      { freq: 146.8, gain: 0.1, type: 'sine' },
+      { freq: 220, gain: 0.04, type: 'triangle' },
+    ],
+    lfoRate: 0.035,
+    lfoDepth: 0.25,
+    gain: 0.035,
+  },
+};
+
+// ---------------------------------------------------------------------------
+// Focus noise presets — filtered white noise generators
+// ---------------------------------------------------------------------------
+
+interface FocusPreset {
+  filterType: BiquadFilterType;
+  filterFreq: number;
+  filterQ: number;
+  gain: number;
+}
+
+const FOCUS_PRESETS: Record<string, FocusPreset> = {
+  white: { filterType: 'allpass', filterFreq: 1000, filterQ: 0, gain: 0.04 },
+  pink: { filterType: 'lowpass', filterFreq: 1500, filterQ: 0.5, gain: 0.06 },
+  brown: { filterType: 'lowpass', filterFreq: 400, filterQ: 0.7, gain: 0.08 },
+  rain: { filterType: 'bandpass', filterFreq: 3000, filterQ: 1.5, gain: 0.07 },
+  vinyl: { filterType: 'bandpass', filterFreq: 800, filterQ: 2.0, gain: 0.05 },
+};
+
+// ---------------------------------------------------------------------------
 // Engine
 // ---------------------------------------------------------------------------
 
@@ -1686,6 +1813,38 @@ export class ChirpEngine {
   private noiseBuffer: AudioBuffer | null = null;
   private volume = 1.0;
   private style: SoundStyle = 'melodic';
+
+  // ── Spatial audio ──
+  private defaultPan = 0; // -1 (left) to 1 (right)
+
+  // ── Harmonic context ──
+  private noteHistory: number[] = []; // ring buffer of recent frequencies
+  private readonly NOTE_HISTORY_SIZE = 6;
+
+  // ── Adaptive tempo / beat clock ──
+  private beatBpm = 120;
+  private beatPhase = 0; // time of last beat start
+  private deltaTimestamps: number[] = []; // recent text_delta arrival times
+  private readonly DELTA_WINDOW = 12; // how many deltas to average
+
+  // ── Completion tracking ──
+  private streamToolCount = 0;
+
+  // ── Ambient soundscape ──
+  private ambientOscs: OscillatorNode[] = [];
+  private ambientGains: GainNode[] = [];
+  private ambientLfos: OscillatorNode[] = [];
+  private ambientMaster: GainNode | null = null;
+  private ambientTheme: string | null = null;
+
+  // ── Focus noise ──
+  private focusSource: AudioBufferSourceNode | null = null;
+  private focusGain: GainNode | null = null;
+  private focusPreset: string | null = null;
+  private longNoiseBuffer: AudioBuffer | null = null;
+
+  // ── Musical typing ──
+  private keystrokeIndex = 0;
 
   private createContext(): AudioContext {
     const ctx = new AudioContext();
@@ -1740,10 +1899,11 @@ export class ChirpEngine {
    * Each partial gets its own oscillator + gain node with an
    * exponential decay envelope — far more natural than linear ramps.
    */
-  private playNote(spec: NoteSpec, startOffset = 0): void {
+  private playNote(spec: NoteSpec, startOffset = 0, pan?: number): void {
     const ctx = this.ensureContext();
     const master = this.masterGain!;
     const t = ctx.currentTime + startOffset;
+    const usePan = pan ?? this.defaultPan;
 
     for (const ot of spec.partials) {
       const freq =
@@ -1771,17 +1931,30 @@ export class ChirpEngine {
       env.gain.linearRampToValueAtTime(0, noteEnd);
 
       osc.connect(env);
-      env.connect(master);
+
+      // Spatial panning — route through StereoPannerNode when non-zero
+      if (usePan !== 0) {
+        const panner = ctx.createStereoPanner();
+        panner.pan.setValueAtTime(usePan, t);
+        env.connect(panner);
+        panner.connect(master);
+      } else {
+        env.connect(master);
+      }
+
       osc.start(t);
       osc.stop(noteEnd + 0.05);
     }
+
+    // Record frequency for harmonic context
+    this.recordNote(spec.freq);
   }
 
-  private playSpec(spec: NoteSpec | NoteSpec[], startOffset = 0): void {
+  private playSpec(spec: NoteSpec | NoteSpec[], startOffset = 0, pan?: number): void {
     if (Array.isArray(spec)) {
-      for (const s of spec) this.playNote(s, startOffset);
+      for (const s of spec) this.playNote(s, startOffset, pan);
     } else {
-      this.playNote(spec, startOffset);
+      this.playNote(spec, startOffset, pan);
     }
   }
 
@@ -2184,6 +2357,10 @@ export class ChirpEngine {
       this.lastFired.set(event, now);
     }
 
+    // Stream lifecycle tracking
+    if (event === 'message_start') this.resetStreamTracking();
+    if (event === 'text_delta') this.recordDelta();
+
     try {
       if (this.style === 'classic') {
         if (event === 'text_delta') {
@@ -2259,6 +2436,15 @@ export class ChirpEngine {
       this.playSpec(spec);
     } catch (e) {
       console.warn('[ChirpEngine] playback error:', e);
+    }
+
+    // Scaled completion fanfare after message_stop (when tools were used)
+    if (event === 'message_stop' && this.streamToolCount > 1) {
+      try {
+        this.completionFanfare();
+      } catch (_) {
+        /* swallow */
+      }
     }
   }
 
@@ -2418,10 +2604,457 @@ export class ChirpEngine {
     }
   }
 
+  // ── Harmonic context ─────────────────────────────────────────────────────
+
+  /** Record a frequency into the rolling history for consonance tracking */
+  private recordNote(freq: number): void {
+    this.noteHistory.push(freq);
+    if (this.noteHistory.length > this.NOTE_HISTORY_SIZE) {
+      this.noteHistory.shift();
+    }
+  }
+
+  /** Score the consonance of an interval (0–1, higher = more consonant) */
+  private consonanceScore(a: number, b: number): number {
+    const ratio = Math.max(a, b) / Math.min(a, b);
+    const semitones = Math.round(12 * Math.log2(ratio)) % 12;
+    const SCORES: Record<number, number> = {
+      0: 1.0, // unison
+      1: 0.2, // minor 2nd
+      2: 0.5, // major 2nd
+      3: 0.75, // minor 3rd
+      4: 0.8, // major 3rd
+      5: 0.85, // perfect 4th
+      6: 0.1, // tritone
+      7: 0.9, // perfect 5th
+      8: 0.65, // minor 6th
+      9: 0.7, // major 6th
+      10: 0.4, // minor 7th
+      11: 0.3, // major 7th
+    };
+    return SCORES[semitones] ?? 0.5;
+  }
+
+  /** Pick the most consonant frequency from candidates, given recent history */
+  selectConsonant(candidates: number[]): number {
+    if (this.noteHistory.length === 0 || candidates.length <= 1) {
+      return candidates[0] ?? 440;
+    }
+    let bestFreq = candidates[0];
+    let bestScore = -1;
+    for (const freq of candidates) {
+      let score = 0;
+      for (const prev of this.noteHistory) {
+        score += this.consonanceScore(freq, prev);
+      }
+      if (score > bestScore) {
+        bestScore = score;
+        bestFreq = freq;
+      }
+    }
+    return bestFreq;
+  }
+
+  // ── Adaptive tempo / beat clock ─────────────────────────────────────────
+
+  /** Record a text_delta arrival and derive streaming BPM */
+  private recordDelta(): void {
+    const now = performance.now();
+    this.deltaTimestamps.push(now);
+    if (this.deltaTimestamps.length > this.DELTA_WINDOW) {
+      this.deltaTimestamps.shift();
+    }
+    if (this.deltaTimestamps.length >= 3) {
+      const intervals: number[] = [];
+      for (let i = 1; i < this.deltaTimestamps.length; i++) {
+        intervals.push(this.deltaTimestamps[i] - this.deltaTimestamps[i - 1]);
+      }
+      const avgMs = intervals.reduce((a, b) => a + b, 0) / intervals.length;
+      this.beatBpm = Math.max(60, Math.min(300, 60000 / avgMs));
+      this.beatPhase = now;
+    }
+  }
+
+  /** Return seconds offset to snap to the nearest 16th-note grid position */
+  quantizeToNextBeat(): number {
+    if (this.deltaTimestamps.length < 3) return 0;
+    const beatDuration = 60000 / this.beatBpm;
+    const sixteenthDur = beatDuration / 4;
+    const now = performance.now();
+    const posIn16th = (now - this.beatPhase) % sixteenthDur;
+    const toNext16th = sixteenthDur - posIn16th;
+    // If within 20% of a grid line, play on time
+    if (posIn16th < sixteenthDur * 0.2 || toNext16th < sixteenthDur * 0.2) {
+      return 0;
+    }
+    return toNext16th / 1000; // convert ms → seconds
+  }
+
+  // ── Scaled completion fanfares ──────────────────────────────────────────
+
+  /** Play ascending arpeggio scaled to stream complexity (tool count) */
+  private completionFanfare(): void {
+    const count = this.streamToolCount;
+    if (count <= 0) return;
+
+    const getScale = (): number[] => {
+      if (this.style === 'forest')
+        return [
+          FOREST_NOTES.D4,
+          FOREST_NOTES.A4,
+          FOREST_NOTES.D5,
+          FOREST_NOTES.A5,
+          FOREST_NOTES.D6,
+        ];
+      if (this.style === 'wind-chime')
+        return [
+          CHIME_NOTES.F4,
+          CHIME_NOTES.A4,
+          CHIME_NOTES.C5,
+          CHIME_NOTES.F5,
+          CHIME_NOTES.A5,
+          CHIME_NOTES.C6,
+        ];
+      if (this.style === 'whimsy')
+        return [
+          WHIMSY_NOTES.C4,
+          WHIMSY_NOTES.E4,
+          WHIMSY_NOTES.G4,
+          WHIMSY_NOTES.C5,
+          WHIMSY_NOTES.E5,
+          WHIMSY_NOTES.G5,
+        ];
+      return [NOTES.C4, NOTES.E4, NOTES.G4, NOTES.C5, NOTES.E5, NOTES.G5, NOTES.C6];
+    };
+
+    const getPartials = (): Overtone[] => {
+      if (this.style === 'forest') return FAIRY_SPARKLE;
+      if (this.style === 'wind-chime') return CRYSTAL_CHIME;
+      if (this.style === 'whimsy') return MUSIC_BOX;
+      return VIBRAPHONE;
+    };
+
+    const scale = getScale();
+    const partials = getPartials();
+    // 2 notes for 2 tools, up to full scale for 5+ tools
+    const numNotes = Math.min(Math.max(2, Math.ceil(count / 2) + 1), scale.length);
+    const noteSpacing = 0.06;
+
+    for (let i = 0; i < numNotes; i++) {
+      this.playNote(
+        {
+          freq: scale[i],
+          partials,
+          attack: 0.004,
+          release: 0.2 + i * 0.04,
+          gain: 0.18 - i * 0.015,
+        },
+        // Stagger after the normal message_stop sound
+        0.35 + i * noteSpacing,
+      );
+    }
+  }
+
+  // ── Musical typing ──────────────────────────────────────────────────────
+
+  /** Play a pentatonic note for a keystroke, cycling through the scale */
+  playKeystroke(): void {
+    const scales: Record<string, number[]> = {
+      melodic: [NOTES.C5, NOTES.D5, NOTES.E5, NOTES.G5, NOTES.A5],
+      forest: [FOREST_NOTES.D4, FOREST_NOTES.E4, FOREST_NOTES.G4, FOREST_NOTES.A4, FOREST_NOTES.B4],
+      'wind-chime': [
+        CHIME_NOTES.F4,
+        CHIME_NOTES.G4,
+        CHIME_NOTES.A4,
+        CHIME_NOTES.B4,
+        CHIME_NOTES.C5,
+      ],
+      whimsy: [WHIMSY_NOTES.C5, WHIMSY_NOTES.D5, WHIMSY_NOTES.E5, WHIMSY_NOTES.G5, WHIMSY_NOTES.A5],
+      classic: [523.3, 587.3, 659.3, 784.0, 880.0], // C5 pentatonic
+    };
+
+    const scale = scales[this.style] ?? scales.melodic;
+    // Use harmonic context to pick the most consonant next note
+    const freq =
+      this.noteHistory.length > 0
+        ? this.selectConsonant(scale)
+        : scale[this.keystrokeIndex % scale.length];
+    this.keystrokeIndex++;
+
+    const getPartials = (): Overtone[] => {
+      if (this.style === 'forest') return RAINDROP;
+      if (this.style === 'wind-chime') return TINKLE_CHIME;
+      if (this.style === 'whimsy') return TOY_PIANO;
+      return VIBRAPHONE;
+    };
+
+    try {
+      this.playNote({
+        freq,
+        partials: getPartials(),
+        attack: 0.002,
+        release: 0.04,
+        gain: 0.07,
+      });
+    } catch (e) {
+      console.warn('[ChirpEngine] keystroke error:', e);
+    }
+  }
+
+  // ── Ambient soundscape ──────────────────────────────────────────────────
+
+  /** Create a looping noise buffer for focus noise */
+  private makeLongNoiseBuffer(ctx: AudioContext): AudioBuffer {
+    if (this.longNoiseBuffer && this.longNoiseBuffer.sampleRate === ctx.sampleRate) {
+      return this.longNoiseBuffer;
+    }
+    const length = Math.ceil(ctx.sampleRate * 4);
+    const buf = ctx.createBuffer(1, length, ctx.sampleRate);
+    const data = buf.getChannelData(0);
+    for (let i = 0; i < length; i++) data[i] = Math.random() * 2 - 1;
+    this.longNoiseBuffer = buf;
+    return buf;
+  }
+
+  /** Start a generative ambient drone for the given hypertheme */
+  startAmbient(theme: string): void {
+    // Stop existing ambient if running
+    this.stopAmbient();
+
+    const def = AMBIENT_DEFS[theme];
+    if (!def) return;
+
+    const ctx = this.ensureContext();
+    const master = this.masterGain!;
+    const now = ctx.currentTime;
+
+    // Ambient master gain with 2s fade-in
+    this.ambientMaster = ctx.createGain();
+    this.ambientMaster.gain.setValueAtTime(0, now);
+    this.ambientMaster.gain.linearRampToValueAtTime(def.gain, now + 2);
+    this.ambientMaster.connect(master);
+
+    // LFO for tremolo — modulates ambient master gain
+    const lfo = ctx.createOscillator();
+    const lfoGain = ctx.createGain();
+    lfo.type = 'sine';
+    lfo.frequency.setValueAtTime(def.lfoRate, now);
+    lfoGain.gain.setValueAtTime(def.gain * def.lfoDepth, now);
+    lfo.connect(lfoGain);
+    lfoGain.connect(this.ambientMaster.gain);
+    lfo.start(now);
+    this.ambientLfos.push(lfo);
+
+    // Create voice oscillators
+    for (const voice of def.voices) {
+      const osc = ctx.createOscillator();
+      const env = ctx.createGain();
+      osc.type = voice.type;
+      osc.frequency.setValueAtTime(voice.freq, now);
+      env.gain.setValueAtTime(voice.gain, now);
+      osc.connect(env);
+      env.connect(this.ambientMaster);
+      osc.start(now);
+      this.ambientOscs.push(osc);
+      this.ambientGains.push(env);
+    }
+
+    this.ambientTheme = theme;
+  }
+
+  /** Stop the ambient drone with a 2s fade-out */
+  stopAmbient(): void {
+    if (!this.ambientMaster || !this.ctx) {
+      this.ambientOscs = [];
+      this.ambientGains = [];
+      this.ambientLfos = [];
+      this.ambientMaster = null;
+      this.ambientTheme = null;
+      return;
+    }
+
+    const now = this.ctx.currentTime;
+
+    // Fade out
+    this.ambientMaster.gain.cancelScheduledValues(now);
+    this.ambientMaster.gain.setValueAtTime(this.ambientMaster.gain.value, now);
+    this.ambientMaster.gain.linearRampToValueAtTime(0, now + 2);
+
+    // Schedule cleanup after fade
+    const oscs = [...this.ambientOscs];
+    const lfos = [...this.ambientLfos];
+    setTimeout(() => {
+      for (const osc of oscs) {
+        try {
+          osc.stop();
+          osc.disconnect();
+        } catch (_) {
+          /* already stopped */
+        }
+      }
+      for (const lfo of lfos) {
+        try {
+          lfo.stop();
+          lfo.disconnect();
+        } catch (_) {
+          /* already stopped */
+        }
+      }
+    }, 2200);
+
+    this.ambientOscs = [];
+    this.ambientGains = [];
+    this.ambientLfos = [];
+    this.ambientMaster = null;
+    this.ambientTheme = null;
+  }
+
+  // ── Focus noise ─────────────────────────────────────────────────────────
+
+  /** Start generative focus noise with the given preset */
+  startFocusNoise(preset: string): void {
+    this.stopFocusNoise();
+
+    const def = FOCUS_PRESETS[preset];
+    if (!def) return;
+
+    const ctx = this.ensureContext();
+    const master = this.masterGain!;
+    const now = ctx.currentTime;
+    const buf = this.makeLongNoiseBuffer(ctx);
+
+    const src = ctx.createBufferSource();
+    src.buffer = buf;
+    src.loop = true;
+
+    const filter = ctx.createBiquadFilter();
+    filter.type = def.filterType;
+    filter.frequency.setValueAtTime(def.filterFreq, now);
+    if (def.filterQ > 0) filter.Q.setValueAtTime(def.filterQ, now);
+
+    this.focusGain = ctx.createGain();
+    this.focusGain.gain.setValueAtTime(0, now);
+    this.focusGain.gain.linearRampToValueAtTime(def.gain, now + 1.5);
+
+    src.connect(filter);
+    filter.connect(this.focusGain);
+    this.focusGain.connect(master);
+    src.start(now);
+
+    this.focusSource = src;
+    this.focusPreset = preset;
+  }
+
+  /** Stop focus noise with a 1.5s fade-out */
+  stopFocusNoise(): void {
+    if (!this.focusSource || !this.focusGain || !this.ctx) {
+      this.focusSource = null;
+      this.focusGain = null;
+      this.focusPreset = null;
+      return;
+    }
+
+    const now = this.ctx.currentTime;
+    this.focusGain.gain.cancelScheduledValues(now);
+    this.focusGain.gain.setValueAtTime(this.focusGain.gain.value, now);
+    this.focusGain.gain.linearRampToValueAtTime(0, now + 1.5);
+
+    const src = this.focusSource;
+    setTimeout(() => {
+      try {
+        src.stop();
+        src.disconnect();
+      } catch (_) {
+        /* already stopped */
+      }
+    }, 1700);
+
+    this.focusSource = null;
+    this.focusGain = null;
+    this.focusPreset = null;
+  }
+
+  // ── Data sonification ───────────────────────────────────────────────────
+
+  /** Map numeric values to musical notes and play them sequentially */
+  sonifyData(
+    values: number[],
+    options?: { tempo?: number; minFreq?: number; maxFreq?: number },
+  ): void {
+    if (values.length === 0) return;
+
+    const tempo = options?.tempo ?? 120; // ms per note
+    const minFreq = options?.minFreq ?? 220; // A3
+    const maxFreq = options?.maxFreq ?? 880; // A5
+
+    const min = Math.min(...values);
+    const max = Math.max(...values);
+    const range = max - min || 1;
+
+    const getPartials = (): Overtone[] => {
+      if (this.style === 'forest') return WOODEN_FLUTE;
+      if (this.style === 'wind-chime') return CRYSTAL_CHIME;
+      if (this.style === 'whimsy') return MUSIC_BOX;
+      return VIBRAPHONE;
+    };
+
+    const partials = getPartials();
+
+    try {
+      for (let i = 0; i < values.length; i++) {
+        const normalized = (values[i] - min) / range;
+        const freq = minFreq + normalized * (maxFreq - minFreq);
+
+        this.playNote(
+          {
+            freq,
+            partials,
+            attack: 0.004,
+            release: Math.max(0.05, (tempo / 1000) * 0.6),
+            gain: 0.16,
+          },
+          (i * tempo) / 1000,
+        );
+      }
+    } catch (e) {
+      console.warn('[ChirpEngine] sonification error:', e);
+    }
+  }
+
   // ── Public API ─────────────────────────────────────────────────────────────
 
   setStyle(s: SoundStyle) {
     this.style = s;
+  }
+
+  setPan(pan: number) {
+    this.defaultPan = Math.max(-1, Math.min(1, pan));
+  }
+
+  /** Track a tool call during streaming (for scaled fanfares) */
+  trackToolCall(): void {
+    this.streamToolCount++;
+  }
+
+  /** Reset stream tracking state (called on message_start) */
+  resetStreamTracking(): void {
+    this.streamToolCount = 0;
+    this.deltaTimestamps = [];
+  }
+
+  /** Get current derived streaming BPM */
+  getBpm(): number {
+    return this.beatBpm;
+  }
+
+  /** Whether ambient is currently playing */
+  get isAmbientPlaying(): boolean {
+    return this.ambientTheme !== null;
+  }
+
+  /** Whether focus noise is currently playing */
+  get isFocusNoisePlaying(): boolean {
+    return this.focusPreset !== null;
   }
 
   unlock() {
@@ -2434,10 +3067,17 @@ export class ChirpEngine {
   }
 
   dispose() {
+    this.stopAmbient();
+    this.stopFocusNoise();
     this.ctx?.close();
     this.ctx = null;
     this.masterGain = null;
     this.noiseBuffer = null;
+    this.longNoiseBuffer = null;
+    this.noteHistory = [];
+    this.deltaTimestamps = [];
+    this.streamToolCount = 0;
+    this.keystrokeIndex = 0;
   }
 }
 

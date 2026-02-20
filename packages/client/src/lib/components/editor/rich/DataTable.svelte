@@ -68,6 +68,19 @@
       uiClick();
     } catch {}
   }
+
+  /** Sonify a numeric column — map values to pitch and play sequentially */
+  function sonifyColumn(colIdx: number) {
+    if (!parsed || !settingsStore.soundEnabled) return;
+    const values = filteredRows.map((row) => Number(row[colIdx])).filter((v) => !isNaN(v));
+    if (values.length === 0) return;
+    uiClick();
+    chirpEngine.sonifyData(values, {
+      tempo: Math.max(60, Math.min(200, 3000 / values.length)),
+    });
+  }
+
+  let sonifyCol = $state<number | null>(null);
 </script>
 
 {#if parsed}
@@ -107,6 +120,23 @@
           <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
         </svg>
       </button>
+      {#if settingsStore.soundEnabled && parsed}
+        <select
+          class="sonify-select"
+          bind:value={sonifyCol}
+          onchange={() => {
+            if (sonifyCol !== null) {
+              sonifyColumn(sonifyCol);
+              sonifyCol = null;
+            }
+          }}
+        >
+          <option value={null}>Sonify...</option>
+          {#each parsed.headers as header, i}
+            <option value={i}>{header}</option>
+          {/each}
+        </select>
+      {/if}
     </div>
 
     {#if showFilter}
@@ -282,6 +312,23 @@
 
   tr:hover td {
     background: color-mix(in srgb, var(--accent-primary, #00b4ff) 6%, transparent);
+  }
+
+  .sonify-select {
+    padding: 1px 4px;
+    border: 1px solid color-mix(in srgb, var(--text-tertiary, #6e7681) 30%, transparent);
+    border-radius: 3px;
+    background: var(--bg-primary, #0d1117);
+    color: var(--text-tertiary, #6e7681);
+    font-family: var(--font-family-mono, monospace);
+    font-size: 9px;
+    outline: none;
+    cursor: pointer;
+  }
+
+  .sonify-select:hover {
+    color: var(--text-primary, #c9d1d9);
+    border-color: var(--accent-primary, #00b4ff);
   }
 
   .parse-error {
