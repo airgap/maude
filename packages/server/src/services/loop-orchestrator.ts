@@ -82,10 +82,18 @@ class LoopOrchestrator {
         if (hasPendingWork && row.status === 'running') {
           // Auto-resume: create a new runner to continue this loop
           console.log(`[loop] Auto-resuming orphaned loop ${row.id} (hot reload recovery)`);
-          // Reset any in_progress stories back to pending
-          db.query(
-            "UPDATE prd_stories SET status = 'pending', updated_at = ? WHERE status = 'in_progress'",
-          ).run(Date.now());
+          // Reset any in_progress stories back to pending — but only for THIS loop's PRD/workspace
+          // to avoid clobbering other running loops' story states.
+          const prdId = row.prd_id;
+          if (prdId) {
+            db.query(
+              "UPDATE prd_stories SET status = 'pending', updated_at = ? WHERE prd_id = ? AND status = 'in_progress'",
+            ).run(Date.now(), prdId);
+          } else {
+            db.query(
+              "UPDATE prd_stories SET status = 'pending', updated_at = ? WHERE prd_id IS NULL AND workspace_path = ? AND status = 'in_progress'",
+            ).run(Date.now(), row.workspace_path);
+          }
 
           const config: LoopConfig = JSON.parse(row.config || '{}');
           const runner = new LoopRunner(
@@ -100,7 +108,7 @@ class LoopOrchestrator {
           runner.run().catch((err) => {
             console.error(`[loop:${row.id}] Resumed runner error:`, err);
             this.updateStatus(row.id, 'failed');
-            this.emitEvent(row.id, 'completed', {
+            this.emitEvent(row.id, 'failed', {
               message: `Loop failed after resume: ${String(err)}`,
             });
             this.events.emit('loop_done', row.id);
@@ -114,7 +122,7 @@ class LoopOrchestrator {
             row.id,
           );
           console.log(`[loop] Recovered zombie loop ${row.id} → ${newStatus}`);
-          this.emitEvent(row.id, 'completed', {
+          this.emitEvent(row.id, newStatus as StreamLoopEvent['event'], {
             message:
               newStatus === 'completed'
                 ? 'All stories completed!'
@@ -164,7 +172,7 @@ class LoopOrchestrator {
         );
         console.log(`[loop] Recovered zombie loop ${z.id} → failed`);
         // Notify any connected SSE clients so UI updates immediately
-        this.emitEvent(z.id, 'completed', {
+        this.emitEvent(z.id, 'failed', {
           message: 'Loop runner lost (process may have crashed). Please start a new loop.',
         });
         this.events.emit('loop_done', z.id);
@@ -245,7 +253,7 @@ class LoopOrchestrator {
     runner.run().catch((err) => {
       console.error(`[loop:${loopId}] Unhandled error:`, err);
       this.updateStatus(loopId, 'failed');
-      this.emitEvent(loopId, 'completed', { message: `Loop failed: ${String(err)}` });
+      this.emitEvent(loopId, 'failed', { message: `Loop failed: ${String(err)}` });
       this.events.emit('loop_done', loopId);
     });
 
@@ -278,7 +286,7 @@ class LoopOrchestrator {
       // Can't resume a zombie — it has no runner. Mark it failed.
       if (row.status === 'paused') {
         this.updateStatus(loopId, 'failed');
-        this.emitEvent(loopId, 'completed', {
+        this.emitEvent(loopId, 'failed', {
           message:
             'Loop runner not available (server may have restarted). Please start a new loop.',
         });
@@ -503,11 +511,50 @@ class LoopRunner {
         // Update heartbeat at the start of each iteration
         this.sendHeartbeat();
 
-        // Recover any orphaned in_progress stories before selecting next
-        this.recoverOrphanedStories();
+        // Recover any orphaned in_progress stories before selecting next.
+        // Wrapped in try/catch so a transient DB issue doesn't crash the loop.
+        try {
+          this.recoverOrphanedStories();
+        } catch (recoverErr) {
+          console.error(
+            `[loop:${this.loopId}] recoverOrphanedStories() failed (non-fatal):`,
+            recoverErr,
+          );
+        }
 
-        // Select next story
-        const story = this.selectNextStory();
+        // Select next story.
+        // If selectNextStory() returns null, it could be a transient issue (e.g. the
+        // previous story's status update hasn't settled). Retry once after a brief
+        // delay before deciding the loop is truly done.
+        let story: UserStory | null = null;
+        try {
+          story = this.selectNextStory();
+        } catch (selectErr) {
+          console.error(`[loop:${this.loopId}] selectNextStory() threw:`, selectErr);
+          // Wait and retry once — if it fails again we'll handle it in the next iteration
+          await new Promise((r) => setTimeout(r, 2000));
+          try {
+            story = this.selectNextStory();
+          } catch (retryErr) {
+            console.error(`[loop:${this.loopId}] selectNextStory() retry also failed:`, retryErr);
+            // Continue to next iteration — the while condition may still allow us to try again
+            continue;
+          }
+        }
+
+        if (!story) {
+          // No story selected. Before giving up, wait briefly and retry once.
+          // This handles the race where a story was just marked completed but the
+          // DB read for the next story happens before the write is visible (unlikely
+          // in SQLite, but defensive against other transient issues).
+          await new Promise((r) => setTimeout(r, 1000));
+          try {
+            story = this.selectNextStory();
+          } catch {
+            /* handled below */
+          }
+        }
+
         if (!story) {
           // Check if all done or all failed
           const stories = this.getAllStories();
@@ -545,6 +592,21 @@ class LoopRunner {
             }
             // Retry selection after forced reset
             continue;
+          }
+
+          // Check if there are pending stories with unmet dependencies — they're
+          // not eligible yet but may become eligible as other stories complete.
+          const hasPendingWithDeps = stories.some(
+            (s) =>
+              s.status === 'pending' &&
+              s.attempts < s.maxAttempts &&
+              !s.researchOnly &&
+              (s.dependsOn || []).length > 0,
+          );
+          if (hasPendingWithDeps) {
+            console.warn(
+              `[loop:${this.loopId}] Pending stories exist with unmet dependencies — cannot proceed. Marking loop as failed.`,
+            );
           }
 
           // No eligible stories left (all failed/maxed out)
