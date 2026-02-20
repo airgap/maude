@@ -1,10 +1,23 @@
 <script lang="ts">
+  import { chirpEngine } from '$lib/audio/chirp-engine';
+  import { settingsStore } from '$lib/stores/settings.svelte';
+
   let { content, streaming = false } = $props<{ content: string; streaming?: boolean }>();
   let collapsed = $state(true);
+
+  function uiClick() {
+    if (settingsStore.soundEnabled) chirpEngine.uiClick();
+  }
 </script>
 
 <div class="thinking-block" class:streaming>
-  <button class="thinking-header" onclick={() => (collapsed = !collapsed)}>
+  <button
+    class="thinking-header"
+    onclick={() => {
+      collapsed = !collapsed;
+      uiClick();
+    }}
+  >
     <svg
       width="12"
       height="12"

@@ -2841,3 +2841,662 @@ select:focus {
     background: color-mix(in srgb, var(--bg-secondary, #161b22) 88%, transparent);
   }
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Chat messages — per-hypertheme entrance animations
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* Tech — clip-in reveal from left */
+[data-hypertheme='tech'] .message-animation-wrapper {
+  animation: msg-entrance-tech 180ms ease-out forwards;
+}
+@keyframes msg-entrance-tech {
+  from {
+    opacity: 0;
+    clip-path: inset(0 100% 0 0);
+  }
+  to {
+    opacity: 1;
+    clip-path: inset(0 0 0 0);
+  }
+}
+
+/* Arcane — fade with purple glow pulse */
+[data-hypertheme='arcane'] .message-animation-wrapper {
+  animation: msg-entrance-arcane 350ms ease-out forwards;
+}
+@keyframes msg-entrance-arcane {
+  0% {
+    opacity: 0;
+    box-shadow: 0 0 0 rgba(139, 92, 246, 0);
+  }
+  50% {
+    opacity: 0.8;
+    box-shadow: 0 0 18px rgba(139, 92, 246, 0.2);
+  }
+  100% {
+    opacity: 1;
+    box-shadow: none;
+  }
+}
+
+/* Ethereal — soft scale bloom, dreamy float-up */
+[data-hypertheme='ethereal'] .message-animation-wrapper {
+  animation: msg-entrance-ethereal 300ms ease-out forwards;
+}
+@keyframes msg-entrance-ethereal {
+  from {
+    opacity: 0;
+    transform: scale(0.97) translateY(6px);
+    filter: blur(2px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+    filter: blur(0);
+  }
+}
+
+/* Study — warm ember glow-in, paper unfold */
+[data-hypertheme='study'] .message-animation-wrapper {
+  animation: msg-entrance-study 280ms ease-out forwards;
+}
+@keyframes msg-entrance-study {
+  0% {
+    opacity: 0;
+    box-shadow: 0 0 0 rgba(251, 191, 36, 0);
+  }
+  60% {
+    opacity: 0.9;
+    box-shadow: 0 0 12px rgba(251, 191, 36, 0.15);
+  }
+  100% {
+    opacity: 1;
+    box-shadow: none;
+  }
+}
+
+/* Astral — starfield fade with cosmic shimmer */
+[data-hypertheme='astral'] .message-animation-wrapper,
+[data-hypertheme='astral-midnight'] .message-animation-wrapper {
+  animation: msg-entrance-astral 320ms ease-out forwards;
+}
+@keyframes msg-entrance-astral {
+  0% {
+    opacity: 0;
+    box-shadow: 0 0 0 rgba(99, 102, 241, 0);
+    transform: translateY(6px);
+  }
+  50% {
+    opacity: 0.7;
+    box-shadow: 0 0 15px rgba(99, 102, 241, 0.15);
+  }
+  100% {
+    opacity: 1;
+    box-shadow: none;
+    transform: translateY(0);
+  }
+}
+
+/* Goth — hard cut with crimson border flash */
+[data-hypertheme='goth'] .message-animation-wrapper {
+  animation: msg-entrance-goth 200ms ease-out forwards;
+}
+@keyframes msg-entrance-goth {
+  0% {
+    opacity: 0;
+    border-color: rgba(185, 28, 28, 0.4);
+  }
+  30% {
+    opacity: 1;
+    border-color: rgba(185, 28, 28, 0.2);
+  }
+  100% {
+    opacity: 1;
+    border-color: transparent;
+  }
+}
+
+/* Magic Forest — organic unfurl from top */
+[data-hypertheme='magic-forest'] .message-animation-wrapper {
+  animation: msg-entrance-forest 300ms ease-out forwards;
+}
+@keyframes msg-entrance-forest {
+  0% {
+    opacity: 0;
+    transform: scaleY(0.92);
+    transform-origin: top;
+  }
+  60% {
+    opacity: 0.9;
+    transform: scaleY(1.01);
+  }
+  100% {
+    opacity: 1;
+    transform: scaleY(1);
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Streaming text — per-hypertheme glow wave & cursor
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* Arcane — purple arcane shimmer */
+[data-hypertheme='arcane'] .prose.streaming::before {
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(139, 92, 246, 0.06) 50%,
+    transparent 100%
+  );
+  background-size: 200% 100%;
+}
+[data-hypertheme='arcane'] .cursor {
+  color: #a78bfa;
+  text-shadow:
+    0 0 6px rgba(139, 92, 246, 0.5),
+    0 0 12px rgba(139, 92, 246, 0.2);
+}
+
+/* Ethereal — teal opalescent wave */
+[data-hypertheme='ethereal'] .prose.streaming::before {
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(45, 212, 191, 0.05) 40%,
+    rgba(160, 120, 240, 0.04) 60%,
+    transparent 100%
+  );
+  background-size: 200% 100%;
+}
+[data-hypertheme='ethereal'] .cursor {
+  color: #5eead4;
+  text-shadow:
+    0 0 6px rgba(45, 212, 191, 0.4),
+    0 0 12px rgba(45, 212, 191, 0.15);
+}
+
+/* Study — warm amber glow */
+[data-hypertheme='study'] .prose.streaming::before {
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(251, 191, 36, 0.05) 50%,
+    transparent 100%
+  );
+  background-size: 200% 100%;
+}
+[data-hypertheme='study'] .cursor {
+  color: #fbbf24;
+  text-shadow:
+    0 0 6px rgba(251, 191, 36, 0.4),
+    0 0 12px rgba(251, 191, 36, 0.15);
+}
+
+/* Astral — indigo cosmic wave */
+[data-hypertheme='astral'] .prose.streaming::before,
+[data-hypertheme='astral-midnight'] .prose.streaming::before {
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(99, 102, 241, 0.05) 50%,
+    transparent 100%
+  );
+  background-size: 200% 100%;
+}
+[data-hypertheme='astral'] .cursor,
+[data-hypertheme='astral-midnight'] .cursor {
+  color: #818cf8;
+  text-shadow:
+    0 0 6px rgba(99, 102, 241, 0.5),
+    0 0 14px rgba(99, 102, 241, 0.2);
+}
+
+/* Goth — blood-red pulse wave */
+[data-hypertheme='goth'] .prose.streaming::before {
+  background: linear-gradient(90deg, transparent 0%, rgba(185, 28, 28, 0.06) 50%, transparent 100%);
+  background-size: 200% 100%;
+}
+[data-hypertheme='goth'] .cursor {
+  color: #dc2626;
+  text-shadow:
+    0 0 6px rgba(185, 28, 28, 0.5),
+    0 0 10px rgba(185, 28, 28, 0.2);
+}
+
+/* Tech — cyan scan wave */
+[data-hypertheme='tech'] .prose.streaming::before {
+  background: linear-gradient(90deg, transparent 0%, rgba(0, 180, 255, 0.06) 50%, transparent 100%);
+  background-size: 200% 100%;
+}
+
+/* Magic Forest — bioluminescent green wave */
+[data-hypertheme='magic-forest'] .prose.streaming::before {
+  background: linear-gradient(90deg, transparent 0%, rgba(34, 197, 94, 0.05) 50%, transparent 100%);
+  background-size: 200% 100%;
+}
+[data-hypertheme='magic-forest'] .cursor {
+  color: #4ade80;
+  text-shadow:
+    0 0 6px rgba(34, 197, 94, 0.5),
+    0 0 12px rgba(34, 197, 94, 0.2);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Chat sub-components — per-hypertheme visual treatments
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ── Code blocks — per-hypertheme glow ── */
+
+[data-hypertheme='arcane'] .code-block {
+  box-shadow: 0 0 10px rgba(139, 92, 246, 0.1);
+}
+[data-hypertheme='arcane'] .code-block:hover {
+  box-shadow:
+    0 0 14px rgba(139, 92, 246, 0.18),
+    inset 0 0 6px rgba(139, 92, 246, 0.04);
+}
+
+[data-hypertheme='ethereal'] .code-block {
+  box-shadow: 0 0 8px rgba(45, 212, 191, 0.06);
+}
+[data-hypertheme='ethereal'] .code-block:hover {
+  box-shadow:
+    0 0 12px rgba(45, 212, 191, 0.12),
+    inset 0 0 4px rgba(45, 212, 191, 0.03);
+}
+
+[data-hypertheme='study'] .code-block {
+  box-shadow: 0 0 8px rgba(251, 191, 36, 0.05);
+}
+[data-hypertheme='study'] .code-block:hover {
+  box-shadow: 0 0 12px rgba(251, 191, 36, 0.1);
+}
+
+[data-hypertheme='astral'] .code-block,
+[data-hypertheme='astral-midnight'] .code-block {
+  box-shadow: 0 0 8px rgba(99, 102, 241, 0.08);
+}
+[data-hypertheme='astral'] .code-block:hover,
+[data-hypertheme='astral-midnight'] .code-block:hover {
+  box-shadow: 0 0 14px rgba(99, 102, 241, 0.14);
+}
+
+[data-hypertheme='goth'] .code-block {
+  box-shadow: 0 0 6px rgba(185, 28, 28, 0.08);
+}
+[data-hypertheme='goth'] .code-block:hover {
+  box-shadow:
+    0 0 10px rgba(185, 28, 28, 0.14),
+    inset 0 1px 0 rgba(185, 28, 28, 0.06);
+}
+
+[data-hypertheme='magic-forest'] .code-block {
+  box-shadow: 0 0 8px rgba(34, 197, 94, 0.06);
+}
+[data-hypertheme='magic-forest'] .code-block:hover {
+  box-shadow: 0 0 12px rgba(34, 197, 94, 0.12);
+}
+
+/* ── Tool call blocks — per-hypertheme glow ── */
+
+[data-hypertheme='arcane'] .tool-block {
+  box-shadow: 0 0 8px rgba(139, 92, 246, 0.08);
+}
+[data-hypertheme='ethereal'] .tool-block {
+  box-shadow: 0 0 6px rgba(45, 212, 191, 0.05);
+}
+[data-hypertheme='study'] .tool-block {
+  box-shadow: 0 0 6px rgba(251, 191, 36, 0.04);
+}
+[data-hypertheme='astral'] .tool-block,
+[data-hypertheme='astral-midnight'] .tool-block {
+  box-shadow: 0 0 8px rgba(99, 102, 241, 0.06);
+}
+[data-hypertheme='goth'] .tool-block {
+  box-shadow: 0 0 5px rgba(185, 28, 28, 0.06);
+}
+[data-hypertheme='magic-forest'] .tool-block {
+  box-shadow: 0 0 6px rgba(34, 197, 94, 0.05);
+}
+
+/* ── Thinking blocks — per-hypertheme subtle styling ── */
+
+[data-hypertheme='arcane'] .thinking-block {
+  box-shadow: inset 0 0 8px rgba(139, 92, 246, 0.04);
+}
+[data-hypertheme='ethereal'] .thinking-block {
+  border-radius: var(--radius-lg, 8px);
+  box-shadow: 0 1px 6px rgba(45, 212, 191, 0.04);
+}
+[data-hypertheme='goth'] .thinking-block {
+  box-shadow: inset 0 1px 0 rgba(185, 28, 28, 0.06);
+}
+[data-hypertheme='magic-forest'] .thinking-block {
+  box-shadow: inset 0 0 6px rgba(34, 197, 94, 0.03);
+}
+
+/* ── Tool call tracker — per-hypertheme progress bar ── */
+
+[data-hypertheme='arcane'] .tool-tracker .progress-fill {
+  background: linear-gradient(90deg, #7c3aed, #a78bfa);
+}
+[data-hypertheme='ethereal'] .tool-tracker .progress-fill {
+  background: linear-gradient(90deg, #14b8a6, #5eead4);
+}
+[data-hypertheme='study'] .tool-tracker .progress-fill {
+  background: linear-gradient(90deg, #d97706, #fbbf24);
+}
+[data-hypertheme='astral'] .tool-tracker .progress-fill,
+[data-hypertheme='astral-midnight'] .tool-tracker .progress-fill {
+  background: linear-gradient(90deg, #6366f1, #818cf8);
+}
+[data-hypertheme='goth'] .tool-tracker .progress-fill {
+  background: linear-gradient(90deg, #991b1b, #dc2626);
+}
+[data-hypertheme='magic-forest'] .tool-tracker .progress-fill {
+  background: linear-gradient(90deg, #16a34a, #4ade80);
+}
+
+/* ── Message bubble — strengthen hover glow per-hypertheme ── */
+
+[data-hypertheme='arcane'] .message:hover {
+  box-shadow: inset 0 0 24px rgba(139, 92, 246, 0.05);
+}
+[data-hypertheme='ethereal'] .message:hover {
+  box-shadow:
+    0 4px 20px rgba(0, 0, 0, 0.2),
+    0 0 24px rgba(45, 212, 191, 0.06) !important;
+}
+[data-hypertheme='study'] .message:hover {
+  box-shadow:
+    0 2px 12px rgba(0, 0, 0, 0.2),
+    0 0 24px rgba(251, 191, 36, 0.06) !important;
+}
+[data-hypertheme='goth'] .message:hover {
+  box-shadow: inset 0 0 20px rgba(185, 28, 28, 0.04);
+}
+[data-hypertheme='magic-forest'] .message:hover {
+  box-shadow: inset 0 0 20px rgba(34, 197, 94, 0.04);
+}
+
+/* ── Streaming shield charge bar — per-hypertheme colors ── */
+
+[data-hypertheme='arcane'] .message.assistant::before {
+  background: linear-gradient(180deg, transparent, #8b5cf6, transparent);
+  background-size: 100% 200%;
+}
+[data-hypertheme='ethereal'] .message.assistant::before {
+  background: linear-gradient(180deg, transparent, #2dd4bf, transparent);
+  background-size: 100% 200%;
+}
+[data-hypertheme='study'] .message.assistant::before {
+  background: linear-gradient(180deg, transparent, #d97706, transparent);
+  background-size: 100% 200%;
+}
+[data-hypertheme='astral'] .message.assistant::before,
+[data-hypertheme='astral-midnight'] .message.assistant::before {
+  background: linear-gradient(180deg, transparent, #6366f1, transparent);
+  background-size: 100% 200%;
+}
+[data-hypertheme='goth'] .message.assistant::before {
+  background: linear-gradient(180deg, transparent, #dc2626, transparent);
+  background-size: 100% 200%;
+}
+[data-hypertheme='magic-forest'] .message.assistant::before {
+  background: linear-gradient(180deg, transparent, #22c55e, transparent);
+  background-size: 100% 200%;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Nudge bubbles — per-hypertheme styling
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+[data-hypertheme='arcane'] .nudge-bubble {
+  background: color-mix(in srgb, #8b5cf6 6%, transparent);
+  border-color: color-mix(in srgb, #8b5cf6 25%, transparent);
+  box-shadow: inset 0 0 8px rgba(139, 92, 246, 0.04);
+}
+[data-hypertheme='ethereal'] .nudge-bubble {
+  background: color-mix(in srgb, #2dd4bf 5%, transparent);
+  border-color: color-mix(in srgb, #2dd4bf 20%, transparent);
+  border-radius: var(--radius-lg, 8px);
+}
+[data-hypertheme='study'] .nudge-bubble {
+  background: color-mix(in srgb, #fbbf24 5%, transparent);
+  border-color: color-mix(in srgb, #d97706 20%, transparent);
+}
+[data-hypertheme='astral'] .nudge-bubble,
+[data-hypertheme='astral-midnight'] .nudge-bubble {
+  background: color-mix(in srgb, #6366f1 5%, transparent);
+  border-color: color-mix(in srgb, #6366f1 20%, transparent);
+}
+[data-hypertheme='goth'] .nudge-bubble {
+  background: color-mix(in srgb, #dc2626 5%, transparent);
+  border-color: color-mix(in srgb, #991b1b 25%, transparent);
+  box-shadow: inset 0 1px 0 rgba(185, 28, 28, 0.06);
+}
+[data-hypertheme='magic-forest'] .nudge-bubble {
+  background: color-mix(in srgb, #22c55e 5%, transparent);
+  border-color: color-mix(in srgb, #22c55e 20%, transparent);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Agent groups — per-hypertheme styling
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+[data-hypertheme='arcane'] .agent-group {
+  box-shadow: 0 0 8px rgba(139, 92, 246, 0.08);
+  border-left-color: #8b5cf6;
+}
+[data-hypertheme='ethereal'] .agent-group {
+  box-shadow: 0 0 6px rgba(45, 212, 191, 0.06);
+  border-radius: var(--radius-lg, 8px);
+}
+[data-hypertheme='study'] .agent-group {
+  box-shadow: 0 0 6px rgba(251, 191, 36, 0.05);
+  border-left-color: #d97706;
+}
+[data-hypertheme='astral'] .agent-group,
+[data-hypertheme='astral-midnight'] .agent-group {
+  box-shadow: 0 0 8px rgba(99, 102, 241, 0.06);
+  border-left-color: #6366f1;
+}
+[data-hypertheme='goth'] .agent-group {
+  box-shadow: 0 0 5px rgba(185, 28, 28, 0.06);
+  border-left-color: #dc2626;
+}
+[data-hypertheme='magic-forest'] .agent-group {
+  box-shadow: 0 0 6px rgba(34, 197, 94, 0.06);
+  border-left-color: #22c55e;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Streaming progress bar — per-hypertheme glow treatments
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* Base progress bar glow per theme — affects all variants */
+[data-hypertheme='arcane'] .progress-bar {
+  filter: drop-shadow(0 0 3px rgba(139, 92, 246, 0.3));
+}
+[data-hypertheme='ethereal'] .progress-bar {
+  filter: drop-shadow(0 0 3px rgba(45, 212, 191, 0.2));
+}
+[data-hypertheme='study'] .progress-bar {
+  filter: drop-shadow(0 0 3px rgba(251, 191, 36, 0.2));
+}
+[data-hypertheme='astral'] .progress-bar,
+[data-hypertheme='astral-midnight'] .progress-bar {
+  filter: drop-shadow(0 0 3px rgba(99, 102, 241, 0.25));
+}
+[data-hypertheme='goth'] .progress-bar {
+  filter: drop-shadow(0 0 3px rgba(185, 28, 28, 0.25));
+}
+[data-hypertheme='magic-forest'] .progress-bar {
+  filter: drop-shadow(0 0 3px rgba(34, 197, 94, 0.2));
+}
+
+/* Matrix variant — theme-tinted digital rain */
+[data-hypertheme='arcane'] .progress-bar.matrix {
+  background: repeating-linear-gradient(
+    90deg,
+    #1a002e80 0px,
+    #8b5cf6cc 1px,
+    #8b5cf666 2px,
+    #1a002e80 4px
+  );
+  background-size: 200% 100%;
+  box-shadow:
+    0 0 8px #8b5cf699,
+    0 0 3px #8b5cf6cc;
+}
+[data-hypertheme='goth'] .progress-bar.matrix {
+  background: repeating-linear-gradient(
+    90deg,
+    #1a000080 0px,
+    #dc2626cc 1px,
+    #dc262666 2px,
+    #1a000080 4px
+  );
+  background-size: 200% 100%;
+  box-shadow:
+    0 0 8px #dc262699,
+    0 0 3px #dc2626cc;
+}
+[data-hypertheme='study'] .progress-bar.matrix {
+  background: repeating-linear-gradient(
+    90deg,
+    #1a0e0080 0px,
+    #fbbf24cc 1px,
+    #fbbf2466 2px,
+    #1a0e0080 4px
+  );
+  background-size: 200% 100%;
+  box-shadow:
+    0 0 8px #fbbf2499,
+    0 0 3px #fbbf24cc;
+}
+[data-hypertheme='ethereal'] .progress-bar.matrix {
+  background: repeating-linear-gradient(
+    90deg,
+    #001a1a80 0px,
+    #2dd4bfcc 1px,
+    #2dd4bf66 2px,
+    #001a1a80 4px
+  );
+  background-size: 200% 100%;
+  box-shadow:
+    0 0 8px #2dd4bf99,
+    0 0 3px #2dd4bfcc;
+}
+[data-hypertheme='astral'] .progress-bar.matrix,
+[data-hypertheme='astral-midnight'] .progress-bar.matrix {
+  background: repeating-linear-gradient(
+    90deg,
+    #0a001a80 0px,
+    #6366f1cc 1px,
+    #6366f166 2px,
+    #0a001a80 4px
+  );
+  background-size: 200% 100%;
+  box-shadow:
+    0 0 8px #6366f199,
+    0 0 3px #6366f1cc;
+}
+
+/* Fire variant — theme-tinted warm gradient */
+[data-hypertheme='arcane'] .progress-bar.fire {
+  background: linear-gradient(
+    90deg,
+    #4c1d9580,
+    #7c3aed80,
+    #a78bfa80,
+    #6d28d980,
+    #4c1d9580,
+    #7c3aed80
+  );
+  background-size: 300% 100%;
+}
+[data-hypertheme='goth'] .progress-bar.fire {
+  background: linear-gradient(
+    90deg,
+    #7f1d1d80,
+    #dc262680,
+    #ef444480,
+    #b91c1c80,
+    #7f1d1d80,
+    #dc262680
+  );
+  background-size: 300% 100%;
+}
+[data-hypertheme='ethereal'] .progress-bar.fire {
+  background: linear-gradient(
+    90deg,
+    #0d948080,
+    #14b8a680,
+    #5eead480,
+    #0f766e80,
+    #0d948080,
+    #14b8a680
+  );
+  background-size: 300% 100%;
+}
+
+/* Ocean variant — theme-tinted deep wave */
+[data-hypertheme='arcane'] .progress-bar.ocean {
+  background: linear-gradient(
+    90deg,
+    #1e1b4b80,
+    #4c1d9580,
+    #7c3aed80,
+    #a78bfa80,
+    #6d28d980,
+    #1e1b4b80
+  );
+  background-size: 300% 100%;
+}
+[data-hypertheme='goth'] .progress-bar.ocean {
+  background: linear-gradient(
+    90deg,
+    #1a000080,
+    #7f1d1d80,
+    #dc262680,
+    #ef444480,
+    #99111180,
+    #1a000080
+  );
+  background-size: 300% 100%;
+}
+[data-hypertheme='magic-forest'] .progress-bar.ocean {
+  background: linear-gradient(
+    90deg,
+    #052e1680,
+    #15803d80,
+    #22c55e80,
+    #4ade8080,
+    #16a34a80,
+    #052e1680
+  );
+  background-size: 300% 100%;
+}
+
+/* Neon variant — theme-colored triple glow */
+[data-hypertheme='arcane'] .progress-bar.neon {
+  background: #8b5cf6;
+}
+[data-hypertheme='ethereal'] .progress-bar.neon {
+  background: #2dd4bf;
+}
+[data-hypertheme='study'] .progress-bar.neon {
+  background: #fbbf24;
+}
+[data-hypertheme='astral'] .progress-bar.neon,
+[data-hypertheme='astral-midnight'] .progress-bar.neon {
+  background: #6366f1;
+}
+[data-hypertheme='goth'] .progress-bar.neon {
+  background: #dc2626;
+}
+[data-hypertheme='magic-forest'] .progress-bar.neon {
+  background: #22c55e;
+}

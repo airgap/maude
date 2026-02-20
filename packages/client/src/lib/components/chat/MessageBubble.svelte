@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { Message, MessageContent } from '@e/shared';
   import { settingsStore } from '$lib/stores/settings.svelte';
+  import { chirpEngine } from '$lib/audio/chirp-engine';
   import CodeBlock from './CodeBlock.svelte';
   import ThinkingBlock from './ThinkingBlock.svelte';
   import ToolCallBlock from './ToolCallBlock.svelte';
@@ -112,9 +113,14 @@
 
   const isMac = typeof navigator !== 'undefined' && navigator.platform.includes('Mac');
 
+  function uiClick() {
+    if (settingsStore.soundEnabled) chirpEngine.uiClick();
+  }
+
   function copyMessageText() {
     const text = getTextContent();
     if (text) navigator.clipboard.writeText(text);
+    uiClick();
   }
 
   function copyMessageHtml() {
@@ -303,7 +309,14 @@
     {#if !editing}
       <div class="message-actions">
         <Tooltip content="Edit message" shortcut="E" placement="bottom">
-          <button class="action-btn" aria-label="Edit" onclick={() => startEdit()}>
+          <button
+            class="action-btn"
+            aria-label="Edit"
+            onclick={() => {
+              startEdit();
+              uiClick();
+            }}
+          >
             <svg
               width="12"
               height="12"
@@ -322,7 +335,10 @@
           <button
             class="action-btn"
             aria-label="Fork from here"
-            onclick={() => onFork?.(message.id)}
+            onclick={() => {
+              onFork?.(message.id);
+              uiClick();
+            }}
           >
             <svg
               width="12"
@@ -352,7 +368,10 @@
             <button
               class="action-btn action-restore"
               aria-label={restoringSnapshot ? 'Restoring...' : 'Restore snapshot'}
-              onclick={handleRestore}
+              onclick={() => {
+                handleRestore();
+                uiClick();
+              }}
               disabled={restoringSnapshot}
             >
               <svg
@@ -382,6 +401,7 @@
                   .map((b: any) => b.text)
                   .join(' ');
                 ttsStore.toggle(text, message.id);
+                uiClick();
               }}
             >
               {#if ttsStore.currentId === message.id}<svg
@@ -410,7 +430,10 @@
               <button
                 class="btn-icon"
                 aria-label="Replay session"
-                onclick={() => (showReplay = true)}
+                onclick={() => {
+                  showReplay = true;
+                  uiClick();
+                }}
                 ><svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" stroke="none"
                   ><polygon points="5 3 19 12 5 21 5 3" /></svg
                 ></button
@@ -422,7 +445,10 @@
           <button
             class="action-btn action-delete"
             aria-label="Delete message"
-            onclick={() => onDelete?.(message.id)}
+            onclick={() => {
+              onDelete?.(message.id);
+              uiClick();
+            }}
           >
             <svg
               width="12"

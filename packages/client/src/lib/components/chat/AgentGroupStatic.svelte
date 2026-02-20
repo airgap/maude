@@ -1,9 +1,14 @@
 <script lang="ts">
   import type { MessageContent } from '@e/shared';
   import { settingsStore } from '$lib/stores/settings.svelte';
+  import { chirpEngine } from '$lib/audio/chirp-engine';
   import ThinkingBlock from './ThinkingBlock.svelte';
   import ToolCallBlock from './ToolCallBlock.svelte';
   import { renderMarkdownPartial } from '$lib/utils/markdown';
+
+  function uiClick() {
+    if (settingsStore.soundEnabled) chirpEngine.uiClick();
+  }
 
   let {
     taskBlock,
@@ -36,7 +41,13 @@
 </script>
 
 <div class="agent-group">
-  <button class="agent-header" onclick={() => (expanded = !expanded)}>
+  <button
+    class="agent-header"
+    onclick={() => {
+      expanded = !expanded;
+      uiClick();
+    }}
+  >
     <svg
       width="12"
       height="12"

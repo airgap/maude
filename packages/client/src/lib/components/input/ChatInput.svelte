@@ -6,6 +6,7 @@
   import { editorStore } from '$lib/stores/editor.svelte';
   import { lspStore } from '$lib/stores/lsp.svelte';
   import { sendAndStream, cancelStream } from '$lib/api/sse';
+  import { chirpEngine } from '$lib/audio/chirp-engine';
   import { api } from '$lib/api/client';
   import { executeSlashCommand, type SlashCommandContext } from '$lib/commands/slash-commands';
   import { uiStore, onFocusChatInput } from '$lib/stores/ui.svelte';
@@ -575,6 +576,9 @@
       conversationStore.activeId != null &&
       streamStore.conversationId === conversationStore.activeId;
     if ((!text && pendingAttachments.length === 0) || isStreamingHere) return;
+
+    // Audio feedback for chat send
+    if (settingsStore.soundEnabled) chirpEngine.chirp('chat_send');
 
     // Intercept `cd` as directory navigation
     if (text === 'cd' || text.startsWith('cd ')) {

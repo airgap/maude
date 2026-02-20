@@ -32,7 +32,9 @@ export type ChirpEvent =
   | 'command_success' // Terminal command exited 0
   | 'command_fail' // Terminal command exited non-zero
   | 'rich_appear' // Rich content detected for a block
-  | 'progress_complete'; // Progress bar hit 100%
+  | 'progress_complete' // Progress bar hit 100%
+  // Chat events
+  | 'chat_send'; // User sent a chat message
 
 // ---------------------------------------------------------------------------
 // Additive synthesis primitives
@@ -300,6 +302,15 @@ const EVENT_NOTES: Record<ChirpEvent, NoteSpec | NoteSpec[]> = {
     { freq: NOTES.G5, partials: MARIMBA, attack: 0.004, release: 0.25, gain: 0.12 },
     { freq: NOTES.C6, partials: MARIMBA, attack: 0.004, release: 0.25, gain: 0.08 },
   ],
+
+  // Chat send — bright vibraphone tap on A4, quick affirmation
+  chat_send: {
+    freq: NOTES.A4,
+    partials: VIBRAPHONE,
+    attack: 0.003,
+    release: 0.06,
+    gain: 0.2,
+  },
 };
 
 // ---------------------------------------------------------------------------
@@ -658,6 +669,15 @@ const FOREST_EVENT_NOTES: Record<ChirpEvent, NoteSpec | NoteSpec[]> = {
     { freq: FOREST_NOTES.A5, partials: FAIRY_SPARKLE, attack: 0.004, release: 0.3, gain: 0.16 },
     { freq: FOREST_NOTES.D6, partials: FAIRY_SPARKLE, attack: 0.004, release: 0.3, gain: 0.1 },
   ],
+
+  // Chat send — leaf rustle, quick wind chime tap
+  chat_send: {
+    freq: FOREST_NOTES.A4,
+    partials: WIND_CHIME,
+    attack: 0.003,
+    release: 0.06,
+    gain: 0.18,
+  },
 };
 
 interface ForestToolNotes {
@@ -960,6 +980,15 @@ const WIND_CHIME_EVENT_NOTES: Record<ChirpEvent, NoteSpec | NoteSpec[]> = {
     { freq: CHIME_NOTES.C6, partials: CRYSTAL_CHIME, attack: 0.004, release: 0.25, gain: 0.1 },
     { freq: CHIME_NOTES.F6, partials: CRYSTAL_CHIME, attack: 0.004, release: 0.25, gain: 0.06 },
   ],
+
+  // Chat send — tinkle chime tap, bright acknowledgement
+  chat_send: {
+    freq: CHIME_NOTES.A5,
+    partials: TINKLE_CHIME,
+    attack: 0.003,
+    release: 0.06,
+    gain: 0.18,
+  },
 };
 
 interface WindChimeToolNotes {
@@ -1193,6 +1222,15 @@ const WHIMSY_EVENT_NOTES: Record<ChirpEvent, NoteSpec | NoteSpec[]> = {
     { freq: WHIMSY_NOTES.G5, partials: MUSIC_BOX, attack: 0.003, release: 0.3, gain: 0.1 },
     { freq: WHIMSY_NOTES.C6, partials: MUSIC_BOX, attack: 0.003, release: 0.3, gain: 0.06 },
   ],
+
+  // Chat send — toy piano pop, cheerful send
+  chat_send: {
+    freq: WHIMSY_NOTES.A5,
+    partials: TOY_PIANO,
+    attack: 0.002,
+    release: 0.06,
+    gain: 0.18,
+  },
 };
 
 interface WhimsyToolNotes {
@@ -1458,6 +1496,17 @@ const CLASSIC_CHIRPS: Record<ChirpEvent, ClassicConfig> = {
     gain: 0.24,
     gain2: 0.14,
   },
+
+  // Chat send — quick sine blip, crisp acknowledgement
+  chat_send: {
+    freq: 880,
+    type: 'sine',
+    attack: 0.003,
+    decay: 0.06,
+    sustain: 0.0,
+    release: 0.04,
+    gain: 0.18,
+  },
 };
 
 type ClassicToolFamily = 'shell' | 'read' | 'write' | 'search' | 'agent' | 'default';
@@ -1622,6 +1671,7 @@ const EVENT_COOLDOWNS: Partial<Record<ChirpEvent, number>> = {
   command_fail: 200,
   rich_appear: 300,
   progress_complete: 500,
+  chat_send: 300,
 };
 
 // ---------------------------------------------------------------------------

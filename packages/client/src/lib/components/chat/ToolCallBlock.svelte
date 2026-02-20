@@ -1,6 +1,12 @@
 <script lang="ts">
   import { highlightLines, langFromPath, escapeHtml } from '$lib/utils/highlight';
   import { parseMcpToolName } from '@e/shared';
+  import { chirpEngine } from '$lib/audio/chirp-engine';
+  import { settingsStore } from '$lib/stores/settings.svelte';
+
+  function uiClick() {
+    if (settingsStore.soundEnabled) chirpEngine.uiClick();
+  }
 
   let {
     toolName,
@@ -320,7 +326,13 @@
 </script>
 
 <div class="tool-block" class:running class:error={result?.is_error && !compact} class:compact>
-  <button class="tool-header" onclick={() => (expanded = !expanded)}>
+  <button
+    class="tool-header"
+    onclick={() => {
+      expanded = !expanded;
+      uiClick();
+    }}
+  >
     <svg
       width="12"
       height="12"

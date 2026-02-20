@@ -3,9 +3,15 @@
   import { primaryPaneStore } from '$lib/stores/primaryPane.svelte';
   import { highlightLines } from '$lib/utils/highlight';
   import { uiStore } from '$lib/stores/ui.svelte';
+  import { chirpEngine } from '$lib/audio/chirp-engine';
+  import { settingsStore } from '$lib/stores/settings.svelte';
   import ContextMenu from '$lib/components/ui/ContextMenu.svelte';
   import type { ContextMenuItem } from '$lib/components/ui/ContextMenu.svelte';
   import Tooltip from '$lib/components/ui/Tooltip.svelte';
+
+  function uiClick() {
+    if (settingsStore.soundEnabled) chirpEngine.uiClick();
+  }
 
   // ── Friendly names for language labels ──
   const LANG_DISPLAY: Record<string, string> = {
@@ -118,6 +124,7 @@
   async function copy() {
     await navigator.clipboard.writeText(code);
     copied = true;
+    uiClick();
     setTimeout(() => {
       copied = false;
     }, 2000);
@@ -126,6 +133,7 @@
   async function copyLine(idx: number) {
     await navigator.clipboard.writeText(displayLines[idx]);
     copiedLine = idx;
+    uiClick();
     setTimeout(() => {
       copiedLine = null;
     }, 1500);
@@ -307,7 +315,14 @@
           content="Open in editor"
           shortcut={navigator?.platform?.includes('Mac') ? '⌘↵' : 'Ctrl+Enter'}
         >
-          <button class="code-btn" onclick={openInEditor} aria-label="Open in editor">
+          <button
+            class="code-btn"
+            onclick={() => {
+              openInEditor();
+              uiClick();
+            }}
+            aria-label="Open in editor"
+          >
             <svg
               width="13"
               height="13"
@@ -333,6 +348,7 @@
           class:active={wordWrap}
           onclick={() => {
             wordWrap = !wordWrap;
+            uiClick();
           }}
           aria-label={wordWrap ? 'Disable word wrap' : 'Enable word wrap'}
           aria-pressed={wordWrap}
