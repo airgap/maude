@@ -4,19 +4,40 @@ import {
   type CommentaryPersonality,
   PERSONALITY_PROMPTS,
 } from '../services/commentator';
+import { getDb } from '../db/database';
 import type { StreamCommentary } from '@e/shared';
 
 const app = new Hono();
 
 /** All valid personality values (used for query-param validation). */
 const VALID_PERSONALITIES = Object.keys(PERSONALITY_PROMPTS) as CommentaryPersonality[];
-const DEFAULT_PERSONALITY: CommentaryPersonality = 'sports_announcer';
+const FALLBACK_PERSONALITY: CommentaryPersonality = 'sports_announcer';
+
+/** Read the user's preferred commentary personality from settings, if any. */
+function getUserPreferredPersonality(): CommentaryPersonality | undefined {
+  try {
+    const db = getDb();
+    const row = db
+      .query('SELECT value FROM settings WHERE key = ?')
+      .get('commentaryPersonality') as { value: string } | null;
+    if (row) {
+      const parsed = JSON.parse(row.value) as string;
+      if (VALID_PERSONALITIES.includes(parsed as CommentaryPersonality)) {
+        return parsed as CommentaryPersonality;
+      }
+    }
+  } catch {
+    /* settings unavailable — fall through */
+  }
+  return undefined;
+}
 
 /**
  * GET /commentary/:workspaceId — SSE stream of commentary events.
  *
  * Query params:
- *   personality — one of CommentaryPersonality values (defaults to sports_announcer)
+ *   personality — one of CommentaryPersonality values
+ *                 (defaults to user preference, then falls back to sports_announcer)
  *
  * The endpoint starts the commentator for the given workspace when the client
  * connects and stops it when the client disconnects.
@@ -24,12 +45,14 @@ const DEFAULT_PERSONALITY: CommentaryPersonality = 'sports_announcer';
 app.get('/:workspaceId', (c) => {
   const workspaceId = c.req.param('workspaceId');
 
-  // Resolve personality from query param, falling back to the default
+  // Resolve personality: query param → user preference → fallback
   const rawPersonality = c.req.query('personality');
-  const personality: CommentaryPersonality =
-    rawPersonality && VALID_PERSONALITIES.includes(rawPersonality as CommentaryPersonality)
-      ? (rawPersonality as CommentaryPersonality)
-      : DEFAULT_PERSONALITY;
+  let personality: CommentaryPersonality;
+  if (rawPersonality && VALID_PERSONALITIES.includes(rawPersonality as CommentaryPersonality)) {
+    personality = rawPersonality as CommentaryPersonality;
+  } else {
+    personality = getUserPreferredPersonality() ?? FALLBACK_PERSONALITY;
+  }
 
   // Start (or restart) commentary for this workspace
   commentatorService.startCommentary(workspaceId, personality);
