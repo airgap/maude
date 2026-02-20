@@ -39,6 +39,7 @@ import { artifactRoutes } from './routes/artifacts';
 import { agentNoteRoutes } from './routes/agent-notes';
 import { managerRoutes } from './routes/manager';
 import { taskRunnerRoutes } from './routes/task-runner';
+import { commentaryRoutes } from './routes/commentary';
 import { authMiddleware } from './middleware/auth';
 import { websocket } from './ws';
 import { initDatabase } from './db/database';
@@ -115,6 +116,7 @@ app.route('/api/artifacts', artifactRoutes);
 app.route('/api/agent-notes', agentNoteRoutes);
 app.route('/api/manager', managerRoutes);
 app.route('/api/task-runner', taskRunnerRoutes);
+app.route('/api/commentary', commentaryRoutes);
 
 // Initialize database
 initDatabase();
