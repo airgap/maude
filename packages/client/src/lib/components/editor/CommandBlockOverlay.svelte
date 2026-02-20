@@ -3,6 +3,8 @@
   import { terminalStore } from '$lib/stores/terminal.svelte';
   import { terminalConnectionManager } from '$lib/services/terminal-connection';
   import RichBlockRenderer from './RichBlockRenderer.svelte';
+  import { chirpEngine } from '$lib/audio/chirp-engine';
+  import { settingsStore } from '$lib/stores/settings.svelte';
 
   let { sessionId, blocks, cellHeight, cellWidth, viewportTopRow, viewportRows, terminalElement } =
     $props<{
@@ -139,7 +141,10 @@
           <div class="block-header-inner">
             <button
               class="collapse-toggle"
-              onclick={() => terminalStore.toggleBlockCollapse(sessionId, block.id)}
+              onclick={() => {
+                terminalStore.toggleBlockCollapse(sessionId, block.id);
+                if (settingsStore.soundEnabled) chirpEngine.uiClick();
+              }}
               title={block.collapsed ? 'Expand output' : 'Collapse output'}
               aria-label={block.collapsed ? 'Expand command output' : 'Collapse command output'}
             >
@@ -214,7 +219,10 @@
               <button
                 class="rich-toggle"
                 class:active={vb.richActive}
-                onclick={() => terminalStore.toggleRichView(block.id)}
+                onclick={() => {
+                  terminalStore.toggleRichView(block.id);
+                  if (settingsStore.soundEnabled) chirpEngine.uiClick();
+                }}
                 title={vb.richActive ? 'Show raw output' : 'Show rich view'}
                 aria-label={vb.richActive
                   ? 'Switch to raw terminal output'
@@ -590,6 +598,18 @@
     padding: 4px 8px;
     overflow-y: auto;
     z-index: 6;
+    animation: rich-entrance var(--ht-transition-speed, 125ms) ease-out;
+  }
+
+  @keyframes rich-entrance {
+    from {
+      opacity: 0;
+      transform: translateY(-4px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
   }
 
   .rich-overlay.success {

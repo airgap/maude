@@ -1,6 +1,12 @@
 <script lang="ts">
   import type { RichErrorData } from '@e/shared';
   import { editorStore } from '$lib/stores/editor.svelte';
+  import { chirpEngine } from '$lib/audio/chirp-engine';
+  import { settingsStore } from '$lib/stores/settings.svelte';
+
+  function uiClick() {
+    if (settingsStore.soundEnabled) chirpEngine.uiClick();
+  }
 
   let { data } = $props<{ data: string }>();
 
@@ -23,6 +29,7 @@
   const internalCount = $derived(parsed?.frames.filter((f) => f.isInternal).length ?? 0);
 
   function openFile(file: string, line: number, col?: number) {
+    uiClick();
     editorStore.openFile(file, false, { line, col: col ?? 1 });
   }
 </script>
@@ -84,10 +91,43 @@
 
 <style>
   .error-renderer {
-    border: 1px solid color-mix(in srgb, var(--accent-error, #ff3344) 30%, transparent);
-    border-radius: var(--radius-sm, 4px);
+    border: var(--ht-border-width, 1px) var(--ht-border-style, solid)
+      color-mix(in srgb, var(--accent-error, #ff3344) 30%, transparent);
+    border-radius: var(--ht-radius, 4px);
     overflow: hidden;
     background: color-mix(in srgb, var(--accent-error, #ff3344) 4%, var(--bg-primary, #0d1117));
+    transition: border-color var(--ht-transition-speed, 125ms) ease;
+    animation:
+      error-shake 0.3s ease-out,
+      error-flash 0.4s ease-out;
+  }
+
+  @keyframes error-shake {
+    0%,
+    100% {
+      transform: translateX(0);
+    }
+    20% {
+      transform: translateX(-2px);
+    }
+    40% {
+      transform: translateX(2px);
+    }
+    60% {
+      transform: translateX(-1px);
+    }
+    80% {
+      transform: translateX(1px);
+    }
+  }
+
+  @keyframes error-flash {
+    0% {
+      border-color: var(--accent-error, #ff3344);
+    }
+    100% {
+      border-color: color-mix(in srgb, var(--accent-error, #ff3344) 30%, transparent);
+    }
   }
 
   .error-header {

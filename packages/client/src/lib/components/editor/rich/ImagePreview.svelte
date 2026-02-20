@@ -1,7 +1,13 @@
 <script lang="ts">
   import { getBaseUrl } from '$lib/api/client';
+  import { chirpEngine } from '$lib/audio/chirp-engine';
+  import { settingsStore } from '$lib/stores/settings.svelte';
 
   let { data } = $props<{ data: string }>();
+
+  function uiClick() {
+    if (settingsStore.soundEnabled) chirpEngine.uiClick();
+  }
 
   let selectedImage = $state<string | null>(null);
 
@@ -35,7 +41,10 @@
       {#each paths as path (path)}
         <button
           class="thumbnail"
-          onclick={() => (selectedImage = selectedImage === path ? null : path)}
+          onclick={() => {
+            selectedImage = selectedImage === path ? null : path;
+            uiClick();
+          }}
           title={getFileName(path)}
         >
           <img src={imageUrl(path)} alt={getFileName(path)} loading="lazy" />
@@ -72,10 +81,12 @@
 
 <style>
   .image-preview-wrapper {
-    border: 1px solid color-mix(in srgb, var(--text-tertiary, #6e7681) 20%, transparent);
-    border-radius: var(--radius-sm, 4px);
+    border: var(--ht-border-width, 1px) var(--ht-border-style, solid)
+      color-mix(in srgb, var(--text-tertiary, #6e7681) 20%, transparent);
+    border-radius: var(--ht-radius, 4px);
     overflow: hidden;
     background: var(--bg-primary, #0d1117);
+    transition: border-color var(--ht-transition-speed, 125ms) ease;
   }
 
   .preview-toolbar {

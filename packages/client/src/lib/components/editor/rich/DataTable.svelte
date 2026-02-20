@@ -1,7 +1,13 @@
 <script lang="ts">
   import type { RichTableData } from '@e/shared';
+  import { chirpEngine } from '$lib/audio/chirp-engine';
+  import { settingsStore } from '$lib/stores/settings.svelte';
 
   let { data } = $props<{ data: string }>();
+
+  function uiClick() {
+    if (settingsStore.soundEnabled) chirpEngine.uiClick();
+  }
 
   let sortCol = $state<number | null>(null);
   let sortAsc = $state(true);
@@ -45,6 +51,7 @@
   });
 
   function handleSort(colIdx: number) {
+    uiClick();
     if (sortCol === colIdx) {
       sortAsc = !sortAsc;
     } else {
@@ -58,6 +65,7 @@
     const lines = [parsed.headers.join(','), ...filteredRows.map((r) => r.join(','))];
     try {
       await navigator.clipboard.writeText(lines.join('\n'));
+      uiClick();
     } catch {}
   }
 </script>
@@ -67,7 +75,14 @@
     <div class="table-toolbar">
       <span class="row-count">{filteredRows.length} row{filteredRows.length !== 1 ? 's' : ''}</span>
       <span class="format-badge">{parsed.format}</span>
-      <button class="toolbar-btn" onclick={() => (showFilter = !showFilter)} title="Filter rows">
+      <button
+        class="toolbar-btn"
+        onclick={() => {
+          showFilter = !showFilter;
+          uiClick();
+        }}
+        title="Filter rows"
+      >
         <svg
           width="12"
           height="12"
@@ -132,10 +147,12 @@
 
 <style>
   .data-table-wrapper {
-    border: 1px solid color-mix(in srgb, var(--text-tertiary, #6e7681) 20%, transparent);
-    border-radius: var(--radius-sm, 4px);
+    border: var(--ht-border-width, 1px) var(--ht-border-style, solid)
+      color-mix(in srgb, var(--text-tertiary, #6e7681) 20%, transparent);
+    border-radius: var(--ht-radius, 4px);
     overflow: hidden;
     background: var(--bg-primary, #0d1117);
+    transition: border-color var(--ht-transition-speed, 125ms) ease;
   }
 
   .table-toolbar {

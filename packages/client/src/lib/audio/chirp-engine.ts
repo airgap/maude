@@ -27,7 +27,12 @@ export type ChirpEvent =
   | 'user_question' // User question prompt
   | 'message_stop' // Response complete
   | 'error' // Stream error
-  | 'cancelled'; // User cancelled
+  | 'cancelled' // User cancelled
+  // Terminal events
+  | 'command_success' // Terminal command exited 0
+  | 'command_fail' // Terminal command exited non-zero
+  | 'rich_appear' // Rich content detected for a block
+  | 'progress_complete'; // Progress bar hit 100%
 
 // ---------------------------------------------------------------------------
 // Additive synthesis primitives
@@ -260,6 +265,40 @@ const EVENT_NOTES: Record<ChirpEvent, NoteSpec | NoteSpec[]> = {
   cancelled: [
     { freq: NOTES.A4, partials: MARIMBA, attack: 0.006, release: 0.3, gain: 0.2 },
     { freq: NOTES.G4, partials: MARIMBA, attack: 0.006, release: 0.4, gain: 0.14 },
+  ],
+
+  // ── Terminal events ──
+
+  // Quick vibraphone dyad — C5 + E5, bright clean confirmation
+  command_success: [
+    { freq: NOTES.C5, partials: VIBRAPHONE, attack: 0.003, release: 0.1, gain: 0.2 },
+    { freq: NOTES.E5, partials: VIBRAPHONE, attack: 0.003, release: 0.1, gain: 0.12 },
+  ],
+
+  // Low plate clang — Bb4, mechanical failure
+  command_fail: {
+    freq: NOTES.Bb4,
+    partials: PLATE,
+    attack: 0.002,
+    release: 0.1,
+    gain: 0.22,
+  },
+
+  // Soft bowl bloom — E5, data unfolding into existence
+  rich_appear: {
+    freq: NOTES.E5,
+    partials: BOWL,
+    attack: 0.02,
+    release: 0.2,
+    gain: 0.16,
+  },
+
+  // Ascending marimba fanfare — C5 + E5 + G5 + C6
+  progress_complete: [
+    { freq: NOTES.C5, partials: MARIMBA, attack: 0.004, release: 0.25, gain: 0.24 },
+    { freq: NOTES.E5, partials: MARIMBA, attack: 0.004, release: 0.25, gain: 0.18 },
+    { freq: NOTES.G5, partials: MARIMBA, attack: 0.004, release: 0.25, gain: 0.12 },
+    { freq: NOTES.C6, partials: MARIMBA, attack: 0.004, release: 0.25, gain: 0.08 },
   ],
 };
 
@@ -588,6 +627,37 @@ const FOREST_EVENT_NOTES: Record<ChirpEvent, NoteSpec | NoteSpec[]> = {
     { freq: FOREST_NOTES.E5, partials: WOODEN_FLUTE, attack: 0.006, release: 0.3, gain: 0.2 },
     { freq: FOREST_NOTES.D5, partials: WOODEN_FLUTE, attack: 0.006, release: 0.4, gain: 0.14 },
   ],
+
+  // Wind chime resolution — D5 + A5, woodland confirmation
+  command_success: [
+    { freq: FOREST_NOTES.D5, partials: WIND_CHIME, attack: 0.003, release: 0.12, gain: 0.2 },
+    { freq: FOREST_NOTES.A5, partials: WIND_CHIME, attack: 0.003, release: 0.12, gain: 0.12 },
+  ],
+
+  // Owl warning hoot — D2, deep ominous call
+  command_fail: {
+    freq: FOREST_NOTES.D2,
+    partials: OWL_HOOT,
+    attack: 0.03,
+    release: 0.2,
+    gain: 0.22,
+  },
+
+  // Fairy sparkle bloom — A5, magical data appearing
+  rich_appear: {
+    freq: FOREST_NOTES.A5,
+    partials: FAIRY_SPARKLE,
+    attack: 0.01,
+    release: 0.15,
+    gain: 0.16,
+  },
+
+  // Ascending fairy cascade — D5 + A5 + D6
+  progress_complete: [
+    { freq: FOREST_NOTES.D5, partials: FAIRY_SPARKLE, attack: 0.004, release: 0.3, gain: 0.22 },
+    { freq: FOREST_NOTES.A5, partials: FAIRY_SPARKLE, attack: 0.004, release: 0.3, gain: 0.16 },
+    { freq: FOREST_NOTES.D6, partials: FAIRY_SPARKLE, attack: 0.004, release: 0.3, gain: 0.1 },
+  ],
 };
 
 interface ForestToolNotes {
@@ -858,6 +928,38 @@ const WIND_CHIME_EVENT_NOTES: Record<ChirpEvent, NoteSpec | NoteSpec[]> = {
     { freq: CHIME_NOTES.G5, partials: TINKLE_CHIME, attack: 0.004, release: 0.12, gain: 0.18 },
     { freq: CHIME_NOTES.F5, partials: TINKLE_CHIME, attack: 0.004, release: 0.15, gain: 0.12 },
   ],
+
+  // Crystal chime resolution — F5 + C6
+  command_success: [
+    { freq: CHIME_NOTES.F5, partials: CRYSTAL_CHIME, attack: 0.003, release: 0.1, gain: 0.2 },
+    { freq: CHIME_NOTES.C6, partials: CRYSTAL_CHIME, attack: 0.003, release: 0.1, gain: 0.12 },
+  ],
+
+  // Low bamboo clack — warning tap
+  command_fail: {
+    freq: CHIME_NOTES.F3,
+    partials: BAMBOO_CHIME,
+    attack: 0.002,
+    release: 0.08,
+    gain: 0.22,
+  },
+
+  // Tinkle shimmer — A5, data appearing
+  rich_appear: {
+    freq: CHIME_NOTES.A5,
+    partials: TINKLE_CHIME,
+    attack: 0.01,
+    release: 0.15,
+    gain: 0.16,
+  },
+
+  // Ascending crystal cascade — F5 + A5 + C6 + F6
+  progress_complete: [
+    { freq: CHIME_NOTES.F5, partials: CRYSTAL_CHIME, attack: 0.004, release: 0.25, gain: 0.22 },
+    { freq: CHIME_NOTES.A5, partials: CRYSTAL_CHIME, attack: 0.004, release: 0.25, gain: 0.16 },
+    { freq: CHIME_NOTES.C6, partials: CRYSTAL_CHIME, attack: 0.004, release: 0.25, gain: 0.1 },
+    { freq: CHIME_NOTES.F6, partials: CRYSTAL_CHIME, attack: 0.004, release: 0.25, gain: 0.06 },
+  ],
 };
 
 interface WindChimeToolNotes {
@@ -1058,6 +1160,38 @@ const WHIMSY_EVENT_NOTES: Record<ChirpEvent, NoteSpec | NoteSpec[]> = {
   cancelled: [
     { freq: WHIMSY_NOTES.A5, partials: TOY_PIANO, attack: 0.004, release: 0.28, gain: 0.2 },
     { freq: WHIMSY_NOTES.G5, partials: TOY_PIANO, attack: 0.004, release: 0.38, gain: 0.14 },
+  ],
+
+  // Music box resolution — D5 + A5, toy success
+  command_success: [
+    { freq: WHIMSY_NOTES.D5, partials: MUSIC_BOX, attack: 0.002, release: 0.12, gain: 0.2 },
+    { freq: WHIMSY_NOTES.A5, partials: MUSIC_BOX, attack: 0.002, release: 0.12, gain: 0.12 },
+  ],
+
+  // Toy xylophone descending clunk — F4, cartoonish fail
+  command_fail: {
+    freq: WHIMSY_NOTES.F4,
+    partials: TOY_XYLOPHONE,
+    attack: 0.002,
+    release: 0.1,
+    gain: 0.22,
+  },
+
+  // Kalimba sparkle — G5, data blooming
+  rich_appear: {
+    freq: WHIMSY_NOTES.G5,
+    partials: KALIMBA,
+    attack: 0.01,
+    release: 0.18,
+    gain: 0.16,
+  },
+
+  // Music box ascending arpeggio — C5 + E5 + G5 + C6
+  progress_complete: [
+    { freq: WHIMSY_NOTES.C5, partials: MUSIC_BOX, attack: 0.003, release: 0.3, gain: 0.22 },
+    { freq: WHIMSY_NOTES.E5, partials: MUSIC_BOX, attack: 0.003, release: 0.3, gain: 0.16 },
+    { freq: WHIMSY_NOTES.G5, partials: MUSIC_BOX, attack: 0.003, release: 0.3, gain: 0.1 },
+    { freq: WHIMSY_NOTES.C6, partials: MUSIC_BOX, attack: 0.003, release: 0.3, gain: 0.06 },
   ],
 };
 
@@ -1272,6 +1406,58 @@ const CLASSIC_CHIRPS: Record<ChirpEvent, ClassicConfig> = {
     gain: 0.18,
     filter: 900,
   },
+
+  // Terminal: quick rising pair — shell success beep
+  command_success: {
+    freq: 880,
+    freq2: 1320,
+    type: 'square',
+    attack: 0.003,
+    decay: 0.04,
+    sustain: 0.0,
+    release: 0.08,
+    gain: 0.18,
+    gain2: 0.1,
+    filter: 2000,
+  },
+
+  // Terminal: descending sawtooth buzz — shell fail
+  command_fail: {
+    freq: 200,
+    freq2: 140,
+    type: 'sawtooth',
+    attack: 0.005,
+    decay: 0.08,
+    sustain: 0.0,
+    release: 0.14,
+    gain: 0.2,
+    gain2: 0.12,
+    filter: 600,
+  },
+
+  // Terminal: sine bloom — data appearing
+  rich_appear: {
+    freq: 1200,
+    type: 'sine',
+    attack: 0.015,
+    decay: 0.1,
+    sustain: 0.0,
+    release: 0.15,
+    gain: 0.14,
+  },
+
+  // Terminal: rising sine fanfare — progress done
+  progress_complete: {
+    freq: 523,
+    freq2: 1047,
+    type: 'sine',
+    attack: 0.008,
+    decay: 0.18,
+    sustain: 0.0,
+    release: 0.3,
+    gain: 0.24,
+    gain2: 0.14,
+  },
 };
 
 type ClassicToolFamily = 'shell' | 'read' | 'write' | 'search' | 'agent' | 'default';
@@ -1432,6 +1618,10 @@ const EVENT_COOLDOWNS: Partial<Record<ChirpEvent, number>> = {
   tool_start: 120,
   tool_result_ok: 200,
   text_start: 100,
+  command_success: 200,
+  command_fail: 200,
+  rich_appear: 300,
+  progress_complete: 500,
 };
 
 // ---------------------------------------------------------------------------
@@ -2130,6 +2320,52 @@ export class ChirpEngine {
     note(0.0, 329, 329, 0.07, 0.22);
     note(0.09, 392, 392, 0.07, 0.24);
     note(0.19, 494, 587, 0.28, 0.3);
+  }
+
+  // ── Terminal interaction sounds ─────────────────────────────────────────────
+
+  /** Ultra-short micro-click for UI interactions (sorting, toggling, etc.) */
+  uiClick() {
+    const cooldown = 60;
+    const now = performance.now();
+    if (now - (this.lastFired.get('command_success') ?? 0) < cooldown) return;
+    this.lastFired.set('command_success', now);
+    try {
+      this.playNote({
+        freq: 1800,
+        partials: [{ ratio: 1, gain: 1.0, decay: 0.03 }],
+        attack: 0.001,
+        release: 0.015,
+        gain: 0.08,
+      });
+    } catch (e) {
+      console.warn('[ChirpEngine] playback error:', e);
+    }
+  }
+
+  /** Play ascending milestone tone based on progress percentage */
+  progressMilestone(percent: number) {
+    const cooldown = 800;
+    const now = performance.now();
+    if (now - (this.lastFired.get('progress_complete') ?? 0) < cooldown) return;
+    this.lastFired.set('progress_complete', now);
+
+    // Map percentage to ascending scale degrees
+    const milestoneNotes = [NOTES.C4, NOTES.E4, NOTES.G4, NOTES.C5, NOTES.E5];
+    const idx = Math.min(Math.floor(percent / 25), milestoneNotes.length - 1);
+    const freq = milestoneNotes[idx];
+
+    try {
+      this.playNote({
+        freq,
+        partials: VIBRAPHONE,
+        attack: 0.003,
+        release: 0.08,
+        gain: 0.12,
+      });
+    } catch (e) {
+      console.warn('[ChirpEngine] playback error:', e);
+    }
   }
 
   // ── Public API ─────────────────────────────────────────────────────────────

@@ -1,5 +1,12 @@
 <script lang="ts">
+  import { chirpEngine } from '$lib/audio/chirp-engine';
+  import { settingsStore } from '$lib/stores/settings.svelte';
+
   let { data } = $props<{ data: string }>();
+
+  function uiClick() {
+    if (settingsStore.soundEnabled) chirpEngine.uiClick();
+  }
 
   let parsed = $derived.by(() => {
     try {
@@ -13,6 +20,7 @@
   let filter = $state('');
 
   function toggle(path: string) {
+    uiClick();
     const next = new Set(expandedPaths);
     if (next.has(path)) {
       next.delete(path);
@@ -67,6 +75,7 @@
   async function copyPath(path: string) {
     try {
       await navigator.clipboard.writeText(path);
+      uiClick();
     } catch {}
   }
 </script>
@@ -136,10 +145,12 @@
 
 <style>
   .json-explorer {
-    border: 1px solid color-mix(in srgb, var(--text-tertiary, #6e7681) 20%, transparent);
-    border-radius: var(--radius-sm, 4px);
+    border: var(--ht-border-width, 1px) var(--ht-border-style, solid)
+      color-mix(in srgb, var(--text-tertiary, #6e7681) 20%, transparent);
+    border-radius: var(--ht-radius, 4px);
     overflow: hidden;
     background: var(--bg-primary, #0d1117);
+    transition: border-color var(--ht-transition-speed, 125ms) ease;
   }
 
   .json-toolbar {

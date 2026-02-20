@@ -491,6 +491,16 @@ function createTerminalStore() {
       return connected;
     },
 
+    /** Raw command blocks map (for reactive watching in effects like TerminalAudio) */
+    get commandBlocksMap(): ReadonlyMap<string, TerminalCommandBlock[]> {
+      return commandBlocks;
+    },
+
+    /** Raw rich content map (for reactive watching in effects like TerminalAudio) */
+    get richContentMap(): ReadonlyMap<string, RichContentEntry[]> {
+      return richContent;
+    },
+
     get lastCommandStatus() {
       return lastCommandStatus;
     },

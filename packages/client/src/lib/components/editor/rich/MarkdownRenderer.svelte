@@ -14,12 +14,14 @@
 
 <style>
   .markdown-renderer {
-    border: 1px solid color-mix(in srgb, var(--text-tertiary, #6e7681) 20%, transparent);
-    border-radius: var(--radius-sm, 4px);
+    border: var(--ht-border-width, 1px) var(--ht-border-style, solid)
+      color-mix(in srgb, var(--text-tertiary, #6e7681) 20%, transparent);
+    border-radius: var(--ht-radius, 4px);
     overflow: hidden;
     background: var(--bg-primary, #0d1117);
     max-height: 600px;
     overflow-y: auto;
+    transition: border-color var(--ht-transition-speed, 125ms) ease;
   }
 
   .markdown-body {

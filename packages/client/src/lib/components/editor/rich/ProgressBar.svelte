@@ -35,6 +35,7 @@
       <div
         class="progress-fill"
         class:complete={parsed.percent >= 100}
+        class:active={parsed.percent > 0 && parsed.percent < 100}
         style="width: {Math.min(100, parsed.percent)}%; background: {barColor}"
       ></div>
     </div>
@@ -74,20 +75,56 @@
 
   .progress-track {
     height: 4px;
-    border-radius: 2px;
+    border-radius: var(--ht-radius-sm, 2px);
     background: color-mix(in srgb, var(--text-tertiary, #6e7681) 15%, transparent);
     overflow: hidden;
   }
 
   .progress-fill {
     height: 100%;
-    border-radius: 2px;
+    border-radius: var(--ht-radius-sm, 2px);
     transition:
       width 0.3s ease,
       background 0.3s ease;
+    position: relative;
   }
 
+  /* Active shimmer — moving highlight across the bar */
+  .progress-fill.active {
+    background-image: linear-gradient(
+      90deg,
+      transparent 0%,
+      color-mix(in srgb, white 20%, transparent) 50%,
+      transparent 100%
+    );
+    background-size: 200% 100%;
+    animation: progress-shimmer 1.5s ease-in-out infinite;
+  }
+
+  @keyframes progress-shimmer {
+    0% {
+      background-position: 200% 0;
+    }
+    100% {
+      background-position: -200% 0;
+    }
+  }
+
+  /* Complete — green with glow pulse */
   .progress-fill.complete {
     background: var(--accent-secondary, #00ff88) !important;
+    animation: progress-complete-glow 0.6s ease-out;
+  }
+
+  @keyframes progress-complete-glow {
+    0% {
+      box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent-secondary, #00ff88) 50%, transparent);
+    }
+    50% {
+      box-shadow: 0 0 8px 2px color-mix(in srgb, var(--accent-secondary, #00ff88) 40%, transparent);
+    }
+    100% {
+      box-shadow: none;
+    }
   }
 </style>

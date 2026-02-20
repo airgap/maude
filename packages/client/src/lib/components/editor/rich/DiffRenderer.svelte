@@ -1,6 +1,12 @@
 <script lang="ts">
   import type { RichDiffData, RichDiffFile } from '@e/shared';
   import { editorStore } from '$lib/stores/editor.svelte';
+  import { chirpEngine } from '$lib/audio/chirp-engine';
+  import { settingsStore } from '$lib/stores/settings.svelte';
+
+  function uiClick() {
+    if (settingsStore.soundEnabled) chirpEngine.uiClick();
+  }
 
   let { data } = $props<{ data: string }>();
 
@@ -16,6 +22,7 @@
   });
 
   function toggleFile(idx: number) {
+    uiClick();
     const next = new Set(expandedFiles);
     if (next.has(idx)) next.delete(idx);
     else next.add(idx);
@@ -109,10 +116,12 @@
 
 <style>
   .diff-renderer {
-    border: 1px solid color-mix(in srgb, var(--text-tertiary, #6e7681) 20%, transparent);
-    border-radius: var(--radius-sm, 4px);
+    border: var(--ht-border-width, 1px) var(--ht-border-style, solid)
+      color-mix(in srgb, var(--text-tertiary, #6e7681) 20%, transparent);
+    border-radius: var(--ht-radius, 4px);
     overflow: hidden;
     background: var(--bg-primary, #0d1117);
+    transition: border-color var(--ht-transition-speed, 125ms) ease;
   }
 
   .diff-toolbar {
