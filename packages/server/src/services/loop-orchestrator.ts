@@ -25,7 +25,7 @@ const PRIORITY_ORDER: Record<StoryPriority, number> = {
 };
 
 /**
- * Manages the autonomous loop lifecycle. Singleton, like claudeManager.
+ * Manages the Golem lifecycle. Singleton, like claudeManager.
  * Each loop run creates real E conversations and tasks for traceability.
  */
 class LoopOrchestrator {
@@ -215,7 +215,7 @@ class LoopOrchestrator {
         .get(prdId) as any;
       if (!storyCount || storyCount.count === 0) {
         throw new Error(
-          'Cannot start loop: PRD has no pending stories. Add at least one story first.',
+          'Cannot activate Golem: PRD has no pending stories. Add at least one story first.',
         );
       }
       label = `PRD: ${prd.name}`;
@@ -227,7 +227,7 @@ class LoopOrchestrator {
         )
         .get(workspacePath) as any;
       if (!storyCount || storyCount.count === 0) {
-        throw new Error('Cannot start loop: No pending standalone stories in this workspace.');
+        throw new Error('Cannot activate Golem: No pending standalone stories in this workspace.');
       }
       label = 'Standalone stories';
     }
@@ -369,13 +369,13 @@ class LoopOrchestrator {
       if (output.length > 0) {
         const changedFiles = output.split('\n').length;
         throw new Error(
-          `Cannot start loop: working tree has ${changedFiles} uncommitted change${changedFiles === 1 ? '' : 's'}. ` +
+          `Cannot activate Golem: working tree has ${changedFiles} uncommitted change${changedFiles === 1 ? '' : 's'}. ` +
             `Please commit or stash your changes first. Dirty state causes cascading build failures across stories.`,
         );
       }
     } catch (err) {
       // Re-throw our own Error, but swallow git failures (e.g. git not installed)
-      if (err instanceof Error && err.message.startsWith('Cannot start loop:')) {
+      if (err instanceof Error && err.message.startsWith('Cannot activate Golem:')) {
         throw err;
       }
       console.warn(`[loop] ensureCleanWorkingTree check failed (non-fatal):`, err);
@@ -1784,8 +1784,8 @@ ${criteria}
 
       // Commit
       const msg = this.prdId
-        ? `[loop] ${story.title}\n\nImplemented by E autonomous loop.\nPRD: ${this.prdId}\nStory: ${story.id}`
-        : `[loop] ${story.title}\n\nImplemented by E autonomous loop.\nStory: ${story.id}`;
+        ? `[golem] ${story.title}\n\nImplemented by E Golem.\nPRD: ${this.prdId}\nStory: ${story.id}`
+        : `[golem] ${story.title}\n\nImplemented by E Golem.\nStory: ${story.id}`;
       const commitProc = Bun.spawn(['git', 'commit', '-m', msg], {
         cwd: this.workspacePath,
         stdout: 'pipe',

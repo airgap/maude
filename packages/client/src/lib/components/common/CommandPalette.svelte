@@ -147,8 +147,8 @@
     },
     {
       id: 'loop-start',
-      label: 'Start Autonomous Loop',
-      category: 'Loop',
+      label: 'Activate Golem',
+      category: 'Golem',
       action: () => {
         uiStore.setSidebarTab('work');
         uiStore.openModal('loop-config');

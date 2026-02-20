@@ -192,13 +192,13 @@
 
       const result = await loopStore.startLoop(prdId ?? null, workspacePath, config);
       if (result.ok) {
-        uiStore.toast('Autonomous loop started', 'success');
+        uiStore.toast('Golem activated', 'success');
         close();
       } else {
-        uiStore.toast(result.error || 'Failed to start loop', 'error');
+        uiStore.toast(result.error || 'Failed to activate Golem', 'error');
       }
     } catch (err) {
-      uiStore.toast(`Failed to start loop: ${err}`, 'error');
+      uiStore.toast(`Failed to activate Golem: ${err}`, 'error');
     }
   }
 
@@ -212,7 +212,7 @@
   <!-- svelte-ignore a11y_no_static_element_interactions a11y_click_events_have_key_events -->
   <div class="modal" onclick={(e) => e.stopPropagation()}>
     <div class="modal-header">
-      <h2>Configure Loop</h2>
+      <h2>Configure Golem</h2>
       <button class="close-btn" onclick={close}>
         <svg
           width="16"
@@ -389,13 +389,13 @@
             viewBox="0 0 24 24"
             fill="currentColor"
             stroke="none"><polygon points="5 3 19 12 5 21 5 3" /></svg
-          > Start Loop (with warnings){:else}<svg
+          > Activate Golem (with warnings){:else}<svg
             width="11"
             height="11"
             viewBox="0 0 24 24"
             fill="currentColor"
             stroke="none"><polygon points="5 3 19 12 5 21 5 3" /></svg
-          > Start Loop{/if}
+          > Activate Golem{/if}
       </button>
     </div>
   </div>

@@ -230,7 +230,7 @@
             <h3>Stories</h3>
             <p>Each PRD contains user stories. Stories have statuses: <code>backlog → in-progress → completed</code>. Stories from code comments can be auto-imported via the TODOs panel.</p>
             <h3>Loop integration</h3>
-            <p>The <strong>Loop</strong> feature runs Claude in an autonomous loop to implement stories one by one. Configure it with the Loop Config modal.</p>
+            <p>The <strong>Golem</strong> feature runs Claude in an autonomous loop to implement stories one by one. Configure it with the Golem Config modal.</p>
           `,
         },
         {
@@ -461,19 +461,19 @@
     },
     {
       id: 'agents',
-      label: 'Agents & Loops',
+      label: 'Agents & Golems',
       icon: 'M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5',
       articles: [
         {
           id: 'loop-mode',
-          title: 'Loop Mode',
+          title: 'Golem Mode',
           body: `
-            <p><strong>Loop Mode</strong> runs Claude in a fully autonomous cycle: it reads a story, implements it, verifies the result, and moves to the next story — without your intervention.</p>
-            <h3>Starting a loop</h3>
+            <p><strong>Golem Mode</strong> runs Claude in a fully autonomous cycle: it reads a story, implements it, verifies the result, and moves to the next story — without your intervention.</p>
+            <h3>Activating a Golem</h3>
             <ol>
               <li>Open the <strong>Work</strong> sidebar tab and select a PRD</li>
-              <li>Click <strong>Start Loop</strong></li>
-              <li>Configure settings in the Loop Config modal (model, max iterations, permission mode)</li>
+              <li>Click <strong>Activate Golem</strong></li>
+              <li>Configure settings in the Golem Config modal (model, max iterations, permission mode)</li>
               <li>Click <strong>Run</strong></li>
             </ol>
             <h3>What the loop does</h3>
@@ -485,7 +485,7 @@
               <li>Marks the story <code>completed</code> and moves on</li>
             </ul>
             <h3>Stopping</h3>
-            <p>Click <strong>Stop Loop</strong> at any time. The current story is left in <code>in-progress</code> state.</p>
+            <p>Click <strong>Stop Golem</strong> at any time. The current story is left in <code>in-progress</code> state.</p>
           `,
         },
         {

@@ -860,7 +860,7 @@ function createLoopStore() {
           }
           return { ok: true };
         }
-        return { ok: false, error: (res as any).error || 'Failed to start loop' };
+        return { ok: false, error: (res as any).error || 'Failed to activate Golem' };
       } catch (err) {
         return { ok: false, error: String(err) };
       } finally {

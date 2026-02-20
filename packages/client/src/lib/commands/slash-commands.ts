@@ -246,7 +246,7 @@ const commands: SlashCommand[] = [
   },
   {
     name: 'loop',
-    description: 'Open autonomous loop / work panel',
+    description: 'Open Golem / work panel',
     execute: (ctx) => {
       uiStore.setSidebarTab('work');
       uiStore.setSidebarOpen(true);

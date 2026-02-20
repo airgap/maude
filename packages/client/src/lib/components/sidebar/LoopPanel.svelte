@@ -289,12 +289,12 @@
 
       const result = await loopStore.startLoop(prdId ?? null, workspacePath, config);
       if (result.ok) {
-        uiStore.toast('Loop started with defaults', 'success');
+        uiStore.toast('Golem activated with defaults', 'success');
       } else {
-        uiStore.toast(result.error || 'Failed to start loop', 'error');
+        uiStore.toast(result.error || 'Failed to activate Golem', 'error');
       }
     } catch (err) {
-      uiStore.toast(`Failed to start loop: ${err}`, 'error');
+      uiStore.toast(`Failed to activate Golem: ${err}`, 'error');
     }
   }
 
@@ -560,7 +560,7 @@
 <div class="loop-panel">
   <!-- Header -->
   <div class="section-header">
-    <h3>Autonomous Loop</h3>
+    <h3>Golem</h3>
     {#if loopStore.isActive}
       <span
         class="loop-badge"
@@ -1108,7 +1108,7 @@
         <button
           class="btn-sm btn-danger"
           onclick={() => {
-            if (confirm('Cancel the autonomous loop?')) loopStore.cancelLoop();
+            if (confirm('Cancel the Golem?')) loopStore.cancelLoop();
           }}
           ><svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor" stroke="none"
             ><rect x="4" y="4" width="16" height="16" rx="2" /></svg
@@ -1148,7 +1148,7 @@
             {:else}
               <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor" stroke="none"
                 ><polygon points="5 3 19 12 5 21 5 3" /></svg
-              > Start Loop
+              > Activate Golem
             {/if}
           </span>
         </button>

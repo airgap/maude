@@ -157,15 +157,15 @@ export const TUTORIAL_STEPS: TutorialStep[] = [
   },
   {
     id: 'agents-loops',
-    title: 'Agents & Loops',
+    title: 'Agents & Golems',
     icon: 'M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5',
     description: 'Automated task execution',
     body: `
-      <p><strong>Loop Mode</strong> allows the AI to work autonomously: it selects a task, implements it, verifies the result, and continues to the next task without requiring input.</p>
-      <h3>Starting a loop</h3>
+      <p><strong>Golem Mode</strong> allows the AI to work autonomously: it selects a task, implements it, verifies the result, and continues to the next task without requiring input.</p>
+      <h3>Activating a Golem</h3>
       <ol>
         <li>Open the <strong>Work</strong> panel and create a PRD with user stories</li>
-        <li>Click <strong>Start Loop</strong></li>
+        <li>Click <strong>Activate Golem</strong></li>
         <li>Configure the model, iteration limit, and tool permissions</li>
         <li>Click <strong>Run</strong></li>
       </ol>

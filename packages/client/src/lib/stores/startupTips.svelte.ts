@@ -130,7 +130,7 @@ export const STARTUP_TIPS: StartupTip[] = [
   {
     id: 'loop-mode',
     category: 'Workflow',
-    text: 'Create a PRD with user stories, then click Start Loop — E implements stories autonomously.',
+    text: 'Create a PRD with user stories, then click Activate Golem — E implements stories autonomously.',
     actionLabel: 'Open Work panel',
     actionId: 'open-work-panel',
   },
