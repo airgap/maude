@@ -69,6 +69,7 @@ interface NoteSpec {
   release: number;
   gain: number;
   detune?: number;
+  waveform?: OscillatorType;
 }
 
 // ---------------------------------------------------------------------------
@@ -1296,11 +1297,468 @@ const WHIMSY_TOOL_NOTES: Record<ToolFamily, WhimsyToolNotes> = {
 };
 
 // ---------------------------------------------------------------------------
+// Chiptune (8-bit) synthesis — NES/Game Boy inspired
+// Square and triangle waves, single-partial, sharp envelopes.
+// ---------------------------------------------------------------------------
+
+/** Square wave lead — classic NES pulse channel */
+const CHIP_LEAD: Overtone[] = [{ ratio: 1, gain: 1.0, decay: 0.25 }];
+
+/** Triangle wave bass — NES triangle channel, warm and smooth */
+const CHIP_BASS: Overtone[] = [{ ratio: 1, gain: 1.0, decay: 0.4 }];
+
+/** Quick arpeggio note — very short, staccato */
+const CHIP_ARP: Overtone[] = [{ ratio: 1, gain: 1.0, decay: 0.12 }];
+
+/** SFX hit — gritty with a bit of harmonic color */
+const CHIP_SFX: Overtone[] = [
+  { ratio: 1, gain: 1.0, decay: 0.1 },
+  { ratio: 1.5, gain: 0.3, decay: 0.05 },
+];
+
+// A minor pentatonic — the classic chiptune scale
+const CHIP_NOTES = {
+  A2: 110.0,
+  C3: 130.8,
+  D3: 146.8,
+  E3: 164.8,
+  G3: 196.0,
+  A3: 220.0,
+  C4: 261.6,
+  D4: 293.7,
+  E4: 329.6,
+  G4: 392.0,
+  A4: 440.0,
+  C5: 523.3,
+  D5: 587.3,
+  E5: 659.3,
+  G5: 784.0,
+  A5: 880.0,
+  C6: 1046.5,
+  E6: 1318.5,
+};
+
+const CHIPTUNE_EVENT_NOTES: Record<ChirpEvent, NoteSpec | NoteSpec[]> = {
+  message_start: {
+    freq: CHIP_NOTES.A4,
+    partials: CHIP_LEAD,
+    attack: 0.001,
+    release: 0.08,
+    gain: 0.3,
+    waveform: 'square',
+  },
+  text_start: {
+    freq: CHIP_NOTES.E5,
+    partials: CHIP_LEAD,
+    attack: 0.001,
+    release: 0.05,
+    gain: 0.2,
+    waveform: 'square',
+  },
+  text_delta: {
+    freq: CHIP_NOTES.A5,
+    partials: CHIP_ARP,
+    attack: 0.001,
+    release: 0.02,
+    gain: 0.0,
+    waveform: 'square',
+  },
+  thinking_start: {
+    freq: CHIP_NOTES.A2,
+    partials: CHIP_BASS,
+    attack: 0.01,
+    release: 0.3,
+    gain: 0.28,
+    waveform: 'triangle',
+  },
+  tool_start: {
+    freq: CHIP_NOTES.E4,
+    partials: CHIP_LEAD,
+    attack: 0.001,
+    release: 0.06,
+    gain: 0.24,
+    waveform: 'square',
+  },
+  tool_result_ok: [
+    {
+      freq: CHIP_NOTES.A4,
+      partials: CHIP_ARP,
+      attack: 0.001,
+      release: 0.06,
+      gain: 0.24,
+      waveform: 'square',
+    },
+    {
+      freq: CHIP_NOTES.E5,
+      partials: CHIP_ARP,
+      attack: 0.001,
+      release: 0.06,
+      gain: 0.16,
+      waveform: 'square',
+    },
+  ],
+  tool_result_error: {
+    freq: CHIP_NOTES.D3,
+    partials: CHIP_SFX,
+    attack: 0.001,
+    release: 0.1,
+    gain: 0.28,
+    waveform: 'sawtooth',
+  },
+  tool_approval: [
+    {
+      freq: CHIP_NOTES.C5,
+      partials: CHIP_LEAD,
+      attack: 0.002,
+      release: 0.3,
+      gain: 0.26,
+      waveform: 'square',
+    },
+    {
+      freq: CHIP_NOTES.E5,
+      partials: CHIP_LEAD,
+      attack: 0.002,
+      release: 0.3,
+      gain: 0.2,
+      waveform: 'square',
+    },
+    {
+      freq: CHIP_NOTES.G5,
+      partials: CHIP_LEAD,
+      attack: 0.002,
+      release: 0.3,
+      gain: 0.14,
+      waveform: 'square',
+    },
+  ],
+  user_question: {
+    freq: CHIP_NOTES.E4,
+    partials: CHIP_LEAD,
+    attack: 0.001,
+    release: 0.08,
+    gain: 0.0,
+    waveform: 'square',
+  },
+  message_stop: [
+    {
+      freq: CHIP_NOTES.C5,
+      partials: CHIP_LEAD,
+      attack: 0.001,
+      release: 0.2,
+      gain: 0.26,
+      waveform: 'square',
+    },
+    {
+      freq: CHIP_NOTES.E5,
+      partials: CHIP_LEAD,
+      attack: 0.001,
+      release: 0.2,
+      gain: 0.18,
+      waveform: 'square',
+    },
+    {
+      freq: CHIP_NOTES.A5,
+      partials: CHIP_LEAD,
+      attack: 0.001,
+      release: 0.2,
+      gain: 0.12,
+      waveform: 'square',
+    },
+  ],
+  error: [
+    {
+      freq: CHIP_NOTES.D3,
+      partials: CHIP_SFX,
+      attack: 0.001,
+      release: 0.15,
+      gain: 0.3,
+      waveform: 'sawtooth',
+    },
+    {
+      freq: CHIP_NOTES.A2,
+      partials: CHIP_SFX,
+      attack: 0.001,
+      release: 0.15,
+      gain: 0.22,
+      waveform: 'sawtooth',
+    },
+  ],
+  cancelled: [
+    {
+      freq: CHIP_NOTES.E5,
+      partials: CHIP_LEAD,
+      attack: 0.001,
+      release: 0.15,
+      gain: 0.2,
+      waveform: 'square',
+    },
+    {
+      freq: CHIP_NOTES.C5,
+      partials: CHIP_LEAD,
+      attack: 0.001,
+      release: 0.2,
+      gain: 0.14,
+      waveform: 'triangle',
+    },
+  ],
+  command_success: [
+    {
+      freq: CHIP_NOTES.A4,
+      partials: CHIP_ARP,
+      attack: 0.001,
+      release: 0.06,
+      gain: 0.2,
+      waveform: 'square',
+    },
+    {
+      freq: CHIP_NOTES.E5,
+      partials: CHIP_ARP,
+      attack: 0.001,
+      release: 0.06,
+      gain: 0.12,
+      waveform: 'square',
+    },
+  ],
+  command_fail: {
+    freq: CHIP_NOTES.D3,
+    partials: CHIP_SFX,
+    attack: 0.001,
+    release: 0.08,
+    gain: 0.22,
+    waveform: 'sawtooth',
+  },
+  rich_appear: {
+    freq: CHIP_NOTES.E5,
+    partials: CHIP_LEAD,
+    attack: 0.002,
+    release: 0.1,
+    gain: 0.16,
+    waveform: 'triangle',
+  },
+  progress_complete: [
+    {
+      freq: CHIP_NOTES.A4,
+      partials: CHIP_ARP,
+      attack: 0.001,
+      release: 0.15,
+      gain: 0.22,
+      waveform: 'square',
+    },
+    {
+      freq: CHIP_NOTES.C5,
+      partials: CHIP_ARP,
+      attack: 0.001,
+      release: 0.15,
+      gain: 0.16,
+      waveform: 'square',
+    },
+    {
+      freq: CHIP_NOTES.E5,
+      partials: CHIP_ARP,
+      attack: 0.001,
+      release: 0.15,
+      gain: 0.12,
+      waveform: 'square',
+    },
+    {
+      freq: CHIP_NOTES.A5,
+      partials: CHIP_ARP,
+      attack: 0.001,
+      release: 0.15,
+      gain: 0.08,
+      waveform: 'square',
+    },
+  ],
+  chat_send: {
+    freq: CHIP_NOTES.A5,
+    partials: CHIP_ARP,
+    attack: 0.001,
+    release: 0.04,
+    gain: 0.18,
+    waveform: 'square',
+  },
+};
+
+const CHIPTUNE_TOOL_NOTES: Record<
+  ToolFamily,
+  { start: NoteSpec | NoteSpec[]; ok: NoteSpec | NoteSpec[] }
+> = {
+  shell: {
+    start: {
+      freq: CHIP_NOTES.A3,
+      partials: CHIP_BASS,
+      attack: 0.001,
+      release: 0.08,
+      gain: 0.24,
+      waveform: 'triangle',
+    },
+    ok: [
+      {
+        freq: CHIP_NOTES.A3,
+        partials: CHIP_ARP,
+        attack: 0.001,
+        release: 0.08,
+        gain: 0.22,
+        waveform: 'square',
+      },
+      {
+        freq: CHIP_NOTES.E4,
+        partials: CHIP_ARP,
+        attack: 0.001,
+        release: 0.08,
+        gain: 0.14,
+        waveform: 'square',
+      },
+    ],
+  },
+  read: {
+    start: {
+      freq: CHIP_NOTES.E5,
+      partials: CHIP_ARP,
+      attack: 0.001,
+      release: 0.06,
+      gain: 0.18,
+      waveform: 'square',
+    },
+    ok: [
+      {
+        freq: CHIP_NOTES.C5,
+        partials: CHIP_ARP,
+        attack: 0.001,
+        release: 0.08,
+        gain: 0.18,
+        waveform: 'square',
+      },
+      {
+        freq: CHIP_NOTES.E5,
+        partials: CHIP_ARP,
+        attack: 0.001,
+        release: 0.08,
+        gain: 0.12,
+        waveform: 'square',
+      },
+    ],
+  },
+  write: {
+    start: {
+      freq: CHIP_NOTES.D4,
+      partials: CHIP_LEAD,
+      attack: 0.001,
+      release: 0.08,
+      gain: 0.24,
+      waveform: 'square',
+    },
+    ok: [
+      {
+        freq: CHIP_NOTES.G4,
+        partials: CHIP_ARP,
+        attack: 0.001,
+        release: 0.1,
+        gain: 0.22,
+        waveform: 'square',
+      },
+      {
+        freq: CHIP_NOTES.D5,
+        partials: CHIP_ARP,
+        attack: 0.001,
+        release: 0.1,
+        gain: 0.14,
+        waveform: 'square',
+      },
+    ],
+  },
+  search: {
+    start: {
+      freq: CHIP_NOTES.D5,
+      partials: CHIP_LEAD,
+      attack: 0.002,
+      release: 0.12,
+      gain: 0.2,
+      waveform: 'triangle',
+    },
+    ok: [
+      {
+        freq: CHIP_NOTES.G4,
+        partials: CHIP_ARP,
+        attack: 0.001,
+        release: 0.1,
+        gain: 0.2,
+        waveform: 'square',
+      },
+      {
+        freq: CHIP_NOTES.D5,
+        partials: CHIP_ARP,
+        attack: 0.001,
+        release: 0.1,
+        gain: 0.12,
+        waveform: 'square',
+      },
+    ],
+  },
+  agent: {
+    start: {
+      freq: CHIP_NOTES.A3,
+      partials: CHIP_BASS,
+      attack: 0.005,
+      release: 0.3,
+      gain: 0.26,
+      waveform: 'triangle',
+    },
+    ok: [
+      {
+        freq: CHIP_NOTES.E4,
+        partials: CHIP_LEAD,
+        attack: 0.002,
+        release: 0.2,
+        gain: 0.24,
+        waveform: 'square',
+      },
+      {
+        freq: CHIP_NOTES.A4,
+        partials: CHIP_LEAD,
+        attack: 0.002,
+        release: 0.2,
+        gain: 0.16,
+        waveform: 'square',
+      },
+    ],
+  },
+  default: {
+    start: {
+      freq: CHIP_NOTES.E4,
+      partials: CHIP_LEAD,
+      attack: 0.001,
+      release: 0.06,
+      gain: 0.2,
+      waveform: 'square',
+    },
+    ok: [
+      {
+        freq: CHIP_NOTES.E4,
+        partials: CHIP_ARP,
+        attack: 0.001,
+        release: 0.08,
+        gain: 0.22,
+        waveform: 'square',
+      },
+      {
+        freq: CHIP_NOTES.A4,
+        partials: CHIP_ARP,
+        attack: 0.001,
+        release: 0.08,
+        gain: 0.14,
+        waveform: 'square',
+      },
+    ],
+  },
+};
+
+// ---------------------------------------------------------------------------
 // Classic (oscillator) synthesis — the original chirp engine configs
 // Used when soundStyle === 'classic'
 // ---------------------------------------------------------------------------
 
-export type SoundStyle = 'classic' | 'melodic' | 'whimsy' | 'forest' | 'wind-chime';
+export type SoundStyle = 'classic' | 'melodic' | 'whimsy' | 'forest' | 'wind-chime' | 'chiptune';
 
 interface ClassicConfig {
   freq: number;
@@ -1802,6 +2260,41 @@ const FOCUS_PRESETS: Record<string, FocusPreset> = {
 };
 
 // ---------------------------------------------------------------------------
+// Reverb impulse response definitions — per-hypertheme spatial character
+// ---------------------------------------------------------------------------
+
+interface ReverbDef {
+  duration: number; // impulse length in seconds
+  decay: number; // exponential decay time constant
+  mix: number; // wet level (0–1)
+  filterFreq: number; // lowpass filter on impulse (darker = lower)
+}
+
+const REVERB_DEFS: Record<string, ReverbDef> = {
+  tech: { duration: 0.8, decay: 0.3, mix: 0.15, filterFreq: 4000 },
+  arcane: { duration: 2.0, decay: 0.8, mix: 0.25, filterFreq: 3000 },
+  ethereal: { duration: 3.5, decay: 1.5, mix: 0.35, filterFreq: 6000 },
+  study: { duration: 0.6, decay: 0.2, mix: 0.1, filterFreq: 3500 },
+  astral: { duration: 4.0, decay: 1.8, mix: 0.3, filterFreq: 5000 },
+  'astral-midnight': { duration: 5.0, decay: 2.2, mix: 0.35, filterFreq: 4000 },
+  goth: { duration: 2.5, decay: 1.0, mix: 0.25, filterFreq: 2000 },
+  'magic-forest': { duration: 2.0, decay: 0.7, mix: 0.2, filterFreq: 5000 },
+};
+
+// ---------------------------------------------------------------------------
+// Rhythm groove templates — timing offsets within a beat (normalized 0–1)
+// ---------------------------------------------------------------------------
+
+type RhythmPattern = 'straight' | 'swing' | 'shuffle' | 'dotted';
+
+const GROOVE_TEMPLATES: Record<RhythmPattern, number[]> = {
+  straight: [0, 0.25, 0.5, 0.75],
+  swing: [0, 0.33, 0.5, 0.83],
+  shuffle: [0, 0.375, 0.5, 0.875],
+  dotted: [0, 0.375, 0.75],
+};
+
+// ---------------------------------------------------------------------------
 // Engine
 // ---------------------------------------------------------------------------
 
@@ -1846,6 +2339,37 @@ export class ChirpEngine {
   // ── Musical typing ──
   private keystrokeIndex = 0;
 
+  // ── Reverb ──
+  private reverbNode: ConvolverNode | null = null;
+  private reverbGain: GainNode | null = null;
+  private currentReverbTheme: string | null = null;
+
+  // ── Sidechain ducking ──
+  private ambientTargetGain = 0;
+  private focusTargetGain = 0;
+
+  // ── Error escalation ──
+  private consecutiveErrors = 0;
+
+  // ── Rhythm patterns ──
+  private rhythmPattern: RhythmPattern = 'straight';
+  private rhythmPosition = 0;
+
+  // ── MIDI output ──
+  private midiOutput: MIDIOutput | null = null;
+  private midiEnabled = false;
+
+  // ── Generative composition ──
+  private generativeMode = false;
+  private genPadOscs: OscillatorNode[] = [];
+  private genPadGains: GainNode[] = [];
+  private genPadMaster: GainNode | null = null;
+  private genRoot = 261.6; // C4
+
+  // ── Style blending ──
+  private blendRatio = 0;
+  private secondaryStyle: SoundStyle | null = null;
+
   private createContext(): AudioContext {
     const ctx = new AudioContext();
 
@@ -1869,11 +2393,17 @@ export class ChirpEngine {
     this.masterGain = ctx.createGain();
     this.masterGain.gain.value = this.volume;
 
-    // Signal path: masterGain → loShelf → hiShelf → compressor → destination
+    // Signal path: masterGain → loShelf → hiShelf → compressor → destination (dry)
+    //              masterGain → reverbNode → reverbGain → destination     (wet send)
     this.masterGain.connect(loShelf);
     loShelf.connect(hiShelf);
     hiShelf.connect(this.compressor);
     this.compressor.connect(ctx.destination);
+
+    // Reverb send — initially silent, activated by setReverb()
+    this.reverbGain = ctx.createGain();
+    this.reverbGain.gain.value = 0;
+    this.reverbGain.connect(ctx.destination);
 
     document.addEventListener('visibilitychange', () => {
       if (!document.hidden && ctx.state === 'suspended') {
@@ -1913,7 +2443,7 @@ export class ChirpEngine {
       const osc = ctx.createOscillator();
       const env = ctx.createGain();
 
-      osc.type = 'sine';
+      osc.type = spec.waveform ?? 'sine';
       osc.frequency.setValueAtTime(freq, t);
 
       // Attack: linear ramp to peak
@@ -1948,6 +2478,12 @@ export class ChirpEngine {
 
     // Record frequency for harmonic context
     this.recordNote(spec.freq);
+
+    // MIDI output (if enabled)
+    if (this.midiEnabled && this.midiOutput) {
+      const maxDecay = Math.max(...spec.partials.map((p) => p.decay));
+      this.sendMidiNote(spec.freq, spec.gain, spec.attack + maxDecay + spec.release);
+    }
   }
 
   private playSpec(spec: NoteSpec | NoteSpec[], startOffset = 0, pan?: number): void {
@@ -2316,9 +2852,12 @@ export class ChirpEngine {
         this.playSpec(FOREST_TOOL_NOTES[toolFamily(name)].start);
       } else if (this.style === 'wind-chime') {
         this.playSpec(WIND_CHIME_TOOL_NOTES[toolFamily(name)].start);
+      } else if (this.style === 'chiptune') {
+        this.playSpec(CHIPTUNE_TOOL_NOTES[toolFamily(name)].start);
       } else {
         this.playSpec(TOOL_NOTES[toolFamily(name)].start);
       }
+      this.duckAmbient();
     } catch (e) {
       console.warn('[ChirpEngine] playback error:', e);
     }
@@ -2332,6 +2871,7 @@ export class ChirpEngine {
       if (now - (this.lastFired.get(key) ?? 0) < cooldown) return;
       this.lastFired.set(key, now);
     }
+    this.consecutiveErrors = 0; // Reset error escalation on success
     try {
       if (this.style === 'classic') {
         this.playClassicConfig(CLASSIC_TOOL_CHIRPS[toolFamily(name)].ok);
@@ -2341,9 +2881,12 @@ export class ChirpEngine {
         this.playSpec(FOREST_TOOL_NOTES[toolFamily(name)].ok);
       } else if (this.style === 'wind-chime') {
         this.playSpec(WIND_CHIME_TOOL_NOTES[toolFamily(name)].ok);
+      } else if (this.style === 'chiptune') {
+        this.playSpec(CHIPTUNE_TOOL_NOTES[toolFamily(name)].ok);
       } else {
         this.playSpec(TOOL_NOTES[toolFamily(name)].ok);
       }
+      this.duckAmbient();
     } catch (e) {
       console.warn('[ChirpEngine] playback error:', e);
     }
@@ -2358,82 +2901,180 @@ export class ChirpEngine {
     }
 
     // Stream lifecycle tracking
-    if (event === 'message_start') this.resetStreamTracking();
+    if (event === 'message_start') {
+      this.resetStreamTracking();
+      this.consecutiveErrors = 0;
+      if (this.generativeMode) this.genOnEvent(event);
+    }
     if (event === 'text_delta') this.recordDelta();
 
+    // Error escalation tracking
+    if (event === 'tool_result_error' || event === 'error') {
+      this.consecutiveErrors++;
+    } else if (event === 'tool_result_ok' || event === 'message_stop') {
+      this.consecutiveErrors = 0;
+    }
+
+    // Rhythm quantization offset for text_delta
+    const rhythmOffset =
+      event === 'text_delta' && this.rhythmPattern !== 'straight' ? this.getGrooveOffset() : 0;
+
     try {
+      // Generative mode: route events to composition engine
+      if (this.generativeMode && event !== 'text_delta') {
+        this.genOnEvent(event);
+      }
+
+      // Style blending: if active, try blended spec first
+      if (
+        this.secondaryStyle &&
+        this.blendRatio > 0 &&
+        event !== 'text_delta' &&
+        event !== 'user_question'
+      ) {
+        const blended = this.getBlendedSpec(event);
+        if (blended) {
+          this.playSpec(blended, rhythmOffset);
+          this.duckAmbient();
+          return;
+        }
+      }
+
       if (this.style === 'classic') {
         if (event === 'text_delta') {
           this.playClassicScribble();
+          this.duckAmbient();
           return;
         }
         if (event === 'user_question') {
           this.playClassicUserQuestion();
+          this.duckAmbient();
           return;
         }
         const cfg = CLASSIC_CHIRPS[event];
-        if (cfg) this.playClassicConfig(cfg);
+        if (cfg) {
+          // Error escalation: boost gain on consecutive errors
+          if (this.consecutiveErrors > 1 && (event === 'tool_result_error' || event === 'error')) {
+            const escalated = {
+              ...cfg,
+              gain: Math.min(0.5, cfg.gain * (1 + this.consecutiveErrors * 0.15)),
+            };
+            this.playClassicConfig(escalated);
+          } else {
+            this.playClassicConfig(cfg);
+          }
+        }
+        this.duckAmbient();
+        return;
+      }
+
+      if (this.style === 'chiptune') {
+        if (event === 'text_delta') {
+          this.playChiptuneBlip();
+          this.duckAmbient();
+          return;
+        }
+        if (event === 'user_question') {
+          this.playChiptuneQuestion();
+          this.duckAmbient();
+          return;
+        }
+        const spec = CHIPTUNE_EVENT_NOTES[event];
+        if (!spec) return;
+        this.playSpec(spec, rhythmOffset);
+        this.duckAmbient();
         return;
       }
 
       if (this.style === 'whimsy') {
         if (event === 'text_delta') {
           this.playWhimsySqueak();
+          this.duckAmbient();
           return;
         }
         if (event === 'user_question') {
           this.playWhimsyQuestion();
+          this.duckAmbient();
           return;
         }
         const spec = WHIMSY_EVENT_NOTES[event];
         if (!spec) return;
-        this.playSpec(spec);
+        this.playSpec(spec, rhythmOffset);
+        this.duckAmbient();
         return;
       }
 
       if (this.style === 'forest') {
         if (event === 'text_delta') {
           this.playForestRustle();
+          this.duckAmbient();
           return;
         }
         if (event === 'user_question') {
           this.playForestQuestion();
+          this.duckAmbient();
           return;
         }
         const spec = FOREST_EVENT_NOTES[event];
         if (!spec) return;
-        this.playSpec(spec);
+        this.playSpec(spec, rhythmOffset);
+        this.duckAmbient();
         return;
       }
 
       if (this.style === 'wind-chime') {
         if (event === 'text_delta') {
           this.playWindChimeBreeze();
+          this.duckAmbient();
           return;
         }
         if (event === 'user_question') {
           this.playWindChimeQuestion();
+          this.duckAmbient();
           return;
         }
         const spec = WIND_CHIME_EVENT_NOTES[event];
         if (!spec) return;
-        this.playSpec(spec);
+        this.playSpec(spec, rhythmOffset);
+        this.duckAmbient();
         return;
       }
 
       // Melodic path
       if (event === 'text_delta') {
         this.playBrush();
+        this.duckAmbient();
         return;
       }
       if (event === 'user_question') {
         this.playUserQuestion();
+        this.duckAmbient();
         return;
+      }
+
+      // Error escalation for additive synthesis styles
+      if (this.consecutiveErrors > 1 && (event === 'tool_result_error' || event === 'error')) {
+        const spec = EVENT_NOTES[event];
+        if (spec) {
+          const escalate = (s: NoteSpec): NoteSpec => ({
+            ...s,
+            gain: Math.min(0.5, s.gain * (1 + this.consecutiveErrors * 0.12)),
+            detune: (s.detune ?? 0) + this.consecutiveErrors * 15, // increasingly detuned
+          });
+          if (Array.isArray(spec)) {
+            this.playSpec(spec.map(escalate), rhythmOffset);
+          } else {
+            this.playSpec(escalate(spec), rhythmOffset);
+          }
+          this.duckAmbient();
+          return;
+        }
       }
 
       const spec = EVENT_NOTES[event];
       if (!spec) return;
-      this.playSpec(spec);
+      this.playSpec(spec, rhythmOffset);
+      this.duckAmbient();
     } catch (e) {
       console.warn('[ChirpEngine] playback error:', e);
     }
@@ -2602,6 +3243,409 @@ export class ChirpEngine {
     } catch (e) {
       console.warn('[ChirpEngine] playback error:', e);
     }
+  }
+
+  // ── Chiptune handlers ────────────────────────────────────────────────────
+
+  /** NES-style text blip — quick square wave with pitch variation */
+  private playChiptuneBlip(): void {
+    const ctx = this.ensureContext();
+    const master = this.masterGain!;
+    const now = ctx.currentTime;
+    const freq = 1800 + Math.random() * 400;
+    const osc = ctx.createOscillator();
+    const env = ctx.createGain();
+    osc.type = 'square';
+    osc.frequency.setValueAtTime(freq, now);
+    env.gain.setValueAtTime(0, now);
+    env.gain.linearRampToValueAtTime(0.12, now + 0.001);
+    env.gain.setTargetAtTime(0.0001, now + 0.001, 0.01);
+    osc.connect(env);
+    env.connect(master);
+    osc.start(now);
+    osc.stop(now + 0.03);
+  }
+
+  /** Chiptune question — ascending square arpeggio like a retro "got item" jingle */
+  private playChiptuneQuestion(): void {
+    const freqs = [CHIP_NOTES.E4, CHIP_NOTES.G4, CHIP_NOTES.A4, CHIP_NOTES.C5];
+    for (let i = 0; i < freqs.length; i++) {
+      this.playNote(
+        {
+          freq: freqs[i],
+          partials: CHIP_LEAD,
+          attack: 0.001,
+          release: 0.06,
+          gain: 0.24,
+          waveform: 'square',
+        },
+        i * 0.06,
+      );
+    }
+  }
+
+  // ── Reverb ──────────────────────────────────────────────────────────────
+
+  /** Generate a synthetic impulse response for convolution reverb */
+  private generateImpulse(ctx: AudioContext, def: ReverbDef): AudioBuffer {
+    const length = Math.ceil(ctx.sampleRate * def.duration);
+    const buf = ctx.createBuffer(2, length, ctx.sampleRate);
+    for (let ch = 0; ch < 2; ch++) {
+      const data = buf.getChannelData(ch);
+      for (let i = 0; i < length; i++) {
+        // Exponentially decaying noise, with simple lowpass via averaging
+        const noise = Math.random() * 2 - 1;
+        const decay = Math.exp(-i / (ctx.sampleRate * def.decay));
+        data[i] = noise * decay;
+      }
+      // Simple filter: average adjacent samples to darken high frequencies
+      if (def.filterFreq < 5000) {
+        const passes = Math.round((8000 - def.filterFreq) / 1000);
+        for (let p = 0; p < passes; p++) {
+          for (let i = 1; i < length; i++) {
+            data[i] = data[i] * 0.5 + data[i - 1] * 0.5;
+          }
+        }
+      }
+    }
+    return buf;
+  }
+
+  /** Set reverb to match a hypertheme — generates impulse and connects convolver */
+  setReverb(theme: string): void {
+    const def = REVERB_DEFS[theme];
+    if (!def) {
+      this.clearReverb();
+      return;
+    }
+    if (theme === this.currentReverbTheme) return;
+
+    const ctx = this.ensureContext();
+    const master = this.masterGain!;
+
+    // Clean up old reverb
+    if (this.reverbNode) {
+      try {
+        this.reverbNode.disconnect();
+      } catch (_) {
+        /* */
+      }
+    }
+
+    // Create convolver with generated impulse
+    this.reverbNode = ctx.createConvolver();
+    this.reverbNode.buffer = this.generateImpulse(ctx, def);
+
+    // Connect: masterGain → convolver → reverbGain (→ destination, already connected)
+    master.connect(this.reverbNode);
+    this.reverbNode.connect(this.reverbGain!);
+    this.reverbGain!.gain.value = def.mix;
+
+    this.currentReverbTheme = theme;
+  }
+
+  /** Remove reverb */
+  clearReverb(): void {
+    if (this.reverbNode) {
+      try {
+        this.reverbNode.disconnect();
+      } catch (_) {
+        /* */
+      }
+      this.reverbNode = null;
+    }
+    if (this.reverbGain) this.reverbGain.gain.value = 0;
+    this.currentReverbTheme = null;
+  }
+
+  // ── Sidechain ducking ──────────────────────────────────────────────────
+
+  /** Momentarily duck ambient drone + focus noise so chirps cut through */
+  private duckAmbient(): void {
+    if (this.ambientMaster && this.ctx && this.ambientTargetGain > 0) {
+      const now = this.ctx.currentTime;
+      this.ambientMaster.gain.cancelScheduledValues(now);
+      this.ambientMaster.gain.setValueAtTime(this.ambientTargetGain * 0.3, now);
+      this.ambientMaster.gain.linearRampToValueAtTime(this.ambientTargetGain, now + 0.35);
+    }
+    if (this.focusGain && this.ctx && this.focusTargetGain > 0) {
+      const now = this.ctx.currentTime;
+      this.focusGain.gain.cancelScheduledValues(now);
+      this.focusGain.gain.setValueAtTime(this.focusTargetGain * 0.3, now);
+      this.focusGain.gain.linearRampToValueAtTime(this.focusTargetGain, now + 0.35);
+    }
+  }
+
+  // ── Rhythm patterns ─────────────────────────────────────────────────────
+
+  /** Get start offset to snap to the nearest groove grid position */
+  private getGrooveOffset(): number {
+    if (this.deltaTimestamps.length < 3) return 0;
+    const beatDuration = 60000 / this.beatBpm; // ms
+    const template = GROOVE_TEMPLATES[this.rhythmPattern];
+    const now = performance.now();
+    const posInBeat = ((now - this.beatPhase) % beatDuration) / beatDuration; // 0–1
+
+    // Find nearest groove position
+    let minDist = 1;
+    let nearestPos = 0;
+    for (const pos of template) {
+      const dist = Math.min(
+        Math.abs(posInBeat - pos),
+        Math.abs(posInBeat - pos - 1),
+        Math.abs(posInBeat - pos + 1),
+      );
+      if (dist < minDist) {
+        minDist = dist;
+        nearestPos = pos;
+      }
+    }
+
+    // If already close to a groove position, play on time
+    if (minDist < 0.08) return 0;
+
+    // Otherwise delay to next groove position
+    let delay = nearestPos - posInBeat;
+    if (delay < 0) delay += 1;
+    return (delay * beatDuration) / 1000; // convert to seconds
+  }
+
+  // ── Conversation leitmotifs ─────────────────────────────────────────────
+
+  /** Play a unique 4-note motif derived from a conversation ID hash */
+  playLeitmotif(conversationId: string): void {
+    let hash = 0;
+    for (let i = 0; i < conversationId.length; i++) {
+      hash = ((hash << 5) - hash + conversationId.charCodeAt(i)) | 0;
+    }
+
+    const scale = this.getCurrentScale();
+    const partials = this.getCurrentPartials();
+
+    for (let i = 0; i < 4; i++) {
+      const idx = Math.abs((hash >> (i * 7)) & 0x7f) % scale.length;
+      this.playNote(
+        { freq: scale[idx], partials, attack: 0.004, release: 0.15, gain: 0.14 },
+        i * 0.08,
+      );
+    }
+  }
+
+  /** Get the current style's scale as a frequency array */
+  private getCurrentScale(): number[] {
+    if (this.style === 'forest') return Object.values(FOREST_NOTES);
+    if (this.style === 'wind-chime') return Object.values(CHIME_NOTES);
+    if (this.style === 'whimsy') return Object.values(WHIMSY_NOTES);
+    if (this.style === 'chiptune') return Object.values(CHIP_NOTES);
+    return Object.values(NOTES);
+  }
+
+  /** Get the current style's default instrument partials */
+  private getCurrentPartials(): Overtone[] {
+    if (this.style === 'forest') return WIND_CHIME;
+    if (this.style === 'wind-chime') return CRYSTAL_CHIME;
+    if (this.style === 'whimsy') return MUSIC_BOX;
+    if (this.style === 'chiptune') return CHIP_LEAD;
+    return VIBRAPHONE;
+  }
+
+  // ── Background notification melodies ────────────────────────────────────
+
+  /** Play a distinctive melody when the tab is hidden — attention needed */
+  playNotificationMelody(type: 'completion' | 'approval' | 'error'): void {
+    if (typeof document !== 'undefined' && !document.hidden) return;
+
+    const scale = this.getCurrentScale();
+    const partials = this.getCurrentPartials();
+    const patterns: Record<string, number[]> = {
+      completion: [0, 2, 4, 7].map((i) => scale[Math.min(i, scale.length - 1)]),
+      approval: [2, 4, 7, 9].map((i) => scale[Math.min(i, scale.length - 1)]),
+      error: [7, 4, 2, 0].map((i) => scale[Math.min(i, scale.length - 1)]),
+    };
+
+    const notes = patterns[type] ?? patterns.completion;
+    try {
+      for (let i = 0; i < notes.length; i++) {
+        this.playNote(
+          { freq: notes[i], partials, attack: 0.006, release: 0.25, gain: 0.22 },
+          i * 0.12,
+        );
+      }
+    } catch (e) {
+      console.warn('[ChirpEngine] notification melody error:', e);
+    }
+  }
+
+  // ── MIDI output ─────────────────────────────────────────────────────────
+
+  /** Enable MIDI output — connects to the first available MIDI output port */
+  async enableMidi(): Promise<boolean> {
+    try {
+      const access = await navigator.requestMIDIAccess();
+      const outputs = Array.from(access.outputs.values());
+      if (outputs.length > 0) {
+        this.midiOutput = outputs[0];
+        this.midiEnabled = true;
+        return true;
+      }
+    } catch (e) {
+      console.warn('[ChirpEngine] MIDI access failed:', e);
+    }
+    return false;
+  }
+
+  /** Disable MIDI output */
+  disableMidi(): void {
+    this.midiOutput = null;
+    this.midiEnabled = false;
+  }
+
+  /** Send a MIDI note-on/off pair for the given frequency */
+  private sendMidiNote(freq: number, velocity: number, duration: number): void {
+    if (!this.midiOutput) return;
+    const midiNote = Math.round(12 * Math.log2(freq / 440) + 69);
+    if (midiNote < 0 || midiNote > 127) return;
+    const vel = Math.round(Math.min(127, Math.max(1, velocity * 127)));
+    const now = performance.now();
+    this.midiOutput.send([0x90, midiNote, vel]); // note on
+    this.midiOutput.send([0x80, midiNote, 0], now + duration * 1000); // note off
+  }
+
+  // ── Generative composition ──────────────────────────────────────────────
+
+  /** Start generative composition mode — continuous evolving music from events */
+  startGenerative(): void {
+    this.stopGenerative();
+    const ctx = this.ensureContext();
+    const master = this.masterGain!;
+    const now = ctx.currentTime;
+
+    this.genPadMaster = ctx.createGain();
+    this.genPadMaster.gain.setValueAtTime(0, now);
+    this.genPadMaster.gain.linearRampToValueAtTime(0.03, now + 2);
+    this.genPadMaster.connect(master);
+
+    // Create a simple pad: root + fifth + octave
+    for (const ratio of [1, 1.5, 2]) {
+      const osc = ctx.createOscillator();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(this.genRoot * ratio, now);
+      const g = ctx.createGain();
+      g.gain.value = ratio === 1 ? 0.5 : 0.25;
+      osc.connect(g);
+      g.connect(this.genPadMaster);
+      osc.start(now);
+      this.genPadOscs.push(osc);
+      this.genPadGains.push(g);
+    }
+
+    this.generativeMode = true;
+  }
+
+  /** Stop generative composition with fade-out */
+  stopGenerative(): void {
+    if (this.genPadMaster && this.ctx) {
+      const now = this.ctx.currentTime;
+      this.genPadMaster.gain.cancelScheduledValues(now);
+      this.genPadMaster.gain.setValueAtTime(this.genPadMaster.gain.value, now);
+      this.genPadMaster.gain.linearRampToValueAtTime(0, now + 2);
+    }
+
+    const oscs = [...this.genPadOscs];
+    setTimeout(() => {
+      for (const osc of oscs) {
+        try {
+          osc.stop();
+          osc.disconnect();
+        } catch (_) {
+          /* */
+        }
+      }
+    }, 2200);
+
+    this.genPadOscs = [];
+    this.genPadGains = [];
+    this.genPadMaster = null;
+    this.generativeMode = false;
+  }
+
+  /** Handle a stream event in generative mode — shift chords, add melody */
+  private genOnEvent(event: ChirpEvent): void {
+    if (!this.ctx || !this.genPadMaster) return;
+    const now = this.ctx.currentTime;
+
+    // Chord changes based on event type
+    let newRoot = this.genRoot;
+    if (event === 'message_start')
+      newRoot = 261.6; // C4 — home key
+    else if (event === 'tool_start')
+      newRoot = this.genRoot * (4 / 3); // IV
+    else if (event === 'tool_result_ok')
+      newRoot = this.genRoot * (3 / 2); // V
+    else if (event === 'tool_result_error')
+      newRoot = this.genRoot * (6 / 5); // minor iii
+    else if (event === 'message_stop') newRoot = 261.6; // resolve to I
+
+    // Keep root in a reasonable range
+    while (newRoot > 400) newRoot /= 2;
+    while (newRoot < 130) newRoot *= 2;
+
+    if (newRoot !== this.genRoot) {
+      this.genRoot = newRoot;
+      // Smoothly glide pad oscillators to new chord
+      const ratios = [1, 1.5, 2];
+      for (let i = 0; i < this.genPadOscs.length && i < ratios.length; i++) {
+        this.genPadOscs[i].frequency.linearRampToValueAtTime(newRoot * ratios[i], now + 0.5);
+      }
+    }
+
+    // Add a melody note for non-delta events
+    if (event !== 'text_delta' && event !== 'message_start') {
+      const scale = this.getCurrentScale();
+      const freq = this.selectConsonant(scale.filter((f) => f > 200 && f < 1200));
+      this.playNote(
+        { freq, partials: this.getCurrentPartials(), attack: 0.004, release: 0.2, gain: 0.1 },
+        0,
+      );
+    }
+  }
+
+  // ── Style blending ──────────────────────────────────────────────────────
+
+  /** Get a blended NoteSpec by interpolating between primary and secondary styles */
+  private getBlendedSpec(event: ChirpEvent): NoteSpec | NoteSpec[] | null {
+    if (!this.secondaryStyle || this.blendRatio === 0) return null;
+
+    const primary = this.getStyleSpec(this.style, event);
+    const secondary = this.getStyleSpec(this.secondaryStyle, event);
+    if (!primary || !secondary) return primary ?? secondary;
+
+    const r = this.blendRatio;
+
+    // Blend single specs
+    if (!Array.isArray(primary) && !Array.isArray(secondary)) {
+      return {
+        freq: primary.freq * (1 - r) + secondary.freq * r,
+        partials: r < 0.5 ? primary.partials : secondary.partials,
+        attack: primary.attack * (1 - r) + secondary.attack * r,
+        release: primary.release * (1 - r) + secondary.release * r,
+        gain: primary.gain * (1 - r) + secondary.gain * r,
+        waveform: r < 0.5 ? primary.waveform : secondary.waveform,
+      };
+    }
+
+    // For arrays, pick based on blend ratio
+    return r < 0.5 ? primary : secondary;
+  }
+
+  /** Look up the NoteSpec for a given style and event */
+  private getStyleSpec(style: SoundStyle, event: ChirpEvent): NoteSpec | NoteSpec[] | null {
+    if (style === 'melodic') return EVENT_NOTES[event] ?? null;
+    if (style === 'whimsy') return WHIMSY_EVENT_NOTES[event] ?? null;
+    if (style === 'forest') return FOREST_EVENT_NOTES[event] ?? null;
+    if (style === 'wind-chime') return WIND_CHIME_EVENT_NOTES[event] ?? null;
+    if (style === 'chiptune') return CHIPTUNE_EVENT_NOTES[event] ?? null;
+    return null;
   }
 
   // ── Harmonic context ─────────────────────────────────────────────────────
@@ -2829,6 +3873,7 @@ export class ChirpEngine {
     const now = ctx.currentTime;
 
     // Ambient master gain with 2s fade-in
+    this.ambientTargetGain = def.gain;
     this.ambientMaster = ctx.createGain();
     this.ambientMaster.gain.setValueAtTime(0, now);
     this.ambientMaster.gain.linearRampToValueAtTime(def.gain, now + 2);
@@ -2922,6 +3967,8 @@ export class ChirpEngine {
     const master = this.masterGain!;
     const now = ctx.currentTime;
     const buf = this.makeLongNoiseBuffer(ctx);
+
+    this.focusTargetGain = def.gain;
 
     const src = ctx.createBufferSource();
     src.buffer = buf;
@@ -3066,18 +4113,45 @@ export class ChirpEngine {
     if (this.masterGain) this.masterGain.gain.value = this.volume;
   }
 
+  /** Set the rhythm quantization pattern for streaming chirps */
+  setRhythmPattern(pattern: RhythmPattern) {
+    this.rhythmPattern = pattern;
+    this.rhythmPosition = 0;
+  }
+
+  /** Blend two sound styles together (0 = pure primary, 1 = pure secondary) */
+  setBlend(primary: SoundStyle, secondary: SoundStyle, ratio: number) {
+    this.style = primary;
+    this.secondaryStyle = secondary;
+    this.blendRatio = Math.max(0, Math.min(1, ratio));
+  }
+
+  /** Clear style blending — revert to single style */
+  clearBlend() {
+    this.secondaryStyle = null;
+    this.blendRatio = 0;
+  }
+
   dispose() {
     this.stopAmbient();
     this.stopFocusNoise();
+    this.stopGenerative();
+    this.clearReverb();
+    this.disableMidi();
     this.ctx?.close();
     this.ctx = null;
     this.masterGain = null;
+    this.reverbGain = null;
     this.noiseBuffer = null;
     this.longNoiseBuffer = null;
     this.noteHistory = [];
     this.deltaTimestamps = [];
     this.streamToolCount = 0;
     this.keystrokeIndex = 0;
+    this.consecutiveErrors = 0;
+    this.rhythmPosition = 0;
+    this.secondaryStyle = null;
+    this.blendRatio = 0;
   }
 }
 

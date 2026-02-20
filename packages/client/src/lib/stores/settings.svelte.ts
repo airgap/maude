@@ -64,7 +64,7 @@ interface SettingsState {
   sendWithEnter: boolean;
   soundEnabled: boolean;
   soundVolume: number;
-  soundStyle: 'classic' | 'melodic' | 'whimsy' | 'forest' | 'wind-chime';
+  soundStyle: 'classic' | 'melodic' | 'whimsy' | 'forest' | 'wind-chime' | 'chiptune';
   keyboardSounds: boolean;
   // Desktop notification settings
   notifyOnCompletion: boolean;

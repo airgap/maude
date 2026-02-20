@@ -52,6 +52,15 @@
     chirpEngine.setStyle(settingsStore.soundStyle);
   });
 
+  // Keep reverb in sync with hypertheme
+  $effect(() => {
+    if (settingsStore.soundEnabled) {
+      chirpEngine.setReverb(settingsStore.hypertheme);
+    } else {
+      chirpEngine.clearReverb();
+    }
+  });
+
   function chirp(event: Parameters<typeof chirpEngine.chirp>[0]) {
     if (!settingsStore.soundEnabled) return;
     chirpEngine.chirp(event);
@@ -81,6 +90,9 @@
             event: 'story_failed',
             data: { conversationId: stream.conversationId ?? undefined },
           });
+          if (document.hidden && settingsStore.soundEnabled) {
+            chirpEngine.playNotificationMelody('error');
+          }
         }
       } else if (status === 'cancelled') {
         chirp('cancelled');
@@ -125,6 +137,9 @@
             event: 'story_completed',
             data: { conversationId: stream.conversationId ?? undefined },
           });
+          if (document.hidden && settingsStore.soundEnabled) {
+            chirpEngine.playNotificationMelody('completion');
+          }
         }
       }
       prevTextLen = 0;
@@ -165,6 +180,9 @@
         desktopNotifications.approvalNeeded(latest?.toolName, {
           conversationId: stream.conversationId ?? undefined,
         });
+        if (document.hidden && settingsStore.soundEnabled) {
+          chirpEngine.playNotificationMelody('approval');
+        }
       }
       prevApprovalCount = approvals.length;
     }
