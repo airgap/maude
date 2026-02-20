@@ -560,6 +560,9 @@
         case 'logging_stopped':
           terminalStore.clearLogging(sid);
           break;
+        case 'rich_content':
+          terminalStore.addRichContent(msg.blockId, msg.contentType, msg.data);
+          break;
       }
     });
   }

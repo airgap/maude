@@ -8,6 +8,7 @@ import type {
   TerminalSessionMeta,
   TerminalCommandBlock,
   SplitDirection,
+  RichContentType,
 } from '@e/shared';
 import { DEFAULT_TERMINAL_PREFERENCES } from '@e/shared';
 
@@ -46,6 +47,12 @@ export interface PersistedTerminalTab {
   layout: TerminalLayout;
   focusedSessionId: string;
   profileId?: string;
+}
+
+// ── Rich content entry for a command block ──
+export interface RichContentEntry {
+  contentType: RichContentType;
+  data: string;
 }
 
 // ── Navigation direction for split pane focus ──
@@ -404,6 +411,12 @@ function createTerminalStore() {
   let pendingCommandTexts = $state<Map<string, string>>(new Map());
   /** Whether block rendering is enabled (requires shell integration) */
   let blockRenderingEnabled = $state<Set<string>>(new Set());
+
+  // --- Rich content per command block ---
+  /** Rich content entries keyed by blockId, each block can have multiple rich items */
+  let richContent = $state<Map<string, RichContentEntry[]>>(new Map());
+  /** Per-block toggle: whether to show rich (true) or raw terminal (false) view */
+  let richViewActive = $state<Map<string, boolean>>(new Map());
 
   // --- Screen reader announcements ---
   /** Message to be announced to screen readers via aria-live region */
@@ -904,9 +917,20 @@ function createTerminalStore() {
       const newBlocks = new Map(commandBlocks);
       newBlocks.set(
         sessionId,
-        blocks.map((b) =>
-          b.id === commandId ? { ...b, exitCode, endRow, finishedAt: Date.now() } : b,
-        ),
+        blocks.map((b) => {
+          if (b.id === commandId) {
+            return { ...b, exitCode, endRow, finishedAt: Date.now() };
+          }
+          // Smart auto-collapse: when a new command finishes, collapse previous
+          // successful blocks that have many lines of output to reduce noise
+          if (b.exitCode === 0 && b.endRow >= 0 && !b.collapsed) {
+            const lines = b.endRow - b.startRow;
+            if (lines > 50) {
+              return { ...b, collapsed: true };
+            }
+          }
+          return b;
+        }),
       );
       commandBlocks = newBlocks;
     },
@@ -955,6 +979,67 @@ function createTerminalStore() {
       const newBlocks = new Map(commandBlocks);
       newBlocks.delete(sessionId);
       commandBlocks = newBlocks;
+    },
+
+    // ── Rich content ──
+
+    /** Add rich content for a command block */
+    addRichContent(blockId: string, contentType: RichContentType, data: string) {
+      const entries = richContent.get(blockId) ?? [];
+      const next = new Map(richContent);
+
+      // Progress updates replace previous progress entries (real-time update)
+      if (contentType === 'progress') {
+        const filtered = entries.filter((e) => e.contentType !== 'progress');
+        next.set(blockId, [...filtered, { contentType, data }]);
+      } else {
+        next.set(blockId, [...entries, { contentType, data }]);
+      }
+      richContent = next;
+
+      // Auto-activate rich view when content arrives
+      if (!richViewActive.has(blockId)) {
+        const nextView = new Map(richViewActive);
+        nextView.set(blockId, true);
+        richViewActive = nextView;
+      }
+    },
+
+    /** Get all rich content entries for a command block */
+    getRichContent(blockId: string): RichContentEntry[] {
+      return richContent.get(blockId) ?? [];
+    },
+
+    /** Check if a block has rich content */
+    hasRichContent(blockId: string): boolean {
+      const entries = richContent.get(blockId);
+      return !!entries && entries.length > 0;
+    },
+
+    /** Toggle between rich view and raw terminal view for a block */
+    toggleRichView(blockId: string) {
+      const nextView = new Map(richViewActive);
+      nextView.set(blockId, !this.isRichViewActive(blockId));
+      richViewActive = nextView;
+    },
+
+    /** Check if rich view is active for a block */
+    isRichViewActive(blockId: string): boolean {
+      return richViewActive.get(blockId) ?? false;
+    },
+
+    /** Clear rich content for a session's blocks */
+    clearRichContent(sessionId: string) {
+      const blocks = commandBlocks.get(sessionId) ?? [];
+      if (blocks.length === 0) return;
+      const nextContent = new Map(richContent);
+      const nextView = new Map(richViewActive);
+      for (const b of blocks) {
+        nextContent.delete(b.id);
+        nextView.delete(b.id);
+      }
+      richContent = nextContent;
+      richViewActive = nextView;
     },
 
     /** @deprecated use registerSession/unregisterSession instead */

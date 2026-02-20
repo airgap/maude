@@ -293,6 +293,12 @@ interface TerminalSession {
   outputBuffer: string;
   /** Timer handle for the coalescing flush */
   flushTimer: ReturnType<typeof setTimeout> | null;
+  /** Accumulates output during a command block for rich content analysis */
+  commandOutputBuffer: string;
+  /** Whether we are currently inside a command block (between start and end) */
+  commandInProgress: boolean;
+  /** The current command's text (for context-aware analysis) */
+  currentCommandText: string | null;
 }
 
 /** Maximum scrollback buffer size in bytes per session */
@@ -471,6 +477,9 @@ class TerminalSessionManager {
       currentCommandId: null,
       outputBuffer: '',
       flushTimer: null,
+      commandOutputBuffer: '',
+      commandInProgress: false,
+      currentCommandText: null,
     };
 
     // Update PID when the worker reports it
@@ -496,6 +505,7 @@ class TerminalSessionManager {
         if (result.commandText !== null) {
           // Command text arrives before command_start; use next command ID
           const nextCmdId = `${session.id}_cmd_${session.commandCounter + 1}`;
+          session.currentCommandText = result.commandText;
           this.sendControl(session, {
             type: 'command_text',
             id: nextCmdId,
@@ -506,6 +516,8 @@ class TerminalSessionManager {
         if (result.commandStart) {
           session.commandCounter++;
           session.currentCommandId = `${session.id}_cmd_${session.commandCounter}`;
+          session.commandInProgress = true;
+          session.commandOutputBuffer = '';
           this.sendControl(session, {
             type: 'command_start',
             id: session.currentCommandId,
@@ -514,6 +526,18 @@ class TerminalSessionManager {
 
         if (result.commandEndExitCode !== null) {
           const cmdId = session.currentCommandId || `${session.id}_cmd_${session.commandCounter}`;
+          session.commandInProgress = false;
+
+          // Analyze command output for rich content before sending command_end
+          this.analyzeCommandOutput(
+            session,
+            cmdId,
+            session.commandOutputBuffer,
+            session.currentCommandText,
+          );
+          session.commandOutputBuffer = '';
+          session.currentCommandText = null;
+
           this.sendControl(session, {
             type: 'command_end',
             id: cmdId,
@@ -525,6 +549,15 @@ class TerminalSessionManager {
         // Forward cleaned data (OSC sequences stripped) to clients
         const cleanData = result.cleanData;
         if (cleanData.length > 0) {
+          // Buffer output for rich content analysis (cap at 256KB to avoid memory issues)
+          if (session.commandInProgress && session.commandOutputBuffer.length < 256 * 1024) {
+            session.commandOutputBuffer += cleanData;
+
+            // Real-time progress detection on streaming output
+            if (session.currentCommandId) {
+              this.detectStreamingProgress(session, session.currentCommandId, cleanData);
+            }
+          }
           this.queueOutput(session, cleanData);
         }
       } else {
@@ -884,6 +917,458 @@ class TerminalSessionManager {
   }
 
   /** Send a JSON control message to all attached WebSockets */
+  // --- Rich Content Analysis ---
+
+  /**
+   * Analyze command output after a block completes and send rich_content
+   * control messages for any detected structured content.
+   *
+   * Strips ANSI escape codes before analysis.
+   */
+  private analyzeCommandOutput(
+    session: TerminalSession,
+    blockId: string,
+    raw: string,
+    commandText: string | null,
+  ): void {
+    if (!raw || raw.length < 5) return;
+
+    // Strip ANSI escape codes for content analysis
+    const text = raw
+      .replace(/\x1b\[[0-9;]*[a-zA-Z]/g, '')
+      .replace(/\r/g, '')
+      .trim();
+    if (!text) return;
+
+    // --- Markdown detection (command-text-aware: cat *.md, bat *.md, etc.) ---
+    if (commandText && this.detectAndSendMarkdown(session, blockId, text, commandText)) return;
+
+    // --- JSON detection ---
+    if (this.detectAndSendJson(session, blockId, text)) return;
+
+    // --- Diff detection ---
+    if (this.detectAndSendDiff(session, blockId, text)) return;
+
+    // --- Error / stack trace detection ---
+    if (this.detectAndSendError(session, blockId, text)) return;
+
+    // --- Table detection (CSV / TSV / column-aligned) ---
+    if (this.detectAndSendTable(session, blockId, text)) return;
+
+    // --- Image path detection ---
+    if (commandText) {
+      this.detectAndSendImages(session, blockId, text, commandText);
+    }
+  }
+
+  /** Detect progress indicators in streaming output (called per chunk, not per block) */
+  private detectStreamingProgress(session: TerminalSession, blockId: string, chunk: string): void {
+    // Strip ANSI for pattern matching
+    const clean = chunk.replace(/\x1b\[[0-9;]*[a-zA-Z]/g, '').replace(/\r/g, '');
+
+    // Percentage pattern: "45%", "45.2%", "[=====>    ] 45%"
+    const pctMatch = clean.match(/(\d{1,3}(?:\.\d)?)%/);
+    if (pctMatch) {
+      const pct = parseFloat(pctMatch[1]);
+      if (pct >= 0 && pct <= 100) {
+        // Extract label context (text before the percentage)
+        const beforePct = clean.slice(0, clean.indexOf(pctMatch[0])).trim();
+        const label =
+          beforePct
+            .slice(-60)
+            .replace(/[\[\]|=>#\-\s]+$/, '')
+            .trim() || 'Progress';
+
+        // Extract speed if present (e.g., "1.2 MB/s")
+        const speedMatch = clean.match(/(\d+(?:\.\d+)?\s*(?:KB|MB|GB|B|kB)\/s)/i);
+
+        this.sendControl(session, {
+          type: 'rich_content',
+          blockId,
+          contentType: 'progress',
+          data: JSON.stringify({
+            percent: pct,
+            label,
+            speed: speedMatch?.[1] || undefined,
+          }),
+        });
+      }
+    }
+
+    // Fraction pattern: "[3/12]", "Step 3 of 12"
+    const fracMatch = clean.match(/(?:\[|step\s+)(\d+)\s*(?:\/|of)\s*(\d+)/i);
+    if (fracMatch && !pctMatch) {
+      const current = parseInt(fracMatch[1]);
+      const total = parseInt(fracMatch[2]);
+      if (total > 0 && current <= total) {
+        const pct = (current / total) * 100;
+        const label =
+          clean
+            .slice(clean.indexOf(fracMatch[0]) + fracMatch[0].length)
+            .trim()
+            .slice(0, 60) || `Step ${current}/${total}`;
+
+        this.sendControl(session, {
+          type: 'rich_content',
+          blockId,
+          contentType: 'progress',
+          data: JSON.stringify({ percent: pct, label }),
+        });
+      }
+    }
+  }
+
+  private detectAndSendMarkdown(
+    session: TerminalSession,
+    blockId: string,
+    text: string,
+    commandText: string,
+  ): boolean {
+    // Detect if the command is reading a markdown file
+    const cmd = commandText.trim();
+    const mdFilePattern = /(?:cat|bat|batcat|less|more|head|tail)\s+.*\.(?:md|mdx|markdown)\b/i;
+    if (!mdFilePattern.test(cmd)) return false;
+
+    // Require some markdown-like content (headings, lists, code blocks, links)
+    const hasMarkdownFeatures =
+      /^#{1,6}\s/m.test(text) ||
+      /^\s*[-*+]\s/m.test(text) ||
+      /```/m.test(text) ||
+      /\[.+?\]\(.+?\)/.test(text);
+
+    if (hasMarkdownFeatures && text.length > 20) {
+      this.sendControl(session, {
+        type: 'rich_content',
+        blockId,
+        contentType: 'markdown',
+        data: text,
+      });
+      return true;
+    }
+    return false;
+  }
+
+  private detectAndSendImages(
+    session: TerminalSession,
+    blockId: string,
+    text: string,
+    commandText: string,
+  ): void {
+    // Detect image file paths in command output
+    const imageExtensions = /\.(png|jpg|jpeg|gif|webp|svg|bmp|ico)$/i;
+    const lines = text.split('\n');
+    const imagePaths: string[] = [];
+
+    for (const line of lines) {
+      const trimmed = line.trim();
+      // Check if the line looks like a file path (absolute or relative) ending in an image extension
+      if (imageExtensions.test(trimmed) && !trimmed.includes(' ') && trimmed.length < 500) {
+        // Resolve relative paths against session CWD
+        const fullPath = trimmed.startsWith('/') ? trimmed : resolve(session.cwd, trimmed);
+        if (existsSync(fullPath)) {
+          imagePaths.push(fullPath);
+        }
+      }
+    }
+
+    if (imagePaths.length > 0 && imagePaths.length <= 20) {
+      this.sendControl(session, {
+        type: 'rich_content',
+        blockId,
+        contentType: 'image',
+        data: JSON.stringify(imagePaths),
+      });
+    }
+  }
+
+  private detectAndSendJson(session: TerminalSession, blockId: string, text: string): boolean {
+    const trimmed = text.trim();
+    if (
+      (trimmed.startsWith('{') && trimmed.endsWith('}')) ||
+      (trimmed.startsWith('[') && trimmed.endsWith(']'))
+    ) {
+      try {
+        const parsed = JSON.parse(trimmed);
+        // Only render as JSON tree for non-trivial objects
+        if (typeof parsed === 'object' && parsed !== null) {
+          const keys = Array.isArray(parsed) ? parsed.length : Object.keys(parsed).length;
+          if (keys > 2 || (Array.isArray(parsed) && keys > 0)) {
+            // Check if it's a table-like array of objects
+            if (
+              Array.isArray(parsed) &&
+              parsed.length >= 2 &&
+              parsed.every(
+                (item) => typeof item === 'object' && item !== null && !Array.isArray(item),
+              )
+            ) {
+              const headers = Object.keys(parsed[0]);
+              if (headers.length >= 2) {
+                const rows = parsed.map((item: Record<string, unknown>) =>
+                  headers.map((h) => String(item[h] ?? '')),
+                );
+                this.sendControl(session, {
+                  type: 'rich_content',
+                  blockId,
+                  contentType: 'table',
+                  data: JSON.stringify({ headers, rows, format: 'json' }),
+                });
+                return true;
+              }
+            }
+            this.sendControl(session, {
+              type: 'rich_content',
+              blockId,
+              contentType: 'json',
+              data: trimmed,
+            });
+            return true;
+          }
+        }
+      } catch {
+        // Not valid JSON — fall through to other detectors
+      }
+    }
+    return false;
+  }
+
+  private detectAndSendDiff(session: TerminalSession, blockId: string, text: string): boolean {
+    if (!text.includes('diff --git ') && !text.startsWith('diff --git ')) return false;
+
+    try {
+      const files: Array<{
+        oldPath: string;
+        newPath: string;
+        hunks: Array<{
+          oldStart: number;
+          oldCount: number;
+          newStart: number;
+          newCount: number;
+          lines: Array<{ type: 'add' | 'remove' | 'context'; content: string }>;
+        }>;
+        binary: boolean;
+        renamed: boolean;
+      }> = [];
+      let totalAdd = 0;
+      let totalDel = 0;
+
+      const diffSections = text.split(/^(?=diff --git )/m);
+      for (const section of diffSections) {
+        if (!section.startsWith('diff --git ')) continue;
+
+        const lines = section.split('\n');
+        const diffLine = lines[0];
+        const match = diffLine.match(/^diff --git a\/(.+?) b\/(.+)$/);
+        if (!match) continue;
+
+        const oldPath = match[1];
+        const newPath = match[2];
+        const binary = section.includes('Binary files');
+        const renamed = section.includes('rename from');
+        const hunks: (typeof files)[0]['hunks'] = [];
+
+        const hunkMatches = section.matchAll(/^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@.*$/gm);
+        for (const hm of hunkMatches) {
+          const hunkStart = section.indexOf(hm[0]);
+          const hunkEnd = section.indexOf('\n@@ ', hunkStart + 1);
+          const hunkText =
+            hunkEnd === -1
+              ? section.slice(hunkStart + hm[0].length + 1)
+              : section.slice(hunkStart + hm[0].length + 1, hunkEnd);
+
+          const hunkLines = hunkText.split('\n').map((l) => {
+            if (l.startsWith('+')) {
+              totalAdd++;
+              return { type: 'add' as const, content: l.slice(1) };
+            }
+            if (l.startsWith('-')) {
+              totalDel++;
+              return { type: 'remove' as const, content: l.slice(1) };
+            }
+            return { type: 'context' as const, content: l.startsWith(' ') ? l.slice(1) : l };
+          });
+
+          hunks.push({
+            oldStart: parseInt(hm[1]),
+            oldCount: parseInt(hm[2] ?? '1'),
+            newStart: parseInt(hm[3]),
+            newCount: parseInt(hm[4] ?? '1'),
+            lines: hunkLines,
+          });
+        }
+
+        files.push({ oldPath, newPath, hunks, binary, renamed });
+      }
+
+      if (files.length > 0) {
+        this.sendControl(session, {
+          type: 'rich_content',
+          blockId,
+          contentType: 'diff',
+          data: JSON.stringify({
+            files,
+            stats: { additions: totalAdd, deletions: totalDel, filesChanged: files.length },
+          }),
+        });
+        return true;
+      }
+    } catch {
+      // Parse failure — fall through
+    }
+    return false;
+  }
+
+  private detectAndSendError(session: TerminalSession, blockId: string, text: string): boolean {
+    // Node.js / JavaScript errors
+    const nodeMatch = text.match(/^(\w*Error): (.+?)$/m);
+    if (nodeMatch) {
+      const frames: Array<{
+        file: string;
+        line: number;
+        column?: number;
+        function: string;
+        isInternal: boolean;
+      }> = [];
+
+      const atLines = text.matchAll(/^\s+at\s+(?:(.+?)\s+)?\(?(.+?):(\d+):(\d+)\)?$/gm);
+      for (const m of atLines) {
+        const file = m[2];
+        frames.push({
+          function: m[1] || '(anonymous)',
+          file,
+          line: parseInt(m[3]),
+          column: parseInt(m[4]),
+          isInternal:
+            file.includes('node_modules') || file.includes('node:') || !file.startsWith('/'),
+        });
+      }
+
+      if (frames.length >= 1) {
+        this.sendControl(session, {
+          type: 'rich_content',
+          blockId,
+          contentType: 'error',
+          data: JSON.stringify({
+            errorType: nodeMatch[1],
+            message: nodeMatch[2],
+            file: frames[0]?.file,
+            line: frames[0]?.line,
+            column: frames[0]?.column,
+            frames,
+          }),
+        });
+        return true;
+      }
+    }
+
+    // Python tracebacks
+    if (text.includes('Traceback (most recent call last):')) {
+      const frames: Array<{
+        file: string;
+        line: number;
+        column?: number;
+        function: string;
+        isInternal: boolean;
+      }> = [];
+
+      const pyFrames = text.matchAll(/File "(.+?)", line (\d+), in (.+)/g);
+      for (const m of pyFrames) {
+        const file = m[1];
+        frames.push({
+          file,
+          line: parseInt(m[2]),
+          function: m[3],
+          isInternal: file.includes('site-packages') || file.includes('/lib/python'),
+        });
+      }
+
+      const pyError = text.match(/^(\w+(?:Error|Exception|Warning)): (.+)$/m);
+      if (pyError && frames.length >= 1) {
+        this.sendControl(session, {
+          type: 'rich_content',
+          blockId,
+          contentType: 'error',
+          data: JSON.stringify({
+            errorType: pyError[1],
+            message: pyError[2],
+            file: frames[frames.length - 1]?.file,
+            line: frames[frames.length - 1]?.line,
+            frames: frames.reverse(),
+          }),
+        });
+        return true;
+      }
+    }
+
+    return false;
+  }
+
+  private detectAndSendTable(session: TerminalSession, blockId: string, text: string): boolean {
+    const lines = text.split('\n').filter((l) => l.trim());
+    if (lines.length < 3) return false; // Need at least header + 2 rows
+
+    // CSV detection: comma-separated with consistent column count
+    const commaCountFirst = (lines[0].match(/,/g) || []).length;
+    if (commaCountFirst >= 1) {
+      const isCSV = lines.every((l) => {
+        const count = (l.match(/,/g) || []).length;
+        return Math.abs(count - commaCountFirst) <= 1; // Allow slight variance
+      });
+
+      if (isCSV) {
+        const headers = this.parseCSVLine(lines[0]);
+        const rows = lines.slice(1).map((l) => this.parseCSVLine(l));
+        if (headers.length >= 2) {
+          this.sendControl(session, {
+            type: 'rich_content',
+            blockId,
+            contentType: 'table',
+            data: JSON.stringify({ headers, rows, format: 'csv' }),
+          });
+          return true;
+        }
+      }
+    }
+
+    // TSV detection: tab-separated
+    if (lines[0].includes('\t')) {
+      const tabCountFirst = (lines[0].match(/\t/g) || []).length;
+      const isTSV = lines.every((l) => (l.match(/\t/g) || []).length === tabCountFirst);
+      if (isTSV && tabCountFirst >= 1) {
+        const headers = lines[0].split('\t').map((s) => s.trim());
+        const rows = lines.slice(1).map((l) => l.split('\t').map((s) => s.trim()));
+        this.sendControl(session, {
+          type: 'rich_content',
+          blockId,
+          contentType: 'table',
+          data: JSON.stringify({ headers, rows, format: 'tsv' }),
+        });
+        return true;
+      }
+    }
+
+    return false;
+  }
+
+  /** Simple CSV line parser (handles quoted fields) */
+  private parseCSVLine(line: string): string[] {
+    const result: string[] = [];
+    let current = '';
+    let inQuotes = false;
+    for (let i = 0; i < line.length; i++) {
+      const ch = line[i];
+      if (ch === '"') {
+        inQuotes = !inQuotes;
+      } else if (ch === ',' && !inQuotes) {
+        result.push(current.trim());
+        current = '';
+      } else {
+        current += ch;
+      }
+    }
+    result.push(current.trim());
+    return result;
+  }
+
   private sendControl(session: TerminalSession, msg: TerminalControlMessage): void {
     for (const ws of session.attachedWs) {
       this.sendControlToWs(ws, msg);

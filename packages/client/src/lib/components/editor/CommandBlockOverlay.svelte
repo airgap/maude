@@ -2,6 +2,7 @@
   import type { TerminalCommandBlock } from '@e/shared';
   import { terminalStore } from '$lib/stores/terminal.svelte';
   import { terminalConnectionManager } from '$lib/services/terminal-connection';
+  import RichBlockRenderer from './RichBlockRenderer.svelte';
 
   let { sessionId, blocks, cellHeight, cellWidth, viewportTopRow, viewportRows, terminalElement } =
     $props<{
@@ -89,6 +90,8 @@
 
         const isRunning = block.exitCode === null;
         const isCopied = copiedBlockId === block.id;
+        const hasRich = terminalStore.hasRichContent(block.id);
+        const richActive = terminalStore.isRichViewActive(block.id);
 
         return {
           block,
@@ -99,6 +102,8 @@
           outputLines,
           isRunning,
           isCopied,
+          hasRich,
+          richActive,
         };
       })
       .filter(Boolean) as Array<{
@@ -110,6 +115,8 @@
       outputLines: number;
       isRunning: boolean;
       isCopied: boolean;
+      hasRich: boolean;
+      richActive: boolean;
     }>;
   });
 </script>
@@ -202,6 +209,32 @@
               </span>
             {/if}
 
+            <!-- Rich view toggle -->
+            {#if vb.hasRich}
+              <button
+                class="rich-toggle"
+                class:active={vb.richActive}
+                onclick={() => terminalStore.toggleRichView(block.id)}
+                title={vb.richActive ? 'Show raw output' : 'Show rich view'}
+                aria-label={vb.richActive
+                  ? 'Switch to raw terminal output'
+                  : 'Switch to rich rendered view'}
+              >
+                <svg
+                  width="12"
+                  height="12"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                >
+                  <rect x="3" y="3" width="18" height="18" rx="2" />
+                  <line x1="3" y1="9" x2="21" y2="9" />
+                  <line x1="9" y1="9" x2="9" y2="21" />
+                </svg>
+              </button>
+            {/if}
+
             <!-- Copy button -->
             <button
               class="copy-btn"
@@ -274,8 +307,22 @@
         </div>
       {/if}
 
+      <!-- Rich content overlay: replaces raw terminal output with HTML rendering -->
+      {#if vb.hasRich && vb.richActive && vb.outputHeightPx > 0 && !block.collapsed}
+        {@const richEntries = terminalStore.getRichContent(block.id)}
+        <div
+          class="rich-overlay"
+          class:success={block.exitCode === 0}
+          class:failure={block.exitCode !== null && block.exitCode !== 0}
+          class:running={vb.isRunning}
+          style="top: {vb.outputTopPx}px; min-height: {vb.outputHeightPx}px"
+        >
+          <RichBlockRenderer entries={richEntries} blockId={block.id} />
+        </div>
+      {/if}
+
       <!-- Block border gutter: left accent border along the output area (expanded only) -->
-      {#if !block.collapsed && vb.outputHeightPx > 0}
+      {#if !block.collapsed && vb.outputHeightPx > 0 && !(vb.hasRich && vb.richActive)}
         <div
           class="block-gutter"
           class:success={block.exitCode === 0}
@@ -493,6 +540,68 @@
   .copy-btn.copied {
     opacity: 1;
     color: var(--accent-secondary, #00ff88);
+  }
+
+  /* ── Rich toggle button ── */
+
+  .rich-toggle {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 16px;
+    padding: 0;
+    border: none;
+    background: none;
+    color: var(--text-tertiary, #6e7681);
+    cursor: pointer;
+    border-radius: var(--radius-sm, 4px);
+    flex-shrink: 0;
+    opacity: 0;
+    transition:
+      opacity 0.15s ease,
+      color 0.15s ease,
+      background 0.15s ease;
+  }
+
+  .block-header-inner:hover .rich-toggle {
+    opacity: 1;
+  }
+
+  .rich-toggle:hover {
+    color: var(--text-primary, #c9d1d9);
+    background: color-mix(in srgb, var(--text-primary, #c9d1d9) 10%, transparent);
+  }
+
+  .rich-toggle.active {
+    opacity: 1;
+    color: var(--accent-primary, #00b4ff);
+  }
+
+  /* ── Rich content overlay ── */
+
+  .rich-overlay {
+    position: absolute;
+    left: 0;
+    right: 0;
+    pointer-events: auto;
+    background: var(--bg-primary, #0d1117);
+    border-left: 2px solid transparent;
+    padding: 4px 8px;
+    overflow-y: auto;
+    z-index: 6;
+  }
+
+  .rich-overlay.success {
+    border-left-color: color-mix(in srgb, var(--accent-secondary, #00ff88) 30%, transparent);
+  }
+
+  .rich-overlay.failure {
+    border-left-color: color-mix(in srgb, var(--accent-error, #ff3344) 30%, transparent);
+  }
+
+  .rich-overlay.running {
+    border-left-color: color-mix(in srgb, var(--accent-primary, #00b4ff) 30%, transparent);
   }
 
   /* ── Collapsed output mask ── */

@@ -69,7 +69,8 @@ export type TerminalControlMessage =
   | TerminalCommandEnd
   | TerminalCommandText
   | TerminalLoggingStarted
-  | TerminalLoggingStopped;
+  | TerminalLoggingStopped
+  | TerminalRichContent;
 
 export interface TerminalReplayStart {
   type: 'replay_start';
@@ -115,6 +116,82 @@ export interface TerminalLoggingStarted {
 
 export interface TerminalLoggingStopped {
   type: 'logging_stopped';
+}
+
+// --- Rich Content Types ---
+
+/** Content types supported by the rich block renderer */
+export type RichContentType =
+  | 'table'
+  | 'json'
+  | 'image'
+  | 'diff'
+  | 'markdown'
+  | 'error'
+  | 'progress';
+
+/** Rich content message sent from server when structured output is detected */
+export interface TerminalRichContent {
+  type: 'rich_content';
+  /** The command block this content belongs to */
+  blockId: string;
+  /** What kind of rich content this is */
+  contentType: RichContentType;
+  /** Serialized payload (interpretation depends on contentType) */
+  data: string;
+}
+
+/** Parsed table data for the table renderer */
+export interface RichTableData {
+  headers: string[];
+  rows: string[][];
+  /** Original format detected */
+  format: 'csv' | 'tsv' | 'json' | 'columns';
+}
+
+/** Parsed error data for the error renderer */
+export interface RichErrorData {
+  errorType: string;
+  message: string;
+  file?: string;
+  line?: number;
+  column?: number;
+  frames: RichErrorFrame[];
+}
+
+export interface RichErrorFrame {
+  file: string;
+  line: number;
+  column?: number;
+  function: string;
+  isInternal: boolean;
+}
+
+/** Parsed diff data for the diff renderer */
+export interface RichDiffData {
+  files: RichDiffFile[];
+  stats: { additions: number; deletions: number; filesChanged: number };
+}
+
+export interface RichDiffFile {
+  oldPath: string;
+  newPath: string;
+  hunks: RichDiffHunk[];
+  binary: boolean;
+  renamed: boolean;
+}
+
+export interface RichDiffHunk {
+  oldStart: number;
+  oldCount: number;
+  newStart: number;
+  newCount: number;
+  lines: RichDiffLine[];
+}
+
+export interface RichDiffLine {
+  type: 'add' | 'remove' | 'context';
+  content: string;
 }
 
 // --- Protocol Constants ---
