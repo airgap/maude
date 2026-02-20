@@ -7,6 +7,9 @@ packages/server/dist/
 packages/server/src/native/pty-helper
 .svelte-kit/
 
+# Runtime databases
+*.db
+
 # Coverage
 coverage/
 **/coverage/
