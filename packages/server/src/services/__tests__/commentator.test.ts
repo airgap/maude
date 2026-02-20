@@ -199,12 +199,51 @@ describe('PERSONALITY_PROMPTS', () => {
     }
   });
 
+  test('each personality includes at least 3 few-shot examples', () => {
+    for (const p of personalities) {
+      const prompt = PERSONALITY_PROMPTS[p];
+      // Each example has an "Activity:" header followed by a "Commentary:" response
+      const exampleCount = (prompt.match(/Commentary:\s*"/g) || []).length;
+      expect(exampleCount).toBeGreaterThanOrEqual(3);
+    }
+  });
+
   test('project_lead uses first person', () => {
     expect(PERSONALITY_PROMPTS.project_lead).toContain('first person');
   });
 
   test('sports_announcer is energetic', () => {
     expect(PERSONALITY_PROMPTS.sports_announcer).toContain('energetic');
+  });
+
+  test('documentary_narrator references David Attenborough', () => {
+    expect(PERSONALITY_PROMPTS.documentary_narrator).toContain('David Attenborough');
+  });
+
+  test('technical_analyst focuses on architecture', () => {
+    const prompt = PERSONALITY_PROMPTS.technical_analyst;
+    expect(prompt).toContain('architecture');
+    expect(prompt).toContain('design patterns');
+  });
+
+  test('comedic_observer is witty and playful', () => {
+    const prompt = PERSONALITY_PROMPTS.comedic_observer;
+    expect(prompt).toContain('witty');
+    expect(prompt).toContain('playful');
+  });
+
+  test('project_lead is authoritative and uses I/my', () => {
+    const prompt = PERSONALITY_PROMPTS.project_lead;
+    expect(prompt).toContain('authoritative');
+    expect(prompt).toContain('"I"');
+  });
+
+  test('each personality has structured Activity/Commentary examples', () => {
+    for (const p of personalities) {
+      const prompt = PERSONALITY_PROMPTS[p];
+      expect(prompt).toContain('Activity:');
+      expect(prompt).toContain('Commentary:');
+    }
   });
 });
 
