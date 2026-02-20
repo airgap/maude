@@ -3,7 +3,7 @@
   import { workspaceListStore } from '$lib/stores/projects.svelte';
   import { primaryPaneStore } from '$lib/stores/primaryPane.svelte';
   import { uiStore } from '$lib/stores/ui.svelte';
-  import { commentaryStore } from '$lib/stores/commentary.svelte';
+  import { managerCommentaryStore } from '$lib/stores/manager-commentary.svelte';
   import { onMount, onDestroy } from 'svelte';
   import type { WorkspaceSettings } from '@e/shared';
 
@@ -108,6 +108,9 @@
   let evtSource: EventSource | null = null;
   let openPersonalityDropdown = $state<string | null>(null); // workspace ID with open dropdown
 
+  // Derived: expanded workspace from the manager commentary store
+  let expandedWsId = $derived(managerCommentaryStore.expandedWorkspaceId);
+
   // ---- Load ----
   async function load() {
     loading = true;
@@ -180,6 +183,11 @@
     return `${Math.floor(diff / 86_400_000)}d ago`;
   }
 
+  function formatCommentaryTime(timestamp: number): string {
+    const date = new Date(timestamp);
+    return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  }
+
   function workspaceName(path: string | null | undefined): string {
     if (!path) return 'Unknown';
     const ws = workspaceListStore.workspaces.find((w) => w.path === path);
@@ -188,12 +196,36 @@
   }
 
   // ---- Commentary Controls ----
+
+  /**
+   * Auto-start commentary SSE connections for active (non-muted) workspaces.
+   * This effect runs whenever the workspace data changes.
+   */
+  $effect(() => {
+    if (!data?.workspaces) return;
+
+    for (const ws of data.workspaces) {
+      const isMuted = ws.settings?.commentaryMuted ?? false;
+      const isAlreadyActive = managerCommentaryStore.isActive(ws.id);
+
+      if (!isMuted && !isAlreadyActive && ws.agentStatus !== 'idle') {
+        // Start commentary for active, non-muted workspaces
+        const personality = ws.settings?.commentaryPersonality || 'technical_analyst';
+        managerCommentaryStore.startCommentary(ws.id, personality);
+      } else if (isMuted && isAlreadyActive) {
+        // Stop commentary for muted workspaces
+        managerCommentaryStore.stopCommentary(ws.id);
+      }
+    }
+  });
+
   async function toggleCommentaryMute(ws: WorkspaceStatus) {
     const currentMuted = ws.settings?.commentaryMuted ?? false;
+    const newMuted = !currentMuted;
     try {
       await api.workspaces.update(ws.id, {
         settings: {
-          commentaryMuted: !currentMuted,
+          commentaryMuted: newMuted,
         },
       });
       // Update local state
@@ -202,13 +234,17 @@
         if (idx >= 0) {
           data.workspaces[idx].settings = {
             ...data.workspaces[idx].settings,
-            commentaryMuted: !currentMuted,
+            commentaryMuted: newMuted,
           };
         }
       }
-      // If commentary is active for this workspace and we're muting, stop it
-      if (!currentMuted && commentaryStore.workspaceId === ws.id) {
-        commentaryStore.stopCommentary();
+      // Update the manager commentary store
+      managerCommentaryStore.setMuted(ws.id, newMuted);
+
+      // If unmuting, restart commentary
+      if (!newMuted && ws.agentStatus !== 'idle') {
+        const personality = ws.settings?.commentaryPersonality || 'technical_analyst';
+        managerCommentaryStore.startCommentary(ws.id, personality);
       }
     } catch (err) {
       console.error('Failed to toggle commentary mute:', err);
@@ -263,8 +299,8 @@
         }
       }
       // If commentary is active for this workspace, restart with new personality
-      if (commentaryStore.workspaceId === ws.id && commentaryStore.isActive) {
-        commentaryStore.startCommentary(ws.id, personality);
+      if (managerCommentaryStore.isActive(ws.id)) {
+        managerCommentaryStore.startCommentary(ws.id, personality);
       }
     } catch (err) {
       console.error('Failed to set commentary personality:', err);
@@ -301,6 +337,8 @@
   onDestroy(() => {
     evtSource?.close();
     if (refreshInterval) clearInterval(refreshInterval);
+    // Clean up all commentary SSE connections
+    managerCommentaryStore.stopAll();
   });
 </script>
 
@@ -437,182 +475,276 @@
       </div>
       <div class="workspace-list">
         {#each data.workspaces as ws (ws.id)}
-          <div class="workspace-row" class:muted={ws.settings?.commentaryMuted}>
-            <span class="ws-dot" style:background={statusDot(ws.agentStatus)}></span>
-            <div class="ws-info">
-              <span class="ws-name">{ws.name}</span>
-              <span class="ws-meta">
-                <span class="ws-status">{statusLabel(ws.agentStatus)}</span>
-                {#if ws.activeLoops.length > 0}
-                  · {ws.activeLoops.length} loop{ws.activeLoops.length !== 1 ? 's' : ''}
-                {/if}
-                {#if ws.activeSessions.length > 0}
-                  · {ws.activeSessions.length} session{ws.activeSessions.length !== 1 ? 's' : ''}
-                {/if}
-              </span>
-            </div>
-            {#if ws.pendingApprovals.length > 0}
-              <span class="badge warn sm">{ws.pendingApprovals.length}</span>
-            {/if}
-            <div class="ws-commentary-controls">
-              <!-- Personality Selector -->
-              <div class="ws-personality-dropdown">
-                <button
-                  class="ws-control-btn"
-                  class:active={!ws.settings?.commentaryMuted}
-                  onclick={(e) => {
-                    e.stopPropagation();
-                    togglePersonalityDropdown(ws.id);
-                  }}
-                  title="Change commentary personality"
-                >
-                  <svg
-                    width="12"
-                    height="12"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="2"
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
+          {@const wsCommentary = managerCommentaryStore.getWorkspaceState(ws.id)}
+          {@const wsEntries = managerCommentaryStore.getEntries(ws.id)}
+          {@const isCommentaryActive = managerCommentaryStore.isActive(ws.id)}
+          {@const isMuted = ws.settings?.commentaryMuted ?? false}
+          {@const isExpanded = expandedWsId === ws.id}
+          <div class="workspace-card" class:muted={isMuted} class:expanded={isExpanded}>
+            <!-- Workspace Header Row -->
+            <div class="workspace-card-header">
+              <span
+                class="ws-dot"
+                style:background={statusDot(ws.agentStatus)}
+                class:ws-dot-pulse={ws.agentStatus === 'running'}
+              ></span>
+              <div class="ws-info">
+                <span class="ws-name">
+                  {ws.name}
+                  {#if isCommentaryActive && !isMuted}
+                    <span class="commentary-live-dot" title="Commentary active"></span>
+                  {/if}
+                </span>
+                <span class="ws-meta">
+                  <span class="ws-status">{statusLabel(ws.agentStatus)}</span>
+                  {#if ws.activeLoops.length > 0}
+                    · {ws.activeLoops.length} loop{ws.activeLoops.length !== 1 ? 's' : ''}
+                  {/if}
+                  {#if ws.activeSessions.length > 0}
+                    · {ws.activeSessions.length} session{ws.activeSessions.length !== 1 ? 's' : ''}
+                  {/if}
+                </span>
+              </div>
+              {#if ws.pendingApprovals.length > 0}
+                <span class="badge warn sm">{ws.pendingApprovals.length}</span>
+              {/if}
+              <div class="ws-commentary-controls">
+                <!-- Personality Selector -->
+                <div class="ws-personality-dropdown">
+                  <button
+                    class="ws-control-btn"
+                    class:active={!isMuted}
+                    onclick={(e) => {
+                      e.stopPropagation();
+                      togglePersonalityDropdown(ws.id);
+                    }}
+                    title="Change commentary personality"
                   >
-                    <path
-                      d={personalities.find(
-                        (p) => p.id === (ws.settings?.commentaryPersonality || 'sports_announcer'),
-                      )?.icon || ''}
-                    />
-                  </svg>
-                </button>
+                    <svg
+                      width="12"
+                      height="12"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <path
+                        d={personalities.find(
+                          (p) =>
+                            p.id === (ws.settings?.commentaryPersonality || 'sports_announcer'),
+                        )?.icon || ''}
+                      />
+                    </svg>
+                  </button>
 
-                {#if openPersonalityDropdown === ws.id}
-                  <div class="personality-dropdown" onclick={(e) => e.stopPropagation()}>
-                    {#each personalities as p}
-                      <button
-                        class="personality-option"
-                        class:active={(ws.settings?.commentaryPersonality || 'sports_announcer') ===
-                          p.id}
-                        onclick={() => setCommentaryPersonality(ws, p.id)}
-                      >
-                        <svg
-                          width="14"
-                          height="14"
-                          viewBox="0 0 24 24"
-                          fill="none"
-                          stroke="currentColor"
-                          stroke-width="2"
-                          stroke-linecap="round"
-                          stroke-linejoin="round"
+                  {#if openPersonalityDropdown === ws.id}
+                    <div class="personality-dropdown" onclick={(e) => e.stopPropagation()}>
+                      {#each personalities as p}
+                        <button
+                          class="personality-option"
+                          class:active={(ws.settings?.commentaryPersonality ||
+                            'sports_announcer') === p.id}
+                          onclick={() => setCommentaryPersonality(ws, p.id)}
                         >
-                          <path d={p.icon} />
-                        </svg>
-                        <span class="personality-label">{p.label}</span>
-                        {#if (ws.settings?.commentaryPersonality || 'sports_announcer') === p.id}
                           <svg
-                            width="12"
-                            height="12"
+                            width="14"
+                            height="14"
                             viewBox="0 0 24 24"
                             fill="none"
                             stroke="currentColor"
-                            stroke-width="2.5"
-                            class="check-icon"
+                            stroke-width="2"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
                           >
-                            <polyline points="20 6 9 17 4 12"></polyline>
+                            <path d={p.icon} />
                           </svg>
-                        {/if}
-                      </button>
-                    {/each}
-                  </div>
-                {/if}
+                          <span class="personality-label">{p.label}</span>
+                          {#if (ws.settings?.commentaryPersonality || 'sports_announcer') === p.id}
+                            <svg
+                              width="12"
+                              height="12"
+                              viewBox="0 0 24 24"
+                              fill="none"
+                              stroke="currentColor"
+                              stroke-width="2.5"
+                              class="check-icon"
+                            >
+                              <polyline points="20 6 9 17 4 12"></polyline>
+                            </svg>
+                          {/if}
+                        </button>
+                      {/each}
+                    </div>
+                  {/if}
+                </div>
+
+                <!-- Mute/Unmute Button -->
+                <button
+                  class="ws-control-btn"
+                  class:muted={isMuted}
+                  onclick={(e) => {
+                    e.stopPropagation();
+                    toggleCommentaryMute(ws);
+                  }}
+                  title={isMuted ? 'Unmute commentary' : 'Mute commentary'}
+                >
+                  {#if isMuted}
+                    <!-- Volume X (muted) icon -->
+                    <svg
+                      width="12"
+                      height="12"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
+                      <line x1="23" y1="9" x2="17" y2="15"></line>
+                      <line x1="17" y1="9" x2="23" y2="15"></line>
+                    </svg>
+                  {:else}
+                    <!-- Volume 2 (active) icon -->
+                    <svg
+                      width="12"
+                      height="12"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
+                      <path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"></path>
+                    </svg>
+                  {/if}
+                </button>
+
+                <!-- History Toggle Button -->
+                <button
+                  class="ws-control-btn"
+                  class:active={ws.settings?.commentaryHistoryEnabled !== false}
+                  onclick={(e) => {
+                    e.stopPropagation();
+                    toggleCommentaryHistory(ws);
+                  }}
+                  title={ws.settings?.commentaryHistoryEnabled !== false
+                    ? 'Disable commentary history'
+                    : 'Enable commentary history'}
+                >
+                  {#if ws.settings?.commentaryHistoryEnabled === false}
+                    <!-- History disabled icon (book with X) -->
+                    <svg
+                      width="12"
+                      height="12"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" />
+                      <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" />
+                      <line x1="18" y1="6" x2="10" y2="14" />
+                      <line x1="10" y1="6" x2="18" y2="14" />
+                    </svg>
+                  {:else}
+                    <!-- History enabled icon (book) -->
+                    <svg
+                      width="12"
+                      height="12"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" />
+                      <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" />
+                    </svg>
+                  {/if}
+                </button>
               </div>
-
-              <!-- Mute/Unmute Button -->
-              <button
-                class="ws-control-btn"
-                class:muted={ws.settings?.commentaryMuted}
-                onclick={() => toggleCommentaryMute(ws)}
-                title={ws.settings?.commentaryMuted ? 'Unmute commentary' : 'Mute commentary'}
-              >
-                {#if ws.settings?.commentaryMuted}
-                  <!-- Volume X (muted) icon -->
-                  <svg
-                    width="12"
-                    height="12"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="2"
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                  >
-                    <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
-                    <line x1="23" y1="9" x2="17" y2="15"></line>
-                    <line x1="17" y1="9" x2="23" y2="15"></line>
-                  </svg>
-                {:else}
-                  <!-- Volume 2 (active) icon -->
-                  <svg
-                    width="12"
-                    height="12"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="2"
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                  >
-                    <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
-                    <path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"></path>
-                  </svg>
-                {/if}
-              </button>
-
-              <!-- History Toggle Button -->
-              <button
-                class="ws-control-btn"
-                class:active={ws.settings?.commentaryHistoryEnabled !== false}
-                onclick={(e) => {
-                  e.stopPropagation();
-                  toggleCommentaryHistory(ws);
-                }}
-                title={ws.settings?.commentaryHistoryEnabled !== false
-                  ? 'Disable commentary history'
-                  : 'Enable commentary history'}
-              >
-                {#if ws.settings?.commentaryHistoryEnabled === false}
-                  <!-- History disabled icon (book with X) -->
-                  <svg
-                    width="12"
-                    height="12"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="2"
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                  >
-                    <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" />
-                    <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" />
-                    <line x1="18" y1="6" x2="10" y2="14" />
-                    <line x1="10" y1="6" x2="18" y2="14" />
-                  </svg>
-                {:else}
-                  <!-- History enabled icon (book) -->
-                  <svg
-                    width="12"
-                    height="12"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="2"
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                  >
-                    <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" />
-                    <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" />
-                  </svg>
-                {/if}
-              </button>
             </div>
+
+            <!-- Commentary Feed Area -->
+            {#if !isMuted && wsEntries.length > 0}
+              <!-- svelte-ignore a11y_click_events_have_key_events -->
+              <!-- svelte-ignore a11y_no_static_element_interactions -->
+              <div
+                class="ws-commentary-feed"
+                class:expanded={isExpanded}
+                onclick={() => managerCommentaryStore.toggleExpanded(ws.id)}
+                title={isExpanded ? 'Collapse commentary' : 'Expand commentary'}
+              >
+                <div class="commentary-feed-header">
+                  <svg
+                    width="10"
+                    height="10"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    class="commentary-mic-icon"
+                  >
+                    <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" />
+                    <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
+                  </svg>
+                  <span class="commentary-feed-label">Commentary</span>
+                  <svg
+                    width="10"
+                    height="10"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    class="commentary-chevron"
+                    class:rotated={isExpanded}
+                  >
+                    <polyline points="6 9 12 15 18 9"></polyline>
+                  </svg>
+                </div>
+                <div class="commentary-entries">
+                  {#each isExpanded ? wsEntries : wsEntries.slice(-2) as entry (entry.timestamp)}
+                    <div class="commentary-entry">
+                      <span class="commentary-time">{formatCommentaryTime(entry.timestamp)}</span>
+                      <span class="commentary-text">{entry.text}</span>
+                    </div>
+                  {/each}
+                </div>
+              </div>
+            {:else if !isMuted && isCommentaryActive}
+              <!-- Active but no entries yet -->
+              <div class="ws-commentary-feed waiting">
+                <div class="commentary-feed-header">
+                  <svg
+                    width="10"
+                    height="10"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    class="commentary-mic-icon"
+                  >
+                    <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" />
+                    <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
+                  </svg>
+                  <span class="commentary-feed-label waiting-text">Listening...</span>
+                </div>
+              </div>
+            {/if}
           </div>
         {:else}
           <div class="empty">No workspaces</div>
@@ -955,27 +1087,35 @@
     flex: 1;
   }
 
-  /* Workspace list */
+  /* Workspace cards */
   .workspace-list {
     display: flex;
     flex-direction: column;
     gap: 4px;
   }
 
-  .workspace-row {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    padding: 6px 8px;
+  .workspace-card {
     background: var(--bg-secondary);
     border-radius: var(--radius-sm);
     border: 1px solid transparent;
     transition: all var(--transition);
+    overflow: hidden;
   }
 
-  .workspace-row.muted {
+  .workspace-card.muted {
     opacity: 0.6;
     border-color: var(--border-secondary);
+  }
+
+  .workspace-card.expanded {
+    border-color: color-mix(in srgb, var(--accent-primary) 30%, transparent);
+  }
+
+  .workspace-card-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 8px;
   }
 
   .ws-dot {
@@ -983,6 +1123,24 @@
     height: 7px;
     border-radius: 50%;
     flex-shrink: 0;
+    transition: box-shadow var(--transition);
+  }
+
+  .ws-dot-pulse {
+    box-shadow: 0 0 0 0 var(--accent-primary);
+    animation: ws-dot-ring 2s ease-in-out infinite;
+  }
+
+  @keyframes ws-dot-ring {
+    0% {
+      box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent-primary) 40%, transparent);
+    }
+    70% {
+      box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent-primary) 0%, transparent);
+    }
+    100% {
+      box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent-primary) 0%, transparent);
+    }
   }
 
   .ws-info {
@@ -991,13 +1149,37 @@
   }
 
   .ws-name {
-    display: block;
+    display: flex;
+    align-items: center;
+    gap: 5px;
     font-size: var(--fs-sm);
     font-weight: 600;
     color: var(--text-primary);
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+  }
+
+  /* Pulsing dot when commentary is active */
+  .commentary-live-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--accent-primary);
+    flex-shrink: 0;
+    animation: commentary-pulse 2s ease-in-out infinite;
+  }
+
+  @keyframes commentary-pulse {
+    0%,
+    100% {
+      opacity: 1;
+      transform: scale(1);
+    }
+    50% {
+      opacity: 0.3;
+      transform: scale(0.8);
+    }
   }
 
   .ws-meta {
@@ -1118,6 +1300,104 @@
   .check-icon {
     flex-shrink: 0;
     color: var(--accent-primary);
+  }
+
+  /* Commentary Feed Area */
+  .ws-commentary-feed {
+    border-top: 1px solid var(--border-secondary);
+    padding: 4px 8px 6px;
+    cursor: pointer;
+    transition: all var(--transition);
+    background: color-mix(in srgb, var(--accent-primary) 3%, transparent);
+  }
+
+  .ws-commentary-feed:hover {
+    background: color-mix(in srgb, var(--accent-primary) 6%, transparent);
+  }
+
+  .ws-commentary-feed.expanded {
+    background: color-mix(in srgb, var(--accent-primary) 5%, transparent);
+  }
+
+  .ws-commentary-feed.waiting {
+    cursor: default;
+  }
+
+  .commentary-feed-header {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    margin-bottom: 2px;
+  }
+
+  .commentary-mic-icon {
+    flex-shrink: 0;
+    color: var(--accent-primary);
+    opacity: 0.7;
+  }
+
+  .commentary-feed-label {
+    font-size: var(--fs-xxs);
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--accent-primary);
+    opacity: 0.7;
+    flex: 1;
+  }
+
+  .waiting-text {
+    font-style: italic;
+    font-weight: 600;
+    opacity: 0.5;
+    animation: pulse-dot 2s ease-in-out infinite;
+  }
+
+  .commentary-chevron {
+    flex-shrink: 0;
+    color: var(--text-tertiary);
+    transition: transform var(--transition);
+  }
+
+  .commentary-chevron.rotated {
+    transform: rotate(180deg);
+  }
+
+  .commentary-entries {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+  }
+
+  .commentary-entry {
+    display: flex;
+    gap: 6px;
+    align-items: flex-start;
+  }
+
+  .commentary-time {
+    flex-shrink: 0;
+    font-size: var(--fs-xxs);
+    color: var(--text-tertiary);
+    opacity: 0.7;
+    font-family: var(--font-family-mono, monospace);
+    line-height: 1.5;
+    min-width: 40px;
+  }
+
+  .commentary-text {
+    font-size: var(--fs-xxs);
+    color: var(--text-secondary);
+    line-height: 1.5;
+    overflow: hidden;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+  }
+
+  .ws-commentary-feed.expanded .commentary-text {
+    -webkit-line-clamp: unset;
+    overflow: visible;
   }
 
   /* Completed stories */
