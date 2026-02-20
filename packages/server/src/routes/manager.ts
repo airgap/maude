@@ -172,6 +172,16 @@ app.get('/overview', (c) => {
       agentStatus = 'waiting';
     }
 
+    // Parse settings JSON
+    let settings = null;
+    if (ws.settings) {
+      try {
+        settings = typeof ws.settings === 'string' ? JSON.parse(ws.settings) : ws.settings;
+      } catch {
+        settings = null;
+      }
+    }
+
     return {
       id: ws.id,
       name: ws.name,
@@ -181,6 +191,7 @@ app.get('/overview', (c) => {
       activeSessions: activeSessions,
       pendingApprovals: wsPendingApprovals,
       lastOpened: ws.last_opened,
+      settings,
     };
   });
 
