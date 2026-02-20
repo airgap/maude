@@ -6,16 +6,7 @@
   import { api } from '$lib/api/client';
   import { uiStore } from '$lib/stores/ui.svelte';
   import CommentaryExportModal from '$lib/components/commentary/CommentaryExportModal.svelte';
-
-  type CommentaryPersonality =
-    | 'sports_announcer'
-    | 'documentary_narrator'
-    | 'technical_analyst'
-    | 'comedic_observer'
-    | 'project_lead'
-    | 'wizard';
-
-  type CommentaryVerbosity = 'frequent' | 'strategic' | 'minimal';
+  import type { CommentaryPersonality, CommentaryVerbosity } from '@e/shared';
 
   interface VerbosityOption {
     id: CommentaryVerbosity;
