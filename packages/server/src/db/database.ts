@@ -266,6 +266,22 @@ export function initDatabase(): void {
     CREATE INDEX IF NOT EXISTS idx_agent_notes_workspace ON agent_notes(workspace_path, created_at DESC);
     CREATE INDEX IF NOT EXISTS idx_agent_notes_status ON agent_notes(workspace_path, status);
     CREATE INDEX IF NOT EXISTS idx_agent_notes_story ON agent_notes(story_id);
+
+    CREATE TABLE IF NOT EXISTS commentary_history (
+      id TEXT PRIMARY KEY,
+      workspace_id TEXT NOT NULL,
+      conversation_id TEXT,
+      text TEXT NOT NULL,
+      personality TEXT NOT NULL,
+      timestamp INTEGER NOT NULL,
+      created_at INTEGER NOT NULL,
+      FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE,
+      FOREIGN KEY (conversation_id) REFERENCES conversations(id) ON DELETE CASCADE
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_commentary_workspace ON commentary_history(workspace_id, created_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_commentary_conversation ON commentary_history(conversation_id, created_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_commentary_timestamp ON commentary_history(timestamp DESC);
   `);
 
   // Migrate: add new conversation columns (safe ALTER TABLE — no-ops if already exist)

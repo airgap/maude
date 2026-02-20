@@ -1607,4 +1607,50 @@ export const api = {
         `/agent-notes/unread-count?workspacePath=${encodeURIComponent(workspacePath)}`,
       ),
   },
+
+  // --- Commentary History ---
+  commentary: {
+    getWorkspaceHistory: (workspaceId: string, limit?: number, offset?: number) => {
+      const params = new URLSearchParams();
+      if (limit) params.set('limit', String(limit));
+      if (offset) params.set('offset', String(offset));
+      const q = params.toString();
+      return request<{
+        ok: boolean;
+        data: {
+          history: Array<{
+            id: string;
+            workspace_id: string;
+            conversation_id: string | null;
+            text: string;
+            personality: string;
+            timestamp: number;
+          }>;
+        };
+      }>(`/commentary/${encodeURIComponent(workspaceId)}/history${q ? '?' + q : ''}`);
+    },
+    getConversationHistory: (conversationId: string, limit?: number) => {
+      const params = new URLSearchParams();
+      if (limit) params.set('limit', String(limit));
+      const q = params.toString();
+      return request<{
+        ok: boolean;
+        data: {
+          history: Array<{
+            id: string;
+            workspace_id: string;
+            conversation_id: string | null;
+            text: string;
+            personality: string;
+            timestamp: number;
+          }>;
+        };
+      }>(`/commentary/conversation/${encodeURIComponent(conversationId)}${q ? '?' + q : ''}`);
+    },
+    clearHistory: (workspaceId: string) =>
+      request<{ ok: boolean; data: { success: boolean } }>(
+        `/commentary/${encodeURIComponent(workspaceId)}/history`,
+        { method: 'DELETE' },
+      ),
+  },
 };

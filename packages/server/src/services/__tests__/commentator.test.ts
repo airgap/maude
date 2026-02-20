@@ -66,38 +66,38 @@ describe('summariseBatch', () => {
   });
 
   test('summarises message_start events', () => {
-    const result = summariseBatch([makeMessageStart('claude-haiku-4-5')]);
+    const result = summariseBatch([makeMessageStart('claude-haiku-4-5')], 'high');
     expect(result).toContain('Agent started a new response');
     expect(result).toContain('claude-haiku-4-5');
   });
 
   test('summarises text deltas with preview', () => {
-    const result = summariseBatch([makeTextDelta('Hello world')]);
+    const result = summariseBatch([makeTextDelta('Hello world')], 'high');
     expect(result).toContain('Agent wrote: "Hello world"');
   });
 
   test('truncates long text deltas', () => {
     const longText = 'x'.repeat(200);
-    const result = summariseBatch([makeTextDelta(longText)]);
+    const result = summariseBatch([makeTextDelta(longText)], 'high');
     expect(result).toContain('…');
     // Preview should be at most 120 chars of the text
     expect(result.length).toBeLessThan(250);
   });
 
   test('summarises tool results', () => {
-    const result = summariseBatch([makeToolResult('Read', false)]);
+    const result = summariseBatch([makeToolResult('Read', false)], 'high');
     expect(result).toContain('"Read"');
     expect(result).toContain('succeeded');
   });
 
   test('summarises failed tool results', () => {
-    const result = summariseBatch([makeToolResult('Write', true)]);
+    const result = summariseBatch([makeToolResult('Write', true)], 'high');
     expect(result).toContain('"Write"');
     expect(result).toContain('failed');
   });
 
   test('summarises tool_use_start', () => {
-    const result = summariseBatch([makeToolUseStart('Bash')]);
+    const result = summariseBatch([makeToolUseStart('Bash')], 'high');
     expect(result).toContain('Agent invoking tool "Bash"');
   });
 

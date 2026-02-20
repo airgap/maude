@@ -10,6 +10,7 @@
   import SparkleCursor from '$lib/components/effects/SparkleCursor.svelte';
   import StreamAudio from '$lib/components/effects/StreamAudio.svelte';
   import TerminalAudio from '$lib/components/effects/TerminalAudio.svelte';
+  import CommentaryAudio from '$lib/components/effects/CommentaryAudio.svelte';
   import LoopNotifications from '$lib/components/effects/LoopNotifications.svelte';
   import { goto } from '$app/navigation';
 
@@ -123,4 +124,5 @@
 {/if}
 <StreamAudio />
 <TerminalAudio />
+<CommentaryAudio />
 <LoopNotifications />

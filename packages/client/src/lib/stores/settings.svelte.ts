@@ -94,6 +94,12 @@ interface SettingsState {
   termDefaultProfileId: string;
   // Agent terminal integration
   agentTerminalEnabled: boolean;
+  // Commentary TTS
+  ttsEnabled: boolean;
+  ttsVolume: number;
+  ttsProvider: 'browser' | 'elevenlabs' | 'google';
+  elevenLabsApiKey?: string;
+  googleTtsApiKey?: string;
 }
 
 const defaults: SettingsState = {
@@ -165,6 +171,11 @@ const defaults: SettingsState = {
   terminalProfiles: [],
   termDefaultProfileId: '',
   agentTerminalEnabled: false,
+  ttsEnabled: false,
+  ttsVolume: 80,
+  ttsProvider: 'browser',
+  elevenLabsApiKey: undefined,
+  googleTtsApiKey: undefined,
 };
 
 function loadFromStorage(): SettingsState {
@@ -282,8 +293,11 @@ function createSettingsStore() {
 
   // Apply theme + hypertheme on load
   if (typeof window !== 'undefined') {
-    applyTheme(state.theme);
-    applyHypertheme(state.hypertheme);
+    // Capture initial values to avoid Svelte state_referenced_locally warning
+    const initialTheme = state.theme;
+    const initialHypertheme = state.hypertheme;
+    applyTheme(initialTheme);
+    applyHypertheme(initialHypertheme);
   }
 
   return {
@@ -451,6 +465,21 @@ function createSettingsStore() {
     },
     get agentTerminalEnabled() {
       return state.agentTerminalEnabled;
+    },
+    get ttsEnabled() {
+      return state.ttsEnabled;
+    },
+    get ttsVolume() {
+      return state.ttsVolume;
+    },
+    get ttsProvider() {
+      return state.ttsProvider;
+    },
+    get elevenLabsApiKey() {
+      return state.elevenLabsApiKey;
+    },
+    get googleTtsApiKey() {
+      return state.googleTtsApiKey;
     },
     get all() {
       return state;

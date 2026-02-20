@@ -10,7 +10,7 @@
   import { renderMarkdown } from '$lib/utils/markdown';
   import ProseBlock from './ProseBlock.svelte';
   import ConversationBranchButton from './ConversationBranchButton.svelte';
-  import { ttsStore } from '$lib/stores/tts.svelte';
+  import { ttsStore } from '$lib/services/tts.svelte';
   import { uiStore } from '$lib/stores/ui.svelte';
   import { api } from '$lib/api/client';
   import ReplayModal from './ReplayModal.svelte';

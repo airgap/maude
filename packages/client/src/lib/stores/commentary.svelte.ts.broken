@@ -1,6 +1,6 @@
 import type { StreamCommentary } from '@e/shared';
 import { getBaseUrl, getAuthToken } from '$lib/api/client';
-import { commentaryTtsService, type CommentaryPersonality } from '$lib/services/commentary-tts';
+import { ttsService, type CommentaryPersonality } from '$lib/services/tts.svelte';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -65,11 +65,11 @@ function createCommentaryStore() {
 
         // Speak the commentary if TTS is enabled and not paused
         if (ttsEnabled && !ttsPaused) {
-          commentaryTtsService
+          ttsService
             .speak(commentary.text, commentary.personality as CommentaryPersonality)
-            .catch((err: unknown) => {
+            // .catch((err: unknown) => {
               console.error('[commentary] TTS failed:', err);
-            });
+            // });
         }
       }
     } catch {
@@ -182,14 +182,14 @@ function createCommentaryStore() {
           while (true) {
             // Check if superseded by a newer connection
             if (myGeneration !== commentaryGeneration) {
-              reader.cancel().catch(() => {});
+              reader.cancel().catch(() => {// });
               return;
             }
 
             const { done, value } = await reader.read();
             if (done) break;
 
-            buffer += decoder.decode(value, { stream: true });
+            buffer += decoder.decode(value, { stream: true // });
             const lines = buffer.split('\n');
             buffer = lines.pop() ?? '';
 
@@ -234,7 +234,7 @@ function createCommentaryStore() {
       }
 
       // Stop any current TTS playback
-      commentaryTtsService.stop();
+      // ttsService.stop();
 
       active = false;
       currentWorkspaceId = null;
@@ -260,9 +260,7 @@ function createCommentaryStore() {
       ttsEnabled = true;
       if (volume !== undefined) {
         ttsVolume = Math.max(0, Math.min(1, volume));
-        commentaryTtsService.setVolume(ttsVolume);
       }
-      commentaryTtsService.unmute();
     },
 
     /**
@@ -270,8 +268,7 @@ function createCommentaryStore() {
      */
     disableTts() {
       ttsEnabled = false;
-      commentaryTtsService.stop();
-      commentaryTtsService.mute();
+      // ttsService.stop();
     },
 
     /**
@@ -279,7 +276,7 @@ function createCommentaryStore() {
      */
     setTtsVolume(volume: number) {
       ttsVolume = Math.max(0, Math.min(1, volume));
-      commentaryTtsService.setVolume(ttsVolume);
+      // ttsService.setVolume(ttsVolume);
     },
 
     /**
@@ -287,7 +284,7 @@ function createCommentaryStore() {
      */
     pauseTts() {
       ttsPaused = true;
-      commentaryTtsService.pause();
+      // ttsService.pause();
     },
 
     /**
@@ -295,19 +292,7 @@ function createCommentaryStore() {
      */
     resumeTts() {
       ttsPaused = false;
-      commentaryTtsService.resume();
-    },
-
-    /**
-     * Configure TTS provider and API keys.
-     */
-    configureTts(
-      provider: 'browser' | 'elevenlabs' | 'google',
-      elevenLabsApiKey?: string,
-      googleApiKey?: string,
-    ) {
-      commentaryTtsService.setProvider(provider);
-      commentaryTtsService.setApiKeys(elevenLabsApiKey, googleApiKey);
+      // ttsService.resume();
     },
 
     /**
@@ -322,7 +307,7 @@ function createCommentaryStore() {
 
         const url = `${getBaseUrl()}/commentary/${encodeURIComponent(workspaceId)}/history?limit=${limit}&offset=${offset}`;
 
-        const response = await fetch(url, { headers });
+        const response = await fetch(url, { headers // });
 
         if (!response.ok) {
           error = `Failed to load history: HTTP ${response.status}`;
@@ -370,7 +355,7 @@ function createCommentaryStore() {
         const response = await fetch(url, {
           method: 'DELETE',
           headers,
-        });
+        // });
 
         if (!response.ok) {
           error = `Failed to clear history: HTTP ${response.status}`;
@@ -397,5 +382,5 @@ export const commentaryStore = createCommentaryStore();
 if (import.meta.hot) {
   import.meta.hot.dispose(() => {
     commentaryStore.stopCommentary();
-  });
+  // });
 }

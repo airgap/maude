@@ -1,0 +1,267 @@
+/**
+ * Commentary Export Utilities
+ *
+ * Handles exporting commentary history in various formats:
+ * - Markdown (timestamped list for documentation)
+ * - JSON (structured data for analysis)
+ * - Audio (TTS replay for sharing/review)
+ */
+
+import type { CommentaryEntry } from '$lib/stores/commentary.svelte';
+
+// ---------------------------------------------------------------------------
+// Types
+// ---------------------------------------------------------------------------
+
+export interface ExportOptions {
+  /** Workspace name/path for context */
+  workspaceName?: string;
+  /** Timestamp range filter */
+  startTime?: number;
+  endTime?: number;
+  /** Whether to include metadata header */
+  includeMetadata?: boolean;
+}
+
+export interface ExportMetadata {
+  workspaceName: string;
+  personality: string;
+  exportDate: string;
+  totalEntries: number;
+  timeRange: {
+    start: string;
+    end: string;
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Download Helper
+// ---------------------------------------------------------------------------
+
+/**
+ * Trigger a browser download for the given data.
+ */
+function downloadFile(filename: string, content: string | Blob, mimeType?: string) {
+  const blob =
+    typeof content === 'string' ? new Blob([content], { type: mimeType || 'text/plain' }) : content;
+
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+// ---------------------------------------------------------------------------
+// Format Helpers
+// ---------------------------------------------------------------------------
+
+/**
+ * Filter entries by time range if specified.
+ */
+function filterByTimeRange(
+  entries: CommentaryEntry[],
+  startTime?: number,
+  endTime?: number,
+): CommentaryEntry[] {
+  return entries.filter((entry) => {
+    if (startTime && entry.timestamp < startTime) return false;
+    if (endTime && entry.timestamp > endTime) return false;
+    return true;
+  });
+}
+
+/**
+ * Format timestamp as human-readable string.
+ */
+function formatTimestamp(timestamp: number, includeDate = true): string {
+  const date = new Date(timestamp);
+
+  if (includeDate) {
+    return date.toLocaleString('en-US', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+    });
+  }
+
+  return date.toLocaleTimeString('en-US', {
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+  });
+}
+
+/**
+ * Get metadata for the export.
+ */
+function getExportMetadata(entries: CommentaryEntry[], workspaceName: string): ExportMetadata {
+  const timestamps = entries.map((e) => e.timestamp);
+  const minTime = Math.min(...timestamps);
+  const maxTime = Math.max(...timestamps);
+
+  // Get the most common personality used
+  const personalityCounts = entries.reduce(
+    (acc, entry) => {
+      acc[entry.personality] = (acc[entry.personality] || 0) + 1;
+      return acc;
+    },
+    {} as Record<string, number>,
+  );
+
+  const primaryPersonality =
+    Object.entries(personalityCounts).sort(([, a], [, b]) => b - a)[0]?.[0] || 'unknown';
+
+  return {
+    workspaceName,
+    personality: primaryPersonality,
+    exportDate: new Date().toISOString(),
+    totalEntries: entries.length,
+    timeRange: {
+      start: formatTimestamp(minTime),
+      end: formatTimestamp(maxTime),
+    },
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Markdown Export
+// ---------------------------------------------------------------------------
+
+/**
+ * Export commentary history as a timestamped Markdown document.
+ */
+export function exportAsMarkdown(entries: CommentaryEntry[], options: ExportOptions = {}): void {
+  const filtered = filterByTimeRange(entries, options.startTime, options.endTime);
+
+  if (filtered.length === 0) {
+    throw new Error('No commentary entries to export');
+  }
+
+  const workspaceName = options.workspaceName || 'Unknown Workspace';
+  const metadata = getExportMetadata(filtered, workspaceName);
+
+  let markdown = '';
+
+  // Add metadata header if requested
+  if (options.includeMetadata !== false) {
+    markdown += `# Commentary Export\n\n`;
+    markdown += `**Workspace:** ${metadata.workspaceName}\n\n`;
+    markdown += `**Personality:** ${metadata.personality}\n\n`;
+    markdown += `**Exported:** ${metadata.exportDate}\n\n`;
+    markdown += `**Time Range:** ${metadata.timeRange.start} — ${metadata.timeRange.end}\n\n`;
+    markdown += `**Total Entries:** ${metadata.totalEntries}\n\n`;
+    markdown += `---\n\n`;
+  }
+
+  // Add commentary entries
+  markdown += `## Commentary Timeline\n\n`;
+
+  for (const entry of filtered) {
+    const time = formatTimestamp(entry.timestamp);
+    const personality = entry.personality
+      .replace(/_/g, ' ')
+      .replace(/\b\w/g, (l) => l.toUpperCase());
+
+    markdown += `### ${time}\n`;
+    markdown += `**Personality:** ${personality}\n\n`;
+    markdown += `> ${entry.text}\n\n`;
+  }
+
+  // Generate filename
+  const dateStr = new Date().toISOString().split('T')[0];
+  const filename = `commentary-${dateStr}.md`;
+
+  downloadFile(filename, markdown, 'text/markdown');
+}
+
+// ---------------------------------------------------------------------------
+// JSON Export
+// ---------------------------------------------------------------------------
+
+/**
+ * Export commentary history as structured JSON.
+ */
+export function exportAsJSON(entries: CommentaryEntry[], options: ExportOptions = {}): void {
+  const filtered = filterByTimeRange(entries, options.startTime, options.endTime);
+
+  if (filtered.length === 0) {
+    throw new Error('No commentary entries to export');
+  }
+
+  const workspaceName = options.workspaceName || 'Unknown Workspace';
+  const metadata = getExportMetadata(filtered, workspaceName);
+
+  const exportData = {
+    metadata,
+    entries: filtered.map((entry) => ({
+      timestamp: entry.timestamp,
+      timestampISO: new Date(entry.timestamp).toISOString(),
+      text: entry.text,
+      personality: entry.personality,
+      workspaceId: entry.workspaceId,
+    })),
+  };
+
+  const json = JSON.stringify(exportData, null, 2);
+
+  // Generate filename
+  const dateStr = new Date().toISOString().split('T')[0];
+  const filename = `commentary-${dateStr}.json`;
+
+  downloadFile(filename, json, 'application/json');
+}
+
+// ---------------------------------------------------------------------------
+// Audio Export (TTS Replay)
+// ---------------------------------------------------------------------------
+
+/**
+ * Generate and export an audio file of the commentary using TTS.
+ * This creates a single audio file by concatenating TTS for each entry.
+ */
+export async function exportAsAudio(
+  entries: CommentaryEntry[],
+  options: ExportOptions = {},
+): Promise<void> {
+  const filtered = filterByTimeRange(entries, options.startTime, options.endTime);
+
+  if (filtered.length === 0) {
+    throw new Error('No commentary entries to export');
+  }
+
+  // Check if Web Speech API is available
+  if (!('speechSynthesis' in window)) {
+    throw new Error('Text-to-speech is not supported in this browser');
+  }
+
+  // For audio export, we'll generate a simple audio file using TTS
+  // Due to browser limitations, we'll create a text file that can be used with external TTS
+  const workspaceName = options.workspaceName || 'Unknown Workspace';
+  const metadata = getExportMetadata(filtered, workspaceName);
+
+  let script = '';
+  script += `Commentary Export - ${metadata.workspaceName}\n`;
+  script += `Exported: ${metadata.exportDate}\n\n`;
+
+  for (let i = 0; i < filtered.length; i++) {
+    const entry = filtered[i];
+    const time = formatTimestamp(entry.timestamp, false);
+    script += `[${i + 1}] ${time}: ${entry.text}\n\n`;
+  }
+
+  // Export as text file with instructions
+  const dateStr = new Date().toISOString().split('T')[0];
+  const filename = `commentary-${dateStr}-audio-script.txt`;
+
+  downloadFile(filename, script, 'text/plain');
+
+  // Show info message that this is a text script for TTS
+  console.log('[commentary-export] Audio export created as text script');
+}

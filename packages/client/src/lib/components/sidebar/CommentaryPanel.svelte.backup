@@ -3,7 +3,6 @@
   import { workspaceStore } from '$lib/stores/workspace.svelte';
   import { api } from '$lib/api/client';
   import { uiStore } from '$lib/stores/ui.svelte';
-  import CommentaryExportModal from '$lib/components/commentary/CommentaryExportModal.svelte';
 
   type CommentaryPersonality =
     | 'sports_announcer'
@@ -62,12 +61,12 @@
   let history = $derived(commentaryStore.commentaryHistory);
   let error = $derived(commentaryStore.error);
   let ttsEnabled = $derived(commentaryStore.ttsEnabled);
-  let ttsVolume = $derived(commentaryStore.ttsVolume);
   let ttsPaused = $derived(commentaryStore.ttsPaused);
+  let ttsVolume = $derived(commentaryStore.ttsVolume);
 
   let showPersonalityDropdown = $state(false);
   let savedPersonality = $state<CommentaryPersonality | null>(null);
-  let showExportModal = $state(false);
+  let showVolumeSlider = $state(false);
 
   // Load workspace settings to get saved personality preference
   $effect(() => {
@@ -76,30 +75,9 @@
       (async () => {
         try {
           const res = await api.workspaces.get(workspaceId);
-          if (res.ok && res.data?.settings) {
-            const settings = res.data.settings;
-
-            // Load personality preference
-            if (settings.commentaryPersonality) {
-              savedPersonality = settings.commentaryPersonality as CommentaryPersonality;
-            }
-
-            // Load TTS settings
-            if (settings.commentaryTtsEnabled) {
-              const volume = settings.commentaryTtsVolume ?? 0.8;
-              commentaryStore.enableTts(volume);
-
-              // Configure TTS provider if specified
-              if (settings.commentaryTtsProvider) {
-                commentaryStore.configureTts(
-                  settings.commentaryTtsProvider,
-                  settings.commentaryTtsElevenLabsApiKey,
-                  settings.commentaryTtsGoogleApiKey,
-                );
-              }
-            }
+          if (res.ok && res.data?.settings?.commentaryPersonality) {
+            savedPersonality = res.data.settings.commentaryPersonality as CommentaryPersonality;
           }
-
           // Auto-start commentary when panel is opened
           const personality = savedPersonality || 'sports_announcer';
           commentaryStore.startCommentary(workspaceId, personality);
@@ -146,6 +124,53 @@
     }
   }
 
+  function toggleTts() {
+    if (ttsEnabled) {
+      commentaryStore.disableTts();
+      // Save preference
+      if (workspaceId) {
+        api.workspaces
+          .update(workspaceId, {
+            settings: { commentaryTtsEnabled: false },
+          })
+          .catch((err) => console.error('[commentary] Failed to save TTS preference:', err));
+      }
+    } else {
+      commentaryStore.enableTts(ttsVolume);
+      // Save preference
+      if (workspaceId) {
+        api.workspaces
+          .update(workspaceId, {
+            settings: { commentaryTtsEnabled: true, commentaryTtsVolume: ttsVolume },
+          })
+          .catch((err) => console.error('[commentary] Failed to save TTS preference:', err));
+      }
+    }
+  }
+
+  function toggleTtsPause() {
+    if (ttsPaused) {
+      commentaryStore.resumeTts();
+    } else {
+      commentaryStore.pauseTts();
+    }
+  }
+
+  function handleVolumeChange(e: Event) {
+    const target = e.target as HTMLInputElement;
+    const newVolume = parseFloat(target.value);
+    commentaryStore.setTtsVolume(newVolume);
+
+    // Save preference
+    if (workspaceId) {
+      api.workspaces
+        .update(workspaceId, {
+          settings: { commentaryTtsVolume: newVolume },
+        })
+        .catch((err) => console.error('[commentary] Failed to save TTS volume:', err));
+    }
+  }
+
   function formatTime(timestamp: number): string {
     const date = new Date(timestamp);
     return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
@@ -153,36 +178,6 @@
 
   function closeDropdown() {
     showPersonalityDropdown = false;
-  }
-
-  function toggleTts() {
-    if (ttsEnabled) {
-      commentaryStore.disableTts();
-      saveWorkspaceSetting('commentaryTtsEnabled', false);
-    } else {
-      commentaryStore.enableTts(ttsVolume);
-      saveWorkspaceSetting('commentaryTtsEnabled', true);
-    }
-  }
-
-  function handleVolumeChange(event: Event) {
-    const input = event.target as HTMLInputElement;
-    const volume = parseFloat(input.value);
-    commentaryStore.setTtsVolume(volume);
-    saveWorkspaceSetting('commentaryTtsVolume', volume);
-  }
-
-  async function saveWorkspaceSetting(key: string, value: any) {
-    if (!workspaceId) return;
-    try {
-      await api.workspaces.update(workspaceId, {
-        settings: {
-          [key]: value,
-        },
-      });
-    } catch (err) {
-      console.error('[commentary] Failed to save setting:', err);
-    }
   }
 
   // Close dropdown when clicking outside
@@ -280,30 +275,7 @@
         {/if}
       </div>
 
-      <!-- Export Button -->
-      <button
-        class="export-btn"
-        onclick={() => (showExportModal = true)}
-        title="Export commentary"
-        disabled={history.length === 0}
-      >
-        <svg
-          width="14"
-          height="14"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="2"
-          stroke-linecap="round"
-          stroke-linejoin="round"
-        >
-          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-          <polyline points="7 10 12 15 17 10" />
-          <line x1="12" y1="15" x2="12" y2="3" />
-        </svg>
-      </button>
-
-      <!-- TTS Toggle -->
+      <!-- TTS Toggle Button -->
       <button
         class="tts-btn"
         class:active={ttsEnabled}
@@ -364,13 +336,13 @@
     </div>
   </div>
 
-  <!-- TTS Volume Control (shown when TTS is enabled) -->
+  <!-- TTS Volume Controls -->
   {#if ttsEnabled}
     <div class="tts-controls">
       <div class="volume-control">
         <svg
-          width="12"
-          height="12"
+          width="14"
+          height="14"
           viewBox="0 0 24 24"
           fill="none"
           stroke="currentColor"
@@ -379,6 +351,7 @@
           stroke-linejoin="round"
         >
           <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
+          <path d="M15.54 8.46a5 5 0 0 1 0 7.07"></path>
         </svg>
         <input
           type="range"
@@ -388,7 +361,6 @@
           value={ttsVolume}
           oninput={handleVolumeChange}
           class="volume-slider"
-          title="TTS Volume"
         />
         <span class="volume-label">{Math.round(ttsVolume * 100)}%</span>
       </div>
@@ -482,13 +454,6 @@
     {/if}
   </div>
 </div>
-
-<CommentaryExportModal
-  bind:show={showExportModal}
-  {history}
-  {workspacePath}
-  onClose={() => (showExportModal = false)}
-/>
 
 <style>
   .commentary-panel {
@@ -631,7 +596,7 @@
     color: var(--accent-primary);
   }
 
-  .export-btn {
+  .tts-btn {
     width: 26px;
     height: 26px;
     border-radius: var(--radius-sm);
@@ -646,15 +611,16 @@
     padding: 0;
   }
 
-  .export-btn:hover:not(:disabled) {
+  .tts-btn:hover {
     color: var(--text-primary);
     border-color: var(--border-primary);
     background: var(--bg-hover);
   }
 
-  .export-btn:disabled {
-    opacity: 0.4;
-    cursor: not-allowed;
+  .tts-btn.active {
+    color: var(--accent-primary);
+    border-color: var(--accent-primary);
+    background: color-mix(in srgb, var(--accent-primary) 8%, transparent);
   }
 
   .toggle-btn {
@@ -682,98 +648,6 @@
     color: var(--accent-primary);
     border-color: var(--accent-primary);
     background: color-mix(in srgb, var(--accent-primary) 12%, transparent);
-  }
-
-  .tts-btn {
-    width: 28px;
-    height: 26px;
-    border-radius: var(--radius-sm);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    background: transparent;
-    border: 1px solid var(--border-secondary);
-    cursor: pointer;
-    color: var(--text-tertiary);
-    transition: all var(--transition);
-    padding: 0;
-  }
-
-  .tts-btn:hover {
-    color: var(--accent-primary);
-    border-color: var(--accent-primary);
-    background: color-mix(in srgb, var(--accent-primary) 8%, transparent);
-  }
-
-  .tts-btn.active {
-    color: var(--accent-primary);
-    border-color: var(--accent-primary);
-    background: color-mix(in srgb, var(--accent-primary) 12%, transparent);
-  }
-
-  .tts-controls {
-    padding: 8px 14px;
-    background: var(--bg-secondary);
-    border-bottom: 1px solid var(--border-secondary);
-    flex-shrink: 0;
-  }
-
-  .volume-control {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-  }
-
-  .volume-control svg {
-    flex-shrink: 0;
-    color: var(--text-tertiary);
-  }
-
-  .volume-slider {
-    flex: 1;
-    height: 4px;
-    border-radius: 2px;
-    background: var(--bg-tertiary);
-    outline: none;
-    -webkit-appearance: none;
-    appearance: none;
-  }
-
-  .volume-slider::-webkit-slider-thumb {
-    -webkit-appearance: none;
-    appearance: none;
-    width: 12px;
-    height: 12px;
-    border-radius: 50%;
-    background: var(--accent-primary);
-    cursor: pointer;
-    transition: transform var(--transition);
-  }
-
-  .volume-slider::-webkit-slider-thumb:hover {
-    transform: scale(1.2);
-  }
-
-  .volume-slider::-moz-range-thumb {
-    width: 12px;
-    height: 12px;
-    border-radius: 50%;
-    background: var(--accent-primary);
-    cursor: pointer;
-    border: none;
-    transition: transform var(--transition);
-  }
-
-  .volume-slider::-moz-range-thumb:hover {
-    transform: scale(1.2);
-  }
-
-  .volume-label {
-    font-size: var(--fs-xs);
-    color: var(--text-secondary);
-    font-weight: 600;
-    min-width: 32px;
-    text-align: right;
   }
 
   .commentary-content {

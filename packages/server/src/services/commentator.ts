@@ -11,6 +11,8 @@ import { EventEmitter } from 'events';
 import { callLlm as defaultCallLlm } from './llm-oneshot';
 import type { CallLlmOptions } from './llm-oneshot';
 import type { StreamEvent, StreamCommentary } from '@e/shared';
+import { getDb } from '../db/database';
+import { nanoid } from 'nanoid';
 
 // ---------------------------------------------------------------------------
 // Personality system
@@ -21,7 +23,10 @@ export type CommentaryPersonality =
   | 'documentary_narrator'
   | 'technical_analyst'
   | 'comedic_observer'
-  | 'project_lead';
+  | 'project_lead'
+  | 'wizard';
+
+export type CommentaryVerbosity = 'low' | 'medium' | 'high';
 
 export const PERSONALITY_PROMPTS: Record<CommentaryPersonality, string> = {
   sports_announcer: `You are a fast-paced, energetic sports announcer providing play-by-play commentary on an AI coding agent's work. Use 3rd person. Be exciting and dramatic. Use short, punchy sentences. Reference specific actions (file reads, edits, tool calls) like they're strategic plays. Keep each commentary to 1-3 sentences maximum.
@@ -43,6 +48,10 @@ Example: "There goes E, casually reading 47 files simultaneously like it's just 
   project_lead: `You are narrating in first person AS the AI coding agent (E). Speak as if you are the project lead describing your own work. Be authoritative and confident. Use "I" and "my". Keep each commentary to 1-3 sentences maximum.
 
 Example: "I'm analyzing the stream events architecture right now. I see we can mirror events through a new bridge — I'll design that next."`,
+
+  wizard: `You are an ancient wizard observing an AI coding agent's work through mystical means. Use archaic language, magical metaphors, and mystical terms. Speak in third person. Be dramatic and theatrical. Keep each commentary to 1-3 sentences maximum.
+
+Example: "Behold! The digital artificer weaves its spell across the scrolls of code. Through arcane divination, it peers into the heart of the streaming enchantments, seeking the threads that bind the mystical data flows."`,
 };
 
 // ---------------------------------------------------------------------------
@@ -50,7 +59,10 @@ Example: "I'm analyzing the stream events architecture right now. I see we can m
 // ---------------------------------------------------------------------------
 
 /** Distill a batch of raw StreamEvents into a compact text summary for the LLM. */
-export function summariseBatch(events: StreamEvent[]): string {
+export function summariseBatch(
+  events: StreamEvent[],
+  verbosity: CommentaryVerbosity = 'high',
+): string {
   if (events.length === 0) return '';
 
   const parts: string[] = [];
@@ -153,6 +165,62 @@ export function summariseBatch(events: StreamEvent[]): string {
 }
 
 // ---------------------------------------------------------------------------
+// Database helpers
+// ---------------------------------------------------------------------------
+
+/**
+ * Check if commentary history is enabled for a workspace.
+ * Defaults to true if not explicitly set to false.
+ */
+function isHistoryEnabled(workspaceId: string): boolean {
+  try {
+    const db = getDb();
+    const workspace = db.query('SELECT settings FROM workspaces WHERE id = ?').get(workspaceId) as {
+      settings: string | null;
+    } | null;
+
+    if (!workspace || !workspace.settings) return true; // Default to enabled
+
+    const settings = JSON.parse(workspace.settings);
+    // Default to true if not explicitly set to false
+    return settings.commentaryHistoryEnabled !== false;
+  } catch (err) {
+    console.error('[commentator] Failed to check history setting:', err);
+    return true; // Default to enabled on error
+  }
+}
+
+/**
+ * Save a commentary entry to the database.
+ * Only saves if history is enabled for the workspace.
+ */
+function saveCommentaryToDb(commentary: StreamCommentary, conversationId: string | null): void {
+  if (!isHistoryEnabled(commentary.workspaceId)) return;
+
+  try {
+    const db = getDb();
+    const id = nanoid(12);
+    const now = Date.now();
+
+    db.query(
+      `INSERT INTO commentary_history (id, workspace_id, conversation_id, text, personality, timestamp, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    ).run(
+      id,
+      commentary.workspaceId,
+      conversationId,
+      commentary.text,
+      commentary.personality,
+      commentary.timestamp,
+      now,
+    );
+  } catch (err) {
+    // Non-critical — log and continue
+    console.error('[commentator] Failed to save commentary to database:', err);
+  }
+}
+
+// ---------------------------------------------------------------------------
 // CommentatorService
 // ---------------------------------------------------------------------------
 
@@ -168,6 +236,8 @@ interface WorkspaceCommentator {
   generating: boolean;
   /** Whether this commentator is active. */
   active: boolean;
+  /** Optional conversation ID for linking commentary to a conversation. */
+  conversationId: string | null;
 }
 
 /** Minimum batch window — events are accumulated for at least this long. */
@@ -195,7 +265,11 @@ export class CommentatorService {
    * Start (or restart) commentary for a workspace.
    * If commentary is already active for the workspace, it is stopped first.
    */
-  startCommentary(workspaceId: string, personality: CommentaryPersonality): void {
+  startCommentary(
+    workspaceId: string,
+    personality: CommentaryPersonality,
+    conversationId?: string,
+  ): void {
     // Stop existing commentator if any
     this.stopCommentary(workspaceId);
 
@@ -206,6 +280,7 @@ export class CommentatorService {
       batchStartedAt: 0,
       generating: false,
       active: true,
+      conversationId: conversationId || null,
     };
 
     this.commentators.set(workspaceId, commentator);
@@ -341,6 +416,10 @@ export class CommentatorService {
         workspaceId,
       };
 
+      // Save to database (if history is enabled)
+      saveCommentaryToDb(commentary, commentator.conversationId);
+
+      // Emit to SSE stream
       this.events.emit('commentary', commentary);
     } catch (err) {
       // Commentary is non-critical — log and move on

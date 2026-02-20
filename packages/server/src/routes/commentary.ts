@@ -32,12 +32,134 @@ function getUserPreferredPersonality(): CommentaryPersonality | undefined {
   return undefined;
 }
 
+/** Read verbosity setting for a workspace from the database. */
+function getWorkspaceVerbosity(workspaceId: string): 'low' | 'medium' | 'high' {
+  try {
+    const db = getDb();
+    const row = db.query('SELECT settings FROM workspaces WHERE id = ?').get(workspaceId) as {
+      settings: string | null;
+    } | null;
+    if (row && row.settings) {
+      const settings = JSON.parse(row.settings);
+      const verbosity = settings.commentaryVerbosity;
+      if (verbosity === 'low' || verbosity === 'medium' || verbosity === 'high') {
+        return verbosity;
+      }
+    }
+  } catch {
+    /* DB unavailable or parse error — fall through */
+  }
+  return 'medium'; // Default to medium (strategic mode)
+}
+/**
+ * GET /commentary/conversation/:conversationId — Fetch commentary for a conversation.
+ *
+ * Query params:
+ *   limit — maximum number of entries to return (default: 100, max: 1000)
+ *   offset — number of entries to skip (default: 0)
+ *
+ * Returns an array of commentary history entries for a specific conversation.
+ */
+app.get('/conversation/:conversationId', (c) => {
+  const conversationId = c.req.param('conversationId');
+  const limit = Math.min(parseInt(c.req.query('limit') || '100', 10), 1000);
+  const offset = parseInt(c.req.query('offset') || '0', 10);
+
+  try {
+    const db = getDb();
+    const rows = db
+      .query(
+        `SELECT id, workspace_id, conversation_id, text, personality, timestamp
+         FROM commentary_history
+         WHERE conversation_id = ?
+         ORDER BY timestamp DESC
+         LIMIT ? OFFSET ?`,
+      )
+      .all(conversationId, limit, offset) as any[];
+
+    const history = rows.map((row) => ({
+      id: row.id,
+      workspaceId: row.workspace_id,
+      conversationId: row.conversation_id,
+      text: row.text,
+      personality: row.personality,
+      timestamp: row.timestamp,
+    }));
+
+    return c.json({ history });
+  } catch (err) {
+    console.error('[commentary] Failed to fetch conversation history:', err);
+    return c.json({ error: 'Failed to fetch commentary history', history: [] }, 500);
+  }
+});
+
+/**
+ * GET /commentary/:workspaceId/history — Fetch commentary history for a workspace.
+ *
+ * Query params:
+ *   limit — maximum number of entries to return (default: 100, max: 1000)
+ *   offset — number of entries to skip (default: 0)
+ *
+ * Returns an array of commentary history entries sorted by timestamp DESC.
+ */
+app.get('/:workspaceId/history', (c) => {
+  const workspaceId = c.req.param('workspaceId');
+  const limit = Math.min(parseInt(c.req.query('limit') || '100', 10), 1000);
+  const offset = parseInt(c.req.query('offset') || '0', 10);
+
+  try {
+    const db = getDb();
+    const rows = db
+      .query(
+        `SELECT id, workspace_id, conversation_id, text, personality, timestamp
+         FROM commentary_history
+         WHERE workspace_id = ?
+         ORDER BY timestamp DESC
+         LIMIT ? OFFSET ?`,
+      )
+      .all(workspaceId, limit, offset) as any[];
+
+    const history = rows.map((row) => ({
+      id: row.id,
+      workspaceId: row.workspace_id,
+      conversationId: row.conversation_id,
+      text: row.text,
+      personality: row.personality,
+      timestamp: row.timestamp,
+    }));
+
+    return c.json({ history });
+  } catch (err) {
+    console.error('[commentary] Failed to fetch history:', err);
+    return c.json({ error: 'Failed to fetch commentary history', history: [] }, 500);
+  }
+});
+
+/**
+ * DELETE /commentary/:workspaceId/history — Delete all commentary history for a workspace.
+ *
+ * Returns { ok: true, data: { success: true } } on success.
+ */
+app.delete('/:workspaceId/history', (c) => {
+  const workspaceId = c.req.param('workspaceId');
+
+  try {
+    const db = getDb();
+    db.query('DELETE FROM commentary_history WHERE workspace_id = ?').run(workspaceId);
+    return c.json({ ok: true, data: { success: true } });
+  } catch (err) {
+    console.error('[commentary] Failed to clear history:', err);
+    return c.json({ ok: false, error: 'Failed to clear commentary history' }, 500);
+  }
+});
+
 /**
  * GET /commentary/:workspaceId — SSE stream of commentary events.
  *
  * Query params:
  *   personality — one of CommentaryPersonality values
  *                 (defaults to user preference, then falls back to sports_announcer)
+ *   conversationId — optional conversation ID to link commentary to
  *
  * The endpoint starts the commentator for the given workspace when the client
  * connects and stops it when the client disconnects.
@@ -53,6 +175,11 @@ app.get('/:workspaceId', (c) => {
   } else {
     personality = getUserPreferredPersonality() ?? FALLBACK_PERSONALITY;
   }
+
+  // Get optional conversation ID
+  const conversationId = c.req.query('conversationId') || undefined;
+
+  // Get verbosity setting from workspace configuration
 
   // Start (or restart) commentary for this workspace
   commentatorService.startCommentary(workspaceId, personality);

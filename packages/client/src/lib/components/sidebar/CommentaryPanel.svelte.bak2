@@ -3,6 +3,7 @@
   import { workspaceStore } from '$lib/stores/workspace.svelte';
   import { api } from '$lib/api/client';
   import { uiStore } from '$lib/stores/ui.svelte';
+  import { settingsStore } from '$lib/stores/settings.svelte';
   import CommentaryExportModal from '$lib/components/commentary/CommentaryExportModal.svelte';
 
   type CommentaryPersonality =
@@ -76,30 +77,15 @@
       (async () => {
         try {
           const res = await api.workspaces.get(workspaceId);
-          if (res.ok && res.data?.settings) {
-            const settings = res.data.settings;
-
-            // Load personality preference
-            if (settings.commentaryPersonality) {
-              savedPersonality = settings.commentaryPersonality as CommentaryPersonality;
+          if (res.ok && res.data?.settings?.commentaryPersonality) {
             }
-
             // Load TTS settings
-            if (settings.commentaryTtsEnabled) {
-              const volume = settings.commentaryTtsVolume ?? 0.8;
-              commentaryStore.enableTts(volume);
-
-              // Configure TTS provider if specified
-              if (settings.commentaryTtsProvider) {
-                commentaryStore.configureTts(
-                  settings.commentaryTtsProvider,
-                  settings.commentaryTtsElevenLabsApiKey,
-                  settings.commentaryTtsGoogleApiKey,
-                );
+            if (res.ok && res.data?.settings) {
+              if (res.data.settings.commentaryTtsEnabled !== undefined && res.data.settings.commentaryTtsEnabled) {
+                commentaryStore.enableTts(res.data.settings.commentaryTtsVolume || 0.8);
               }
-            }
+            savedPersonality = res.data.settings.commentaryPersonality as CommentaryPersonality;
           }
-
           // Auto-start commentary when panel is opened
           const personality = savedPersonality || 'sports_announcer';
           commentaryStore.startCommentary(workspaceId, personality);
@@ -153,36 +139,6 @@
 
   function closeDropdown() {
     showPersonalityDropdown = false;
-  }
-
-  function toggleTts() {
-    if (ttsEnabled) {
-      commentaryStore.disableTts();
-      saveWorkspaceSetting('commentaryTtsEnabled', false);
-    } else {
-      commentaryStore.enableTts(ttsVolume);
-      saveWorkspaceSetting('commentaryTtsEnabled', true);
-    }
-  }
-
-  function handleVolumeChange(event: Event) {
-    const input = event.target as HTMLInputElement;
-    const volume = parseFloat(input.value);
-    commentaryStore.setTtsVolume(volume);
-    saveWorkspaceSetting('commentaryTtsVolume', volume);
-  }
-
-  async function saveWorkspaceSetting(key: string, value: any) {
-    if (!workspaceId) return;
-    try {
-      await api.workspaces.update(workspaceId, {
-        settings: {
-          [key]: value,
-        },
-      });
-    } catch (err) {
-      console.error('[commentary] Failed to save setting:', err);
-    }
   }
 
   // Close dropdown when clicking outside
@@ -280,69 +236,6 @@
         {/if}
       </div>
 
-      <!-- Export Button -->
-      <button
-        class="export-btn"
-        onclick={() => (showExportModal = true)}
-        title="Export commentary"
-        disabled={history.length === 0}
-      >
-        <svg
-          width="14"
-          height="14"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="2"
-          stroke-linecap="round"
-          stroke-linejoin="round"
-        >
-          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-          <polyline points="7 10 12 15 17 10" />
-          <line x1="12" y1="15" x2="12" y2="3" />
-        </svg>
-      </button>
-
-      <!-- TTS Toggle -->
-      <button
-        class="tts-btn"
-        class:active={ttsEnabled}
-        onclick={toggleTts}
-        title={ttsEnabled ? 'Disable text-to-speech' : 'Enable text-to-speech'}
-      >
-        {#if ttsEnabled}
-          <svg
-            width="14"
-            height="14"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-          >
-            <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
-            <path d="M15.54 8.46a5 5 0 0 1 0 7.07"></path>
-            <path d="M19.07 4.93a10 10 0 0 1 0 14.14"></path>
-          </svg>
-        {:else}
-          <svg
-            width="14"
-            height="14"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-          >
-            <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
-            <line x1="23" y1="9" x2="17" y2="15"></line>
-            <line x1="17" y1="9" x2="23" y2="15"></line>
-          </svg>
-        {/if}
-      </button>
-
       <!-- Toggle Commentary -->
       <button
         class="toggle-btn"
@@ -363,37 +256,6 @@
       </button>
     </div>
   </div>
-
-  <!-- TTS Volume Control (shown when TTS is enabled) -->
-  {#if ttsEnabled}
-    <div class="tts-controls">
-      <div class="volume-control">
-        <svg
-          width="12"
-          height="12"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="2"
-          stroke-linecap="round"
-          stroke-linejoin="round"
-        >
-          <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
-        </svg>
-        <input
-          type="range"
-          min="0"
-          max="1"
-          step="0.01"
-          value={ttsVolume}
-          oninput={handleVolumeChange}
-          class="volume-slider"
-          title="TTS Volume"
-        />
-        <span class="volume-label">{Math.round(ttsVolume * 100)}%</span>
-      </div>
-    </div>
-  {/if}
 
   <div class="commentary-content">
     {#if !workspacePath}
@@ -465,30 +327,94 @@
         </div>
       {/if}
 
-      <!-- History -->
-      {#if history.length > 1}
-        <div class="history-section">
-          <div class="history-header">Previous Commentary</div>
-          <div class="history-list">
-            {#each history.slice(0, -1).reverse() as entry (entry.timestamp)}
-              <div class="history-item">
-                <div class="history-time">{formatTime(entry.timestamp)}</div>
-                <div class="history-text">{entry.text}</div>
-              </div>
-            {/each}
+      <!-- History View Mode -->
+      {#if showHistoryView}
+        <div class="history-view">
+          <div class="history-view-header">
+            <span class="history-view-title">Commentary History</span>
+            {#if history.length > 0}
+              <button class="clear-history-btn" onclick={clearHistory} title="Clear all history">
+                <svg
+                  width="14"
+                  height="14"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <polyline points="3 6 5 6 21 6" />
+                  <path
+                    d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"
+                  />
+                </svg>
+                Clear
+              </button>
+            {/if}
           </div>
+
+          {#if loadingHistory}
+            <div class="loading-state">
+              <div class="spinner"></div>
+              <span>Loading history...</span>
+            </div>
+          {:else if history.length === 0}
+            <div class="empty-state">
+              <div class="empty-icon">
+                <svg
+                  width="32"
+                  height="32"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.5"
+                >
+                  <circle cx="12" cy="12" r="10" />
+                  <polyline points="12 6 12 12 16 14" />
+                </svg>
+              </div>
+              No commentary history yet.
+            </div>
+          {:else}
+            <div class="history-timeline">
+              {#each [...history].reverse() as entry (entry.id || entry.timestamp)}
+                <div class="timeline-entry">
+                  <div class="timeline-marker"></div>
+                  <div class="timeline-content">
+                    <div class="timeline-header">
+                      <span class="timeline-time">{formatTime(entry.timestamp)}</span>
+                      <span class="timeline-personality"
+                        >{entry.personality.replace(/_/g, ' ')}</span
+                      >
+                    </div>
+                    <div class="timeline-text">{entry.text}</div>
+                  </div>
+                </div>
+              {/each}
+            </div>
+          {/if}
         </div>
+      {:else}
+        <!-- Live Commentary Mode -->
+        <!-- History -->
+        {#if history.length > 1}
+          <div class="history-section">
+            <div class="history-header">Previous Commentary</div>
+            <div class="history-list">
+              {#each history.slice(0, -1).reverse() as entry (entry.timestamp)}
+                <div class="history-item">
+                  <div class="history-time">{formatTime(entry.timestamp)}</div>
+                  <div class="history-text">{entry.text}</div>
+                </div>
+              {/each}
+            </div>
+          </div>
+        {/if}
       {/if}
     {/if}
   </div>
 </div>
-
-<CommentaryExportModal
-  bind:show={showExportModal}
-  {history}
-  {workspacePath}
-  onClose={() => (showExportModal = false)}
-/>
 
 <style>
   .commentary-panel {
@@ -631,32 +557,6 @@
     color: var(--accent-primary);
   }
 
-  .export-btn {
-    width: 26px;
-    height: 26px;
-    border-radius: var(--radius-sm);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    background: transparent;
-    border: 1px solid var(--border-secondary);
-    cursor: pointer;
-    color: var(--text-tertiary);
-    transition: all var(--transition);
-    padding: 0;
-  }
-
-  .export-btn:hover:not(:disabled) {
-    color: var(--text-primary);
-    border-color: var(--border-primary);
-    background: var(--bg-hover);
-  }
-
-  .export-btn:disabled {
-    opacity: 0.4;
-    cursor: not-allowed;
-  }
-
   .toggle-btn {
     width: 26px;
     height: 26px;
@@ -682,98 +582,6 @@
     color: var(--accent-primary);
     border-color: var(--accent-primary);
     background: color-mix(in srgb, var(--accent-primary) 12%, transparent);
-  }
-
-  .tts-btn {
-    width: 28px;
-    height: 26px;
-    border-radius: var(--radius-sm);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    background: transparent;
-    border: 1px solid var(--border-secondary);
-    cursor: pointer;
-    color: var(--text-tertiary);
-    transition: all var(--transition);
-    padding: 0;
-  }
-
-  .tts-btn:hover {
-    color: var(--accent-primary);
-    border-color: var(--accent-primary);
-    background: color-mix(in srgb, var(--accent-primary) 8%, transparent);
-  }
-
-  .tts-btn.active {
-    color: var(--accent-primary);
-    border-color: var(--accent-primary);
-    background: color-mix(in srgb, var(--accent-primary) 12%, transparent);
-  }
-
-  .tts-controls {
-    padding: 8px 14px;
-    background: var(--bg-secondary);
-    border-bottom: 1px solid var(--border-secondary);
-    flex-shrink: 0;
-  }
-
-  .volume-control {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-  }
-
-  .volume-control svg {
-    flex-shrink: 0;
-    color: var(--text-tertiary);
-  }
-
-  .volume-slider {
-    flex: 1;
-    height: 4px;
-    border-radius: 2px;
-    background: var(--bg-tertiary);
-    outline: none;
-    -webkit-appearance: none;
-    appearance: none;
-  }
-
-  .volume-slider::-webkit-slider-thumb {
-    -webkit-appearance: none;
-    appearance: none;
-    width: 12px;
-    height: 12px;
-    border-radius: 50%;
-    background: var(--accent-primary);
-    cursor: pointer;
-    transition: transform var(--transition);
-  }
-
-  .volume-slider::-webkit-slider-thumb:hover {
-    transform: scale(1.2);
-  }
-
-  .volume-slider::-moz-range-thumb {
-    width: 12px;
-    height: 12px;
-    border-radius: 50%;
-    background: var(--accent-primary);
-    cursor: pointer;
-    border: none;
-    transition: transform var(--transition);
-  }
-
-  .volume-slider::-moz-range-thumb:hover {
-    transform: scale(1.2);
-  }
-
-  .volume-label {
-    font-size: var(--fs-xs);
-    color: var(--text-secondary);
-    font-weight: 600;
-    min-width: 32px;
-    text-align: right;
   }
 
   .commentary-content {
@@ -878,5 +686,142 @@
     font-size: var(--fs-xs);
     color: var(--text-secondary);
     line-height: 1.5;
+  }
+
+  /* History View Styles */
+  .history-view {
+    padding: 12px;
+  }
+
+  .history-view-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 16px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--border-secondary);
+  }
+
+  .history-view-title {
+    font-size: var(--fs-sm);
+    font-weight: 700;
+    color: var(--text-primary);
+  }
+
+  .clear-history-btn {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 8px;
+    border-radius: var(--radius-sm);
+    background: transparent;
+    border: 1px solid var(--border-secondary);
+    cursor: pointer;
+    color: var(--text-tertiary);
+    font-size: var(--fs-xs);
+    font-weight: 600;
+    transition: all var(--transition);
+  }
+
+  .clear-history-btn:hover {
+    color: var(--accent-error);
+    border-color: var(--accent-error);
+    background: color-mix(in srgb, var(--accent-error) 8%, transparent);
+  }
+
+  .loading-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+    padding: 32px 16px;
+    color: var(--text-tertiary);
+    font-size: var(--fs-sm);
+  }
+
+  .spinner {
+    width: 24px;
+    height: 24px;
+    border: 2px solid var(--border-secondary);
+    border-top-color: var(--accent-primary);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
+
+  @keyframes spin {
+    to {
+      transform: rotate(360deg);
+    }
+  }
+
+  .history-timeline {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  .timeline-entry {
+    display: flex;
+    gap: 12px;
+    position: relative;
+  }
+
+  .timeline-marker {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: var(--accent-primary);
+    border: 2px solid var(--bg-primary);
+    flex-shrink: 0;
+    margin-top: 4px;
+    z-index: 1;
+  }
+
+  .timeline-entry:not(:last-child) .timeline-marker::after {
+    content: '';
+    position: absolute;
+    left: 5px;
+    top: 16px;
+    width: 2px;
+    height: calc(100% + 4px);
+    background: var(--border-secondary);
+  }
+
+  .timeline-content {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .timeline-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    margin-bottom: 6px;
+  }
+
+  .timeline-time {
+    font-size: var(--fs-xxs);
+    color: var(--text-tertiary);
+    font-weight: 600;
+  }
+
+  .timeline-personality {
+    font-size: var(--fs-xxs);
+    color: var(--text-tertiary);
+    text-transform: capitalize;
+    padding: 2px 6px;
+    border-radius: var(--radius-xs);
+    background: var(--bg-tertiary);
+  }
+
+  .timeline-text {
+    font-size: var(--fs-sm);
+    color: var(--text-primary);
+    line-height: 1.6;
+    padding: 8px;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-secondary);
+    border-radius: var(--radius-sm);
   }
 </style>
