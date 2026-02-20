@@ -25,6 +25,7 @@
     "tauri:build": "cd src-tauri && cargo tauri build",
     "start": "bun run --filter @e/client build && bun run --filter @e/server start",
     "check": "bun run --filter '*' check",
+    "check:types": "bun run --filter '*' check",
     "test": "bun run --filter '*' test",
     "test:coverage": "bun run --filter @e/server test:coverage && bun run --filter @e/shared test:coverage && bun run --filter @e/client test:coverage",
     "format": "prettier --write .",
