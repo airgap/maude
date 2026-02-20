@@ -4,6 +4,7 @@ import {
   type CommentaryPersonality,
   PERSONALITY_PROMPTS,
 } from '../services/commentator';
+import { eventBridge } from '../services/event-bridge';
 import { getDb } from '../db/database';
 import type { StreamCommentary } from '@e/shared';
 
@@ -182,7 +183,11 @@ app.get('/:workspaceId', (c) => {
   // Get verbosity setting from workspace configuration
 
   // Start (or restart) commentary for this workspace
-  commentatorService.startCommentary(workspaceId, personality);
+  commentatorService.startCommentary(workspaceId, personality, conversationId);
+
+  // Subscribe this workspace to the event bridge so stream events are
+  // automatically mirrored to the commentator (AC 1, 4)
+  eventBridge.subscribe(workspaceId);
 
   const encoder = new TextEncoder();
 
@@ -209,10 +214,12 @@ app.get('/:workspaceId', (c) => {
         }
       }, 15000);
 
-      // Clean up on client disconnect — stop the commentator for this workspace
+      // Clean up on client disconnect — stop the commentator and unsubscribe
+      // from the event bridge for this workspace (AC 4: dynamic unsubscribe)
       c.req.raw.signal.addEventListener('abort', () => {
         commentatorService.events.off('commentary', handler);
         clearInterval(pingInterval);
+        eventBridge.unsubscribe(workspaceId);
         commentatorService.stopCommentary(workspaceId);
         try {
           controller.close();

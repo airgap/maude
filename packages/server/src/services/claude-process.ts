@@ -28,6 +28,7 @@ import {
   loadConversationHistory,
   summarizeWithLLM,
 } from './chat-compaction';
+import { eventBridge } from './event-bridge';
 
 // Check if `script` utility is available (util-linux) for PTY-wrapped spawning.
 // This avoids native addon issues with node-pty in Bun.
@@ -948,6 +949,11 @@ class ClaudeProcessManager {
                           description: desc,
                         });
                         enqueueEvent(controller, `data: ${approvalEvent}\n\n`);
+
+                        // Bridge approval request to commentators
+                        if (session.workspacePath) {
+                          eventBridge.emitRaw(session.workspacePath, approvalEvent);
+                        }
                       }
 
                       // Emit user_question_request for AskUserQuestion tool
@@ -982,6 +988,11 @@ class ClaudeProcessManager {
                                 duration: result.duration,
                               });
                               enqueueEvent(controller, `data: ${verifyEvent}\n\n`);
+
+                              // Bridge verification result to commentators
+                              if (session.workspacePath) {
+                                eventBridge.emitRaw(session.workspacePath, verifyEvent);
+                              }
                             } catch {
                               /* verification failed silently */
                             }
@@ -1037,6 +1048,11 @@ class ClaudeProcessManager {
                           isError: Boolean(block.is_error),
                         });
                         enqueueEvent(controller, `data: ${resultEvent}\n\n`);
+
+                        // Bridge tool_result to commentators
+                        if (session.workspacePath) {
+                          eventBridge.emitRaw(session.workspacePath, resultEvent);
+                        }
                       }
                     }
                   }
@@ -1050,6 +1066,14 @@ class ClaudeProcessManager {
                   for (const evt of apiEvents) {
                     console.log('[stream] Enqueuing event:', evt.slice(0, 100));
                     enqueueEvent(controller, `data: ${evt}\n\n`);
+                  }
+
+                  // Mirror translated events to active commentators via the event bridge.
+                  // This is fire-and-forget — never blocks the primary stream.
+                  if (session.workspacePath) {
+                    for (const evt of apiEvents) {
+                      eventBridge.emitRaw(session.workspacePath, evt);
+                    }
                   }
 
                   // Persist token usage on result + check context pressure for autocompaction
