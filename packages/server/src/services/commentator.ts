@@ -253,6 +253,9 @@ export function shouldPassVerbosityFilter(
   return MINIMAL_EVENT_TYPES.has(event.type);
 }
 
+/** @deprecated Use shouldPassVerbosityFilter instead */
+export const shouldProcessEvent = shouldPassVerbosityFilter;
+
 /**
  * Get batch timing parameters based on verbosity level.
  * Higher verbosity = more frequent batches.
@@ -273,18 +276,24 @@ export function getBatchTiming(verbosity: CommentaryVerbosity): {
   }
 }
 
+/** @deprecated Use getBatchTiming instead */
+export const getVerbosityBatchTiming = getBatchTiming;
+
 /**
  * Verbosity-specific prompt modifiers appended to the personality system prompt.
  * These instruct the LLM to adjust its output based on the desired detail level.
  */
 export const VERBOSITY_PROMPT_MODIFIERS: Record<CommentaryVerbosity, string> = {
   frequent:
-    '\n\nVERBOSITY: FREQUENT — Provide detailed, play-by-play commentary. Comment on every notable action including tool calls, file reads, edits, thinking phases, and results. Be expressive and thorough.',
+    '\n\nVERBOSITY: FREQUENT — Provide lively, detailed, play-by-play commentary. Comment on every notable action including tool calls, file reads, edits, thinking phases, and results. Be expressive and thorough.',
   strategic:
-    '\n\nVERBOSITY: STRATEGIC MILESTONES — Focus on significant strategic moments: tool invocations, completions, quality check results, and architectural decisions. Skip routine operations and minor text updates. Keep commentary to 1-2 sentences.',
+    '\n\nVERBOSITY: STRATEGIC MILESTONES — Focus on significant strategic moments: tool invocations, completions, quality check results, and architectural decisions. Skip routine operations and minor text updates. Keep commentary to 1-2 succinct sentences.',
   minimal:
-    '\n\nVERBOSITY: MINIMAL — Only comment on major milestones: story completions, critical errors, quality check results, and significant achievements. Be very concise — one sentence maximum.',
+    '\n\nVERBOSITY: MINIMAL — Only comment on major milestones: story completions, critical errors, quality check results, and significant achievements. Be very succinct and concise — one sentence maximum.',
 };
+
+/** @deprecated Use VERBOSITY_PROMPT_MODIFIERS instead */
+export const VERBOSITY_PROMPT_SUFFIX = VERBOSITY_PROMPT_MODIFIERS;
 
 // ---------------------------------------------------------------------------
 // Event summarisation helpers

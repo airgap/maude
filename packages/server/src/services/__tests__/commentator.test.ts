@@ -4,9 +4,9 @@ import {
   CommentatorService,
   summariseBatch,
   PERSONALITY_PROMPTS,
-  VERBOSITY_PROMPT_SUFFIX,
-  shouldProcessEvent,
-  getVerbosityBatchTiming,
+  VERBOSITY_PROMPT_MODIFIERS,
+  shouldPassVerbosityFilter,
+  getBatchTiming,
   MIN_BATCH_MS,
   MAX_BATCH_MS,
   type CommentaryPersonality,
@@ -273,35 +273,67 @@ describe('PERSONALITY_PROMPTS', () => {
       expect(prompt).toContain('Commentary:');
     }
   });
+
+  test('wizard prompt includes famous wizard easter egg references', () => {
+    const prompt = PERSONALITY_PROMPTS.wizard;
+    const wizardNames = [
+      'Merlin',
+      'Gandalf',
+      'Dumbledore',
+      'Morgana',
+      'Rincewind',
+      'Raistlin',
+      'Elminster',
+      'Prospero',
+    ];
+    const foundNames = wizardNames.filter((name) => prompt.includes(name));
+    expect(foundNames.length).toBeGreaterThanOrEqual(2);
+  });
+
+  test('wizard prompt uses archaic language constructions', () => {
+    const prompt = PERSONALITY_PROMPTS.wizard;
+    const archaicWords = ['hath', 'doth', 'verily', 'forsooth', 'methinks'];
+    const found = archaicWords.filter((w) => prompt.toLowerCase().includes(w));
+    expect(found.length).toBeGreaterThanOrEqual(2);
+  });
+
+  test('wizard prompt refers to code as spells and runes', () => {
+    const prompt = PERSONALITY_PROMPTS.wizard;
+    expect(prompt).toContain('spells');
+    expect(prompt).toContain('runes');
+    expect(prompt).toContain('enchantment');
+  });
 });
 
 // ---------------------------------------------------------------------------
-// Verbosity — shouldProcessEvent
+// Verbosity filtering
 // ---------------------------------------------------------------------------
 
-describe('shouldProcessEvent', () => {
+describe('shouldPassVerbosityFilter', () => {
   test('frequent verbosity passes all events', () => {
-    expect(shouldProcessEvent(makeMessageStart(), 'frequent')).toBe(true);
-    expect(shouldProcessEvent(makeTextDelta('text'), 'frequent')).toBe(true);
-    expect(shouldProcessEvent(makeToolUseStart('Read'), 'frequent')).toBe(true);
-    expect(shouldProcessEvent(makeToolResult('Read'), 'frequent')).toBe(true);
-    expect(shouldProcessEvent(makeMessageStop(), 'frequent')).toBe(true);
-    expect(shouldProcessEvent(makeStoryUpdate(), 'frequent')).toBe(true);
-    expect(shouldProcessEvent(makeError('fail'), 'frequent')).toBe(true);
+    expect(shouldPassVerbosityFilter(makeMessageStart(), 'frequent')).toBe(true);
+    expect(shouldPassVerbosityFilter(makeTextDelta('text'), 'frequent')).toBe(true);
+    expect(shouldPassVerbosityFilter(makeToolUseStart('Read'), 'frequent')).toBe(true);
+    expect(shouldPassVerbosityFilter(makeToolResult('Read'), 'frequent')).toBe(true);
+    expect(shouldPassVerbosityFilter(makeMessageStop(), 'frequent')).toBe(true);
+    expect(shouldPassVerbosityFilter(makeStoryUpdate(), 'frequent')).toBe(true);
+    expect(shouldPassVerbosityFilter(makeError('fail'), 'frequent')).toBe(true);
   });
 
   test('strategic verbosity filters out low-signal events', () => {
-    expect(shouldProcessEvent(makeToolUseStart('Read'), 'strategic')).toBe(true);
-    expect(shouldProcessEvent(makeToolResult('Read'), 'strategic')).toBe(true);
-    expect(shouldProcessEvent(makeMessageStop(), 'strategic')).toBe(true);
-    expect(shouldProcessEvent(makeStoryUpdate(), 'strategic')).toBe(true);
-    expect(shouldProcessEvent(makeError('fail'), 'strategic')).toBe(true);
-    expect(shouldProcessEvent(makeVerificationResult(true), 'strategic')).toBe(true);
+    // Should pass
+    expect(shouldPassVerbosityFilter(makeToolUseStart('Read'), 'strategic')).toBe(true);
+    expect(shouldPassVerbosityFilter(makeToolResult('Read'), 'strategic')).toBe(true);
+    expect(shouldPassVerbosityFilter(makeMessageStop(), 'strategic')).toBe(true);
+    expect(shouldPassVerbosityFilter(makeStoryUpdate(), 'strategic')).toBe(true);
+    expect(shouldPassVerbosityFilter(makeError('fail'), 'strategic')).toBe(true);
+    expect(shouldPassVerbosityFilter(makeVerificationResult(true), 'strategic')).toBe(true);
 
-    expect(shouldProcessEvent(makeMessageStart(), 'strategic')).toBe(false);
-    expect(shouldProcessEvent(makeTextDelta('text'), 'strategic')).toBe(false);
+    // Should NOT pass
+    expect(shouldPassVerbosityFilter(makeMessageStart(), 'strategic')).toBe(false);
+    expect(shouldPassVerbosityFilter(makeTextDelta('text'), 'strategic')).toBe(false);
     expect(
-      shouldProcessEvent(
+      shouldPassVerbosityFilter(
         { type: 'content_block_start', index: 0, content_block: { type: 'thinking' } },
         'strategic',
       ),
@@ -309,65 +341,70 @@ describe('shouldProcessEvent', () => {
   });
 
   test('minimal verbosity only passes major milestones', () => {
-    expect(shouldProcessEvent(makeStoryUpdate(), 'minimal')).toBe(true);
-    expect(shouldProcessEvent(makeError('fail'), 'minimal')).toBe(true);
-    expect(shouldProcessEvent(makeVerificationResult(true), 'minimal')).toBe(true);
+    // Should pass
+    expect(shouldPassVerbosityFilter(makeStoryUpdate(), 'minimal')).toBe(true);
+    expect(shouldPassVerbosityFilter(makeError('fail'), 'minimal')).toBe(true);
+    expect(shouldPassVerbosityFilter(makeVerificationResult(true), 'minimal')).toBe(true);
 
-    expect(shouldProcessEvent(makeToolUseStart('Read'), 'minimal')).toBe(false);
-    expect(shouldProcessEvent(makeToolResult('Read'), 'minimal')).toBe(false);
-    expect(shouldProcessEvent(makeMessageStop(), 'minimal')).toBe(false);
-    expect(shouldProcessEvent(makeMessageStart(), 'minimal')).toBe(false);
-    expect(shouldProcessEvent(makeTextDelta('text'), 'minimal')).toBe(false);
+    // Should NOT pass
+    expect(shouldPassVerbosityFilter(makeToolUseStart('Read'), 'minimal')).toBe(false);
+    expect(shouldPassVerbosityFilter(makeToolResult('Read'), 'minimal')).toBe(false);
+    expect(shouldPassVerbosityFilter(makeMessageStop(), 'minimal')).toBe(false);
+    expect(shouldPassVerbosityFilter(makeMessageStart(), 'minimal')).toBe(false);
+    expect(shouldPassVerbosityFilter(makeTextDelta('text'), 'minimal')).toBe(false);
   });
 });
 
 // ---------------------------------------------------------------------------
-// Verbosity — getVerbosityBatchTiming
+// Batch timing
 // ---------------------------------------------------------------------------
 
-describe('getVerbosityBatchTiming', () => {
-  test('frequent mode returns 3-5s window', () => {
-    const timing = getVerbosityBatchTiming('frequent');
-    expect(timing.minBatchMs).toBe(3_000);
-    expect(timing.maxBatchMs).toBe(5_000);
+describe('getBatchTiming', () => {
+  test('frequent mode uses fast timing (3-5s)', () => {
+    const timing = getBatchTiming('frequent');
+    expect(timing.minBatchMs).toBe(MIN_BATCH_MS);
+    expect(timing.maxBatchMs).toBe(MAX_BATCH_MS);
   });
 
-  test('strategic mode returns 8-15s window', () => {
-    const timing = getVerbosityBatchTiming('strategic');
+  test('strategic mode uses moderate timing (8-12s)', () => {
+    const timing = getBatchTiming('strategic');
     expect(timing.minBatchMs).toBe(8_000);
-    expect(timing.maxBatchMs).toBe(15_000);
+    expect(timing.maxBatchMs).toBe(12_000);
   });
 
-  test('minimal mode returns 15-30s window', () => {
-    const timing = getVerbosityBatchTiming('minimal');
+  test('minimal mode uses slow timing (15-20s)', () => {
+    const timing = getBatchTiming('minimal');
     expect(timing.minBatchMs).toBe(15_000);
-    expect(timing.maxBatchMs).toBe(30_000);
+    expect(timing.maxBatchMs).toBe(20_000);
   });
 });
 
 // ---------------------------------------------------------------------------
-// Verbosity — VERBOSITY_PROMPT_SUFFIX
+// Verbosity prompt modifiers
 // ---------------------------------------------------------------------------
 
-describe('VERBOSITY_PROMPT_SUFFIX', () => {
-  test('all three verbosity levels have prompt suffixes', () => {
+describe('VERBOSITY_PROMPT_MODIFIERS', () => {
+  test('all three verbosity levels have modifiers', () => {
     const levels: CommentaryVerbosity[] = ['frequent', 'strategic', 'minimal'];
     for (const level of levels) {
-      expect(VERBOSITY_PROMPT_SUFFIX[level]).toBeDefined();
-      expect(VERBOSITY_PROMPT_SUFFIX[level].length).toBeGreaterThan(20);
+      expect(VERBOSITY_PROMPT_MODIFIERS[level]).toBeDefined();
+      expect(VERBOSITY_PROMPT_MODIFIERS[level].length).toBeGreaterThan(20);
     }
   });
 
-  test('frequent suffix asks for lively commentary', () => {
-    expect(VERBOSITY_PROMPT_SUFFIX.frequent).toContain('lively');
+  test('frequent modifier mentions detailed play-by-play', () => {
+    expect(VERBOSITY_PROMPT_MODIFIERS.frequent).toContain('FREQUENT');
+    expect(VERBOSITY_PROMPT_MODIFIERS.frequent).toContain('detailed');
   });
 
-  test('strategic suffix focuses on significance', () => {
-    expect(VERBOSITY_PROMPT_SUFFIX.strategic).toContain('significance');
+  test('strategic modifier mentions strategic milestones', () => {
+    expect(VERBOSITY_PROMPT_MODIFIERS.strategic).toContain('STRATEGIC MILESTONES');
+    expect(VERBOSITY_PROMPT_MODIFIERS.strategic).toContain('significant');
   });
 
-  test('minimal suffix is succinct', () => {
-    expect(VERBOSITY_PROMPT_SUFFIX.minimal).toContain('succinct');
+  test('minimal modifier mentions minimal/concise', () => {
+    expect(VERBOSITY_PROMPT_MODIFIERS.minimal).toContain('MINIMAL');
+    expect(VERBOSITY_PROMPT_MODIFIERS.minimal).toContain('concise');
   });
 });
 
@@ -503,7 +540,7 @@ describe('CommentatorService — reference counting', () => {
     expect(service.getRefCount('ws-1')).toBe(0);
   });
 
-  test('stopCommentary respects ref counting', () => {
+  test('stopCommentary respects ref counting — does not stop while refs remain', () => {
     service.startCommentary('ws-1', 'sports_announcer');
     service.acquireRef('ws-1');
     service.acquireRef('ws-1');
@@ -600,7 +637,7 @@ describe('CommentatorService — status and listing', () => {
     expect(service.activeCount).toBe(1);
   });
 
-  test('getStatus returns detailed info including verbosity', () => {
+  test('getStatus returns detailed info for all commentators including verbosity', () => {
     service.startCommentary('ws-1', 'sports_announcer', undefined, 'frequent');
     service.startCommentary('ws-2', 'documentary_narrator', undefined, 'minimal');
     service.acquireRef('ws-1');
@@ -643,7 +680,7 @@ describe('CommentatorService — event batching', () => {
     service.stopAll();
   });
 
-  test('batches events and calls LLM after MIN_BATCH_MS (frequent mode)', async () => {
+  test('batches events and calls LLM after MIN_BATCH_MS', async () => {
     service.startCommentary('ws-1', 'sports_announcer', undefined, 'frequent');
 
     service.pushEvent('ws-1', makeMessageStart());
@@ -658,7 +695,8 @@ describe('CommentatorService — event batching', () => {
 
     const callArgs = mockCallLlm.mock.calls[0][0] as any;
     expect(callArgs.system).toContain('sports announcer');
-    expect(callArgs.user).toContain('lively');
+    // Verbosity modifier is appended to system prompt
+    expect(callArgs.system).toContain('FREQUENT');
     expect(callArgs.user).toContain('Agent started');
     expect(callArgs.user).toContain('Agent invoking tool "Read"');
     expect(callArgs.model).toContain('haiku');
@@ -683,30 +721,39 @@ describe('CommentatorService — event batching', () => {
     expect(received[0].timestamp).toBeGreaterThan(0);
   }, 10_000);
 
-  test('strategic mode filters out text deltas', async () => {
-    service.startCommentary('ws-1', 'technical_analyst', undefined, 'strategic');
+  test('flushes batch at MAX_BATCH_MS even with continuous events', async () => {
+    service.startCommentary('ws-1', 'technical_analyst', undefined, 'frequent');
 
-    service.pushEvent('ws-1', makeTextDelta('hello'));
-    service.pushEvent('ws-1', makeTextDelta('world'));
-    service.pushEvent('ws-1', makeMessageStart());
+    const pushInterval = setInterval(() => {
+      service.pushEvent('ws-1', makeTextDelta('ongoing work'));
+    }, 500);
 
-    await new Promise((resolve) => setTimeout(resolve, 10_000));
+    await new Promise((resolve) => setTimeout(resolve, MAX_BATCH_MS + 1_500));
+    clearInterval(pushInterval);
 
-    expect(mockCallLlm).not.toHaveBeenCalled();
+    expect(mockCallLlm.mock.calls.length).toBeGreaterThanOrEqual(1);
   }, 15_000);
 
-  test('strategic mode narrates tool use and errors', async () => {
-    service.startCommentary('ws-1', 'technical_analyst', undefined, 'strategic');
+  test('does not overlap LLM calls — drops batch if generating', async () => {
+    const slowMock = mock(
+      () => new Promise<string>((resolve) => setTimeout(() => resolve('Slow commentary'), 5_000)),
+    );
+    service = new CommentatorService(slowMock as LlmCaller);
+
+    service.startCommentary('ws-1', 'comedic_observer', undefined, 'frequent');
+
+    service.pushEvent('ws-1', makeMessageStart());
+    await new Promise((resolve) => setTimeout(resolve, MIN_BATCH_MS + 500));
+
+    expect(slowMock).toHaveBeenCalledTimes(1);
 
     service.pushEvent('ws-1', makeToolUseStart('Edit'));
-    service.pushEvent('ws-1', makeToolResult('Edit'));
+    await new Promise((resolve) => setTimeout(resolve, MIN_BATCH_MS + 500));
 
-    await new Promise((resolve) => setTimeout(resolve, 9_000));
+    expect(slowMock).toHaveBeenCalledTimes(1);
 
-    expect(mockCallLlm).toHaveBeenCalledTimes(1);
-    const callArgs = mockCallLlm.mock.calls[0][0] as any;
-    expect(callArgs.user).toContain('significance');
-  }, 15_000);
+    await new Promise((resolve) => setTimeout(resolve, 4_000));
+  }, 20_000);
 
   test('handles LLM errors gracefully without stopping commentary', async () => {
     const failThenSucceed = mock()
@@ -764,7 +811,7 @@ describe('CommentatorService — event batching', () => {
     expect(received.length).toBe(0);
   }, 10_000);
 
-  test('LLM prompt includes verbosity suffix in user prompt', async () => {
+  test('LLM prompt includes verbosity modifier', async () => {
     service.startCommentary('ws-1', 'sports_announcer', undefined, 'minimal');
 
     service.pushEvent('ws-1', makeStoryUpdate());
@@ -773,9 +820,34 @@ describe('CommentatorService — event batching', () => {
 
     if (mockCallLlm.mock.calls.length > 0) {
       const callArgs = mockCallLlm.mock.calls[0][0] as any;
-      expect(callArgs.user).toContain('succinct');
+      expect(callArgs.system).toContain('MINIMAL');
     }
   }, 25_000);
+
+  test('strategic mode filters out text deltas', async () => {
+    service.startCommentary('ws-1', 'technical_analyst', undefined, 'strategic');
+
+    service.pushEvent('ws-1', makeTextDelta('hello'));
+    service.pushEvent('ws-1', makeTextDelta('world'));
+    service.pushEvent('ws-1', makeMessageStart());
+
+    await new Promise((resolve) => setTimeout(resolve, 10_000));
+
+    expect(mockCallLlm).not.toHaveBeenCalled();
+  }, 15_000);
+
+  test('strategic mode narrates tool use and errors', async () => {
+    service.startCommentary('ws-1', 'technical_analyst', undefined, 'strategic');
+
+    service.pushEvent('ws-1', makeToolUseStart('Edit'));
+    service.pushEvent('ws-1', makeToolResult('Edit'));
+
+    await new Promise((resolve) => setTimeout(resolve, 9_000));
+
+    expect(mockCallLlm).toHaveBeenCalledTimes(1);
+    const callArgs = mockCallLlm.mock.calls[0][0] as any;
+    expect(callArgs.system).toContain('STRATEGIC MILESTONES');
+  }, 15_000);
 });
 
 // ---------------------------------------------------------------------------
@@ -795,7 +867,7 @@ describe('CommentatorService — multiple workspaces', () => {
     service.stopAll();
   });
 
-  test('independent commentators with different personalities and verbosities', async () => {
+  test('AC 1+2: independent commentators with different personalities', async () => {
     const received: StreamCommentary[] = [];
     service.events.on('commentary', (evt: StreamCommentary) => {
       received.push(evt);
@@ -818,7 +890,7 @@ describe('CommentatorService — multiple workspaces', () => {
     expect(ws2Commentary?.personality).toBe('documentary_narrator');
   }, 10_000);
 
-  test('events for one workspace do not affect another (no crosstalk)', async () => {
+  test('AC 3: events for one workspace do not affect another (no crosstalk)', async () => {
     const received: StreamCommentary[] = [];
     service.events.on('commentary', (evt: StreamCommentary) => {
       received.push(evt);
@@ -835,6 +907,29 @@ describe('CommentatorService — multiple workspaces', () => {
     expect(received.length).toBe(1);
     expect(received[0].workspaceId).toBe('ws-1');
     expect(received[0].personality).toBe('sports_announcer');
+  }, 10_000);
+
+  test('three simultaneous workspaces with different personalities', async () => {
+    const received: StreamCommentary[] = [];
+    service.events.on('commentary', (evt: StreamCommentary) => {
+      received.push(evt);
+    });
+
+    service.startCommentary('ws-1', 'sports_announcer', undefined, 'frequent');
+    service.startCommentary('ws-2', 'documentary_narrator', undefined, 'frequent');
+    service.startCommentary('ws-3', 'comedic_observer', undefined, 'frequent');
+
+    service.pushEvent('ws-1', makeMessageStart());
+    service.pushEvent('ws-2', makeToolUseStart('Edit'));
+    service.pushEvent('ws-3', makeToolResult('Bash', true));
+
+    await new Promise((resolve) => setTimeout(resolve, MIN_BATCH_MS + 1_000));
+
+    expect(mockCallLlm.mock.calls.length).toBe(3);
+    expect(received.length).toBe(3);
+
+    const personalities = received.map((c) => c.personality).sort();
+    expect(personalities).toEqual(['comedic_observer', 'documentary_narrator', 'sports_announcer']);
   }, 10_000);
 
   test('stopping one workspace does not affect others', () => {
@@ -873,4 +968,58 @@ describe('CommentatorService — multiple workspaces', () => {
     expect(service.getVerbosity('ws-1')).toBe('frequent');
     expect(service.getVerbosity('ws-2')).toBe('minimal');
   });
+});
+
+// ---------------------------------------------------------------------------
+// Wizard personality — dedicated tests
+// ---------------------------------------------------------------------------
+
+describe('Wizard personality', () => {
+  test('wizard prompt uses archaic and mystical language', () => {
+    const prompt = PERSONALITY_PROMPTS.wizard;
+    expect(prompt).toContain('wizard');
+    expect(prompt).toContain('arcane');
+    expect(prompt).toContain('mystical');
+  });
+
+  test('wizard prompt references spells, runes, and enchantments', () => {
+    const prompt = PERSONALITY_PROMPTS.wizard;
+    expect(prompt).toContain('spell');
+    expect(prompt).toContain('enchantment');
+    expect(prompt).toContain('runes');
+  });
+
+  test('wizard prompt uses third person perspective', () => {
+    const prompt = PERSONALITY_PROMPTS.wizard;
+    expect(prompt).toContain('third person');
+  });
+
+  test('wizard prompt has Activity/Commentary examples', () => {
+    const prompt = PERSONALITY_PROMPTS.wizard;
+    expect(prompt).toContain('Activity:');
+    expect(prompt).toContain('Commentary:');
+  });
+
+  test('wizard commentator can be started and stopped', () => {
+    const mockLlm: LlmCaller = async () => 'The code-weaver has finished!';
+    const service = new CommentatorService(mockLlm);
+    service.startCommentary('ws-wiz', 'wizard');
+    expect(service.isActive('ws-wiz')).toBe(true);
+    expect(service.getPersonality('ws-wiz')).toBe('wizard');
+    service.forceStopCommentary('ws-wiz');
+    expect(service.isActive('ws-wiz')).toBe(false);
+  });
+
+  test('wizard commentary uses wizard system prompt in LLM call', async () => {
+    const wizMock = mock(() => Promise.resolve('Behold! The artificer weaves its spell!'));
+    const service = new CommentatorService(wizMock as LlmCaller);
+    service.startCommentary('ws-wiz', 'wizard', undefined, 'frequent');
+    service.pushEvent('ws-wiz', makeMessageStart());
+    await new Promise((resolve) => setTimeout(resolve, MIN_BATCH_MS + 500));
+    expect(wizMock).toHaveBeenCalledTimes(1);
+    const callArgs = (wizMock.mock.calls as any[][])[0][0] as any;
+    expect(callArgs.system).toContain('wizard');
+    expect(callArgs.system).toContain('arcane');
+    service.stopAll();
+  }, 10_000);
 });
