@@ -6,11 +6,41 @@ export type CommentaryPersonality =
   | 'project_lead'
   | 'wizard';
 
-export type CommentaryVerbosity = 'low' | 'medium' | 'high';
+/**
+ * Commentary verbosity controls how often the commentator chimes in:
+ *  - 'frequent'  — narrates every 3-5 seconds, covers most events
+ *  - 'strategic' — only narrates on tool_use, message_stop, quality checks
+ *  - 'minimal'   — only major milestones (story completion, errors)
+ */
+export type CommentaryVerbosity = 'frequent' | 'strategic' | 'minimal';
+
+/** Valid verbosity values — used for validation. */
+export const VALID_VERBOSITY_VALUES: CommentaryVerbosity[] = ['frequent', 'strategic', 'minimal'];
+
+/**
+ * Migrate legacy verbosity values ('low'|'medium'|'high') to the new semantic names.
+ * Returns the input unchanged if it's already a valid new value.
+ */
+export function migrateVerbosity(value: string): CommentaryVerbosity {
+  switch (value) {
+    case 'high':
+      return 'frequent';
+    case 'medium':
+      return 'strategic';
+    case 'low':
+      return 'minimal';
+    case 'frequent':
+    case 'strategic':
+    case 'minimal':
+      return value;
+    default:
+      return 'strategic';
+  }
+}
 
 /**
  * Commentary-specific settings that can be stored per-workspace.
- * Default values: enabled=false, personality='technical_analyst', verbosity='medium'
+ * Default values: enabled=false, personality='technical_analyst', verbosity='strategic'
  */
 export interface CommentarySettings {
   enabled: boolean;
@@ -22,7 +52,7 @@ export interface CommentarySettings {
 export const DEFAULT_COMMENTARY_SETTINGS: CommentarySettings = {
   enabled: false,
   personality: 'technical_analyst',
-  verbosity: 'medium',
+  verbosity: 'strategic',
 };
 
 export interface Workspace {
@@ -49,6 +79,8 @@ export interface WorkspaceSettings {
   commentaryTtsProvider?: 'browser' | 'elevenlabs' | 'google';
   commentaryTtsElevenLabsApiKey?: string;
   commentaryTtsGoogleApiKey?: string;
+  /** Experimental: spatial audio positioning for multi-workspace TTS (disabled by default) */
+  commentarySpatialAudioEnabled?: boolean;
 }
 
 export interface WorkspaceSummary {

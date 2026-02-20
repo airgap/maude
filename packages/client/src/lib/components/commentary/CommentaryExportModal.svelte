@@ -7,32 +7,68 @@
     downloadExport,
     type ExportFormat,
   } from '$lib/utils/commentary-export';
+  import { loadWorkspaceHistory } from '$lib/stores/commentary-history';
   import { uiStore } from '$lib/stores/ui.svelte';
 
   interface Props {
     show: boolean;
     history: CommentaryEntry[];
     workspacePath?: string;
+    workspaceId?: string;
     onClose: () => void;
   }
 
-  let { show = $bindable(), history, workspacePath, onClose }: Props = $props();
+  let { show = $bindable(), history, workspacePath, workspaceId, onClose }: Props = $props();
 
   let selectedFormat = $state<ExportFormat>('markdown');
   let selectedTimeRange = $state<'all' | 'last_hour' | 'last_30min'>('all');
+  let selectedSource = $state<'session' | 'full'>('session');
   let exportInProgress = $state(false);
+  let serverHistoryCount = $state<number | null>(null);
+  let serverHistoryLoading = $state(false);
 
-  const formatOptions = [
-    { id: 'markdown' as ExportFormat, label: 'Markdown', description: 'Timestamped text document' },
-    { id: 'json' as ExportFormat, label: 'JSON', description: 'Structured data for analysis' },
-    { id: 'audio' as ExportFormat, label: 'Audio', description: 'TTS replay (WAV file)' },
+  const formatOptions: Array<{ id: ExportFormat; label: string; description: string }> = [
+    { id: 'markdown', label: 'Markdown', description: 'Timestamped text document' },
+    { id: 'json', label: 'JSON', description: 'Structured data for analysis' },
+    { id: 'audio', label: 'Audio Script', description: 'TTS-ready text transcript' },
   ];
 
   const timeRangeOptions = [
-    { id: 'all' as const, label: 'All Commentary', description: 'Export entire session' },
-    { id: 'last_hour' as const, label: 'Last Hour', description: 'Export last 60 minutes' },
-    { id: 'last_30min' as const, label: 'Last 30 Minutes', description: 'Export last 30 minutes' },
+    { id: 'all' as const, label: 'All', description: 'Full history' },
+    { id: 'last_hour' as const, label: 'Last Hour', description: 'Last 60 minutes' },
+    { id: 'last_30min' as const, label: 'Last 30 Min', description: 'Last 30 minutes' },
   ];
+
+  // Load server history count when modal opens
+  $effect(() => {
+    if (show && workspaceId) {
+      serverHistoryLoading = true;
+      loadWorkspaceHistory(workspaceId, 1, 0)
+        .then((entries) => {
+          // If we got entries, try loading a larger count
+          if (entries.length > 0) {
+            return loadWorkspaceHistory(workspaceId!, 5000, 0);
+          }
+          return [];
+        })
+        .then((entries) => {
+          serverHistoryCount = entries.length;
+        })
+        .catch(() => {
+          serverHistoryCount = null;
+        })
+        .finally(() => {
+          serverHistoryLoading = false;
+        });
+    }
+  });
+
+  let entryCount = $derived(() => {
+    if (selectedSource === 'full' && serverHistoryCount !== null) {
+      return serverHistoryCount;
+    }
+    return filteredHistory().length;
+  });
 
   function getTimeRangeTimestamps(): { startTime?: number; endTime?: number } {
     const now = Date.now();
@@ -46,19 +82,45 @@
     }
   }
 
-  async function handleExport() {
-    if (history.length === 0) {
-      uiStore.toast('No commentary to export', 'error');
-      return;
-    }
+  function filteredHistory(): CommentaryEntry[] {
+    const { startTime, endTime } = getTimeRangeTimestamps();
+    return history.filter((entry) => {
+      if (startTime && entry.timestamp < startTime) return false;
+      if (endTime && entry.timestamp > endTime) return false;
+      return true;
+    });
+  }
 
+  async function handleExport() {
     exportInProgress = true;
 
     try {
       const { startTime, endTime } = getTimeRangeTimestamps();
+
+      // Determine which entries to export
+      let entriesToExport: CommentaryEntry[];
+
+      if (selectedSource === 'full' && workspaceId) {
+        // Load full history from the server
+        const serverEntries = await loadWorkspaceHistory(workspaceId, 5000, 0);
+        // Apply time range filtering
+        entriesToExport = serverEntries.filter((entry) => {
+          if (startTime && entry.timestamp < startTime) return false;
+          if (endTime && entry.timestamp > endTime) return false;
+          return true;
+        });
+      } else {
+        entriesToExport = filteredHistory();
+      }
+
+      if (entriesToExport.length === 0) {
+        uiStore.toast('No commentary entries match the selected criteria', 'error');
+        return;
+      }
+
       const exportOptions = {
         format: selectedFormat,
-        entries: history,
+        entries: entriesToExport,
         workspacePath,
         startTime,
         endTime,
@@ -74,7 +136,6 @@
           content = exportAsJSON(exportOptions);
           break;
         case 'audio':
-          uiStore.toast('Generating audio export... This may take a moment.', 'info');
           content = await exportAsAudio(exportOptions);
           break;
         default:
@@ -126,6 +187,67 @@
       </div>
 
       <div class="modal-body">
+        <!-- Source Selection -->
+        {#if workspaceId && serverHistoryCount !== null && serverHistoryCount > 0}
+          <div class="section">
+            <label class="section-label">Source</label>
+            <div class="option-group horizontal">
+              <button
+                class="option-card compact"
+                class:selected={selectedSource === 'session'}
+                onclick={() => (selectedSource = 'session')}
+              >
+                <div class="option-content">
+                  <span class="option-label">Current Session</span>
+                  <span class="option-desc">{history.length} entries</span>
+                </div>
+                {#if selectedSource === 'session'}
+                  <svg
+                    width="14"
+                    height="14"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2.5"
+                    class="check-icon"
+                  >
+                    <polyline points="20 6 9 17 4 12"></polyline>
+                  </svg>
+                {/if}
+              </button>
+              <button
+                class="option-card compact"
+                class:selected={selectedSource === 'full'}
+                onclick={() => (selectedSource = 'full')}
+              >
+                <div class="option-content">
+                  <span class="option-label">Full History</span>
+                  <span class="option-desc">
+                    {#if serverHistoryLoading}
+                      Loading...
+                    {:else}
+                      {serverHistoryCount} entries
+                    {/if}
+                  </span>
+                </div>
+                {#if selectedSource === 'full'}
+                  <svg
+                    width="14"
+                    height="14"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2.5"
+                    class="check-icon"
+                  >
+                    <polyline points="20 6 9 17 4 12"></polyline>
+                  </svg>
+                {/if}
+              </button>
+            </div>
+          </div>
+        {/if}
+
         <!-- Format Selection -->
         <div class="section">
           <label class="section-label">Format</label>
@@ -161,10 +283,10 @@
         <!-- Time Range Selection -->
         <div class="section">
           <label class="section-label">Time Range</label>
-          <div class="option-group">
+          <div class="option-group horizontal">
             {#each timeRangeOptions as option}
               <button
-                class="option-card"
+                class="option-card compact"
                 class:selected={selectedTimeRange === option.id}
                 onclick={() => (selectedTimeRange = option.id)}
               >
@@ -174,8 +296,8 @@
                 </div>
                 {#if selectedTimeRange === option.id}
                   <svg
-                    width="16"
-                    height="16"
+                    width="14"
+                    height="14"
                     viewBox="0 0 24 24"
                     fill="none"
                     stroke="currentColor"
@@ -204,9 +326,14 @@
             <line x1="12" y1="16" x2="12" y2="12"></line>
             <line x1="12" y1="8" x2="12.01" y2="8"></line>
           </svg>
-          <span
-            >{history.length} commentary {history.length === 1 ? 'entry' : 'entries'} available for export</span
-          >
+          <span>
+            {#if selectedSource === 'full' && serverHistoryCount !== null}
+              Up to {serverHistoryCount}
+              {serverHistoryCount === 1 ? 'entry' : 'entries'} from full history
+            {:else}
+              {entryCount()} commentary {entryCount() === 1 ? 'entry' : 'entries'} available
+            {/if}
+          </span>
         </div>
       </div>
 
@@ -214,11 +341,30 @@
         <button class="btn btn-secondary" onclick={onClose} disabled={exportInProgress}>
           Cancel
         </button>
-        <button class="btn btn-primary" onclick={handleExport} disabled={exportInProgress}>
+        <button
+          class="btn btn-primary"
+          onclick={handleExport}
+          disabled={exportInProgress || (selectedSource === 'session' && history.length === 0)}
+        >
           {#if exportInProgress}
             <span class="spinner"></span>
             Exporting...
           {:else}
+            <!-- Download icon -->
+            <svg
+              width="14"
+              height="14"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+              <polyline points="7 10 12 15 17 10" />
+              <line x1="12" y1="15" x2="12" y2="3" />
+            </svg>
             Export
           {/if}
         </button>
@@ -317,6 +463,10 @@
     gap: 8px;
   }
 
+  .option-group.horizontal {
+    flex-direction: row;
+  }
+
   .option-card {
     display: flex;
     align-items: center;
@@ -328,6 +478,11 @@
     cursor: pointer;
     transition: all var(--transition);
     text-align: left;
+  }
+
+  .option-card.compact {
+    padding: 10px 12px;
+    flex: 1;
   }
 
   .option-card:hover {
@@ -343,7 +498,7 @@
   .option-content {
     display: flex;
     flex-direction: column;
-    gap: 4px;
+    gap: 2px;
   }
 
   .option-label {

@@ -99,7 +99,11 @@ export type {
   CommentarySettings,
 } from './projects.js';
 
-export { DEFAULT_COMMENTARY_SETTINGS } from './projects.js';
+export {
+  DEFAULT_COMMENTARY_SETTINGS,
+  VALID_VERBOSITY_VALUES,
+  migrateVerbosity,
+} from './projects.js';
 
 export type { EditorConfigProps } from './editorconfig.js';
 

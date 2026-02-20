@@ -1,6 +1,8 @@
 <script lang="ts">
   import { commentaryStore } from '$lib/stores/commentary.svelte';
+  import { spatialTts } from '$lib/audio/spatial-tts';
   import { api } from '$lib/api/client';
+  import { onMount } from 'svelte';
 
   interface Props {
     workspaceId: string | null | undefined;
@@ -11,6 +13,23 @@
   let ttsEnabled = $derived(commentaryStore.ttsEnabled);
   let ttsVolume = $derived(commentaryStore.ttsVolume);
   let ttsPaused = $derived(commentaryStore.ttsPaused);
+
+  let spatialEnabled = $state(false);
+
+  onMount(async () => {
+    // Load spatial audio preference from workspace settings
+    if (workspaceId) {
+      try {
+        const res = await api.workspaces.get(workspaceId);
+        if (res.ok && res.data?.settings?.commentarySpatialAudioEnabled) {
+          spatialEnabled = true;
+          spatialTts.setEnabled(true);
+        }
+      } catch {
+        // Settings unavailable — keep default (off)
+      }
+    }
+  });
 
   async function toggleTts() {
     if (ttsEnabled) {
@@ -39,6 +58,22 @@
       commentaryStore.resumeTts();
     } else {
       commentaryStore.pauseTts();
+    }
+  }
+
+  async function toggleSpatialAudio() {
+    spatialEnabled = !spatialEnabled;
+    spatialTts.setEnabled(spatialEnabled);
+
+    // Persist to workspace settings
+    if (workspaceId) {
+      try {
+        await api.workspaces.update(workspaceId, {
+          settings: { commentarySpatialAudioEnabled: spatialEnabled },
+        });
+      } catch (err) {
+        console.error('[commentary-tts] Failed to save spatial audio setting:', err);
+      }
     }
   }
 
@@ -133,6 +168,34 @@
         </svg>
       {/if}
     </button>
+
+    <!-- Spatial Audio Toggle (experimental) -->
+    <button
+      class="spatial-btn"
+      class:active={spatialEnabled}
+      onclick={toggleSpatialAudio}
+      title={spatialEnabled
+        ? 'Disable spatial audio positioning (experimental)'
+        : 'Enable spatial audio positioning (experimental) — positions workspaces L/C/R'}
+    >
+      <!-- Stereo panning icon (two speakers with arrows) -->
+      <svg
+        width="14"
+        height="14"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <path d="M2 15V9" />
+        <path d="M6 11h12" />
+        <path d="M8 9l-2 2 2 2" />
+        <path d="M16 9l2 2-2 2" />
+        <path d="M22 15V9" />
+      </svg>
+    </button>
   {/if}
 </div>
 
@@ -144,7 +207,8 @@
   }
 
   .tts-btn,
-  .pause-btn {
+  .pause-btn,
+  .spatial-btn {
     width: 26px;
     height: 26px;
     border-radius: var(--radius-sm);
@@ -160,7 +224,8 @@
   }
 
   .tts-btn:hover,
-  .pause-btn:hover {
+  .pause-btn:hover,
+  .spatial-btn:hover {
     color: var(--accent-primary);
     border-color: var(--accent-primary);
     background: color-mix(in srgb, var(--accent-primary) 8%, transparent);
@@ -170,6 +235,12 @@
     color: var(--accent-primary);
     border-color: var(--accent-primary);
     background: color-mix(in srgb, var(--accent-primary) 12%, transparent);
+  }
+
+  .spatial-btn.active {
+    color: var(--accent-warning, #f0a030);
+    border-color: var(--accent-warning, #f0a030);
+    background: color-mix(in srgb, var(--accent-warning, #f0a030) 12%, transparent);
   }
 
   .volume-control {

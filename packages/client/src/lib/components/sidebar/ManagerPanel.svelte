@@ -13,7 +13,10 @@
     | 'documentary_narrator'
     | 'technical_analyst'
     | 'comedic_observer'
-    | 'project_lead';
+    | 'project_lead'
+    | 'wizard';
+
+  type CommentaryVerbosity = 'frequent' | 'strategic' | 'minimal';
 
   interface PersonalityOption {
     id: CommentaryPersonality;
@@ -97,6 +100,18 @@
       label: 'Lead',
       icon: 'M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75',
     },
+    {
+      id: 'wizard',
+      label: 'Wizard',
+      icon: 'M12 2L9.5 8.5 3 10l5 4.5L6.5 21 12 17.5 17.5 21 16 14.5 21 10l-6.5-1.5z',
+    },
+  ];
+
+  // ---- Verbosity Options ----
+  const verbosityOptions: { value: CommentaryVerbosity; label: string; shortLabel: string }[] = [
+    { value: 'frequent', label: 'Frequent commentary', shortLabel: 'Hi' },
+    { value: 'strategic', label: 'Strategic milestones', shortLabel: 'Med' },
+    { value: 'minimal', label: 'Major events only', shortLabel: 'Lo' },
   ];
 
   // ---- State ----
@@ -106,7 +121,8 @@
   let lastRefresh = $state<Date | null>(null);
   let refreshInterval: ReturnType<typeof setInterval> | null = null;
   let evtSource: EventSource | null = null;
-  let openPersonalityDropdown = $state<string | null>(null); // workspace ID with open dropdown
+  let openPersonalityDropdown = $state<string | null>(null);
+  let openVerbosityDropdown = $state<string | null>(null);
 
   // Derived: expanded workspace from the manager commentary store
   let expandedWsId = $derived(managerCommentaryStore.expandedWorkspaceId);
@@ -135,14 +151,11 @@
       try {
         const evt = JSON.parse(e.data);
         if (evt.type !== 'ping') {
-          // Re-fetch overview on any meaningful event
           load();
         }
       } catch {}
     };
-    evtSource.onerror = () => {
-      // Will auto-reconnect
-    };
+    evtSource.onerror = () => {};
   }
 
   // ---- Navigation ----
@@ -195,25 +208,22 @@
     return path.split('/').pop() ?? path;
   }
 
+  function getVerbosityLabel(ws: WorkspaceStatus): string {
+    const v = ws.settings?.commentaryVerbosity ?? 'strategic';
+    return verbosityOptions.find((o) => o.value === v)?.shortLabel ?? 'Med';
+  }
+
   // ---- Commentary Controls ----
 
-  /**
-   * Auto-start commentary SSE connections for active (non-muted) workspaces.
-   * This effect runs whenever the workspace data changes.
-   */
   $effect(() => {
     if (!data?.workspaces) return;
-
     for (const ws of data.workspaces) {
       const isMuted = ws.settings?.commentaryMuted ?? false;
       const isAlreadyActive = managerCommentaryStore.isActive(ws.id);
-
       if (!isMuted && !isAlreadyActive && ws.agentStatus !== 'idle') {
-        // Start commentary for active, non-muted workspaces
         const personality = ws.settings?.commentaryPersonality || 'technical_analyst';
         managerCommentaryStore.startCommentary(ws.id, personality);
       } else if (isMuted && isAlreadyActive) {
-        // Stop commentary for muted workspaces
         managerCommentaryStore.stopCommentary(ws.id);
       }
     }
@@ -224,11 +234,8 @@
     const newMuted = !currentMuted;
     try {
       await api.workspaces.update(ws.id, {
-        settings: {
-          commentaryMuted: newMuted,
-        },
+        settings: { commentaryMuted: newMuted },
       });
-      // Update local state
       if (data) {
         const idx = data.workspaces.findIndex((w) => w.id === ws.id);
         if (idx >= 0) {
@@ -238,10 +245,7 @@
           };
         }
       }
-      // Update the manager commentary store
       managerCommentaryStore.setMuted(ws.id, newMuted);
-
-      // If unmuting, restart commentary
       if (!newMuted && ws.agentStatus !== 'idle') {
         const personality = ws.settings?.commentaryPersonality || 'technical_analyst';
         managerCommentaryStore.startCommentary(ws.id, personality);
@@ -253,14 +257,11 @@
   }
 
   async function toggleCommentaryHistory(ws: WorkspaceStatus) {
-    const currentEnabled = ws.settings?.commentaryHistoryEnabled ?? true; // Defaults to enabled
+    const currentEnabled = ws.settings?.commentaryHistoryEnabled ?? true;
     try {
       await api.workspaces.update(ws.id, {
-        settings: {
-          commentaryHistoryEnabled: !currentEnabled,
-        },
+        settings: { commentaryHistoryEnabled: !currentEnabled },
       });
-      // Update local state
       if (data) {
         const idx = data.workspaces.findIndex((w) => w.id === ws.id);
         if (idx >= 0) {
@@ -284,11 +285,8 @@
     openPersonalityDropdown = null;
     try {
       await api.workspaces.update(ws.id, {
-        settings: {
-          commentaryPersonality: personality,
-        },
+        settings: { commentaryPersonality: personality },
       });
-      // Update local state
       if (data) {
         const idx = data.workspaces.findIndex((w) => w.id === ws.id);
         if (idx >= 0) {
@@ -298,7 +296,6 @@
           };
         }
       }
-      // If commentary is active for this workspace, restart with new personality
       if (managerCommentaryStore.isActive(ws.id)) {
         managerCommentaryStore.startCommentary(ws.id, personality);
       }
@@ -308,17 +305,57 @@
     }
   }
 
+  async function setCommentaryVerbosity(ws: WorkspaceStatus, verbosity: CommentaryVerbosity) {
+    openVerbosityDropdown = null;
+    try {
+      await api.workspaces.update(ws.id, {
+        settings: { commentaryVerbosity: verbosity },
+      });
+      await api.commentary.updateSettings(ws.id, { verbosity }).catch(() => {});
+      if (data) {
+        const idx = data.workspaces.findIndex((w) => w.id === ws.id);
+        if (idx >= 0) {
+          data.workspaces[idx].settings = {
+            ...data.workspaces[idx].settings,
+            commentaryVerbosity: verbosity,
+          };
+        }
+      }
+      const opt = verbosityOptions.find((o) => o.value === verbosity);
+      uiStore.toast(`Verbosity: ${opt?.label ?? verbosity}`, 'info');
+    } catch (err) {
+      console.error('Failed to set commentary verbosity:', err);
+      uiStore.toast('Failed to update verbosity', 'error');
+    }
+  }
+
   function togglePersonalityDropdown(wsId: string) {
+    openVerbosityDropdown = null;
     openPersonalityDropdown = openPersonalityDropdown === wsId ? null : wsId;
   }
 
-  // Close dropdown when clicking outside
+  function toggleVerbosityDropdown(wsId: string) {
+    openPersonalityDropdown = null;
+    openVerbosityDropdown = openVerbosityDropdown === wsId ? null : wsId;
+  }
+
+  function openCommentarySettings() {
+    openPersonalityDropdown = null;
+    openVerbosityDropdown = null;
+    uiStore.openSettings();
+  }
+
+  // Close dropdowns when clicking outside
   $effect(() => {
-    if (openPersonalityDropdown) {
+    if (openPersonalityDropdown || openVerbosityDropdown) {
       const handler = (e: MouseEvent) => {
         const target = e.target as HTMLElement;
-        if (!target.closest('.ws-personality-dropdown')) {
+        if (
+          !target.closest('.ws-personality-dropdown') &&
+          !target.closest('.ws-verbosity-dropdown')
+        ) {
           openPersonalityDropdown = null;
+          openVerbosityDropdown = null;
         }
       };
       document.addEventListener('click', handler);
@@ -326,18 +363,56 @@
     }
   });
 
+  // ---- Spatial Audio (Experimental, opt-in) ----
+  let spatialEnabled = $derived(managerCommentaryStore.spatialAudioEnabled);
+  let mgrTtsEnabled = $derived(managerCommentaryStore.ttsEnabled);
+  let mgrTtsVolume = $derived(managerCommentaryStore.ttsVolume);
+
+  $effect(() => {
+    if (data?.workspaces) {
+      managerCommentaryStore.updateSpatialPositions(
+        data.workspaces.map((w: WorkspaceStatus) => w.id),
+      );
+    }
+  });
+
+  function toggleSpatialAudio() {
+    const next = !spatialEnabled;
+    managerCommentaryStore.setSpatialAudioEnabled(next);
+    uiStore.toast(
+      next ? 'Spatial audio enabled \u2014 L/C/R positioning' : 'Spatial audio disabled',
+      'info',
+    );
+  }
+
+  function toggleMgrTts() {
+    managerCommentaryStore.setTtsEnabled(!mgrTtsEnabled);
+  }
+
+  function handleMgrVolume(e: Event) {
+    managerCommentaryStore.setTtsVolume(parseFloat((e.target as HTMLInputElement).value));
+  }
+
+  function spatialBadge(wsId: string): string {
+    if (!spatialEnabled) return '';
+    const p = managerCommentaryStore.getSpatialPosition(wsId);
+    if (!p) return '';
+    if (p.pan <= -0.5) return 'L';
+    if (p.pan >= 0.5) return 'R';
+    if (p.pan > -0.1 && p.pan < 0.1) return 'C';
+    return p.pan < 0 ? 'CL' : 'CR';
+  }
+
   // ---- Lifecycle ----
   onMount(() => {
     load();
     connectSSE();
-    // Poll every 30s as fallback
     refreshInterval = setInterval(load, 30_000);
   });
 
   onDestroy(() => {
     evtSource?.close();
     if (refreshInterval) clearInterval(refreshInterval);
-    // Clean up all commentary SSE connections
     managerCommentaryStore.stopAll();
   });
 </script>
@@ -392,6 +467,89 @@
         <span class="stat-num">{data.summary.totalCompletedToday}</span>
         <span class="stat-lbl">Done Today</span>
       </div>
+    </div>
+
+    <!-- Audio Controls Bar -->
+    <div class="audio-controls-bar">
+      <button
+        class="audio-btn"
+        class:active={mgrTtsEnabled}
+        onclick={toggleMgrTts}
+        title={mgrTtsEnabled ? 'Disable TTS' : 'Enable TTS for commentary'}
+      >
+        {#if mgrTtsEnabled}
+          <svg
+            width="12"
+            height="12"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            ><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><path
+              d="M15.54 8.46a5 5 0 0 1 0 7.07"
+            ></path></svg
+          >
+        {:else}
+          <svg
+            width="12"
+            height="12"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            ><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><line
+              x1="23"
+              y1="9"
+              x2="17"
+              y2="15"
+            ></line><line x1="17" y1="9" x2="23" y2="15"></line></svg
+          >
+        {/if}
+        <span class="audio-btn-label">TTS</span>
+      </button>
+      {#if mgrTtsEnabled}
+        <div class="audio-volume" title={`Volume: ${Math.round(mgrTtsVolume * 100)}%`}>
+          <input
+            type="range"
+            min="0"
+            max="1"
+            step="0.05"
+            value={mgrTtsVolume}
+            oninput={handleMgrVolume}
+            class="volume-slider-sm"
+          />
+        </div>
+        <button
+          class="audio-btn spatial-btn"
+          class:active={spatialEnabled}
+          onclick={toggleSpatialAudio}
+          title={spatialEnabled
+            ? 'Disable spatial audio positioning'
+            : 'Enable spatial audio \u2014 position workspaces L/C/R (experimental)'}
+        >
+          <svg
+            width="12"
+            height="12"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            ><path d="M3 18v-6a9 9 0 0 1 18 0v6"></path><path
+              d="M21 19a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3zM3 19a2 2 0 0 0 2 2h1a2 2 0 0 0 2-2v-3a2 2 0 0 0-2-2H3z"
+            ></path></svg
+          >
+          <span class="audio-btn-label">Spatial</span>
+          {#if spatialEnabled}
+            <span class="exp-badge">EXP</span>
+          {/if}
+        </button>
+      {/if}
     </div>
 
     <!-- Inbox: Pending Approvals -->
@@ -480,6 +638,7 @@
           {@const isCommentaryActive = managerCommentaryStore.isActive(ws.id)}
           {@const isMuted = ws.settings?.commentaryMuted ?? false}
           {@const isExpanded = expandedWsId === ws.id}
+          {@const currentVerbosity = ws.settings?.commentaryVerbosity ?? 'strategic'}
           <div class="workspace-card" class:muted={isMuted} class:expanded={isExpanded}>
             <!-- Workspace Header Row -->
             <div class="workspace-card-header">
@@ -493,6 +652,11 @@
                   {ws.name}
                   {#if isCommentaryActive && !isMuted}
                     <span class="commentary-live-dot" title="Commentary active"></span>
+                  {/if}
+                  {#if spatialBadge(ws.id)}
+                    <span class="spatial-pos-badge" title={`Spatial: ${spatialBadge(ws.id)}`}
+                      >{spatialBadge(ws.id)}</span
+                    >
                   {/if}
                 </span>
                 <span class="ws-meta">
@@ -533,7 +697,7 @@
                       <path
                         d={personalities.find(
                           (p) =>
-                            p.id === (ws.settings?.commentaryPersonality || 'sports_announcer'),
+                            p.id === (ws.settings?.commentaryPersonality || 'technical_analyst'),
                         )?.icon || ''}
                       />
                     </svg>
@@ -545,7 +709,7 @@
                         <button
                           class="personality-option"
                           class:active={(ws.settings?.commentaryPersonality ||
-                            'sports_announcer') === p.id}
+                            'technical_analyst') === p.id}
                           onclick={() => setCommentaryPersonality(ws, p.id)}
                         >
                           <svg
@@ -561,7 +725,50 @@
                             <path d={p.icon} />
                           </svg>
                           <span class="personality-label">{p.label}</span>
-                          {#if (ws.settings?.commentaryPersonality || 'sports_announcer') === p.id}
+                          {#if (ws.settings?.commentaryPersonality || 'technical_analyst') === p.id}
+                            <svg
+                              width="12"
+                              height="12"
+                              viewBox="0 0 24 24"
+                              fill="none"
+                              stroke="currentColor"
+                              stroke-width="2.5"
+                              class="check-icon"
+                            >
+                              <polyline points="20 6 9 17 4 12"></polyline>
+                            </svg>
+                          {/if}
+                        </button>
+                      {/each}
+                    </div>
+                  {/if}
+                </div>
+
+                <!-- Verbosity Selector -->
+                <div class="ws-verbosity-dropdown">
+                  <button
+                    class="ws-control-btn ws-verbosity-btn"
+                    class:active={!isMuted}
+                    onclick={(e) => {
+                      e.stopPropagation();
+                      toggleVerbosityDropdown(ws.id);
+                    }}
+                    title="Change commentary verbosity ({currentVerbosity})"
+                  >
+                    <span class="verbosity-label-text">{getVerbosityLabel(ws)}</span>
+                  </button>
+
+                  {#if openVerbosityDropdown === ws.id}
+                    <div class="verbosity-dropdown" onclick={(e) => e.stopPropagation()}>
+                      {#each verbosityOptions as opt}
+                        <button
+                          class="verbosity-option"
+                          class:active={currentVerbosity === opt.value}
+                          onclick={() => setCommentaryVerbosity(ws, opt.value)}
+                        >
+                          <span class="verbosity-option-label">{opt.shortLabel}</span>
+                          <span class="verbosity-option-desc">{opt.label}</span>
+                          {#if currentVerbosity === opt.value}
                             <svg
                               width="12"
                               height="12"
@@ -591,7 +798,6 @@
                   title={isMuted ? 'Unmute commentary' : 'Mute commentary'}
                 >
                   {#if isMuted}
-                    <!-- Volume X (muted) icon -->
                     <svg
                       width="12"
                       height="12"
@@ -607,7 +813,6 @@
                       <line x1="17" y1="9" x2="23" y2="15"></line>
                     </svg>
                   {:else}
-                    <!-- Volume 2 (active) icon -->
                     <svg
                       width="12"
                       height="12"
@@ -624,6 +829,32 @@
                   {/if}
                 </button>
 
+                <!-- Settings Button -->
+                <button
+                  class="ws-control-btn"
+                  onclick={(e) => {
+                    e.stopPropagation();
+                    openCommentarySettings();
+                  }}
+                  title="Open commentary settings"
+                >
+                  <svg
+                    width="12"
+                    height="12"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <circle cx="12" cy="12" r="3"></circle>
+                    <path
+                      d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"
+                    ></path>
+                  </svg>
+                </button>
+
                 <!-- History Toggle Button -->
                 <button
                   class="ws-control-btn"
@@ -637,7 +868,6 @@
                     : 'Enable commentary history'}
                 >
                   {#if ws.settings?.commentaryHistoryEnabled === false}
-                    <!-- History disabled icon (book with X) -->
                     <svg
                       width="12"
                       height="12"
@@ -654,7 +884,6 @@
                       <line x1="10" y1="6" x2="18" y2="14" />
                     </svg>
                   {:else}
-                    <!-- History enabled icon (book) -->
                     <svg
                       width="12"
                       height="12"
@@ -724,7 +953,6 @@
                 </div>
               </div>
             {:else if !isMuted && isCommentaryActive}
-              <!-- Active but no entries yet -->
               <div class="ws-commentary-feed waiting">
                 <div class="commentary-feed-header">
                   <svg
@@ -766,8 +994,9 @@
         <div class="item-list">
           {#each data.completedStories as story (story.id)}
             <div class="story-row" class:failed={story.status === 'failed'}>
-              <span class="story-check"
-                >{#if story.status === 'completed'}<svg
+              <span class="story-check">
+                {#if story.status === 'completed'}
+                  <svg
                     width="13"
                     height="13"
                     viewBox="0 0 24 24"
@@ -776,7 +1005,9 @@
                     stroke-width="2.5"
                     stroke-linecap="round"
                     stroke-linejoin="round"><path d="M20 6L9 17l-5-5" /></svg
-                  >{:else}<svg
+                  >
+                {:else}
+                  <svg
                     width="13"
                     height="13"
                     viewBox="0 0 24 24"
@@ -791,8 +1022,9 @@
                       x2="18"
                       y2="18"
                     /></svg
-                  >{/if}</span
-              >
+                  >
+                {/if}
+              </span>
               <div class="story-info">
                 <span class="story-title-sm">{story.title}</span>
                 <span class="story-meta">
@@ -843,31 +1075,26 @@
     height: 100%;
     overflow-y: auto;
   }
-
   .panel-header {
     display: flex;
     align-items: center;
     justify-content: space-between;
   }
-
   .panel-title {
     font-size: var(--fs-base);
     font-weight: 600;
     color: var(--text-primary);
     margin: 0;
   }
-
   .header-actions {
     display: flex;
     align-items: center;
     gap: 6px;
   }
-
   .last-refresh {
     font-size: var(--fs-xxs);
     color: var(--text-tertiary);
   }
-
   .btn-refresh {
     display: flex;
     align-items: center;
@@ -886,7 +1113,6 @@
     opacity: 0.4;
     cursor: not-allowed;
   }
-
   @keyframes spin {
     to {
       transform: rotate(360deg);
@@ -895,7 +1121,6 @@
   .spinning {
     animation: spin 0.8s linear infinite;
   }
-
   .error-msg {
     font-size: var(--fs-sm);
     color: var(--accent-error);
@@ -903,14 +1128,11 @@
     border-radius: var(--radius-sm);
     padding: 8px 10px;
   }
-
-  /* Stats row */
   .stats-row {
     display: grid;
     grid-template-columns: repeat(4, 1fr);
     gap: 6px;
   }
-
   .stat-chip {
     background: var(--bg-secondary);
     border-radius: var(--radius-sm);
@@ -925,7 +1147,6 @@
   .stat-chip.warn {
     border-color: var(--accent-warning, #f59e0b);
   }
-
   .stat-num {
     display: block;
     font-size: var(--fs-lg);
@@ -941,20 +1162,16 @@
     letter-spacing: 0.05em;
     margin-top: 2px;
   }
-
-  /* Sections */
   .section {
     display: flex;
     flex-direction: column;
     gap: 6px;
   }
-
   .section-header {
     display: flex;
     align-items: center;
     justify-content: space-between;
   }
-
   .section-title {
     display: flex;
     align-items: center;
@@ -965,14 +1182,12 @@
     text-transform: uppercase;
     letter-spacing: 0.06em;
   }
-
   .dot {
     width: 6px;
     height: 6px;
     border-radius: 50%;
     flex-shrink: 0;
   }
-
   @keyframes pulse-dot {
     0%,
     100% {
@@ -985,7 +1200,6 @@
   .spin-dot {
     animation: pulse-dot 1.5s ease-in-out infinite;
   }
-
   .badge {
     font-size: var(--fs-xxs);
     font-weight: 700;
@@ -1008,14 +1222,11 @@
     font-size: var(--fs-xxs);
     padding: 1px 4px;
   }
-
-  /* Item lists */
   .item-list {
     display: flex;
     flex-direction: column;
     gap: 4px;
   }
-
   .inbox-item {
     background: var(--bg-secondary);
     border-radius: var(--radius-sm);
@@ -1035,14 +1246,12 @@
     border-color: var(--accent-primary);
     background: var(--bg-hover);
   }
-
   .inbox-item-top {
     display: flex;
     align-items: center;
     gap: 5px;
     flex-wrap: wrap;
   }
-
   .tool-badge {
     font-size: var(--fs-xxs);
     font-weight: 600;
@@ -1052,7 +1261,6 @@
     padding: 1px 5px;
     border-radius: 3px;
   }
-
   .ws-chip {
     font-size: var(--fs-xxs);
     color: var(--text-tertiary);
@@ -1060,7 +1268,6 @@
     padding: 1px 5px;
     border-radius: 3px;
   }
-
   .inbox-item-desc {
     font-size: var(--fs-xs);
     color: var(--text-primary);
@@ -1069,7 +1276,6 @@
     text-overflow: ellipsis;
     white-space: nowrap;
   }
-
   .inbox-item-sub {
     font-size: var(--fs-xxs);
     color: var(--text-tertiary);
@@ -1077,7 +1283,6 @@
     text-overflow: ellipsis;
     white-space: nowrap;
   }
-
   .story-title {
     font-size: var(--fs-sm);
     color: var(--text-primary);
@@ -1086,14 +1291,11 @@
     white-space: nowrap;
     flex: 1;
   }
-
-  /* Workspace cards */
   .workspace-list {
     display: flex;
     flex-direction: column;
     gap: 4px;
   }
-
   .workspace-card {
     background: var(--bg-secondary);
     border-radius: var(--radius-sm);
@@ -1101,23 +1303,19 @@
     transition: all var(--transition);
     overflow: hidden;
   }
-
   .workspace-card.muted {
     opacity: 0.6;
     border-color: var(--border-secondary);
   }
-
   .workspace-card.expanded {
     border-color: color-mix(in srgb, var(--accent-primary) 30%, transparent);
   }
-
   .workspace-card-header {
     display: flex;
     align-items: center;
     gap: 8px;
     padding: 6px 8px;
   }
-
   .ws-dot {
     width: 7px;
     height: 7px;
@@ -1125,12 +1323,10 @@
     flex-shrink: 0;
     transition: box-shadow var(--transition);
   }
-
   .ws-dot-pulse {
     box-shadow: 0 0 0 0 var(--accent-primary);
     animation: ws-dot-ring 2s ease-in-out infinite;
   }
-
   @keyframes ws-dot-ring {
     0% {
       box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent-primary) 40%, transparent);
@@ -1142,12 +1338,10 @@
       box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent-primary) 0%, transparent);
     }
   }
-
   .ws-info {
     flex: 1;
     min-width: 0;
   }
-
   .ws-name {
     display: flex;
     align-items: center;
@@ -1159,8 +1353,6 @@
     text-overflow: ellipsis;
     white-space: nowrap;
   }
-
-  /* Pulsing dot when commentary is active */
   .commentary-live-dot {
     width: 6px;
     height: 6px;
@@ -1169,7 +1361,6 @@
     flex-shrink: 0;
     animation: commentary-pulse 2s ease-in-out infinite;
   }
-
   @keyframes commentary-pulse {
     0%,
     100% {
@@ -1181,7 +1372,6 @@
       transform: scale(0.8);
     }
   }
-
   .ws-meta {
     display: flex;
     align-items: center;
@@ -1189,22 +1379,22 @@
     font-size: var(--fs-xxs);
     color: var(--text-tertiary);
   }
-
   .ws-status {
     color: var(--text-tertiary);
   }
-
   .ws-commentary-controls {
     display: flex;
     align-items: center;
-    gap: 4px;
+    gap: 3px;
     margin-left: auto;
+    flex-shrink: 0;
   }
-
   .ws-personality-dropdown {
     position: relative;
   }
-
+  .ws-verbosity-dropdown {
+    position: relative;
+  }
   .ws-control-btn {
     display: flex;
     align-items: center;
@@ -1219,29 +1409,36 @@
     transition: all var(--transition);
     padding: 0;
   }
-
   .ws-control-btn:hover {
     color: var(--accent-primary);
     border-color: var(--accent-primary);
     background: color-mix(in srgb, var(--accent-primary) 8%, transparent);
   }
-
   .ws-control-btn.active {
     color: var(--accent-primary);
     border-color: var(--accent-primary);
   }
-
   .ws-control-btn.muted {
     color: var(--accent-error);
     border-color: var(--border-secondary);
   }
-
   .ws-control-btn.muted:hover {
     color: var(--accent-error);
     border-color: var(--accent-error);
     background: color-mix(in srgb, var(--accent-error) 8%, transparent);
   }
-
+  .ws-verbosity-btn {
+    width: auto;
+    min-width: 22px;
+    padding: 0 4px;
+  }
+  .verbosity-label-text {
+    font-size: 8px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.02em;
+    line-height: 1;
+  }
   .personality-dropdown {
     position: absolute;
     top: calc(100% + 4px);
@@ -1254,7 +1451,6 @@
     z-index: 100;
     overflow: hidden;
   }
-
   .personality-option {
     display: flex;
     align-items: center;
@@ -1268,41 +1464,80 @@
     transition: background var(--transition);
     text-align: left;
   }
-
   .personality-option:last-child {
     border-bottom: none;
   }
-
   .personality-option:hover {
     background: var(--bg-hover);
   }
-
   .personality-option.active {
     background: color-mix(in srgb, var(--accent-primary) 8%, transparent);
   }
-
   .personality-option svg {
     flex-shrink: 0;
     color: var(--text-tertiary);
   }
-
   .personality-option.active svg {
     color: var(--accent-primary);
   }
-
   .personality-label {
     font-size: var(--fs-xs);
     font-weight: 600;
     color: var(--text-primary);
     flex: 1;
   }
-
   .check-icon {
     flex-shrink: 0;
     color: var(--accent-primary);
   }
-
-  /* Commentary Feed Area */
+  .verbosity-dropdown {
+    position: absolute;
+    top: calc(100% + 4px);
+    right: 0;
+    min-width: 180px;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-primary);
+    border-radius: var(--radius-md);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    z-index: 100;
+    overflow: hidden;
+  }
+  .verbosity-option {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    padding: 8px 10px;
+    background: transparent;
+    border: none;
+    border-bottom: 1px solid var(--border-secondary);
+    cursor: pointer;
+    transition: background var(--transition);
+    text-align: left;
+  }
+  .verbosity-option:last-child {
+    border-bottom: none;
+  }
+  .verbosity-option:hover {
+    background: var(--bg-hover);
+  }
+  .verbosity-option.active {
+    background: color-mix(in srgb, var(--accent-primary) 8%, transparent);
+  }
+  .verbosity-option-label {
+    font-size: var(--fs-xs);
+    font-weight: 700;
+    color: var(--text-primary);
+    min-width: 28px;
+  }
+  .verbosity-option.active .verbosity-option-label {
+    color: var(--accent-primary);
+  }
+  .verbosity-option-desc {
+    font-size: var(--fs-xxs);
+    color: var(--text-tertiary);
+    flex: 1;
+  }
   .ws-commentary-feed {
     border-top: 1px solid var(--border-secondary);
     padding: 4px 8px 6px;
@@ -1310,32 +1545,26 @@
     transition: all var(--transition);
     background: color-mix(in srgb, var(--accent-primary) 3%, transparent);
   }
-
   .ws-commentary-feed:hover {
     background: color-mix(in srgb, var(--accent-primary) 6%, transparent);
   }
-
   .ws-commentary-feed.expanded {
     background: color-mix(in srgb, var(--accent-primary) 5%, transparent);
   }
-
   .ws-commentary-feed.waiting {
     cursor: default;
   }
-
   .commentary-feed-header {
     display: flex;
     align-items: center;
     gap: 4px;
     margin-bottom: 2px;
   }
-
   .commentary-mic-icon {
     flex-shrink: 0;
     color: var(--accent-primary);
     opacity: 0.7;
   }
-
   .commentary-feed-label {
     font-size: var(--fs-xxs);
     font-weight: 700;
@@ -1345,36 +1574,30 @@
     opacity: 0.7;
     flex: 1;
   }
-
   .waiting-text {
     font-style: italic;
     font-weight: 600;
     opacity: 0.5;
     animation: pulse-dot 2s ease-in-out infinite;
   }
-
   .commentary-chevron {
     flex-shrink: 0;
     color: var(--text-tertiary);
     transition: transform var(--transition);
   }
-
   .commentary-chevron.rotated {
     transform: rotate(180deg);
   }
-
   .commentary-entries {
     display: flex;
     flex-direction: column;
     gap: 3px;
   }
-
   .commentary-entry {
     display: flex;
     gap: 6px;
     align-items: flex-start;
   }
-
   .commentary-time {
     flex-shrink: 0;
     font-size: var(--fs-xxs);
@@ -1384,7 +1607,6 @@
     line-height: 1.5;
     min-width: 40px;
   }
-
   .commentary-text {
     font-size: var(--fs-xxs);
     color: var(--text-secondary);
@@ -1394,13 +1616,10 @@
     -webkit-line-clamp: 2;
     -webkit-box-orient: vertical;
   }
-
   .ws-commentary-feed.expanded .commentary-text {
     -webkit-line-clamp: unset;
     overflow: visible;
   }
-
-  /* Completed stories */
   .story-row {
     display: flex;
     align-items: flex-start;
@@ -1412,14 +1631,12 @@
   .story-row.failed {
     opacity: 0.6;
   }
-
   .story-check {
     flex-shrink: 0;
     margin-top: 1px;
     display: flex;
     align-items: center;
   }
-
   .story-info {
     flex: 1;
     min-width: 0;
@@ -1427,7 +1644,6 @@
     flex-direction: column;
     gap: 2px;
   }
-
   .story-title-sm {
     font-size: var(--fs-xs);
     color: var(--text-primary);
@@ -1435,7 +1651,6 @@
     text-overflow: ellipsis;
     white-space: nowrap;
   }
-
   .story-meta {
     font-size: var(--fs-xxs);
     color: var(--text-tertiary);
@@ -1443,8 +1658,6 @@
     text-overflow: ellipsis;
     white-space: nowrap;
   }
-
-  /* Empty states */
   .empty-state {
     display: flex;
     flex-direction: column;
@@ -1453,31 +1666,128 @@
     padding: 32px 16px;
     color: var(--text-tertiary);
   }
-
   .empty-icon {
     display: flex;
     align-items: center;
     justify-content: center;
     color: var(--text-tertiary);
   }
-
   .empty-text {
     font-size: var(--fs-sm);
     text-align: center;
     line-height: 1.5;
   }
-
   .empty {
     font-size: var(--fs-xs);
     color: var(--text-tertiary);
     padding: 8px;
     text-align: center;
   }
-
   .loading {
     font-size: var(--fs-sm);
     color: var(--text-tertiary);
     padding: 20px;
     text-align: center;
+  }
+
+  /* Audio Controls Bar */
+  .audio-controls-bar {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 8px;
+    background: var(--bg-secondary);
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border-secondary);
+  }
+  .audio-btn {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 3px 8px;
+    border-radius: var(--radius-sm);
+    background: transparent;
+    border: 1px solid var(--border-secondary);
+    cursor: pointer;
+    color: var(--text-tertiary);
+    transition: all var(--transition);
+    font-size: var(--fs-xxs);
+    white-space: nowrap;
+  }
+  .audio-btn:hover {
+    color: var(--accent-primary);
+    border-color: var(--accent-primary);
+    background: color-mix(in srgb, var(--accent-primary) 6%, transparent);
+  }
+  .audio-btn.active {
+    color: var(--accent-primary);
+    border-color: var(--accent-primary);
+    background: color-mix(in srgb, var(--accent-primary) 10%, transparent);
+  }
+  .audio-btn-label {
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+  .spatial-btn {
+    position: relative;
+  }
+  .exp-badge {
+    font-size: 8px;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    color: var(--accent-warning, #f59e0b);
+    background: color-mix(in srgb, var(--accent-warning, #f59e0b) 15%, transparent);
+    padding: 0 3px;
+    border-radius: 2px;
+    line-height: 1.4;
+  }
+  .audio-volume {
+    display: flex;
+    align-items: center;
+  }
+  .volume-slider-sm {
+    width: 50px;
+    height: 3px;
+    -webkit-appearance: none;
+    appearance: none;
+    background: var(--border-secondary);
+    border-radius: 2px;
+    outline: none;
+    cursor: pointer;
+  }
+  .volume-slider-sm::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: var(--accent-primary);
+    cursor: pointer;
+  }
+  .volume-slider-sm::-moz-range-thumb {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: var(--accent-primary);
+    border: none;
+    cursor: pointer;
+  }
+  .spatial-pos-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 8px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    color: var(--accent-primary);
+    background: color-mix(in srgb, var(--accent-primary) 12%, transparent);
+    border: 1px solid color-mix(in srgb, var(--accent-primary) 25%, transparent);
+    padding: 0 3px;
+    border-radius: 3px;
+    line-height: 1.5;
+    min-width: 14px;
+    text-align: center;
+    flex-shrink: 0;
   }
 </style>

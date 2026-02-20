@@ -100,6 +100,8 @@ interface SettingsState {
   ttsProvider: 'browser' | 'elevenlabs' | 'google';
   elevenLabsApiKey?: string;
   googleTtsApiKey?: string;
+  // Experimental: spatial audio for multi-workspace TTS
+  spatialAudioEnabled: boolean;
 }
 
 const defaults: SettingsState = {
@@ -176,6 +178,7 @@ const defaults: SettingsState = {
   ttsProvider: 'browser',
   elevenLabsApiKey: undefined,
   googleTtsApiKey: undefined,
+  spatialAudioEnabled: false,
 };
 
 function loadFromStorage(): SettingsState {
@@ -480,6 +483,9 @@ function createSettingsStore() {
     },
     get googleTtsApiKey() {
       return state.googleTtsApiKey;
+    },
+    get spatialAudioEnabled() {
+      return state.spatialAudioEnabled;
     },
     get all() {
       return state;

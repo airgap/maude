@@ -8,7 +8,7 @@ import type {
   CommentaryVerbosity,
   CommentarySettings,
 } from '@e/shared';
-import { DEFAULT_COMMENTARY_SETTINGS } from '@e/shared';
+import { DEFAULT_COMMENTARY_SETTINGS, VALID_VERBOSITY_VALUES, migrateVerbosity } from '@e/shared';
 
 const app = new Hono();
 
@@ -37,8 +37,7 @@ function getUserPreferredPersonality(): CommentaryPersonality | undefined {
 /**
  * Resolve the full commentary settings for a workspace.
  * Reads from the workspace's JSON settings column and applies defaults.
- *
- * Defaults: enabled=false, personality='technical_analyst', verbosity='medium'
+ * Handles migration from legacy verbosity values ('low'|'medium'|'high').
  */
 function getWorkspaceCommentarySettings(workspaceId: string): CommentarySettings {
   try {
@@ -58,11 +57,9 @@ function getWorkspaceCommentarySettings(workspaceId: string): CommentarySettings
           VALID_PERSONALITIES.includes(settings.commentaryPersonality)
             ? (settings.commentaryPersonality as CommentaryPersonality)
             : DEFAULT_COMMENTARY_SETTINGS.personality,
-        verbosity:
-          settings.commentaryVerbosity &&
-          ['low', 'medium', 'high'].includes(settings.commentaryVerbosity)
-            ? (settings.commentaryVerbosity as CommentaryVerbosity)
-            : DEFAULT_COMMENTARY_SETTINGS.verbosity,
+        verbosity: settings.commentaryVerbosity
+          ? migrateVerbosity(settings.commentaryVerbosity)
+          : DEFAULT_COMMENTARY_SETTINGS.verbosity,
       };
     }
   } catch {
@@ -75,12 +72,6 @@ function getWorkspaceCommentarySettings(workspaceId: string): CommentarySettings
 // Commentary Status Endpoint (for multi-workspace monitoring)
 // ---------------------------------------------------------------------------
 
-/**
- * GET /commentary/status — Get the status of all active commentators.
- *
- * Returns per-workspace status including personality, client count, and
- * generation state. Useful for the Manager View dashboard.
- */
 app.get('/status', (c) => {
   try {
     const commentators = commentatorService.getStatus();
@@ -105,17 +96,10 @@ app.get('/status', (c) => {
 // Commentary Settings Endpoints
 // ---------------------------------------------------------------------------
 
-/**
- * GET /commentary/:workspaceId/settings — Get commentary preferences for a workspace.
- *
- * Returns the resolved commentary settings with defaults applied:
- *   { ok: true, data: { enabled: bool, personality: string, verbosity: string } }
- */
 app.get('/:workspaceId/settings', (c) => {
   const workspaceId = c.req.param('workspaceId');
 
   try {
-    // Verify workspace exists
     const db = getDb();
     const workspace = db.query('SELECT id FROM workspaces WHERE id = ?').get(workspaceId) as any;
     if (!workspace) {
@@ -130,15 +114,6 @@ app.get('/:workspaceId/settings', (c) => {
   }
 });
 
-/**
- * PUT /commentary/:workspaceId/settings — Set commentary preferences for a workspace.
- *
- * Accepts a JSON body with any subset of: { enabled, personality, verbosity }
- * Merges with existing workspace settings. Returns the updated commentary settings.
- *
- * When commentary is disabled via settings, any active commentator for this workspace
- * is force-stopped and the event bridge subscription is removed.
- */
 app.put('/:workspaceId/settings', async (c) => {
   const workspaceId = c.req.param('workspaceId');
 
@@ -146,7 +121,6 @@ app.put('/:workspaceId/settings', async (c) => {
     const body = await c.req.json();
     const db = getDb();
 
-    // Verify workspace exists
     const workspace = db
       .query('SELECT id, settings FROM workspaces WHERE id = ?')
       .get(workspaceId) as any;
@@ -154,7 +128,6 @@ app.put('/:workspaceId/settings', async (c) => {
       return c.json({ ok: false, error: 'Workspace not found' }, 404);
     }
 
-    // Build the settings update
     const settingsUpdate: Record<string, unknown> = {};
 
     if (body.enabled !== undefined) {
@@ -175,9 +148,12 @@ app.put('/:workspaceId/settings', async (c) => {
     }
 
     if (body.verbosity !== undefined) {
-      if (!['low', 'medium', 'high'].includes(body.verbosity)) {
+      if (!VALID_VERBOSITY_VALUES.includes(body.verbosity as CommentaryVerbosity)) {
         return c.json(
-          { ok: false, error: 'Invalid verbosity. Valid values: low, medium, high' },
+          {
+            ok: false,
+            error: `Invalid verbosity. Valid values: ${VALID_VERBOSITY_VALUES.join(', ')}`,
+          },
           400,
         );
       }
@@ -185,12 +161,10 @@ app.put('/:workspaceId/settings', async (c) => {
     }
 
     if (Object.keys(settingsUpdate).length === 0) {
-      // No updates provided — return current settings
       const current = getWorkspaceCommentarySettings(workspaceId);
       return c.json({ ok: true, data: current });
     }
 
-    // Merge with existing settings
     const existingSettings = workspace.settings ? JSON.parse(workspace.settings) : {};
     const mergedSettings = { ...existingSettings, ...settingsUpdate };
 
@@ -199,13 +173,20 @@ app.put('/:workspaceId/settings', async (c) => {
       workspaceId,
     );
 
-    // AC 5: If commentary was just disabled, force-stop and cleanup
+    // If commentary was just disabled, force-stop and cleanup
     if (settingsUpdate.commentaryEnabled === false) {
       commentatorService.forceStopCommentary(workspaceId);
       eventBridge.forceUnsubscribe(workspaceId);
     }
 
-    // Return the updated commentary settings
+    // If verbosity was updated and commentator is active, update it live
+    if (settingsUpdate.commentaryVerbosity && commentatorService.isActive(workspaceId)) {
+      commentatorService.setVerbosity(
+        workspaceId,
+        settingsUpdate.commentaryVerbosity as CommentaryVerbosity,
+      );
+    }
+
     const updatedSettings = getWorkspaceCommentarySettings(workspaceId);
     return c.json({ ok: true, data: updatedSettings });
   } catch (err) {
@@ -218,15 +199,6 @@ app.put('/:workspaceId/settings', async (c) => {
 // Commentary History Endpoints
 // ---------------------------------------------------------------------------
 
-/**
- * GET /commentary/conversation/:conversationId — Fetch commentary for a conversation.
- *
- * Query params:
- *   limit — maximum number of entries to return (default: 100, max: 1000)
- *   offset — number of entries to skip (default: 0)
- *
- * Returns an array of commentary history entries for a specific conversation.
- */
 app.get('/conversation/:conversationId', (c) => {
   const conversationId = c.req.param('conversationId');
   const limit = Math.min(parseInt(c.req.query('limit') || '100', 10), 1000);
@@ -260,15 +232,6 @@ app.get('/conversation/:conversationId', (c) => {
   }
 });
 
-/**
- * GET /commentary/:workspaceId/history — Fetch commentary history for a workspace.
- *
- * Query params:
- *   limit — maximum number of entries to return (default: 100, max: 1000)
- *   offset — number of entries to skip (default: 0)
- *
- * Returns an array of commentary history entries sorted by timestamp DESC.
- */
 app.get('/:workspaceId/history', (c) => {
   const workspaceId = c.req.param('workspaceId');
   const limit = Math.min(parseInt(c.req.query('limit') || '100', 10), 1000);
@@ -302,11 +265,6 @@ app.get('/:workspaceId/history', (c) => {
   }
 });
 
-/**
- * DELETE /commentary/:workspaceId/history — Delete all commentary history for a workspace.
- *
- * Returns { ok: true, data: { success: true } } on success.
- */
 app.delete('/:workspaceId/history', (c) => {
   const workspaceId = c.req.param('workspaceId');
 
@@ -321,34 +279,154 @@ app.delete('/:workspaceId/history', (c) => {
 });
 
 // ---------------------------------------------------------------------------
-// SSE Commentary Stream
+// Commentary Export Endpoint
 // ---------------------------------------------------------------------------
 
 /**
- * GET /commentary/:workspaceId — SSE stream of commentary events.
+ * GET /commentary/:workspaceId/export — Export commentary history.
  *
  * Query params:
- *   personality — one of CommentaryPersonality values
- *                 (defaults to workspace setting → user preference → technical_analyst)
- *   conversationId — optional conversation ID to link commentary to
+ *   format    — 'markdown' | 'json' (default: 'json')
+ *   startTime — optional epoch ms lower bound
+ *   endTime   — optional epoch ms upper bound
+ *   limit     — max entries (default: 5000, max: 10000)
  *
- * The endpoint starts the commentator for the given workspace when the client
- * connects and stops it when the client disconnects.
- *
- * Uses reference counting so multiple SSE clients can connect to the same
- * workspace without interfering with each other. The commentator stays alive
- * until the last client disconnects.
- *
- * If the workspace has commentary disabled (commentaryEnabled=false), the stream
- * still connects but the commentator will not be started until commentary is enabled.
+ * Returns the exported content with appropriate Content-Type headers.
  */
+app.get('/:workspaceId/export', (c) => {
+  const workspaceId = c.req.param('workspaceId');
+  const format = c.req.query('format') || 'json';
+  const startTime = c.req.query('startTime') ? parseInt(c.req.query('startTime')!, 10) : undefined;
+  const endTime = c.req.query('endTime') ? parseInt(c.req.query('endTime')!, 10) : undefined;
+  const limit = Math.min(parseInt(c.req.query('limit') || '5000', 10), 10000);
+
+  if (format !== 'markdown' && format !== 'json') {
+    return c.json({ ok: false, error: 'Invalid format. Valid values: markdown, json' }, 400);
+  }
+
+  try {
+    const db = getDb();
+
+    // Build query with optional time range filtering
+    let sql =
+      'SELECT id, workspace_id, conversation_id, text, personality, timestamp FROM commentary_history WHERE workspace_id = ?';
+    const params: (string | number)[] = [workspaceId];
+
+    if (startTime !== undefined) {
+      sql += ' AND timestamp >= ?';
+      params.push(startTime);
+    }
+    if (endTime !== undefined) {
+      sql += ' AND timestamp <= ?';
+      params.push(endTime);
+    }
+
+    sql += ' ORDER BY timestamp ASC LIMIT ?';
+    params.push(limit);
+
+    const rows = db.query(sql).all(...params) as any[];
+
+    if (rows.length === 0) {
+      return c.json(
+        { ok: false, error: 'No commentary entries found for the given criteria' },
+        404,
+      );
+    }
+
+    const entries = rows.map((row: any) => ({
+      id: row.id as string,
+      workspaceId: row.workspace_id as string,
+      conversationId: row.conversation_id as string | null,
+      text: row.text as string,
+      personality: row.personality as string,
+      timestamp: row.timestamp as number,
+      timestampISO: new Date(row.timestamp as number).toISOString(),
+    }));
+
+    // Resolve workspace name
+    const workspace = db
+      .query('SELECT workspace_path FROM workspaces WHERE id = ?')
+      .get(workspaceId) as { workspace_path: string } | null;
+    const workspaceName = workspace?.workspace_path?.split('/').pop() || 'Unknown Workspace';
+
+    // Build metadata
+    const timestamps = entries.map((e) => e.timestamp);
+    const minTime = Math.min(...timestamps);
+    const maxTime = Math.max(...timestamps);
+
+    const personalityCounts: Record<string, number> = {};
+    for (const entry of entries) {
+      personalityCounts[entry.personality] = (personalityCounts[entry.personality] || 0) + 1;
+    }
+    const primaryPersonality =
+      Object.entries(personalityCounts).sort(([, a], [, b]) => b - a)[0]?.[0] || 'unknown';
+
+    const metadata = {
+      workspaceName,
+      workspaceId,
+      personality: primaryPersonality,
+      exportDate: new Date().toISOString(),
+      totalEntries: entries.length,
+      timeRange: {
+        start: new Date(minTime).toISOString(),
+        end: new Date(maxTime).toISOString(),
+      },
+    };
+
+    const dateStr = new Date().toISOString().split('T')[0];
+
+    if (format === 'markdown') {
+      let md = `# Commentary Export\n\n`;
+      md += `**Workspace:** ${metadata.workspaceName}\n\n`;
+      md += `**Personality:** ${primaryPersonality.replace(/_/g, ' ').replace(/\b\w/g, (l: string) => l.toUpperCase())}\n\n`;
+      md += `**Exported:** ${metadata.exportDate}\n\n`;
+      md += `**Time Range:** ${new Date(minTime).toLocaleString()} — ${new Date(maxTime).toLocaleString()}\n\n`;
+      md += `**Total Entries:** ${metadata.totalEntries}\n\n`;
+      md += `---\n\n`;
+      md += `## Commentary Timeline\n\n`;
+
+      for (const entry of entries) {
+        const time = new Date(entry.timestamp).toLocaleString();
+        const personality = entry.personality
+          .replace(/_/g, ' ')
+          .replace(/\b\w/g, (l: string) => l.toUpperCase());
+        md += `### ${time}\n`;
+        md += `**Personality:** ${personality}\n\n`;
+        md += `> ${entry.text}\n\n`;
+      }
+
+      return new Response(md, {
+        headers: {
+          'Content-Type': 'text/markdown; charset=utf-8',
+          'Content-Disposition': `attachment; filename="commentary-${dateStr}.md"`,
+        },
+      });
+    }
+
+    // JSON format (default)
+    const exportData = { metadata, entries };
+
+    return new Response(JSON.stringify(exportData, null, 2), {
+      headers: {
+        'Content-Type': 'application/json; charset=utf-8',
+        'Content-Disposition': `attachment; filename="commentary-${dateStr}.json"`,
+      },
+    });
+  } catch (err) {
+    console.error('[commentary] Failed to export history:', err);
+    return c.json({ ok: false, error: 'Failed to export commentary history' }, 500);
+  }
+});
+
+// ---------------------------------------------------------------------------
+// SSE Commentary Stream
+// ---------------------------------------------------------------------------
+
 app.get('/:workspaceId', (c) => {
   const workspaceId = c.req.param('workspaceId');
 
-  // Resolve commentary settings for this workspace
   const commentarySettings = getWorkspaceCommentarySettings(workspaceId);
 
-  // Resolve personality: query param → workspace setting → user preference → default
   const rawPersonality = c.req.query('personality');
   let personality: CommentaryPersonality;
   if (rawPersonality && VALID_PERSONALITIES.includes(rawPersonality as CommentaryPersonality)) {
@@ -360,18 +438,18 @@ app.get('/:workspaceId', (c) => {
       DEFAULT_COMMENTARY_SETTINGS.personality;
   }
 
-  // Get optional conversation ID
   const conversationId = c.req.query('conversationId') || undefined;
 
-  // Track whether this client acquired refs (only true if commentary is enabled).
-  // This prevents the disconnect handler from releasing refs that were never acquired.
   let refsAcquired = false;
 
-  // Only start the commentator if commentary is enabled for this workspace.
-  // startCommentary is idempotent for the same personality — it won't restart
-  // or discard buffered events when another client is already connected.
   if (commentarySettings.enabled) {
-    commentatorService.startCommentary(workspaceId, personality, conversationId);
+    // Pass verbosity from workspace settings to the commentator
+    commentatorService.startCommentary(
+      workspaceId,
+      personality,
+      conversationId,
+      commentarySettings.verbosity,
+    );
     commentatorService.acquireRef(workspaceId);
     eventBridge.subscribe(workspaceId);
     refsAcquired = true;
@@ -382,7 +460,6 @@ app.get('/:workspaceId', (c) => {
   const stream = new ReadableStream({
     start(controller) {
       const handler = (commentary: StreamCommentary) => {
-        // AC 3: Only forward commentary for THIS workspace — no crosstalk
         if (commentary.workspaceId === workspaceId) {
           try {
             controller.enqueue(encoder.encode(`data: ${JSON.stringify(commentary)}\n\n`));
@@ -394,7 +471,6 @@ app.get('/:workspaceId', (c) => {
 
       commentatorService.events.on('commentary', handler);
 
-      // Ping every 15 seconds to keep the connection alive
       const pingInterval = setInterval(() => {
         try {
           controller.enqueue(encoder.encode(`data: {"type":"ping"}\n\n`));
@@ -403,17 +479,14 @@ app.get('/:workspaceId', (c) => {
         }
       }, 15000);
 
-      // Clean up on client disconnect — ref-counted so multiple clients work
       c.req.raw.signal.addEventListener('abort', () => {
         commentatorService.events.off('commentary', handler);
         clearInterval(pingInterval);
 
-        // Only release refs if this client actually acquired them
         if (refsAcquired) {
           eventBridge.unsubscribe(workspaceId);
           const remainingRefs = commentatorService.releaseRef(workspaceId);
 
-          // AC 5: Only stop the commentator when the last client disconnects
           if (remainingRefs === 0) {
             commentatorService.stopCommentary(workspaceId);
           }

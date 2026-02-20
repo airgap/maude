@@ -1,6 +1,8 @@
 <script lang="ts">
-  import { commentaryStore } from '$lib/stores/commentary.svelte';
+  import { commentaryStore, type CommentaryEntry } from '$lib/stores/commentary.svelte';
   import { workspaceStore } from '$lib/stores/workspace.svelte';
+  import { settingsStore } from '$lib/stores/settings.svelte';
+  import { findHypertheme } from '$lib/config/hyperthemes';
   import { api } from '$lib/api/client';
   import { uiStore } from '$lib/stores/ui.svelte';
   import CommentaryExportModal from '$lib/components/commentary/CommentaryExportModal.svelte';
@@ -12,6 +14,21 @@
     | 'comedic_observer'
     | 'project_lead'
     | 'wizard';
+
+  type CommentaryVerbosity = 'frequent' | 'strategic' | 'minimal';
+
+  interface VerbosityOption {
+    id: CommentaryVerbosity;
+    label: string;
+    shortLabel: string;
+    description: string;
+  }
+
+  const verbosityOptions: VerbosityOption[] = [
+    { id: 'frequent', label: 'Frequent', shortLabel: 'Freq', description: 'Every few seconds' },
+    { id: 'strategic', label: 'Strategic', shortLabel: 'Strat', description: 'Key milestones' },
+    { id: 'minimal', label: 'Minimal', shortLabel: 'Min', description: 'Major events only' },
+  ];
 
   interface PersonalityOption {
     id: CommentaryPersonality;
@@ -59,6 +76,11 @@
     },
   ];
 
+  /** Personality labels keyed by id for the timeline. */
+  const personalityLabels: Record<string, string> = Object.fromEntries(
+    personalities.map((p) => [p.id, p.label]),
+  );
+
   let workspacePath = $derived(workspaceStore.activeWorkspace?.workspacePath);
   let workspaceId = $derived(workspaceStore.activeWorkspace?.workspaceId);
   let isActive = $derived(commentaryStore.isActive);
@@ -77,9 +99,19 @@
 
   let showPersonalityDropdown = $state(false);
   let savedPersonality = $state<CommentaryPersonality | null>(null);
+  let currentVerbosity = $state<CommentaryVerbosity>('strategic');
   let showExportModal = $state(false);
   let autoScroll = $state(true);
   let contentEl = $state<HTMLDivElement | null>(null);
+
+  // --- Timeline (past commentary) state ---
+  type ViewMode = 'live' | 'timeline';
+  let viewMode = $state<ViewMode>('live');
+  let timelineEntries = $state<CommentaryEntry[]>([]);
+  let timelineLoading = $state(false);
+  let timelineHasMore = $state(false);
+  let timelineOffset = $state(0);
+  const TIMELINE_PAGE_SIZE = 50;
 
   // Auto-scroll to bottom when new commentary arrives
   $effect(() => {
@@ -120,6 +152,11 @@
               savedPersonality = settings.commentaryPersonality as CommentaryPersonality;
             }
 
+            // Load verbosity preference
+            if (settings.commentaryVerbosity) {
+              currentVerbosity = settings.commentaryVerbosity as CommentaryVerbosity;
+            }
+
             // Load TTS settings
             if (settings.commentaryTtsEnabled) {
               const volume = settings.commentaryTtsVolume ?? 0.8;
@@ -136,15 +173,38 @@
             }
           }
 
-          // Auto-start commentary when panel is opened
-          const personality = savedPersonality || 'sports_announcer';
+          // Auto-start commentary when panel is opened.
+          // If no saved personality, check whether the active hypertheme
+          // suggests one (e.g. Wizard's Study → wizard personality).
+          const themeSuggested = findHypertheme(settingsStore.hypertheme)?.suggestedPersonality as
+            | CommentaryPersonality
+            | undefined;
+          const personality = savedPersonality || themeSuggested || 'sports_announcer';
           commentaryStore.startCommentary(workspaceId, personality);
         } catch (err) {
           console.error('[commentary] Failed to load workspace settings:', err);
-          // Fall back to default personality
-          commentaryStore.startCommentary(workspaceId, 'sports_announcer');
+          // Fall back to theme-suggested personality or default
+          const fallback =
+            findHypertheme(settingsStore.hypertheme)?.suggestedPersonality || 'sports_announcer';
+          commentaryStore.startCommentary(workspaceId, fallback);
         }
       })();
+    }
+  });
+
+  // Auto-activate wizard personality when Wizard's Study theme is selected
+  let previousHypertheme = $state(settingsStore.hypertheme);
+  $effect(() => {
+    const currentHypertheme = settingsStore.hypertheme;
+    if (currentHypertheme !== previousHypertheme) {
+      previousHypertheme = currentHypertheme;
+      const ht = findHypertheme(currentHypertheme);
+      if (ht?.suggestedPersonality && workspaceId && isActive) {
+        const suggested = ht.suggestedPersonality as CommentaryPersonality;
+        if (suggested !== currentPersonality) {
+          selectPersonality(suggested);
+        }
+      }
     }
   });
 
@@ -201,6 +261,20 @@
     showPersonalityDropdown = false;
   }
 
+  async function selectVerbosity(verbosity: CommentaryVerbosity) {
+    currentVerbosity = verbosity;
+
+    // Persist to workspace settings
+    if (workspaceId) {
+      try {
+        await api.commentary.updateSettings(workspaceId, { verbosity });
+      } catch (err) {
+        console.error('[commentary] Failed to save verbosity preference:', err);
+        uiStore.toast('Failed to save verbosity preference', 'error');
+      }
+    }
+  }
+
   function toggleTts() {
     if (ttsEnabled) {
       commentaryStore.disableTts();
@@ -229,6 +303,64 @@
     } catch (err) {
       console.error('[commentary] Failed to save setting:', err);
     }
+  }
+
+  // --- Timeline helpers ---
+
+  /** Switch between live and timeline views. */
+  function setViewMode(mode: ViewMode) {
+    viewMode = mode;
+    if (mode === 'timeline' && timelineEntries.length === 0) {
+      loadTimeline();
+    }
+  }
+
+  /** Load persisted commentary history from the database. */
+  async function loadTimeline(append = false) {
+    if (!workspaceId) return;
+    timelineLoading = true;
+    try {
+      const loaded = await commentaryStore.loadHistory(
+        workspaceId,
+        TIMELINE_PAGE_SIZE,
+        append ? timelineOffset : 0,
+      );
+      if (!append) {
+        timelineEntries = loaded;
+        timelineOffset = loaded.length;
+      } else {
+        timelineEntries = [...timelineEntries, ...loaded];
+        timelineOffset += loaded.length;
+      }
+      timelineHasMore = loaded.length === TIMELINE_PAGE_SIZE;
+    } catch (err) {
+      console.error('[commentary] Failed to load timeline:', err);
+    }
+    timelineLoading = false;
+  }
+
+  function loadMoreTimeline() {
+    loadTimeline(true);
+  }
+
+  /** Format a timestamp for the timeline — includes date for older entries. */
+  function formatTimelineTimestamp(timestamp: number): string {
+    const date = new Date(timestamp);
+    const now = new Date();
+    const isToday =
+      date.getDate() === now.getDate() &&
+      date.getMonth() === now.getMonth() &&
+      date.getFullYear() === now.getFullYear();
+
+    if (isToday) {
+      return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    }
+
+    return (
+      date.toLocaleDateString([], { month: 'short', day: 'numeric' }) +
+      ' ' +
+      date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+    );
   }
 
   // Close dropdown when clicking outside
@@ -343,6 +475,20 @@
             {/each}
           </div>
         {/if}
+      </div>
+
+      <!-- Verbosity Selector (segmented control) -->
+      <div class="verbosity-selector" title="Commentary verbosity">
+        {#each verbosityOptions as opt}
+          <button
+            class="verbosity-btn"
+            class:active={currentVerbosity === opt.id}
+            onclick={() => selectVerbosity(opt.id)}
+            title="{opt.label}: {opt.description}"
+          >
+            {opt.shortLabel}
+          </button>
+        {/each}
       </div>
 
       <!-- Clear History Button -->
@@ -483,6 +629,55 @@
     </div>
   {/if}
 
+  <!-- View mode tabs: Live / Past -->
+  {#if workspacePath}
+    <div class="view-tabs">
+      <button
+        class="view-tab"
+        class:active={viewMode === 'live'}
+        onclick={() => setViewMode('live')}
+      >
+        <svg
+          width="12"
+          height="12"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <circle cx="12" cy="12" r="10" />
+          <polyline points="12 6 12 12 16 14" />
+        </svg>
+        Live
+        {#if isActive}
+          <span class="tab-live-dot"></span>
+        {/if}
+      </button>
+      <button
+        class="view-tab"
+        class:active={viewMode === 'timeline'}
+        onclick={() => setViewMode('timeline')}
+      >
+        <svg
+          width="12"
+          height="12"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <line x1="12" y1="20" x2="12" y2="4" />
+          <polyline points="6 10 12 4 18 10" />
+        </svg>
+        Past
+      </button>
+    </div>
+  {/if}
+
   <!-- svelte-ignore a11y_no_static_element_interactions -->
   <div class="commentary-content" bind:this={contentEl} onscroll={handleScroll}>
     {#if !workspacePath}
@@ -505,74 +700,165 @@
         </div>
         Open a workspace to start live commentary.
       </div>
-    {:else if error}
-      <div class="error-state">
-        <svg
-          width="20"
-          height="20"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="2"
-        >
-          <circle cx="12" cy="12" r="10" />
-          <line x1="12" y1="8" x2="12" y2="12" />
-          <line x1="12" y1="16" x2="12.01" y2="16" />
-        </svg>
-        <span>Error: {error}</span>
-      </div>
-    {:else if !isActive && history.length === 0}
-      <div class="empty-state">
-        <div class="empty-icon">
+    {:else if viewMode === 'live'}
+      <!-- === LIVE VIEW === -->
+      {#if error}
+        <div class="error-state">
           <svg
-            width="32"
-            height="32"
+            width="20"
+            height="20"
             viewBox="0 0 24 24"
             fill="none"
             stroke="currentColor"
-            stroke-width="1.5"
-            stroke-linecap="round"
-            stroke-linejoin="round"
+            stroke-width="2"
           >
-            <path
-              d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3zM19 10v2a7 7 0 0 1-14 0v-2M12 19v4M8 23h8"
-            />
+            <circle cx="12" cy="12" r="10" />
+            <line x1="12" y1="8" x2="12" y2="12" />
+            <line x1="12" y1="16" x2="12.01" y2="16" />
           </svg>
+          <span>Error: {error}</span>
         </div>
-        Press play to start commentary.
-      </div>
-    {:else}
-      <!-- Latest commentary (larger) -->
-      {#if commentaryText}
-        <div class="latest-commentary">
-          <div class="commentary-bubble">
-            {commentaryText}
+      {:else if !isActive && history.length === 0}
+        <div class="empty-state">
+          <div class="empty-icon">
+            <svg
+              width="32"
+              height="32"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.5"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <path
+                d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3zM19 10v2a7 7 0 0 1-14 0v-2M12 19v4M8 23h8"
+              />
+            </svg>
           </div>
-          {#if !isActive}
-            <div class="status-badge stopped">Paused</div>
-          {/if}
+          Press play to start commentary.
         </div>
-      {/if}
+      {:else}
+        <!-- Latest commentary (larger) -->
+        {#if commentaryText}
+          <div class="latest-commentary">
+            <div class="commentary-bubble">
+              {commentaryText}
+            </div>
+            {#if !isActive}
+              <div class="status-badge stopped">Paused</div>
+            {/if}
+          </div>
+        {/if}
 
-      <!-- History -->
-      {#if history.length > 1}
-        <div class="history-section">
-          <div class="history-header">Previous Commentary</div>
-          <div class="history-list">
-            {#each history.slice(0, -1).reverse() as entry (entry.timestamp)}
-              <div class="history-item">
-                <div class="history-time">{formatTime(entry.timestamp)}</div>
-                <div class="history-text">{entry.text}</div>
+        <!-- History -->
+        {#if history.length > 1}
+          <div class="history-section">
+            <div class="history-header">Previous Commentary</div>
+            <div class="history-list">
+              {#each history.slice(0, -1).reverse() as entry (entry.timestamp)}
+                <div class="history-item">
+                  <div class="history-time">{formatTime(entry.timestamp)}</div>
+                  <div class="history-text">{entry.text}</div>
+                </div>
+              {/each}
+            </div>
+          </div>
+        {/if}
+      {/if}
+    {:else}
+      <!-- === TIMELINE VIEW (Past Commentary) === -->
+      {#if timelineLoading && timelineEntries.length === 0}
+        <div class="empty-state">
+          <div class="timeline-spinner"></div>
+          Loading commentary history…
+        </div>
+      {:else if timelineEntries.length === 0}
+        <div class="empty-state">
+          <div class="empty-icon">
+            <svg
+              width="32"
+              height="32"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.5"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <path d="M12 8v4l3 3" />
+              <circle cx="12" cy="12" r="10" />
+            </svg>
+          </div>
+          No past commentary stored.
+          <p class="empty-hint">Commentary is saved when history storage is enabled in settings.</p>
+        </div>
+      {:else}
+        <div class="timeline">
+          <div class="timeline-actions">
+            <button
+              class="timeline-refresh-btn"
+              onclick={() => loadTimeline(false)}
+              title="Refresh timeline"
+            >
+              <svg
+                width="12"
+                height="12"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <polyline points="23 4 23 10 17 10" />
+                <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" />
+              </svg>
+              Refresh
+            </button>
+            <span class="timeline-count">{timelineEntries.length} entries</span>
+          </div>
+
+          <div class="timeline-list">
+            {#each timelineEntries as entry, i (entry.timestamp + '-' + i)}
+              <div class="timeline-entry">
+                <div class="timeline-dot-col">
+                  <div class="timeline-dot"></div>
+                  {#if i < timelineEntries.length - 1}
+                    <div class="timeline-line"></div>
+                  {/if}
+                </div>
+                <div class="timeline-entry-content">
+                  <div class="timeline-entry-meta">
+                    <span class="timeline-entry-time"
+                      >{formatTimelineTimestamp(entry.timestamp)}</span
+                    >
+                    <span class="timeline-entry-personality"
+                      >{personalityLabels[entry.personality] || entry.personality}</span
+                    >
+                  </div>
+                  <div class="timeline-entry-text">{entry.text}</div>
+                </div>
               </div>
             {/each}
           </div>
+
+          {#if timelineHasMore}
+            <button
+              class="timeline-load-more"
+              onclick={loadMoreTimeline}
+              disabled={timelineLoading}
+            >
+              {timelineLoading ? 'Loading…' : 'Load more'}
+            </button>
+          {/if}
         </div>
       {/if}
     {/if}
   </div>
 
-  <!-- Auto-scroll indicator (shown when user scrolled up) -->
-  {#if !autoScroll && history.length > 0}
+  <!-- Auto-scroll indicator (shown when user scrolled up in live mode) -->
+  {#if viewMode === 'live' && !autoScroll && history.length > 0}
     <button
       class="scroll-to-bottom"
       onclick={() => {
@@ -602,6 +888,7 @@
   bind:show={showExportModal}
   {history}
   {workspacePath}
+  {workspaceId}
   onClose={() => (showExportModal = false)}
 />
 
@@ -1082,5 +1369,254 @@
   .scroll-to-bottom:hover {
     background: color-mix(in srgb, var(--accent-primary) 90%, black);
     box-shadow: 0 3px 12px rgba(0, 0, 0, 0.3);
+  }
+
+  /* --- View mode tabs --- */
+
+  .view-tabs {
+    display: flex;
+    gap: 0;
+    padding: 0 14px;
+    border-bottom: 1px solid var(--border-secondary);
+    flex-shrink: 0;
+  }
+
+  .view-tab {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 6px 12px;
+    background: transparent;
+    border: none;
+    border-bottom: 2px solid transparent;
+    cursor: pointer;
+    font-size: var(--fs-xs);
+    font-weight: 600;
+    color: var(--text-tertiary);
+    transition: all var(--transition);
+  }
+
+  .view-tab:hover {
+    color: var(--text-secondary);
+  }
+
+  .view-tab.active {
+    color: var(--accent-primary);
+    border-bottom-color: var(--accent-primary);
+  }
+
+  .tab-live-dot {
+    display: inline-block;
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    background: var(--accent-primary);
+    animation: pulse 2s ease-in-out infinite;
+  }
+
+  /* --- Timeline view --- */
+
+  .empty-hint {
+    font-size: var(--fs-xxs);
+    color: var(--text-tertiary);
+    margin-top: 8px;
+  }
+
+  .timeline-spinner {
+    width: 20px;
+    height: 20px;
+    border: 2px solid var(--border-secondary);
+    border-top-color: var(--accent-primary);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+    margin-bottom: 8px;
+  }
+
+  @keyframes spin {
+    to {
+      transform: rotate(360deg);
+    }
+  }
+
+  .timeline {
+    padding-bottom: 8px;
+  }
+
+  .timeline-actions {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 2px 10px;
+  }
+
+  .timeline-refresh-btn {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 3px 8px;
+    border-radius: var(--radius-sm);
+    background: transparent;
+    border: 1px solid var(--border-secondary);
+    cursor: pointer;
+    color: var(--text-tertiary);
+    font-size: var(--fs-xxs);
+    font-weight: 600;
+    transition: all var(--transition);
+  }
+
+  .timeline-refresh-btn:hover {
+    color: var(--text-secondary);
+    border-color: var(--border-primary);
+    background: var(--bg-hover);
+  }
+
+  .timeline-count {
+    font-size: var(--fs-xxs);
+    color: var(--text-tertiary);
+    font-weight: 600;
+  }
+
+  .timeline-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+  }
+
+  .timeline-entry {
+    display: flex;
+    gap: 10px;
+    padding: 0;
+  }
+
+  .timeline-dot-col {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    flex-shrink: 0;
+    width: 14px;
+    padding-top: 4px;
+  }
+
+  .timeline-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--accent-primary);
+    flex-shrink: 0;
+    border: 2px solid color-mix(in srgb, var(--accent-primary) 30%, transparent);
+  }
+
+  .timeline-line {
+    width: 2px;
+    flex: 1;
+    background: var(--border-secondary);
+    min-height: 8px;
+  }
+
+  .timeline-entry-content {
+    flex: 1;
+    min-width: 0;
+    padding-bottom: 14px;
+  }
+
+  .timeline-entry-meta {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 4px;
+  }
+
+  .timeline-entry-time {
+    font-size: var(--fs-xxs);
+    color: var(--text-tertiary);
+    font-weight: 600;
+    white-space: nowrap;
+  }
+
+  .timeline-entry-personality {
+    font-size: var(--fs-xxs);
+    color: var(--accent-primary);
+    font-weight: 600;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    padding: 1px 6px;
+    border-radius: 8px;
+    background: color-mix(in srgb, var(--accent-primary) 10%, transparent);
+  }
+
+  .timeline-entry-text {
+    font-size: var(--fs-xs);
+    color: var(--text-secondary);
+    line-height: 1.5;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-secondary);
+    border-radius: var(--radius-sm);
+    padding: 8px 10px;
+  }
+
+  .timeline-load-more {
+    display: block;
+    width: 100%;
+    padding: 8px;
+    margin-top: 8px;
+    background: transparent;
+    border: 1px dashed var(--border-secondary);
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    color: var(--text-tertiary);
+    font-size: var(--fs-xs);
+    font-weight: 600;
+    transition: all var(--transition);
+  }
+
+  .timeline-load-more:hover:not(:disabled) {
+    border-color: var(--accent-primary);
+    color: var(--accent-primary);
+    background: color-mix(in srgb, var(--accent-primary) 5%, transparent);
+  }
+
+  .timeline-load-more:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  /* --- Verbosity selector --- */
+
+  .verbosity-selector {
+    display: flex;
+    border: 1px solid var(--border-secondary);
+    border-radius: var(--radius-sm);
+    overflow: hidden;
+    flex-shrink: 0;
+  }
+
+  .verbosity-btn {
+    padding: 3px 6px;
+    background: transparent;
+    border: none;
+    border-right: 1px solid var(--border-secondary);
+    cursor: pointer;
+    color: var(--text-tertiary);
+    font-size: 10px;
+    font-weight: 600;
+    transition: all var(--transition);
+    white-space: nowrap;
+    line-height: 1;
+  }
+
+  .verbosity-btn:last-child {
+    border-right: none;
+  }
+
+  .verbosity-btn:hover {
+    color: var(--text-secondary);
+    background: var(--bg-hover);
+  }
+
+  .verbosity-btn.active {
+    color: var(--accent-primary);
+    background: color-mix(in srgb, var(--accent-primary) 12%, transparent);
+    font-weight: 700;
   }
 </style>

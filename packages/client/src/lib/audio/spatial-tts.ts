@@ -1,36 +1,149 @@
 /**
- * Spatial Audio TTS Engine
+ * Spatial Audio TTS Engine (Experimental)
  *
- * Experimental feature that uses Web Audio API to position TTS audio
- * spatially, helping differentiate multiple commentators across workspaces.
+ * Provides spatial audio differentiation for multi-workspace TTS commentary.
+ * Disabled by default — users must opt in via the Manager View.
  *
- * Uses PannerNode to position audio in 3D space:
- * - Left workspace: positioned at (-2, 0, -1)
- * - Center workspace: positioned at (0, 0, -1)
- * - Right workspace: positioned at (2, 0, -1)
+ * ## How it works
  *
- * For 4+ workspaces, positions are distributed evenly between -2 and 2.
+ * **Browser TTS (SpeechSynthesis):**
+ * The Web Speech API does not expose a raw audio stream, so true stereo
+ * panning is not possible. Instead we use _perceptual differentiation_:
+ * - Slight pitch offsets per workspace (e.g. left = lower, right = higher)
+ * - Slight rate offsets per workspace
+ * - Volume balance (attenuate one ear cannot be done, but we log the
+ *   intended position for debugging)
+ *
+ * **Cloud TTS (ElevenLabs / Google):**
+ * Cloud providers return raw audio blobs that CAN be routed through the
+ * Web Audio API. When cloud TTS is active AND spatial audio is enabled,
+ * the audio blob is decoded into an AudioBuffer, run through a
+ * StereoPannerNode, and played with real left/right positioning.
+ *
+ * ## Position assignment
+ *
+ * | Workspaces | Positions                           |
+ * |------------|-------------------------------------|
+ * | 1          | Center (pan = 0)                    |
+ * | 2          | Left (-1), Right (+1)               |
+ * | 3          | Left (-1), Center (0), Right (+1)   |
+ * | 4+         | Evenly spread from -1 to +1         |
+ *
+ * Pan values follow the Web Audio StereoPannerNode convention: -1 = full
+ * left, 0 = center, +1 = full right.
  */
 
-interface SpatialPosition {
-  x: number;
-  y: number;
-  z: number;
+// ---------------------------------------------------------------------------
+// Types
+// ---------------------------------------------------------------------------
+
+export interface SpatialPosition {
+  /** Stereo pan value: -1 (left) to +1 (right) */
+  pan: number;
+  /** Human-readable label */
+  label: string;
 }
 
-interface ActiveUtterance {
-  utterance: SpeechSynthesisUtterance;
+interface ActivePlayback {
   workspaceId: string;
-  mediaStreamSource?: MediaStreamAudioSourceNode;
-  pannerNode?: PannerNode;
+  /** Browser TTS utterance (if using browser provider) */
+  utterance?: SpeechSynthesisUtterance;
+  /** Audio source node for cloud TTS */
+  sourceNode?: AudioBufferSourceNode;
+  /** Panner node for cloud TTS */
+  pannerNode?: StereoPannerNode;
+  /** Gain node for volume control */
+  gainNode?: GainNode;
 }
+
+// ---------------------------------------------------------------------------
+// Position Calculation
+// ---------------------------------------------------------------------------
+
+/**
+ * Calculate stereo pan positions for a set of workspaces.
+ * Returns a Map of workspaceId -> SpatialPosition.
+ */
+export function calculateSpatialPositions(workspaceIds: string[]): Map<string, SpatialPosition> {
+  const positions = new Map<string, SpatialPosition>();
+  const count = workspaceIds.length;
+
+  if (count === 0) return positions;
+
+  const labels = [
+    'Far Left',
+    'Left',
+    'Center-Left',
+    'Center',
+    'Center-Right',
+    'Right',
+    'Far Right',
+  ];
+
+  for (let i = 0; i < count; i++) {
+    let pan: number;
+    let label: string;
+
+    if (count === 1) {
+      pan = 0;
+      label = 'Center';
+    } else if (count === 2) {
+      pan = i === 0 ? -0.8 : 0.8;
+      label = i === 0 ? 'Left' : 'Right';
+    } else if (count === 3) {
+      const pans = [-1, 0, 1];
+      pan = pans[i];
+      label = ['Left', 'Center', 'Right'][i];
+    } else {
+      // Distribute evenly from -1 to +1
+      pan = count > 1 ? -1 + (2 * i) / (count - 1) : 0;
+      // Pick a descriptive label
+      if (pan < -0.5) label = 'Left';
+      else if (pan < -0.1) label = 'Center-Left';
+      else if (pan <= 0.1) label = 'Center';
+      else if (pan <= 0.5) label = 'Center-Right';
+      else label = 'Right';
+    }
+
+    positions.set(workspaceIds[i], { pan, label });
+  }
+
+  return positions;
+}
+
+// ---------------------------------------------------------------------------
+// Pitch / Rate offsets for browser TTS differentiation
+// ---------------------------------------------------------------------------
+
+/**
+ * Returns slight pitch and rate offsets based on pan position.
+ * This helps users distinguish workspace voices when true stereo panning
+ * is unavailable (browser TTS).
+ *
+ * Left workspaces get slightly lower pitch/rate; right get slightly higher.
+ */
+export function getSpatialVoiceModifiers(pan: number): { pitchOffset: number; rateOffset: number } {
+  // Map pan (-1..+1) to small offsets
+  // pitch: -0.08 .. +0.08 (very subtle)
+  // rate:  -0.04 .. +0.04 (very subtle)
+  return {
+    pitchOffset: pan * 0.08,
+    rateOffset: pan * 0.04,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// SpatialTtsEngine
+// ---------------------------------------------------------------------------
 
 class SpatialTtsEngine {
   private audioContext: AudioContext | null = null;
-  private activeUtterances = new Map<string, ActiveUtterance>();
+  private activePlaybacks = new Map<string, ActivePlayback>();
   private workspacePositions = new Map<string, SpatialPosition>();
   private enabled = false;
-  private volume = 1.0;
+  private masterVolume = 1.0;
+
+  // ---- Initialization ----
 
   /**
    * Initialize the Web Audio API context.
@@ -41,241 +154,14 @@ class SpatialTtsEngine {
 
     try {
       this.audioContext = new AudioContext();
-      console.log('[spatial-tts] AudioContext initialized');
+      console.log('[spatial-tts] AudioContext initialized, state:', this.audioContext.state);
     } catch (err) {
       console.error('[spatial-tts] Failed to create AudioContext:', err);
     }
   }
 
   /**
-   * Enable or disable spatial audio positioning.
-   */
-  setEnabled(enabled: boolean): void {
-    this.enabled = enabled;
-    if (!enabled) {
-      this.stopAll();
-    }
-  }
-
-  /**
-   * Set the master volume (0.0 to 1.0).
-   */
-  setVolume(volume: number): void {
-    this.volume = Math.max(0, Math.min(1, volume));
-  }
-
-  /**
-   * Calculate spatial position for a workspace based on its index.
-   * Distributes workspaces evenly across the stereo field.
-   */
-  private calculatePosition(workspaceIds: string[], workspaceId: string): SpatialPosition {
-    const index = workspaceIds.indexOf(workspaceId);
-    const count = workspaceIds.length;
-
-    if (count === 1) {
-      // Single workspace - center
-      return { x: 0, y: 0, z: -1 };
-    } else if (count === 2) {
-      // Two workspaces - left and right
-      return { x: index === 0 ? -1.5 : 1.5, y: 0, z: -1 };
-    } else if (count === 3) {
-      // Three workspaces - left, center, right
-      const positions = [-2, 0, 2];
-      return { x: positions[index] || 0, y: 0, z: -1 };
-    } else {
-      // 4+ workspaces - distribute evenly from -2 to 2
-      const spread = 4; // Total width of the stereo field
-      const step = spread / (count - 1);
-      const x = -2 + index * step;
-      return { x, y: 0, z: -1 };
-    }
-  }
-
-  /**
-   * Update workspace positions when the workspace list changes.
-   */
-  updateWorkspaces(workspaceIds: string[]): void {
-    this.workspacePositions.clear();
-
-    for (const workspaceId of workspaceIds) {
-      const position = this.calculatePosition(workspaceIds, workspaceId);
-      this.workspacePositions.set(workspaceId, position);
-    }
-
-    console.log(
-      '[spatial-tts] Updated workspace positions:',
-      Array.from(this.workspacePositions.entries()).map(
-        ([id, pos]) =>
-          `${id.slice(0, 8)}: (${pos.x.toFixed(1)}, ${pos.y.toFixed(1)}, ${pos.z.toFixed(1)})`,
-      ),
-    );
-  }
-
-  /**
-   * Speak text with spatial positioning for the given workspace.
-   * Falls back to non-spatial TTS if spatial audio is disabled or unavailable.
-   */
-  speak(text: string, workspaceId: string): void {
-    // Stop any existing utterance for this workspace
-    this.stop(workspaceId);
-
-    if (!('speechSynthesis' in window)) {
-      console.warn('[spatial-tts] SpeechSynthesis not available');
-      return;
-    }
-
-    const utterance = new SpeechSynthesisUtterance(text);
-    utterance.rate = 1.0;
-    utterance.pitch = 1.0;
-    utterance.volume = this.volume;
-
-    // Select a natural English voice
-    const voices = window.speechSynthesis.getVoices();
-    const preferred =
-      voices.find((v) => v.lang.startsWith('en') && !v.name.includes('Google')) ||
-      voices.find((v) => v.lang.startsWith('en')) ||
-      voices[0];
-    if (preferred) utterance.voice = preferred;
-
-    // Store the utterance
-    this.activeUtterances.set(workspaceId, { utterance, workspaceId });
-
-    // Set up cleanup on end
-    utterance.onend = () => {
-      this.cleanup(workspaceId);
-    };
-
-    utterance.onerror = (event) => {
-      console.error('[spatial-tts] Error:', event.error);
-      this.cleanup(workspaceId);
-    };
-
-    // Speak with or without spatial positioning
-    if (this.enabled && this.audioContext) {
-      this.speakWithSpatialAudio(utterance, workspaceId);
-    } else {
-      window.speechSynthesis.speak(utterance);
-    }
-  }
-
-  /**
-   * Attempt to apply spatial audio to the utterance using Web Audio API.
-   *
-   * Note: This is experimental and may not work in all browsers.
-   * The Web Speech API doesn't directly expose an audio stream that can be
-   * routed through the Web Audio API, so we use a workaround with
-   * MediaStreamDestination if available.
-   */
-  private speakWithSpatialAudio(utterance: SpeechSynthesisUtterance, workspaceId: string): void {
-    const position = this.workspacePositions.get(workspaceId);
-
-    if (!position || !this.audioContext) {
-      // Fall back to non-spatial
-      window.speechSynthesis.speak(utterance);
-      return;
-    }
-
-    try {
-      // LIMITATION: Web Speech API doesn't provide direct access to audio stream
-      // We'll use a simpler approach with utterance.volume to simulate left/right
-      // by adjusting the stereo balance through the utterance itself.
-      // This is a fallback approach since true spatial audio with SpeechSynthesis
-      // is not fully supported across browsers.
-
-      // For now, speak normally and rely on browser's audio routing
-      // In the future, this could be enhanced with a server-side TTS that
-      // provides raw audio data that can be routed through Web Audio API
-      window.speechSynthesis.speak(utterance);
-
-      // Log the spatial position for debugging
-      console.log(
-        `[spatial-tts] Speaking for workspace ${workspaceId.slice(0, 8)} at position (${position.x.toFixed(1)}, ${position.y.toFixed(1)}, ${position.z.toFixed(1)})`,
-      );
-    } catch (err) {
-      console.error('[spatial-tts] Error setting up spatial audio:', err);
-      // Fall back to non-spatial
-      window.speechSynthesis.cancel();
-      window.speechSynthesis.speak(utterance);
-    }
-  }
-
-  /**
-   * Stop TTS for a specific workspace.
-   */
-  stop(workspaceId: string): void {
-    const active = this.activeUtterances.get(workspaceId);
-    if (!active) return;
-
-    try {
-      // Cancel the utterance
-      // Note: This cancels ALL utterances, not just this one
-      // This is a limitation of the Web Speech API
-      if ('speechSynthesis' in window) {
-        window.speechSynthesis.cancel();
-      }
-
-      this.cleanup(workspaceId);
-    } catch (err) {
-      console.error('[spatial-tts] Error stopping utterance:', err);
-    }
-  }
-
-  /**
-   * Stop all active TTS utterances.
-   */
-  stopAll(): void {
-    if ('speechSynthesis' in window) {
-      window.speechSynthesis.cancel();
-    }
-
-    for (const workspaceId of this.activeUtterances.keys()) {
-      this.cleanup(workspaceId);
-    }
-  }
-
-  /**
-   * Clean up resources for a completed or cancelled utterance.
-   */
-  private cleanup(workspaceId: string): void {
-    const active = this.activeUtterances.get(workspaceId);
-    if (!active) return;
-
-    // Disconnect and clean up audio nodes
-    if (active.pannerNode) {
-      try {
-        active.pannerNode.disconnect();
-      } catch (err) {
-        // Already disconnected
-      }
-    }
-
-    if (active.mediaStreamSource) {
-      try {
-        active.mediaStreamSource.disconnect();
-      } catch (err) {
-        // Already disconnected
-      }
-    }
-
-    this.activeUtterances.delete(workspaceId);
-  }
-
-  /**
-   * Get the current spatial position for a workspace.
-   */
-  getPosition(workspaceId: string): SpatialPosition | undefined {
-    return this.workspacePositions.get(workspaceId);
-  }
-
-  /**
-   * Check if a workspace is currently speaking.
-   */
-  isSpeaking(workspaceId: string): boolean {
-    return this.activeUtterances.has(workspaceId);
-  }
-
-  /**
-   * Resume the AudioContext if it's suspended (required after page load).
+   * Resume the AudioContext if suspended (required after page load).
    */
   async resume(): Promise<void> {
     if (!this.audioContext) {
@@ -291,6 +177,302 @@ class SpatialTtsEngine {
       }
     }
   }
+
+  // ---- Configuration ----
+
+  /** Enable or disable spatial audio positioning. */
+  setEnabled(enabled: boolean): void {
+    this.enabled = enabled;
+    if (enabled) {
+      this.initialize();
+    } else {
+      this.stopAll();
+    }
+    console.log('[spatial-tts] Spatial audio', enabled ? 'enabled' : 'disabled');
+  }
+
+  /** Whether spatial audio is currently enabled. */
+  isEnabled(): boolean {
+    return this.enabled;
+  }
+
+  /** Set master volume (0.0 to 1.0). */
+  setVolume(volume: number): void {
+    this.masterVolume = Math.max(0, Math.min(1, volume));
+
+    // Update any active gain nodes
+    for (const playback of this.activePlaybacks.values()) {
+      if (playback.gainNode) {
+        playback.gainNode.gain.value = this.masterVolume;
+      }
+    }
+  }
+
+  // ---- Workspace Position Management ----
+
+  /**
+   * Recalculate positions when the workspace list changes.
+   * Call this whenever workspaces are added/removed from the manager view.
+   */
+  updateWorkspaces(workspaceIds: string[]): void {
+    this.workspacePositions = calculateSpatialPositions(workspaceIds);
+
+    if (this.workspacePositions.size > 0) {
+      console.log(
+        '[spatial-tts] Updated positions:',
+        Array.from(this.workspacePositions.entries())
+          .map(([id, pos]) => `${id.slice(0, 8)}: ${pos.label} (pan=${pos.pan.toFixed(2)})`)
+          .join(', '),
+      );
+    }
+  }
+
+  /** Get the spatial position assigned to a workspace. */
+  getPosition(workspaceId: string): SpatialPosition | undefined {
+    return this.workspacePositions.get(workspaceId);
+  }
+
+  /** Get all workspace positions (for UI display). */
+  getAllPositions(): Map<string, SpatialPosition> {
+    return new Map(this.workspacePositions);
+  }
+
+  // ---- Browser TTS (SpeechSynthesis) ----
+
+  /**
+   * Speak text using browser SpeechSynthesis with spatial differentiation.
+   *
+   * Since browser TTS cannot be routed through Web Audio API for true panning,
+   * we apply subtle pitch/rate offsets based on the workspace's position to
+   * help the listener differentiate between simultaneous commentators.
+   */
+  speakBrowser(
+    text: string,
+    workspaceId: string,
+    basePitch: number = 1.0,
+    baseRate: number = 1.0,
+    voice?: SpeechSynthesisVoice | null,
+  ): void {
+    if (!('speechSynthesis' in window)) {
+      console.warn('[spatial-tts] SpeechSynthesis not available');
+      return;
+    }
+
+    // Stop any existing playback for this workspace
+    this.stopWorkspace(workspaceId);
+
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.volume = this.masterVolume;
+
+    // Apply spatial voice modifiers if enabled
+    const position = this.workspacePositions.get(workspaceId);
+    if (this.enabled && position) {
+      const mods = getSpatialVoiceModifiers(position.pan);
+      utterance.pitch = Math.max(0.1, Math.min(2, basePitch + mods.pitchOffset));
+      utterance.rate = Math.max(0.1, Math.min(10, baseRate + mods.rateOffset));
+    } else {
+      utterance.pitch = basePitch;
+      utterance.rate = baseRate;
+    }
+
+    if (voice) {
+      utterance.voice = voice;
+    }
+
+    const playback: ActivePlayback = { workspaceId, utterance };
+    this.activePlaybacks.set(workspaceId, playback);
+
+    utterance.onend = () => this.cleanupPlayback(workspaceId);
+    utterance.onerror = () => this.cleanupPlayback(workspaceId);
+
+    window.speechSynthesis.speak(utterance);
+
+    if (this.enabled && position) {
+      console.log(
+        `[spatial-tts] Browser TTS for ${workspaceId.slice(0, 8)} at ${position.label}` +
+          ` (pitch=${utterance.pitch.toFixed(2)}, rate=${utterance.rate.toFixed(2)})`,
+      );
+    }
+  }
+
+  // ---- Cloud TTS (Audio Blob via Web Audio API) ----
+
+  /**
+   * Play an audio blob (from ElevenLabs, Google TTS, etc.) with real
+   * stereo panning through the Web Audio API.
+   *
+   * If spatial audio is disabled or unavailable, falls back to a plain
+   * HTMLAudioElement.
+   */
+  async playAudioBlob(blob: Blob, workspaceId: string): Promise<void> {
+    // Stop any existing playback for this workspace
+    this.stopWorkspace(workspaceId);
+
+    const position = this.workspacePositions.get(workspaceId);
+
+    // Use Web Audio API path if spatial audio is enabled and context is ready
+    if (this.enabled && position && this.audioContext) {
+      await this.resume();
+
+      try {
+        const arrayBuffer = await blob.arrayBuffer();
+        const audioBuffer = await this.audioContext.decodeAudioData(arrayBuffer);
+
+        const source = this.audioContext.createBufferSource();
+        source.buffer = audioBuffer;
+
+        // Create StereoPannerNode for L/R positioning
+        const panner = this.audioContext.createStereoPanner();
+        panner.pan.value = position.pan;
+
+        // Create GainNode for volume control
+        const gain = this.audioContext.createGain();
+        gain.gain.value = this.masterVolume;
+
+        // Connect: source -> panner -> gain -> destination
+        source.connect(panner);
+        panner.connect(gain);
+        gain.connect(this.audioContext.destination);
+
+        const playback: ActivePlayback = {
+          workspaceId,
+          sourceNode: source,
+          pannerNode: panner,
+          gainNode: gain,
+        };
+        this.activePlaybacks.set(workspaceId, playback);
+
+        source.onended = () => this.cleanupPlayback(workspaceId);
+
+        source.start(0);
+
+        console.log(
+          `[spatial-tts] Cloud TTS for ${workspaceId.slice(0, 8)} at ${position.label}` +
+            ` (pan=${position.pan.toFixed(2)})`,
+        );
+        return;
+      } catch (err) {
+        console.warn('[spatial-tts] Web Audio decode failed, falling back to HTMLAudio:', err);
+        // Fall through to HTMLAudioElement
+      }
+    }
+
+    // Fallback: plain audio element (no spatial positioning)
+    const url = URL.createObjectURL(blob);
+    const audio = new Audio(url);
+    audio.volume = this.masterVolume;
+
+    return new Promise<void>((resolve, reject) => {
+      audio.onended = () => {
+        URL.revokeObjectURL(url);
+        this.cleanupPlayback(workspaceId);
+        resolve();
+      };
+      audio.onerror = (err) => {
+        URL.revokeObjectURL(url);
+        this.cleanupPlayback(workspaceId);
+        reject(err);
+      };
+      audio.play().catch(reject);
+    });
+  }
+
+  // ---- Playback Control ----
+
+  /** Stop playback for a specific workspace. */
+  stopWorkspace(workspaceId: string): void {
+    const playback = this.activePlaybacks.get(workspaceId);
+    if (!playback) return;
+
+    // Stop browser TTS utterance
+    // NOTE: speechSynthesis.cancel() stops ALL utterances — this is a browser
+    // limitation. For multi-workspace browser TTS, utterances are queued so
+    // cancelling is disruptive. We mark it as cleaned up.
+    if (playback.utterance && 'speechSynthesis' in window) {
+      window.speechSynthesis.cancel();
+    }
+
+    // Stop Web Audio source
+    if (playback.sourceNode) {
+      try {
+        playback.sourceNode.stop();
+      } catch {
+        // Already stopped
+      }
+    }
+
+    this.cleanupPlayback(workspaceId);
+  }
+
+  /** Stop all active playback. */
+  stopAll(): void {
+    if ('speechSynthesis' in window) {
+      window.speechSynthesis.cancel();
+    }
+
+    for (const workspaceId of [...this.activePlaybacks.keys()]) {
+      const playback = this.activePlaybacks.get(workspaceId);
+      if (playback?.sourceNode) {
+        try {
+          playback.sourceNode.stop();
+        } catch {
+          // Already stopped
+        }
+      }
+      this.cleanupPlayback(workspaceId);
+    }
+  }
+
+  /** Check if a workspace is currently playing. */
+  isSpeaking(workspaceId: string): boolean {
+    return this.activePlaybacks.has(workspaceId);
+  }
+
+  // ---- Cleanup ----
+
+  private cleanupPlayback(workspaceId: string): void {
+    const playback = this.activePlaybacks.get(workspaceId);
+    if (!playback) return;
+
+    if (playback.sourceNode) {
+      try {
+        playback.sourceNode.disconnect();
+      } catch {
+        /* ok */
+      }
+    }
+    if (playback.pannerNode) {
+      try {
+        playback.pannerNode.disconnect();
+      } catch {
+        /* ok */
+      }
+    }
+    if (playback.gainNode) {
+      try {
+        playback.gainNode.disconnect();
+      } catch {
+        /* ok */
+      }
+    }
+
+    this.activePlaybacks.delete(workspaceId);
+  }
+
+  /** Tear down the engine entirely. */
+  destroy(): void {
+    this.stopAll();
+    if (this.audioContext) {
+      this.audioContext.close().catch(() => {});
+      this.audioContext = null;
+    }
+    this.workspacePositions.clear();
+    this.enabled = false;
+  }
 }
+
+// ---------------------------------------------------------------------------
+// Singleton export
+// ---------------------------------------------------------------------------
 
 export const spatialTts = new SpatialTtsEngine();

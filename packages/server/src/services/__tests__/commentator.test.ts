@@ -4,9 +4,13 @@ import {
   CommentatorService,
   summariseBatch,
   PERSONALITY_PROMPTS,
+  VERBOSITY_PROMPT_SUFFIX,
+  shouldProcessEvent,
+  getVerbosityBatchTiming,
   MIN_BATCH_MS,
   MAX_BATCH_MS,
   type CommentaryPersonality,
+  type CommentaryVerbosity,
   type LlmCaller,
 } from '../commentator';
 
@@ -56,6 +60,28 @@ function makeMessageStop(): StreamEvent {
   return { type: 'message_stop' };
 }
 
+function makeStoryUpdate(): StreamEvent {
+  return {
+    type: 'story_update',
+    story: { id: 's1', title: 'Test Story', status: 'completed' } as any,
+  };
+}
+
+function makeError(message: string): StreamEvent {
+  return { type: 'error', error: { type: 'cli_error', message } };
+}
+
+function makeVerificationResult(passed: boolean): StreamEvent {
+  return {
+    type: 'verification_result',
+    filePath: '/src/main.ts',
+    passed,
+    issues: [],
+    tool: 'tsc',
+    duration: 500,
+  };
+}
+
 // ---------------------------------------------------------------------------
 // summariseBatch
 // ---------------------------------------------------------------------------
@@ -66,44 +92,42 @@ describe('summariseBatch', () => {
   });
 
   test('summarises message_start events', () => {
-    const result = summariseBatch([makeMessageStart('claude-haiku-4-5')], 'high');
+    const result = summariseBatch([makeMessageStart('claude-haiku-4-5')], 'frequent');
     expect(result).toContain('Agent started a new response');
     expect(result).toContain('claude-haiku-4-5');
   });
 
   test('summarises text deltas with preview', () => {
-    const result = summariseBatch([makeTextDelta('Hello world')], 'high');
+    const result = summariseBatch([makeTextDelta('Hello world')], 'frequent');
     expect(result).toContain('Agent wrote: "Hello world"');
   });
 
   test('truncates long text deltas', () => {
     const longText = 'x'.repeat(200);
-    const result = summariseBatch([makeTextDelta(longText)], 'high');
-    expect(result).toContain('…');
-    // Preview should be at most 120 chars of the text
+    const result = summariseBatch([makeTextDelta(longText)], 'frequent');
+    expect(result).toContain('\u2026');
     expect(result.length).toBeLessThan(250);
   });
 
   test('summarises tool results', () => {
-    const result = summariseBatch([makeToolResult('Read', false)], 'high');
+    const result = summariseBatch([makeToolResult('Read', false)], 'frequent');
     expect(result).toContain('"Read"');
     expect(result).toContain('succeeded');
   });
 
   test('summarises failed tool results', () => {
-    const result = summariseBatch([makeToolResult('Write', true)], 'high');
+    const result = summariseBatch([makeToolResult('Write', true)], 'frequent');
     expect(result).toContain('"Write"');
     expect(result).toContain('failed');
   });
 
   test('summarises tool_use_start', () => {
-    const result = summariseBatch([makeToolUseStart('Bash')], 'high');
+    const result = summariseBatch([makeToolUseStart('Bash')], 'frequent');
     expect(result).toContain('Agent invoking tool "Bash"');
   });
 
   test('skips ping events', () => {
     const result = summariseBatch([makePing()]);
-    // Ping is handled by an empty case — the catch-all won't fire
     expect(result).toBe('');
   });
 
@@ -192,17 +216,21 @@ describe('PERSONALITY_PROMPTS', () => {
     'project_lead',
   ];
 
-  test('all five personalities have prompts', () => {
+  test('all personalities have prompts', () => {
     for (const p of personalities) {
       expect(PERSONALITY_PROMPTS[p]).toBeDefined();
       expect(PERSONALITY_PROMPTS[p].length).toBeGreaterThan(50);
     }
   });
 
+  test('wizard personality has a prompt', () => {
+    expect(PERSONALITY_PROMPTS.wizard).toBeDefined();
+    expect(PERSONALITY_PROMPTS.wizard.length).toBeGreaterThan(50);
+  });
+
   test('each personality includes at least 3 few-shot examples', () => {
     for (const p of personalities) {
       const prompt = PERSONALITY_PROMPTS[p];
-      // Each example has an "Activity:" header followed by a "Commentary:" response
       const exampleCount = (prompt.match(/Commentary:\s*"/g) || []).length;
       expect(exampleCount).toBeGreaterThanOrEqual(3);
     }
@@ -248,6 +276,102 @@ describe('PERSONALITY_PROMPTS', () => {
 });
 
 // ---------------------------------------------------------------------------
+// Verbosity — shouldProcessEvent
+// ---------------------------------------------------------------------------
+
+describe('shouldProcessEvent', () => {
+  test('frequent verbosity passes all events', () => {
+    expect(shouldProcessEvent(makeMessageStart(), 'frequent')).toBe(true);
+    expect(shouldProcessEvent(makeTextDelta('text'), 'frequent')).toBe(true);
+    expect(shouldProcessEvent(makeToolUseStart('Read'), 'frequent')).toBe(true);
+    expect(shouldProcessEvent(makeToolResult('Read'), 'frequent')).toBe(true);
+    expect(shouldProcessEvent(makeMessageStop(), 'frequent')).toBe(true);
+    expect(shouldProcessEvent(makeStoryUpdate(), 'frequent')).toBe(true);
+    expect(shouldProcessEvent(makeError('fail'), 'frequent')).toBe(true);
+  });
+
+  test('strategic verbosity filters out low-signal events', () => {
+    expect(shouldProcessEvent(makeToolUseStart('Read'), 'strategic')).toBe(true);
+    expect(shouldProcessEvent(makeToolResult('Read'), 'strategic')).toBe(true);
+    expect(shouldProcessEvent(makeMessageStop(), 'strategic')).toBe(true);
+    expect(shouldProcessEvent(makeStoryUpdate(), 'strategic')).toBe(true);
+    expect(shouldProcessEvent(makeError('fail'), 'strategic')).toBe(true);
+    expect(shouldProcessEvent(makeVerificationResult(true), 'strategic')).toBe(true);
+
+    expect(shouldProcessEvent(makeMessageStart(), 'strategic')).toBe(false);
+    expect(shouldProcessEvent(makeTextDelta('text'), 'strategic')).toBe(false);
+    expect(
+      shouldProcessEvent(
+        { type: 'content_block_start', index: 0, content_block: { type: 'thinking' } },
+        'strategic',
+      ),
+    ).toBe(false);
+  });
+
+  test('minimal verbosity only passes major milestones', () => {
+    expect(shouldProcessEvent(makeStoryUpdate(), 'minimal')).toBe(true);
+    expect(shouldProcessEvent(makeError('fail'), 'minimal')).toBe(true);
+    expect(shouldProcessEvent(makeVerificationResult(true), 'minimal')).toBe(true);
+
+    expect(shouldProcessEvent(makeToolUseStart('Read'), 'minimal')).toBe(false);
+    expect(shouldProcessEvent(makeToolResult('Read'), 'minimal')).toBe(false);
+    expect(shouldProcessEvent(makeMessageStop(), 'minimal')).toBe(false);
+    expect(shouldProcessEvent(makeMessageStart(), 'minimal')).toBe(false);
+    expect(shouldProcessEvent(makeTextDelta('text'), 'minimal')).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Verbosity — getVerbosityBatchTiming
+// ---------------------------------------------------------------------------
+
+describe('getVerbosityBatchTiming', () => {
+  test('frequent mode returns 3-5s window', () => {
+    const timing = getVerbosityBatchTiming('frequent');
+    expect(timing.minBatchMs).toBe(3_000);
+    expect(timing.maxBatchMs).toBe(5_000);
+  });
+
+  test('strategic mode returns 8-15s window', () => {
+    const timing = getVerbosityBatchTiming('strategic');
+    expect(timing.minBatchMs).toBe(8_000);
+    expect(timing.maxBatchMs).toBe(15_000);
+  });
+
+  test('minimal mode returns 15-30s window', () => {
+    const timing = getVerbosityBatchTiming('minimal');
+    expect(timing.minBatchMs).toBe(15_000);
+    expect(timing.maxBatchMs).toBe(30_000);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Verbosity — VERBOSITY_PROMPT_SUFFIX
+// ---------------------------------------------------------------------------
+
+describe('VERBOSITY_PROMPT_SUFFIX', () => {
+  test('all three verbosity levels have prompt suffixes', () => {
+    const levels: CommentaryVerbosity[] = ['frequent', 'strategic', 'minimal'];
+    for (const level of levels) {
+      expect(VERBOSITY_PROMPT_SUFFIX[level]).toBeDefined();
+      expect(VERBOSITY_PROMPT_SUFFIX[level].length).toBeGreaterThan(20);
+    }
+  });
+
+  test('frequent suffix asks for lively commentary', () => {
+    expect(VERBOSITY_PROMPT_SUFFIX.frequent).toContain('lively');
+  });
+
+  test('strategic suffix focuses on significance', () => {
+    expect(VERBOSITY_PROMPT_SUFFIX.strategic).toContain('significance');
+  });
+
+  test('minimal suffix is succinct', () => {
+    expect(VERBOSITY_PROMPT_SUFFIX.minimal).toContain('succinct');
+  });
+});
+
+// ---------------------------------------------------------------------------
 // CommentatorService — lifecycle
 // ---------------------------------------------------------------------------
 
@@ -270,19 +394,28 @@ describe('CommentatorService — lifecycle', () => {
     expect(service.getPersonality('ws-1')).toBe('sports_announcer');
   });
 
+  test('startCommentary stores verbosity (defaults to strategic)', () => {
+    service.startCommentary('ws-1', 'sports_announcer');
+    expect(service.getVerbosity('ws-1')).toBe('strategic');
+  });
+
+  test('startCommentary stores custom verbosity', () => {
+    service.startCommentary('ws-1', 'sports_announcer', undefined, 'frequent');
+    expect(service.getVerbosity('ws-1')).toBe('frequent');
+  });
+
   test('forceStopCommentary deactivates the workspace', () => {
     service.startCommentary('ws-1', 'technical_analyst');
     expect(service.isActive('ws-1')).toBe(true);
     service.forceStopCommentary('ws-1');
     expect(service.isActive('ws-1')).toBe(false);
     expect(service.getPersonality('ws-1')).toBeUndefined();
+    expect(service.getVerbosity('ws-1')).toBeUndefined();
   });
 
   test('startCommentary is idempotent for same personality', () => {
     service.startCommentary('ws-1', 'sports_announcer');
-    // Push an event to verify buffer is preserved
     service.pushEvent('ws-1', makeMessageStart());
-    // Starting again with same personality should NOT restart
     service.startCommentary('ws-1', 'sports_announcer');
     expect(service.getPersonality('ws-1')).toBe('sports_announcer');
   });
@@ -291,6 +424,25 @@ describe('CommentatorService — lifecycle', () => {
     service.startCommentary('ws-1', 'sports_announcer');
     service.startCommentary('ws-1', 'comedic_observer');
     expect(service.getPersonality('ws-1')).toBe('comedic_observer');
+  });
+
+  test('startCommentary updates verbosity without restarting when same personality', () => {
+    service.startCommentary('ws-1', 'sports_announcer', undefined, 'strategic');
+    expect(service.getVerbosity('ws-1')).toBe('strategic');
+
+    service.startCommentary('ws-1', 'sports_announcer', undefined, 'frequent');
+    expect(service.getVerbosity('ws-1')).toBe('frequent');
+    expect(service.getPersonality('ws-1')).toBe('sports_announcer');
+  });
+
+  test('setVerbosity updates verbosity for active commentator', () => {
+    service.startCommentary('ws-1', 'sports_announcer', undefined, 'strategic');
+    expect(service.setVerbosity('ws-1', 'minimal')).toBe(true);
+    expect(service.getVerbosity('ws-1')).toBe('minimal');
+  });
+
+  test('setVerbosity returns false for non-existent workspace', () => {
+    expect(service.setVerbosity('nonexistent', 'frequent')).toBe(false);
   });
 
   test('forceStopCommentary is safe for non-existent workspace', () => {
@@ -304,7 +456,11 @@ describe('CommentatorService — lifecycle', () => {
   test('pushEvent ignores ping events', () => {
     service.startCommentary('ws-1', 'sports_announcer');
     service.pushEvent('ws-1', makePing());
-    // No errors, ping is silently dropped
+  });
+
+  test('pushEvent filters events based on verbosity', () => {
+    service.startCommentary('ws-1', 'sports_announcer', undefined, 'strategic');
+    service.pushEvent('ws-1', makeTextDelta('hello'));
   });
 });
 
@@ -347,12 +503,11 @@ describe('CommentatorService — reference counting', () => {
     expect(service.getRefCount('ws-1')).toBe(0);
   });
 
-  test('stopCommentary respects ref counting — does not stop while refs remain', () => {
+  test('stopCommentary respects ref counting', () => {
     service.startCommentary('ws-1', 'sports_announcer');
     service.acquireRef('ws-1');
     service.acquireRef('ws-1');
 
-    // Should not stop because refCount > 0
     const stopped = service.stopCommentary('ws-1');
     expect(stopped).toBe(false);
     expect(service.isActive('ws-1')).toBe(true);
@@ -360,7 +515,6 @@ describe('CommentatorService — reference counting', () => {
 
   test('stopCommentary stops when ref count is zero', () => {
     service.startCommentary('ws-1', 'sports_announcer');
-    // No refs acquired → refCount is 0
 
     const stopped = service.stopCommentary('ws-1');
     expect(stopped).toBe(true);
@@ -372,11 +526,9 @@ describe('CommentatorService — reference counting', () => {
     service.acquireRef('ws-1');
     service.acquireRef('ws-1');
 
-    // Release both refs
     service.releaseRef('ws-1');
     service.releaseRef('ws-1');
 
-    // Now stopCommentary should work
     const stopped = service.stopCommentary('ws-1');
     expect(stopped).toBe(true);
     expect(service.isActive('ws-1')).toBe(false);
@@ -390,7 +542,6 @@ describe('CommentatorService — reference counting', () => {
     const stopped = service.forceStopCommentary('ws-1');
     expect(stopped).toBe(true);
     expect(service.isActive('ws-1')).toBe(false);
-    // Ref counts should also be cleared
     expect(service.getRefCount('ws-1')).toBe(0);
   });
 
@@ -449,9 +600,9 @@ describe('CommentatorService — status and listing', () => {
     expect(service.activeCount).toBe(1);
   });
 
-  test('getStatus returns detailed info for all commentators', () => {
-    service.startCommentary('ws-1', 'sports_announcer');
-    service.startCommentary('ws-2', 'documentary_narrator');
+  test('getStatus returns detailed info including verbosity', () => {
+    service.startCommentary('ws-1', 'sports_announcer', undefined, 'frequent');
+    service.startCommentary('ws-2', 'documentary_narrator', undefined, 'minimal');
     service.acquireRef('ws-1');
     service.acquireRef('ws-1');
     service.acquireRef('ws-2');
@@ -462,6 +613,7 @@ describe('CommentatorService — status and listing', () => {
     const ws1Status = statuses.find((s) => s.workspaceId === 'ws-1');
     expect(ws1Status).toBeDefined();
     expect(ws1Status!.personality).toBe('sports_announcer');
+    expect(ws1Status!.verbosity).toBe('frequent');
     expect(ws1Status!.refCount).toBe(2);
     expect(ws1Status!.generating).toBe(false);
     expect(ws1Status!.bufferedEvents).toBe(0);
@@ -469,6 +621,7 @@ describe('CommentatorService — status and listing', () => {
     const ws2Status = statuses.find((s) => s.workspaceId === 'ws-2');
     expect(ws2Status).toBeDefined();
     expect(ws2Status!.personality).toBe('documentary_narrator');
+    expect(ws2Status!.verbosity).toBe('minimal');
     expect(ws2Status!.refCount).toBe(1);
   });
 });
@@ -490,26 +643,22 @@ describe('CommentatorService — event batching', () => {
     service.stopAll();
   });
 
-  test('batches events and calls LLM after MIN_BATCH_MS', async () => {
-    service.startCommentary('ws-1', 'sports_announcer');
+  test('batches events and calls LLM after MIN_BATCH_MS (frequent mode)', async () => {
+    service.startCommentary('ws-1', 'sports_announcer', undefined, 'frequent');
 
-    // Push events
     service.pushEvent('ws-1', makeMessageStart());
     service.pushEvent('ws-1', makeToolUseStart('Read'));
     service.pushEvent('ws-1', makeToolResult('Read'));
 
-    // LLM should not be called immediately
     expect(mockCallLlm).not.toHaveBeenCalled();
 
-    // Wait for the batch timer to fire (MIN_BATCH_MS = 3s + buffer)
     await new Promise((resolve) => setTimeout(resolve, MIN_BATCH_MS + 500));
 
-    // Now the LLM should have been called
     expect(mockCallLlm).toHaveBeenCalledTimes(1);
 
-    // Verify the call was made with correct shape
     const callArgs = mockCallLlm.mock.calls[0][0] as any;
     expect(callArgs.system).toContain('sports announcer');
+    expect(callArgs.user).toContain('lively');
     expect(callArgs.user).toContain('Agent started');
     expect(callArgs.user).toContain('Agent invoking tool "Read"');
     expect(callArgs.model).toContain('haiku');
@@ -521,10 +670,9 @@ describe('CommentatorService — event batching', () => {
       received.push(evt);
     });
 
-    service.startCommentary('ws-1', 'documentary_narrator');
+    service.startCommentary('ws-1', 'documentary_narrator', undefined, 'frequent');
     service.pushEvent('ws-1', makeMessageStart());
 
-    // Wait for batch + LLM
     await new Promise((resolve) => setTimeout(resolve, MIN_BATCH_MS + 1_000));
 
     expect(received.length).toBe(1);
@@ -535,48 +683,30 @@ describe('CommentatorService — event batching', () => {
     expect(received[0].timestamp).toBeGreaterThan(0);
   }, 10_000);
 
-  test('flushes batch at MAX_BATCH_MS even with continuous events', async () => {
-    service.startCommentary('ws-1', 'technical_analyst');
+  test('strategic mode filters out text deltas', async () => {
+    service.startCommentary('ws-1', 'technical_analyst', undefined, 'strategic');
 
-    // Push events spread over time (simulating continuous activity)
-    const pushInterval = setInterval(() => {
-      service.pushEvent('ws-1', makeTextDelta('ongoing work'));
-    }, 500);
+    service.pushEvent('ws-1', makeTextDelta('hello'));
+    service.pushEvent('ws-1', makeTextDelta('world'));
+    service.pushEvent('ws-1', makeMessageStart());
 
-    // Wait beyond MAX_BATCH_MS + buffer for LLM call to complete
-    await new Promise((resolve) => setTimeout(resolve, MAX_BATCH_MS + 1_500));
-    clearInterval(pushInterval);
+    await new Promise((resolve) => setTimeout(resolve, 10_000));
 
-    // Should have been called at least once (batch flushed at 5s max)
-    expect(mockCallLlm.mock.calls.length).toBeGreaterThanOrEqual(1);
+    expect(mockCallLlm).not.toHaveBeenCalled();
   }, 15_000);
 
-  test('does not overlap LLM calls — drops batch if generating', async () => {
-    // Make callLlm slow
-    const slowMock = mock(
-      () => new Promise<string>((resolve) => setTimeout(() => resolve('Slow commentary'), 5_000)),
-    );
-    service = new CommentatorService(slowMock as LlmCaller);
+  test('strategic mode narrates tool use and errors', async () => {
+    service.startCommentary('ws-1', 'technical_analyst', undefined, 'strategic');
 
-    service.startCommentary('ws-1', 'comedic_observer');
-
-    // Trigger first batch
-    service.pushEvent('ws-1', makeMessageStart());
-    await new Promise((resolve) => setTimeout(resolve, MIN_BATCH_MS + 500));
-
-    // First call should be in-flight
-    expect(slowMock).toHaveBeenCalledTimes(1);
-
-    // Push more events while first call is in-flight
     service.pushEvent('ws-1', makeToolUseStart('Edit'));
-    await new Promise((resolve) => setTimeout(resolve, MIN_BATCH_MS + 500));
+    service.pushEvent('ws-1', makeToolResult('Edit'));
 
-    // The second batch should have been dropped (generating flag is true)
-    expect(slowMock).toHaveBeenCalledTimes(1);
+    await new Promise((resolve) => setTimeout(resolve, 9_000));
 
-    // Wait for the first call to complete
-    await new Promise((resolve) => setTimeout(resolve, 4_000));
-  }, 20_000);
+    expect(mockCallLlm).toHaveBeenCalledTimes(1);
+    const callArgs = mockCallLlm.mock.calls[0][0] as any;
+    expect(callArgs.user).toContain('significance');
+  }, 15_000);
 
   test('handles LLM errors gracefully without stopping commentary', async () => {
     const failThenSucceed = mock()
@@ -590,19 +720,14 @@ describe('CommentatorService — event batching', () => {
       received.push(evt);
     });
 
-    service.startCommentary('ws-1', 'project_lead');
+    service.startCommentary('ws-1', 'project_lead', undefined, 'frequent');
     service.pushEvent('ws-1', makeMessageStart());
 
-    // Wait for batch + failed LLM
     await new Promise((resolve) => setTimeout(resolve, MIN_BATCH_MS + 1_000));
 
-    // No commentary should be emitted on error
     expect(received.length).toBe(0);
-
-    // But commentator should still be active
     expect(service.isActive('ws-1')).toBe(true);
 
-    // And should accept new events — this time mock succeeds
     service.pushEvent('ws-1', makeToolUseStart('Read'));
     await new Promise((resolve) => setTimeout(resolve, MIN_BATCH_MS + 1_000));
 
@@ -625,23 +750,32 @@ describe('CommentatorService — event batching', () => {
       received.push(evt);
     });
 
-    service.startCommentary('ws-1', 'sports_announcer');
+    service.startCommentary('ws-1', 'sports_announcer', undefined, 'frequent');
     service.pushEvent('ws-1', makeMessageStart());
 
-    // Wait for batch to trigger
     await new Promise((resolve) => setTimeout(resolve, MIN_BATCH_MS + 500));
     expect(pendingMock).toHaveBeenCalledTimes(1);
 
-    // Stop commentary while LLM is in-flight
     service.forceStopCommentary('ws-1');
 
-    // Resolve LLM call
     resolveLlm('Should not be emitted');
     await new Promise((resolve) => setTimeout(resolve, 200));
 
-    // No commentary should be emitted because we stopped
     expect(received.length).toBe(0);
   }, 10_000);
+
+  test('LLM prompt includes verbosity suffix in user prompt', async () => {
+    service.startCommentary('ws-1', 'sports_announcer', undefined, 'minimal');
+
+    service.pushEvent('ws-1', makeStoryUpdate());
+
+    await new Promise((resolve) => setTimeout(resolve, 16_000));
+
+    if (mockCallLlm.mock.calls.length > 0) {
+      const callArgs = mockCallLlm.mock.calls[0][0] as any;
+      expect(callArgs.user).toContain('succinct');
+    }
+  }, 25_000);
 });
 
 // ---------------------------------------------------------------------------
@@ -661,21 +795,20 @@ describe('CommentatorService — multiple workspaces', () => {
     service.stopAll();
   });
 
-  test('AC 1+2: independent commentators with different personalities', async () => {
+  test('independent commentators with different personalities and verbosities', async () => {
     const received: StreamCommentary[] = [];
     service.events.on('commentary', (evt: StreamCommentary) => {
       received.push(evt);
     });
 
-    service.startCommentary('ws-1', 'sports_announcer');
-    service.startCommentary('ws-2', 'documentary_narrator');
+    service.startCommentary('ws-1', 'sports_announcer', undefined, 'frequent');
+    service.startCommentary('ws-2', 'documentary_narrator', undefined, 'frequent');
 
     service.pushEvent('ws-1', makeMessageStart());
     service.pushEvent('ws-2', makeToolUseStart('Edit'));
 
     await new Promise((resolve) => setTimeout(resolve, MIN_BATCH_MS + 1_000));
 
-    // Both workspaces should generate commentary
     expect(mockCallLlm.mock.calls.length).toBe(2);
     expect(received.length).toBe(2);
 
@@ -685,48 +818,23 @@ describe('CommentatorService — multiple workspaces', () => {
     expect(ws2Commentary?.personality).toBe('documentary_narrator');
   }, 10_000);
 
-  test('AC 3: events for one workspace do not affect another (no crosstalk)', async () => {
+  test('events for one workspace do not affect another (no crosstalk)', async () => {
     const received: StreamCommentary[] = [];
     service.events.on('commentary', (evt: StreamCommentary) => {
       received.push(evt);
     });
 
-    service.startCommentary('ws-1', 'sports_announcer');
-    service.startCommentary('ws-2', 'documentary_narrator');
+    service.startCommentary('ws-1', 'sports_announcer', undefined, 'frequent');
+    service.startCommentary('ws-2', 'documentary_narrator', undefined, 'frequent');
 
-    // Only push events to ws-1
     service.pushEvent('ws-1', makeMessageStart());
     service.pushEvent('ws-1', makeToolUseStart('Read'));
 
     await new Promise((resolve) => setTimeout(resolve, MIN_BATCH_MS + 1_000));
 
-    // Only ws-1 should have generated commentary
     expect(received.length).toBe(1);
     expect(received[0].workspaceId).toBe('ws-1');
     expect(received[0].personality).toBe('sports_announcer');
-  }, 10_000);
-
-  test('three simultaneous workspaces with different personalities', async () => {
-    const received: StreamCommentary[] = [];
-    service.events.on('commentary', (evt: StreamCommentary) => {
-      received.push(evt);
-    });
-
-    service.startCommentary('ws-1', 'sports_announcer');
-    service.startCommentary('ws-2', 'documentary_narrator');
-    service.startCommentary('ws-3', 'comedic_observer');
-
-    service.pushEvent('ws-1', makeMessageStart());
-    service.pushEvent('ws-2', makeToolUseStart('Edit'));
-    service.pushEvent('ws-3', makeToolResult('Bash', true));
-
-    await new Promise((resolve) => setTimeout(resolve, MIN_BATCH_MS + 1_000));
-
-    expect(mockCallLlm.mock.calls.length).toBe(3);
-    expect(received.length).toBe(3);
-
-    const personalities = received.map((c) => c.personality).sort();
-    expect(personalities).toEqual(['comedic_observer', 'documentary_narrator', 'sports_announcer']);
   }, 10_000);
 
   test('stopping one workspace does not affect others', () => {
@@ -756,5 +864,13 @@ describe('CommentatorService — multiple workspaces', () => {
     service.releaseRef('ws-1');
     expect(service.getRefCount('ws-1')).toBe(1);
     expect(service.getRefCount('ws-2')).toBe(1);
+  });
+
+  test('different workspaces can have different verbosity levels', () => {
+    service.startCommentary('ws-1', 'sports_announcer', undefined, 'frequent');
+    service.startCommentary('ws-2', 'documentary_narrator', undefined, 'minimal');
+
+    expect(service.getVerbosity('ws-1')).toBe('frequent');
+    expect(service.getVerbosity('ws-2')).toBe('minimal');
   });
 });

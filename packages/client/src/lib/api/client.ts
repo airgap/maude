@@ -1664,6 +1664,44 @@ export const api = {
         `/commentary/${encodeURIComponent(workspaceId)}/history`,
         { method: 'DELETE' },
       ),
+    exportHistory: (
+      workspaceId: string,
+      options?: {
+        format?: 'markdown' | 'json';
+        startTime?: number;
+        endTime?: number;
+        limit?: number;
+      },
+    ) => {
+      const params = new URLSearchParams();
+      if (options?.format) params.set('format', options.format);
+      if (options?.startTime) params.set('startTime', String(options.startTime));
+      if (options?.endTime) params.set('endTime', String(options.endTime));
+      if (options?.limit) params.set('limit', String(options.limit));
+      const q = params.toString();
+      return request<{
+        ok: boolean;
+        data: {
+          metadata: {
+            workspaceName: string;
+            workspaceId: string;
+            personality: string;
+            exportDate: string;
+            totalEntries: number;
+            timeRange: { start: string; end: string };
+          };
+          entries: Array<{
+            id: string;
+            workspaceId: string;
+            conversationId: string | null;
+            text: string;
+            personality: string;
+            timestamp: number;
+            timestampISO: string;
+          }>;
+        };
+      }>(`/commentary/${encodeURIComponent(workspaceId)}/export${q ? '?' + q : ''}`);
+    },
     getSettings: (workspaceId: string) =>
       request<{
         ok: boolean;

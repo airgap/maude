@@ -23,6 +23,12 @@ export interface HyperthemeConfig {
   colorOverrides?: Record<string, string>;
   suggestedMonoFont: string;
   suggestedSansFont: string;
+  /**
+   * Optional suggested commentary personality for this hypertheme.
+   * When the user switches to this hypertheme, the commentary panel
+   * can auto-activate this personality for a more immersive experience.
+   */
+  suggestedPersonality?: string;
 }
 
 export const HYPERTHEMES: HyperthemeConfig[] = [
@@ -265,6 +271,7 @@ export const HYPERTHEMES: HyperthemeConfig[] = [
     icon: 'M12 2c-4 6-8 9.5-8 13a8 8 0 0 0 16 0c0-3.5-4-7-8-13z',
     suggestedMonoFont: 'fira-code',
     suggestedSansFont: 'cinzel',
+    suggestedPersonality: 'wizard',
     cssVars: {
       '--ht-radius': '6px',
       '--ht-radius-sm': '4px',

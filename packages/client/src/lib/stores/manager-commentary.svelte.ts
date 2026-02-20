@@ -1,5 +1,7 @@
 import type { StreamCommentary } from '@e/shared';
 import { getBaseUrl, getAuthToken } from '$lib/api/client';
+import { spatialTts, type SpatialPosition } from '$lib/audio/spatial-tts';
+import { commentaryTtsService, type CommentaryPersonality } from '$lib/services/commentary-tts';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -40,6 +42,9 @@ const MAX_ENTRIES_PER_WORKSPACE = 3;
  * Unlike the single-workspace `commentaryStore`, this store manages
  * multiple simultaneous SSE connections — one per workspace — and keeps
  * a small rolling window of recent commentary entries for each.
+ *
+ * Integrates with the SpatialTtsEngine for experimental spatial audio
+ * positioning across workspaces (disabled by default, opt-in).
  */
 function createManagerCommentaryStore() {
   /** Per-workspace commentary state, keyed by workspaceId */
@@ -54,6 +59,15 @@ function createManagerCommentaryStore() {
   /** Which workspace's commentary is expanded (null = none) */
   let expandedWorkspaceId = $state<string | null>(null);
 
+  /** Whether spatial audio is enabled (experimental, disabled by default) */
+  let spatialAudioEnabled = $state(false);
+
+  /** Whether TTS is enabled for the manager view */
+  let ttsEnabled = $state(false);
+
+  /** Current TTS volume (0-1) */
+  let ttsVolume = $state(0.8);
+
   // ---- Internal helpers ----
 
   function ensureState(workspaceId: string): WorkspaceCommentaryState {
@@ -66,6 +80,26 @@ function createManagerCommentaryStore() {
       };
     }
     return workspaceStates[workspaceId];
+  }
+
+  /**
+   * Speak commentary text with spatial audio positioning.
+   * Uses the SpatialTtsEngine for browser TTS with pitch/rate differentiation.
+   */
+  function speakWithSpatialAudio(text: string, workspaceId: string, personality: string): void {
+    if (!ttsEnabled) return;
+
+    const wsState = workspaceStates[workspaceId];
+    if (wsState?.muted) return;
+
+    // Use commentary TTS service, passing workspaceId for spatial positioning.
+    // When spatial audio is enabled, the TTS service delegates to the
+    // SpatialTtsEngine internally for both browser and cloud providers.
+    commentaryTtsService
+      .speak(text, personality as CommentaryPersonality, workspaceId)
+      .catch((err: unknown) => {
+        console.error('[manager-commentary] TTS failed:', err);
+      });
   }
 
   function processLine(workspaceId: string, line: string): void {
@@ -104,6 +138,9 @@ function createManagerCommentaryStore() {
             entries: updated,
           },
         };
+
+        // Speak with spatial positioning if TTS is enabled
+        speakWithSpatialAudio(commentary.text, workspaceId, commentary.personality);
       }
     } catch {
       // Non-JSON or malformed line — skip
@@ -121,6 +158,21 @@ function createManagerCommentaryStore() {
     /** Which workspace's commentary is expanded (null = none) */
     get expandedWorkspaceId(): string | null {
       return expandedWorkspaceId;
+    },
+
+    /** Whether spatial audio is enabled (experimental) */
+    get spatialAudioEnabled(): boolean {
+      return spatialAudioEnabled;
+    },
+
+    /** Whether TTS is enabled for manager view */
+    get ttsEnabled(): boolean {
+      return ttsEnabled;
+    },
+
+    /** Current TTS volume */
+    get ttsVolume(): number {
+      return ttsVolume;
     },
 
     /** Get state for a specific workspace */
@@ -145,7 +197,51 @@ function createManagerCommentaryStore() {
       return workspaceStates[workspaceId]?.entries ?? [];
     },
 
+    /** Get the spatial position for a workspace */
+    getSpatialPosition(workspaceId: string): SpatialPosition | undefined {
+      return spatialTts.getPosition(workspaceId);
+    },
+
     // -- Actions --------------------------------------------------------
+
+    // -- Spatial Audio Controls --
+
+    /**
+     * Enable or disable spatial audio (experimental).
+     * Disabled by default — opt-in only.
+     */
+    setSpatialAudioEnabled(enabled: boolean) {
+      spatialAudioEnabled = enabled;
+      spatialTts.setEnabled(enabled);
+    },
+
+    /**
+     * Enable or disable TTS for the manager view.
+     */
+    setTtsEnabled(enabled: boolean) {
+      ttsEnabled = enabled;
+      if (!enabled) {
+        spatialTts.stopAll();
+        commentaryTtsService.stop();
+      }
+    },
+
+    /**
+     * Set TTS volume for the manager view.
+     */
+    setTtsVolume(volume: number) {
+      ttsVolume = Math.max(0, Math.min(1, volume));
+      spatialTts.setVolume(ttsVolume);
+      commentaryTtsService.setVolume(ttsVolume);
+    },
+
+    /**
+     * Update spatial positions for all tracked workspaces.
+     * Call this when the workspace list changes.
+     */
+    updateSpatialPositions(workspaceIds: string[]) {
+      spatialTts.updateWorkspaces(workspaceIds);
+    },
 
     /**
      * Start an SSE commentary connection for a workspace.
@@ -307,6 +403,9 @@ function createManagerCommentaryStore() {
       for (const wsId of controllers.keys()) {
         this.stopCommentary(wsId);
       }
+      // Stop all spatial and standard TTS playback
+      spatialTts.stopAll();
+      commentaryTtsService.stop();
     },
 
     /**

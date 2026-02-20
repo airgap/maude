@@ -162,17 +162,31 @@
   ];
 
   const verbosityOptions: { value: CommentaryVerbosity; label: string; description: string }[] = [
-    { value: 'high', label: 'Frequent', description: 'Commentary on most events' },
-    { value: 'medium', label: 'Strategic Milestones', description: 'Key moments and transitions' },
-    { value: 'low', label: 'Minimal', description: 'Only major events' },
+    {
+      value: 'frequent',
+      label: 'Frequent',
+      description: 'Commentary every 3-5 seconds on most events',
+    },
+    {
+      value: 'strategic',
+      label: 'Strategic Milestones',
+      description: 'Key actions: tool use, completions, quality checks',
+    },
+    {
+      value: 'minimal',
+      label: 'Minimal',
+      description: 'Only major milestones: story completion, errors',
+    },
   ];
 
   let commentaryEnabled = $state(false);
   let commentaryPersonality = $state<CommentaryPersonality>('technical_analyst');
-  let commentaryVerbosity = $state<CommentaryVerbosity>('medium');
+  let commentaryVerbosity = $state<CommentaryVerbosity>('strategic');
   let commentaryLoading = $state(false);
   let commentaryPreviewText = $state('');
   let commentaryPreviewLoading = $state(false);
+  let commentarySpatialAudioEnabled = $state(false);
+  let commentaryHistoryEnabled = $state(true);
 
   async function loadCommentarySettings() {
     const wsId = workspaceStore.activeWorkspaceId;
@@ -184,6 +198,12 @@
         commentaryEnabled = res.data.enabled;
         commentaryPersonality = res.data.personality as CommentaryPersonality;
         commentaryVerbosity = res.data.verbosity as CommentaryVerbosity;
+      }
+      // Load history-enabled and spatial audio from workspace settings
+      const wsRes = await api.workspaces.get(wsId);
+      if (wsRes.ok && wsRes.data?.settings) {
+        commentaryHistoryEnabled = wsRes.data.settings.commentaryHistoryEnabled !== false;
+        commentarySpatialAudioEnabled = wsRes.data.settings.commentarySpatialAudioEnabled === true;
       }
     } catch {
       /* settings unavailable — keep defaults */
@@ -1419,6 +1439,100 @@
                   <p class="commentary-preview-text">{commentaryPreviewText}</p>
                 </div>
               {/if}
+            </div>
+
+            <div class="setting-group">
+              <label class="setting-label">History &amp; Privacy</label>
+              <p class="setting-hint">
+                Store commentary history in the database so you can review past narrations
+              </p>
+              <div class="audio-toggle-row">
+                <label class="toggle">
+                  <input
+                    type="checkbox"
+                    checked={commentaryHistoryEnabled}
+                    disabled={commentaryLoading}
+                    onchange={async () => {
+                      commentaryHistoryEnabled = !commentaryHistoryEnabled;
+                      const wsId = workspaceStore.activeWorkspaceId;
+                      if (wsId) {
+                        try {
+                          await api.workspaces.update(wsId, {
+                            settings: { commentaryHistoryEnabled },
+                          });
+                          uiStore.toast(
+                            commentaryHistoryEnabled
+                              ? 'Commentary history enabled'
+                              : 'Commentary history disabled — new commentary will not be stored',
+                            'info',
+                          );
+                        } catch {
+                          uiStore.toast('Failed to save history setting', 'error');
+                        }
+                      }
+                    }}
+                  />
+                  <span class="toggle-slider"></span>
+                </label>
+                <span class="audio-toggle-label">
+                  {commentaryHistoryEnabled ? 'Store history' : 'History disabled (privacy mode)'}
+                </span>
+              </div>
+              <p class="setting-hint" style="margin-top: 4px;">
+                {#if commentaryHistoryEnabled}
+                  Commentary will be saved and can be reviewed in the Commentary panel timeline.
+                {:else}
+                  Commentary is ephemeral — it will only appear in the live feed and won't be
+                  persisted.
+                {/if}
+              </p>
+            </div>
+
+            <div class="setting-group" class:muted={!commentaryEnabled}>
+              <label class="setting-label">
+                Spatial Audio
+                <span class="experimental-badge">Experimental</span>
+              </label>
+              <p class="setting-hint">
+                When monitoring 3+ workspaces, position each commentator's audio in stereo space
+                (left / center / right) so you can distinguish them by ear. Cloud TTS providers
+                (ElevenLabs, Google) get true stereo panning; browser TTS uses subtle pitch/rate
+                variations as a perceptual substitute.
+              </p>
+              <div class="audio-toggle-row">
+                <label class="toggle">
+                  <input
+                    type="checkbox"
+                    checked={commentarySpatialAudioEnabled}
+                    disabled={!commentaryEnabled || commentaryLoading}
+                    onchange={async () => {
+                      commentarySpatialAudioEnabled = !commentarySpatialAudioEnabled;
+                      const wsId = workspaceStore.activeWorkspaceId;
+                      if (wsId) {
+                        try {
+                          await api.workspaces.update(wsId, {
+                            settings: { commentarySpatialAudioEnabled },
+                          });
+                          uiStore.toast(
+                            commentarySpatialAudioEnabled
+                              ? 'Spatial audio enabled — workspaces will be positioned L/C/R'
+                              : 'Spatial audio disabled',
+                            'info',
+                          );
+                        } catch {
+                          uiStore.toast('Failed to save spatial audio setting', 'error');
+                        }
+                      }
+                    }}
+                  />
+                  <span class="toggle-slider"></span>
+                </label>
+                <span class="audio-toggle-label">
+                  {commentarySpatialAudioEnabled
+                    ? 'Spatial positioning on'
+                    : 'Spatial positioning off'}
+                </span>
+              </div>
             </div>
           {/if}
         {:else if activeTab === 'editor'}
@@ -3445,6 +3559,21 @@
     line-height: 1.6;
     font-style: italic;
     margin: 0;
+  }
+
+  .experimental-badge {
+    display: inline-block;
+    font-size: 9px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    padding: 1px 5px;
+    border-radius: var(--radius-sm);
+    background: color-mix(in srgb, var(--accent-warning, #f0a030) 15%, transparent);
+    color: var(--accent-warning, #f0a030);
+    border: 1px solid color-mix(in srgb, var(--accent-warning, #f0a030) 30%, transparent);
+    vertical-align: middle;
+    margin-left: 6px;
   }
 
   /* Terminal command policy */

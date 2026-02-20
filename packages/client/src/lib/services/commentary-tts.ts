@@ -7,7 +7,15 @@
  * - Google Cloud TTS API (optional, higher quality)
  *
  * Assigns different voices to different commentary personalities.
+ *
+ * When spatial audio is enabled (experimental), cloud TTS audio is routed
+ * through the SpatialTtsEngine's StereoPannerNode so each workspace gets a
+ * distinct left/center/right position.  Browser TTS uses subtle pitch/rate
+ * offsets as a perceptual substitute (since SpeechSynthesis cannot be
+ * routed through Web Audio).
  */
+
+import { spatialTts } from '$lib/audio/spatial-tts';
 
 export type TtsProvider = 'browser' | 'elevenlabs' | 'google';
 export type CommentaryPersonality =
@@ -34,7 +42,7 @@ const BROWSER_VOICE_MAP: Record<CommentaryPersonality, string[]> = {
   technical_analyst: ['Google US English Female', 'Microsoft Zira', 'Samantha', 'Karen'],
   comedic_observer: ['Google UK English Female', 'Microsoft Hazel', 'Victoria', 'Moira'],
   project_lead: ['Google US English Male', 'Microsoft Mark', 'Alex', 'Fred'],
-  wizard: ['Google UK English Male', 'Microsoft George', 'Daniel', 'Oliver'],
+  wizard: ['Microsoft George', 'Google UK English Male', 'Daniel (Enhanced)', 'Oliver'],
 };
 
 /** ElevenLabs voice IDs for each personality */
@@ -44,7 +52,7 @@ const ELEVENLABS_VOICE_MAP: Record<CommentaryPersonality, string> = {
   technical_analyst: 'EXAVITQu4vr4xnSDxMaL', // Sarah
   comedic_observer: 'ThT5KcBeYPX3keUQqHPh', // Dorothy
   project_lead: 'VR6AewLTigWG4xSOukaG', // Arnold
-  wizard: '2EiwWnXFnvU5JabPnv8n', // Clyde (wise voice)
+  wizard: 'N2lVS1w4EtoT3dr4eOWO', // Callum (deep, mature, gravelly — Gandalf-like)
 };
 
 /** Google TTS voice names for each personality */
@@ -54,7 +62,7 @@ const GOOGLE_VOICE_MAP: Record<CommentaryPersonality, string> = {
   technical_analyst: 'en-US-Neural2-F',
   comedic_observer: 'en-GB-Neural2-A',
   project_lead: 'en-US-Neural2-J',
-  wizard: 'en-GB-Neural2-B', // British voice for wizard
+  wizard: 'en-GB-Neural2-D', // Deep British male voice — mystical, Gandalf-like
 };
 
 // ---------------------------------------------------------------------------
@@ -180,40 +188,60 @@ export class CommentaryTtsService {
   /**
    * Speak the given text using the appropriate voice for the personality.
    * Automatically selects the best provider based on configuration.
+   *
+   * When `workspaceId` is provided and spatial audio is enabled, cloud TTS
+   * audio is routed through the spatial engine for stereo panning, and
+   * browser TTS gets subtle pitch/rate offsets for perceptual differentiation.
    */
-  async speak(text: string, personality: CommentaryPersonality): Promise<void> {
+  async speak(
+    text: string,
+    personality: CommentaryPersonality,
+    workspaceId?: string,
+  ): Promise<void> {
     if (this.isMuted || this.isPaused) return;
 
     // Stop any current speech
     this.stop();
 
+    const useSpatial = workspaceId !== undefined && spatialTts.isEnabled();
+
     try {
       switch (this.provider) {
         case 'elevenlabs':
           if (this.elevenLabsApiKey) {
-            await this.speakElevenLabs(text, personality);
+            const blob = await this.fetchElevenLabsBlob(text, personality);
+            if (useSpatial) {
+              await spatialTts.playAudioBlob(blob, workspaceId);
+            } else {
+              await this.playAudioBlob(blob);
+            }
           } else {
             console.warn(
               '[commentary-tts] ElevenLabs API key not configured, falling back to browser TTS',
             );
-            this.speakBrowser(text, personality);
+            this.speakBrowserSpatial(text, personality, workspaceId);
           }
           break;
 
         case 'google':
           if (this.googleApiKey) {
-            await this.speakGoogle(text, personality);
+            const blob = await this.fetchGoogleBlob(text, personality);
+            if (useSpatial) {
+              await spatialTts.playAudioBlob(blob, workspaceId);
+            } else {
+              await this.playAudioBlob(blob);
+            }
           } else {
             console.warn(
               '[commentary-tts] Google API key not configured, falling back to browser TTS',
             );
-            this.speakBrowser(text, personality);
+            this.speakBrowserSpatial(text, personality, workspaceId);
           }
           break;
 
         case 'browser':
         default:
-          this.speakBrowser(text, personality);
+          this.speakBrowserSpatial(text, personality, workspaceId);
           break;
       }
     } catch (err) {
@@ -221,27 +249,46 @@ export class CommentaryTtsService {
       // Fallback to browser TTS on error
       if (this.provider !== 'browser') {
         console.warn('[commentary-tts] Falling back to browser TTS');
-        this.speakBrowser(text, personality);
+        this.speakBrowserSpatial(text, personality, workspaceId);
       }
     }
   }
 
   /**
-   * Speak using Web Speech API (browser TTS)
+   * Speak using Web Speech API, optionally with spatial voice modifiers.
+   *
+   * When spatial audio is enabled and a workspaceId is provided, the
+   * SpatialTtsEngine applies subtle pitch/rate offsets so concurrent
+   * workspace commentators sound perceptually different (since
+   * SpeechSynthesis cannot be routed through Web Audio for true panning).
    */
-  private speakBrowser(text: string, personality: CommentaryPersonality): void {
+  private speakBrowserSpatial(
+    text: string,
+    personality: CommentaryPersonality,
+    workspaceId: string | undefined,
+  ): void {
     if (!this.synth) {
       console.error('[commentary-tts] Web Speech API not available');
       return;
     }
 
+    const basePitch = this.getPitch(personality);
+    const baseRate = this.getRate(personality);
+    const voice = this.selectBrowserVoice(personality);
+
+    // If spatial audio is enabled and we have a workspaceId, delegate to
+    // the spatial engine which applies per-workspace pitch/rate offsets.
+    if (workspaceId && spatialTts.isEnabled()) {
+      spatialTts.speakBrowser(text, workspaceId, basePitch, baseRate, voice);
+      return;
+    }
+
+    // Non-spatial path
     const utterance = new SpeechSynthesisUtterance(text);
     utterance.volume = this.volume;
-    utterance.rate = this.getRate(personality);
-    utterance.pitch = this.getPitch(personality);
+    utterance.rate = baseRate;
+    utterance.pitch = basePitch;
 
-    // Select the best available voice for this personality
-    const voice = this.selectBrowserVoice(personality);
     if (voice) {
       utterance.voice = voice;
     }
@@ -254,10 +301,17 @@ export class CommentaryTtsService {
     this.synth.speak(utterance);
   }
 
+  // -------------------------------------------------------------------------
+  // Cloud TTS — Blob Fetchers
+  // -------------------------------------------------------------------------
+
   /**
-   * Speak using ElevenLabs API
+   * Fetch audio blob from ElevenLabs API (does NOT play it).
    */
-  private async speakElevenLabs(text: string, personality: CommentaryPersonality): Promise<void> {
+  private async fetchElevenLabsBlob(
+    text: string,
+    personality: CommentaryPersonality,
+  ): Promise<Blob> {
     if (!this.elevenLabsApiKey) {
       throw new Error('ElevenLabs API key not configured');
     }
@@ -286,14 +340,13 @@ export class CommentaryTtsService {
       throw new Error(`ElevenLabs API error: ${response.status} ${response.statusText}`);
     }
 
-    const audioBlob = await response.blob();
-    await this.playAudioBlob(audioBlob);
+    return response.blob();
   }
 
   /**
-   * Speak using Google Cloud TTS API
+   * Fetch audio blob from Google Cloud TTS API (does NOT play it).
    */
-  private async speakGoogle(text: string, personality: CommentaryPersonality): Promise<void> {
+  private async fetchGoogleBlob(text: string, personality: CommentaryPersonality): Promise<Blob> {
     if (!this.googleApiKey) {
       throw new Error('Google API key not configured');
     }
@@ -334,9 +387,7 @@ export class CommentaryTtsService {
       byteNumbers[i] = byteCharacters.charCodeAt(i);
     }
     const byteArray = new Uint8Array(byteNumbers);
-    const audioBlob = new Blob([byteArray], { type: 'audio/mpeg' });
-
-    await this.playAudioBlob(audioBlob);
+    return new Blob([byteArray], { type: 'audio/mpeg' });
   }
 
   /**
@@ -411,7 +462,7 @@ export class CommentaryTtsService {
       case 'project_lead':
         return 0.95; // Authoritative, measured
       case 'wizard':
-        return 0.85; // Slow, mystical
+        return 0.82; // Slow, deliberate, ancient cadence
       default:
         return 1.0;
     }
@@ -433,7 +484,7 @@ export class CommentaryTtsService {
       case 'project_lead':
         return 0.95; // Lower, authoritative
       case 'wizard':
-        return 0.85; // Low, mystical
+        return 0.78; // Deep, rumbling, Gandalf-like gravitas
       default:
         return 1.0;
     }

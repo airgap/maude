@@ -63,10 +63,15 @@ function createCommentaryStore() {
           },
         ];
 
-        // Speak the commentary if TTS is enabled and not paused
+        // Speak the commentary if TTS is enabled and not paused.
+        // Pass workspaceId so spatial audio can apply positioning.
         if (ttsEnabled && !ttsPaused) {
           commentaryTtsService
-            .speak(commentary.text, commentary.personality as CommentaryPersonality)
+            .speak(
+              commentary.text,
+              commentary.personality as CommentaryPersonality,
+              commentary.workspaceId,
+            )
             .catch((err: unknown) => {
               console.error('[commentary] TTS failed:', err);
             });

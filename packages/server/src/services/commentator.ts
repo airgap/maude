@@ -9,6 +9,11 @@
  * Supports multiple concurrent commentators with reference counting for SSE clients.
  * When multiple clients connect to the same workspace's commentary, the commentator
  * stays alive until the last client disconnects.
+ *
+ * Verbosity levels control event filtering, batch timing, and LLM prompt detail:
+ *   - frequent: narrates every 3-5s, all events
+ *   - strategic: narrates every 8-12s, tool use/completions/checks
+ *   - minimal: narrates every 15-20s, only major milestones
  */
 
 import { EventEmitter } from 'events';
@@ -160,21 +165,125 @@ Tool "Bash" succeeded
 Agent wrote: "All tests passing."
 Commentary: "Tests are green across the board. I've validated the changes at every layer — this is ready for review. On to the next task."`,
 
-  wizard: `You are an ancient wizard observing an AI coding agent's work through mystical means. Use archaic language, magical metaphors, and mystical terms. Speak in third person. Be dramatic and theatrical. Keep each commentary to 1-3 sentences maximum.
+  wizard: `You are an ancient, all-knowing wizard — a keeper of arcane codecraft who hath dwelt in the Wizard's Study for a thousand ages — observing an AI coding agent's work through a shimmering scrying crystal. Speak in archaic, mystical language befitting a sage of immeasurable wisdom. Use words like "thee", "thou", "hath", "doth", "verily", "forsooth", "methinks", and "'tis" naturally throughout thy commentary.
+
+Refer to code as spells, runes, enchantments, incantations, glyphs, or sigils. Files are scrolls or tomes. Functions are conjurations. Variables are bound essences. Types are the True Names of things. Errors are curses or hexes. Tests are trials of verification. The terminal is the summoning circle. Git is the Chronicle of Ages. Dependencies are reagents.
+
+Speak in third person about the agent — call it "the artificer", "the code-weaver", "the apprentice", "the sorcerer", or "the conjurer". Be dramatic, theatrical, and grandiose. Keep each commentary to 1-3 sentences maximum.
+
+IMPORTANT: Occasionally (roughly 1 in 5 commentaries), weave in a subtle reference to a famous wizard — Merlin, Gandalf, Dumbledore, Morgana, Rincewind, Raistlin, Elminster, or Prospero — comparing the agent's work to their legendary deeds.
 
 Here are examples of the commentary style:
 
-Activity: Agent started a new response
-Agent invoking tool "Read"
-Commentary: "Behold! The digital artificer weaves its spell across the scrolls of code. Through arcane divination, it peers into the heart of the streaming enchantments, seeking the threads that bind the mystical data flows."
+Activity: Agent started a new response (model: claude-haiku)
+Agent invoking tool "Read" on src/services/stream.ts
+Tool "Read" succeeded
+Commentary: "Behold! The artificer unfurls the ancient scroll of stream.ts, tracing the ley lines of data with a diviner's patience. Methinks even Merlin himself would approve of such thorough reconnaissance before casting a single spell."
 
-Activity: Tool "Edit" succeeded
-Agent invoking tool "Edit"
-Commentary: "With a flourish of eldritch keystrokes, the code-weaver reshapes the ancient runes. The syntax glows with renewed power as the incantation takes hold."
+Activity: Agent invoking tool "Edit" on src/utils/parser.ts
+Tool "Edit" succeeded
+Agent invoking tool "Edit" on src/utils/formatter.ts
+Tool "Edit" succeeded
+Commentary: "Two enchantments woven in swift succession! The code-weaver reshapes the Parser Runes and Formatter Glyphs with a flourish of eldritch keystrokes — the sigils glow with renewed power as the incantations take hold."
 
 Activity: Tool "Bash" failed
 Agent is thinking
-Commentary: "Alas! The conjuration has misfired, its energies scattering into the void. But the wise artificer merely strokes its beard and consults the elder scrolls for guidance."`,
+Agent invoking tool "Read" on src/config.ts
+Commentary: "Alas! A hex upon the summoning circle — the conjuration hath misfired! But fear not, for like Gandalf facing the Balrog, the sorcerer doth not falter. It consults the Configuration Grimoire with the calm of ages."
+
+Activity: Agent invoking tool "Read" on package.json
+Agent invoking tool "Read" on tsconfig.json
+Agent invoking tool "Read" on src/types.ts
+Agent is thinking
+Commentary: "The apprentice studies three sacred tomes at once — the Manifest of Reagents, the TypeScript Codex, and the Book of True Names. 'Tis the mark of a wise conjurer to know the shape of things before reshaping them."
+
+Activity: Agent is thinking
+Agent wrote: "I'll refactor this to use a factory pattern..."
+Agent invoking tool "Edit" on src/services/handler.ts
+Tool "Edit" succeeded
+Commentary: "Verily, the conjurer hath spoken the words of power — 'factory pattern' — and with a decisive flourish, the transformation is wrought upon handler.ts. The runes shimmer and realign, bound now by a deeper enchantment. Dumbledore himself could not have woven it more deftly."`,
+};
+
+// ---------------------------------------------------------------------------
+// Verbosity-based event filtering
+// ---------------------------------------------------------------------------
+
+/**
+ * Event types allowed through for "Strategic Milestones" verbosity.
+ * Only high-signal events: tool use, completions, quality checks, errors.
+ */
+const STRATEGIC_EVENT_TYPES = new Set<string>([
+  'tool_use_start',
+  'tool_result',
+  'message_stop',
+  'verification_result',
+  'story_update',
+  'error',
+  'loop_event',
+  'artifact_created',
+  'agent_note_created',
+  'tool_approval_request',
+  'context_warning',
+]);
+
+/**
+ * Event types allowed through for "Minimal" verbosity.
+ * Only major milestones: story completion, errors, quality checks.
+ */
+const MINIMAL_EVENT_TYPES = new Set<string>([
+  'story_update',
+  'error',
+  'loop_event',
+  'verification_result',
+  'agent_note_created',
+]);
+
+/**
+ * Check whether a stream event should pass through for the given verbosity level.
+ * - frequent: all events pass
+ * - strategic: only tool use, completions, quality checks
+ * - minimal: only major milestones
+ */
+export function shouldPassVerbosityFilter(
+  event: StreamEvent,
+  verbosity: CommentaryVerbosity,
+): boolean {
+  if (verbosity === 'frequent') return true;
+  if (verbosity === 'strategic') return STRATEGIC_EVENT_TYPES.has(event.type);
+  return MINIMAL_EVENT_TYPES.has(event.type);
+}
+
+/**
+ * Get batch timing parameters based on verbosity level.
+ * Higher verbosity = more frequent batches.
+ */
+export function getBatchTiming(verbosity: CommentaryVerbosity): {
+  minBatchMs: number;
+  maxBatchMs: number;
+} {
+  switch (verbosity) {
+    case 'frequent':
+      return { minBatchMs: MIN_BATCH_MS, maxBatchMs: MAX_BATCH_MS };
+    case 'strategic':
+      return { minBatchMs: 8_000, maxBatchMs: 12_000 };
+    case 'minimal':
+      return { minBatchMs: 15_000, maxBatchMs: 20_000 };
+    default:
+      return { minBatchMs: MIN_BATCH_MS, maxBatchMs: MAX_BATCH_MS };
+  }
+}
+
+/**
+ * Verbosity-specific prompt modifiers appended to the personality system prompt.
+ * These instruct the LLM to adjust its output based on the desired detail level.
+ */
+export const VERBOSITY_PROMPT_MODIFIERS: Record<CommentaryVerbosity, string> = {
+  frequent:
+    '\n\nVERBOSITY: FREQUENT — Provide detailed, play-by-play commentary. Comment on every notable action including tool calls, file reads, edits, thinking phases, and results. Be expressive and thorough.',
+  strategic:
+    '\n\nVERBOSITY: STRATEGIC MILESTONES — Focus on significant strategic moments: tool invocations, completions, quality check results, and architectural decisions. Skip routine operations and minor text updates. Keep commentary to 1-2 sentences.',
+  minimal:
+    '\n\nVERBOSITY: MINIMAL — Only comment on major milestones: story completions, critical errors, quality check results, and significant achievements. Be very concise — one sentence maximum.',
 };
 
 // ---------------------------------------------------------------------------
@@ -184,7 +293,7 @@ Commentary: "Alas! The conjuration has misfired, its energies scattering into th
 /** Distill a batch of raw StreamEvents into a compact text summary for the LLM. */
 export function summariseBatch(
   events: StreamEvent[],
-  verbosity: CommentaryVerbosity = 'high',
+  _verbosity: CommentaryVerbosity = 'frequent',
 ): string {
   if (events.length === 0) return '';
 
@@ -349,6 +458,8 @@ function saveCommentaryToDb(commentary: StreamCommentary, conversationId: string
 
 interface WorkspaceCommentator {
   personality: CommentaryPersonality;
+  /** Verbosity level controlling event filtering, batch timing, and prompt detail. */
+  verbosity: CommentaryVerbosity;
   /** Accumulated events in the current batch window. */
   eventBuffer: StreamEvent[];
   /** Timer for the batch window. */
@@ -363,9 +474,9 @@ interface WorkspaceCommentator {
   conversationId: string | null;
 }
 
-/** Minimum batch window — events are accumulated for at least this long. */
+/** Minimum batch window — events are accumulated for at least this long (Frequent mode). */
 export const MIN_BATCH_MS = 3_000;
-/** Maximum batch window — a batch is flushed at this age even if events are sparse. */
+/** Maximum batch window — a batch is flushed at this age even if events are sparse (Frequent mode). */
 export const MAX_BATCH_MS = 5_000;
 /** Haiku model identifier used for low-cost commentary generation. */
 const COMMENTARY_MODEL = 'claude-haiku-4-5-20251001';
@@ -392,8 +503,8 @@ export class CommentatorService {
   }
 
   /**
-   * Start commentary for a workspace. Idempotent if the same personality is
-   * already active — won't restart the commentator or lose buffered events.
+   * Start commentary for a workspace. Idempotent if the same personality and
+   * verbosity are already active — won't restart the commentator or lose buffered events.
    * If a different personality is requested, the existing commentator is
    * force-stopped and a new one created.
    */
@@ -401,13 +512,19 @@ export class CommentatorService {
     workspaceId: string,
     personality: CommentaryPersonality,
     conversationId?: string,
+    verbosity: CommentaryVerbosity = 'strategic',
   ): void {
     const existing = this.commentators.get(workspaceId);
 
-    // If already running with the same personality, just update conversationId if needed
+    // If already running with the same personality, just update conversationId/verbosity if needed
     if (existing && existing.active && existing.personality === personality) {
       if (conversationId && existing.conversationId !== conversationId) {
         existing.conversationId = conversationId;
+      }
+      // Update verbosity without restarting
+      if (existing.verbosity !== verbosity) {
+        existing.verbosity = verbosity;
+        console.log(`[commentator] Updated verbosity to ${verbosity} for workspace ${workspaceId}`);
       }
       return;
     }
@@ -419,6 +536,7 @@ export class CommentatorService {
 
     const commentator: WorkspaceCommentator = {
       personality,
+      verbosity,
       eventBuffer: [],
       batchTimer: null,
       batchStartedAt: 0,
@@ -428,7 +546,21 @@ export class CommentatorService {
     };
 
     this.commentators.set(workspaceId, commentator);
-    console.log(`[commentator] Started ${personality} commentary for workspace ${workspaceId}`);
+    console.log(
+      `[commentator] Started ${personality} commentary (verbosity: ${verbosity}) for workspace ${workspaceId}`,
+    );
+  }
+
+  /**
+   * Update the verbosity level for an active commentator without restarting it.
+   * Returns true if the verbosity was updated, false if no active commentator exists.
+   */
+  setVerbosity(workspaceId: string, verbosity: CommentaryVerbosity): boolean {
+    const commentator = this.commentators.get(workspaceId);
+    if (!commentator || !commentator.active) return false;
+    commentator.verbosity = verbosity;
+    console.log(`[commentator] Verbosity updated to ${verbosity} for workspace ${workspaceId}`);
+    return true;
   }
 
   /**
@@ -526,6 +658,11 @@ export class CommentatorService {
     return this.commentators.get(workspaceId)?.personality;
   }
 
+  /** Get the verbosity for an active commentator, or undefined. */
+  getVerbosity(workspaceId: string): CommentaryVerbosity | undefined {
+    return this.commentators.get(workspaceId)?.verbosity;
+  }
+
   /** Get all workspace IDs with active commentators. */
   getActiveWorkspaces(): string[] {
     return [...this.commentators.keys()];
@@ -543,6 +680,7 @@ export class CommentatorService {
   getStatus(): Array<{
     workspaceId: string;
     personality: CommentaryPersonality;
+    verbosity: CommentaryVerbosity;
     refCount: number;
     generating: boolean;
     bufferedEvents: number;
@@ -550,6 +688,7 @@ export class CommentatorService {
     const result: Array<{
       workspaceId: string;
       personality: CommentaryPersonality;
+      verbosity: CommentaryVerbosity;
       refCount: number;
       generating: boolean;
       bufferedEvents: number;
@@ -558,6 +697,7 @@ export class CommentatorService {
       result.push({
         workspaceId: wsId,
         personality: c.personality,
+        verbosity: c.verbosity,
         refCount: this.refCounts.get(wsId) ?? 0,
         generating: c.generating,
         bufferedEvents: c.eventBuffer.length,
@@ -568,7 +708,8 @@ export class CommentatorService {
 
   /**
    * Feed a stream event into the commentator for a workspace.
-   * Events are accumulated in a batch window (3-5s) and then processed.
+   * Events are filtered by verbosity level and accumulated in a batch window
+   * whose timing depends on the verbosity setting.
    */
   pushEvent(workspaceId: string, event: StreamEvent): void {
     const commentator = this.commentators.get(workspaceId);
@@ -577,28 +718,32 @@ export class CommentatorService {
     // Skip low-signal events that don't contribute to commentary
     if (event.type === 'ping') return;
 
+    // Filter events based on verbosity level
+    if (!shouldPassVerbosityFilter(event, commentator.verbosity)) return;
+
     commentator.eventBuffer.push(event);
 
     const now = Date.now();
+    const { minBatchMs, maxBatchMs } = getBatchTiming(commentator.verbosity);
 
     // Start a new batch window if this is the first event
     if (commentator.batchStartedAt === 0) {
       commentator.batchStartedAt = now;
     }
 
-    // If the batch has been open for MAX_BATCH_MS, flush immediately
+    // If the batch has been open for maxBatchMs, flush immediately
     const batchAge = now - commentator.batchStartedAt;
-    if (batchAge >= MAX_BATCH_MS) {
+    if (batchAge >= maxBatchMs) {
       this.flushBatch(workspaceId);
       return;
     }
 
-    // (Re)schedule flush for MIN_BATCH_MS from the batch start, capped at MAX_BATCH_MS
+    // (Re)schedule flush for minBatchMs from the batch start, capped at maxBatchMs
     if (commentator.batchTimer) {
       clearTimeout(commentator.batchTimer);
     }
 
-    const delay = Math.min(MIN_BATCH_MS, MAX_BATCH_MS - batchAge);
+    const delay = Math.min(minBatchMs, maxBatchMs - batchAge);
     commentator.batchTimer = setTimeout(() => {
       this.flushBatch(workspaceId);
     }, delay);
@@ -635,6 +780,7 @@ export class CommentatorService {
   /**
    * Generate commentary for a batch of events via LLM.
    * Emits a StreamCommentary event on success.
+   * The LLM prompt is adjusted based on the commentator's verbosity level.
    */
   private async generateCommentary(
     workspaceId: string,
@@ -644,13 +790,17 @@ export class CommentatorService {
     commentator.generating = true;
 
     try {
-      const summary = summariseBatch(batch);
+      const summary = summariseBatch(batch, commentator.verbosity);
       if (!summary.trim()) {
         commentator.generating = false;
         return;
       }
 
-      const systemPrompt = PERSONALITY_PROMPTS[commentator.personality];
+      // Build system prompt: personality base + verbosity modifier
+      const systemPrompt =
+        PERSONALITY_PROMPTS[commentator.personality] +
+        VERBOSITY_PROMPT_MODIFIERS[commentator.verbosity];
+
       const userPrompt = `Here is a batch of recent activity from the AI coding agent:\n\n${summary}\n\nProvide a brief commentary on what's happening. Reply with ONLY the commentary text — no preamble, no labels.`;
 
       const text = await this.callLlm({
