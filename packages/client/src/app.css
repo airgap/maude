@@ -3109,7 +3109,8 @@ select:focus {
 [data-hypertheme='study'] .code-block {
   box-shadow: 0 0 8px rgba(251, 191, 36, 0.05);
 }
-[data-hypertheme='study'] .code-block:hover {
+[data-hypertheme='study'] .code-block:hover,
+[data-hypertheme='study'] .code-block.prehover {
   box-shadow: 0 0 12px rgba(251, 191, 36, 0.1);
 }
 
@@ -3208,7 +3209,8 @@ select:focus {
     0 4px 20px rgba(0, 0, 0, 0.2),
     0 0 24px rgba(45, 212, 191, 0.06) !important;
 }
-[data-hypertheme='study'] .message:hover {
+[data-hypertheme='study'] .message:hover,
+[data-hypertheme='study'] .message.prehover {
   box-shadow:
     0 2px 12px rgba(0, 0, 0, 0.2),
     0 0 24px rgba(251, 191, 36, 0.06) !important;

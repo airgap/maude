@@ -1,5 +1,12 @@
 <script lang="ts">
   import { onMount } from 'svelte';
+  // FTL (ftl.rocks) — cursor hover prediction library.
+  // Importing for side-effects: adds .prehover class to elements the cursor is
+  // heading toward, making hover states feel instant. We also implement its
+  // velocity-extrapolation algorithm at a very low multiplier (1.0 vs the
+  // default 4) to nudge the sparkle cursor slightly ahead of the actual pointer,
+  // compensating for the inherent JS rendering lag.
+  import 'ftl.rocks';
 
   interface Sparkle {
     el: HTMLElement;
@@ -18,14 +25,32 @@
   const SPAWN_INTERVAL = 40;
   const CLICK_BURST = 8;
 
+  // FTL-inspired prediction: very low multiplier (default in ftl.rocks is 4).
+  // At 1.0 we extrapolate exactly one frame of velocity — just enough to
+  // counteract the ~1-frame delay between mousemove and rAF paint.
+  const FTL_MULTIPLIER = 1.0;
+  const FTL_MAX_OFFSET = 200; // same clamp as ftl.rocks uses (lock200)
+
   let container: HTMLElement;
   let cursorEl: HTMLElement;
+
+  /** Clamp value to [-max, max], matching ftl.rocks lock200 */
+  function ftlClamp(n: number, max: number): number {
+    return Math.min(max, Math.max(-max, n));
+  }
 
   onMount(() => {
     const sparkles: Sparkle[] = [];
     const pool: HTMLElement[] = [];
-    let mouseX = -100;
-    let mouseY = -100;
+    // Raw (actual) mouse position — used for sparkle spawning & hit testing
+    let rawMouseX = -100;
+    let rawMouseY = -100;
+    // FTL-predicted cursor position — used to render the visual cursor
+    let cursorX = -100;
+    let cursorY = -100;
+    // Previous raw position for velocity calculation
+    let prevRawX = -100;
+    let prevRawY = -100;
     let lastSpawn = 0;
     let lastMoveX = 0;
     let lastMoveY = 0;
@@ -87,10 +112,10 @@
     }
 
     function update() {
-      // Update main cursor position with scale for Wizard's Study when hovering clickable
+      // Update main cursor at the FTL-predicted position (slightly ahead of actual)
       const isStudyTheme = document.documentElement.getAttribute('data-hypertheme') === 'study';
       const scale = isStudyTheme && isHoveringClickable ? 1.25 : 1;
-      cursorEl.style.transform = `translate(${mouseX}px, ${mouseY}px) scale(${scale})`;
+      cursorEl.style.transform = `translate(${cursorX}px, ${cursorY}px) scale(${scale})`;
 
       // Update trail sparkles
       for (let i = sparkles.length - 1; i >= 0; i--) {
@@ -119,8 +144,18 @@
     }
 
     function onMouseMove(e: MouseEvent) {
-      mouseX = e.clientX;
-      mouseY = e.clientY;
+      rawMouseX = e.clientX;
+      rawMouseY = e.clientY;
+
+      // FTL-inspired velocity extrapolation (ftl.rocks algorithm at low multiplier).
+      // Nudge the visual cursor slightly ahead of the actual pointer to compensate
+      // for the ~1-frame lag inherent in JS cursor rendering.
+      const velX = rawMouseX - prevRawX;
+      const velY = rawMouseY - prevRawY;
+      cursorX = rawMouseX + ftlClamp(velX * FTL_MULTIPLIER, FTL_MAX_OFFSET);
+      cursorY = rawMouseY + ftlClamp(velY * FTL_MULTIPLIER, FTL_MAX_OFFSET);
+      prevRawX = rawMouseX;
+      prevRawY = rawMouseY;
 
       // Check if hovering over a clickable element
       const target = e.target as HTMLElement;
@@ -136,16 +171,17 @@
           'button, a, [role="button"], select, input[type="checkbox"], input[type="radio"], .clickable',
         ) !== null;
 
-      const dx = mouseX - lastMoveX;
-      const dy = mouseY - lastMoveY;
+      // Spawn sparkles at the raw position (trail follows actual path)
+      const dx = rawMouseX - lastMoveX;
+      const dy = rawMouseY - lastMoveY;
       const dist = Math.sqrt(dx * dx + dy * dy);
 
       const now = performance.now();
       if (dist > 4 && now - lastSpawn > SPAWN_INTERVAL) {
-        spawnSparkle(mouseX, mouseY);
+        spawnSparkle(rawMouseX, rawMouseY);
         lastSpawn = now;
-        lastMoveX = mouseX;
-        lastMoveY = mouseY;
+        lastMoveX = rawMouseX;
+        lastMoveY = rawMouseY;
       }
     }
 

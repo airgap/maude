@@ -301,7 +301,8 @@
     margin-bottom: 0;
     border-bottom: 1px solid var(--border-secondary);
   }
-  :global([data-hypertheme='study']) .conv-item:hover {
+  :global([data-hypertheme='study']) .conv-item:hover,
+  :global([data-hypertheme='study']) .conv-item.prehover {
     border-left-color: var(--border-primary);
     background: rgba(228, 160, 60, 0.04);
   }
