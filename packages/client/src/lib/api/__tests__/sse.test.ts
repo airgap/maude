@@ -77,6 +77,10 @@ vi.mock('../client', () => ({
   },
 }));
 
+vi.mock('$lib/utils/uuid', () => ({
+  uuid: vi.fn().mockReturnValue('mock-uuid-12345'),
+}));
+
 import {
   sendAndStream,
   cancelStream,

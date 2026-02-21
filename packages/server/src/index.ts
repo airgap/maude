@@ -41,7 +41,7 @@ import { managerRoutes } from './routes/manager';
 import { taskRunnerRoutes } from './routes/task-runner';
 import { commentaryRoutes } from './routes/commentary';
 import { authMiddleware } from './middleware/auth';
-import { csrfMiddleware } from './middleware/csrf';
+import { csrfMiddleware, isOriginAllowed } from './middleware/csrf';
 import { websocket } from './ws';
 import { initDatabase } from './db/database';
 import { existsSync } from 'fs';
@@ -76,9 +76,8 @@ app.use(
       // from iframes, forms, or fetches that omit the Origin.
       // Same-origin requests from the bundled client DO include Origin.
       if (!origin) return null;
-      // Allow any localhost port (dev mode, Tauri, bundled client)
-      if (/^https?:\/\/localhost(:\d+)?$/.test(origin)) return origin;
-      if (origin === 'tauri://localhost' || origin === 'https://tauri.localhost') return origin;
+      // Allow localhost, loopback, and private network IPs (LAN access from mobile)
+      if (isOriginAllowed(origin)) return origin;
       // When TLS is enabled, only allow explicitly configured origins
       if (tls && allowedTlsOrigins.has(origin)) return origin;
       return null;
