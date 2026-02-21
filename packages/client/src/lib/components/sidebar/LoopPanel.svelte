@@ -1173,7 +1173,7 @@
           > Cancel</button
         >
       </div>
-    {:else}
+    {:else if loopStore.activeLoopChecked}
       <!-- svelte-ignore a11y_no_static_element_interactions -->
       <div class="hold-btn-wrap">
         <button

@@ -114,6 +114,7 @@ function createLoopStore() {
   let eventReader = $state<ReadableStreamDefaultReader | null>(null);
   let eventAbort = $state<AbortController | null>(null);
   let standaloneStoryCount = $state(0); // Tracks total stories for standalone loops
+  let activeLoopChecked = $state(false); // True once loadActiveLoop() has completed at least once
 
   // Sprint planning state
   let editMode = $state<EditMode>('locked');
@@ -223,6 +224,10 @@ function createLoopStore() {
     },
     get isActive() {
       return activeLoop?.status === 'running' || activeLoop?.status === 'paused';
+    },
+    /** Whether the initial loadActiveLoop() call has completed. Use to avoid showing the start button prematurely. */
+    get activeLoopChecked() {
+      return activeLoopChecked;
     },
     get completedStories() {
       return activeLoop?.totalStoriesCompleted ?? 0;
@@ -834,6 +839,8 @@ function createLoopStore() {
         }
       } catch {
         /* server may not be ready */
+      } finally {
+        activeLoopChecked = true;
       }
     },
 

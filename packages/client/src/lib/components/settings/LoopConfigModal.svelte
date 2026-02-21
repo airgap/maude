@@ -382,21 +382,28 @@
 
     <div class="modal-footer">
       <button class="btn-cancel" onclick={close}>Cancel</button>
-      <button class="btn-start" onclick={startLoop}>
-        {#if depWarnings.length > 0}<svg
-            width="11"
-            height="11"
-            viewBox="0 0 24 24"
-            fill="currentColor"
-            stroke="none"><polygon points="5 3 19 12 5 21 5 3" /></svg
-          > Activate Golem (with warnings){:else}<svg
-            width="11"
-            height="11"
-            viewBox="0 0 24 24"
-            fill="currentColor"
-            stroke="none"><polygon points="5 3 19 12 5 21 5 3" /></svg
-          > Activate Golem{/if}
-      </button>
+      {#if loopStore.isActive}
+        <div class="already-running">
+          <span class="already-running-dot"></span>
+          Golem is already {loopStore.isRunning ? 'running' : 'paused'}
+        </div>
+      {:else}
+        <button class="btn-start" onclick={startLoop}>
+          {#if depWarnings.length > 0}<svg
+              width="11"
+              height="11"
+              viewBox="0 0 24 24"
+              fill="currentColor"
+              stroke="none"><polygon points="5 3 19 12 5 21 5 3" /></svg
+            > Activate Golem (with warnings){:else}<svg
+              width="11"
+              height="11"
+              viewBox="0 0 24 24"
+              fill="currentColor"
+              stroke="none"><polygon points="5 3 19 12 5 21 5 3" /></svg
+            > Activate Golem{/if}
+        </button>
+      {/if}
     </div>
   </div>
 </div>
@@ -707,5 +714,33 @@
     margin-top: 8px;
     margin-bottom: 0;
     font-style: italic;
+  }
+
+  .already-running {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 16px;
+    font-size: var(--fs-sm);
+    font-weight: 600;
+    color: var(--accent-primary);
+    border-radius: var(--radius-sm);
+    background: color-mix(in srgb, var(--accent-primary) 10%, transparent);
+  }
+  .already-running-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--accent-primary);
+    animation: pulse-dot 2s ease-in-out infinite;
+  }
+  @keyframes pulse-dot {
+    0%,
+    100% {
+      opacity: 1;
+    }
+    50% {
+      opacity: 0.4;
+    }
   }
 </style>

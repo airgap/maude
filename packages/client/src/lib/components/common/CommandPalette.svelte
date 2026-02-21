@@ -4,6 +4,8 @@
   import { conversationStore } from '$lib/stores/conversation.svelte';
   import { editorStore } from '$lib/stores/editor.svelte';
   import { terminalStore } from '$lib/stores/terminal.svelte';
+  import { loopStore } from '$lib/stores/loop.svelte';
+  import { primaryPaneStore } from '$lib/stores/primaryPane.svelte';
   import { api } from '$lib/api/client';
 
   let query = $state('');
@@ -18,7 +20,7 @@
     action: () => void;
   }
 
-  const commands: Command[] = [
+  const commands: Command[] = $derived([
     {
       id: 'new-chat',
       label: 'New Conversation',
@@ -147,11 +149,18 @@
     },
     {
       id: 'loop-start',
-      label: 'Activate Golem',
+      label: loopStore.isActive
+        ? `Golem ${loopStore.isRunning ? 'Running' : 'Paused'} — View Dashboard`
+        : 'Activate Golem',
       category: 'Golem',
       action: () => {
-        uiStore.setSidebarTab('work');
-        uiStore.openModal('loop-config');
+        if (loopStore.isActive && loopStore.activeLoop?.id) {
+          primaryPaneStore.openLooperTab(loopStore.activeLoop.id, 'Looper');
+          close();
+        } else {
+          uiStore.setSidebarTab('work');
+          uiStore.openModal('loop-config');
+        }
       },
     },
     {
@@ -227,7 +236,7 @@
         close();
       },
     },
-  ];
+  ]);
 
   let filtered = $derived(
     commands.filter(

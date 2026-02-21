@@ -11,6 +11,7 @@
   import { executeSlashCommand, type SlashCommandContext } from '$lib/commands/slash-commands';
   import { uiStore, onFocusChatInput } from '$lib/stores/ui.svelte';
   import { workStore } from '$lib/stores/work.svelte';
+  import { loopStore } from '$lib/stores/loop.svelte';
   import { draftsStore } from '$lib/stores/drafts.svelte';
   import { onMount, tick } from 'svelte';
   import SlashCommandMenu from './SlashCommandMenu.svelte';
@@ -737,8 +738,10 @@
 
   async function handleTaskConfirmAndLoop(tasks: DetectedTask[]) {
     await handleTaskConfirm(tasks);
-    // Open loop config so user can configure and start
-    uiStore.openModal('loop-config');
+    // Open loop config so user can configure and start (only if no loop is already running)
+    if (!loopStore.isActive) {
+      uiStore.openModal('loop-config');
+    }
   }
 
   function handleTaskDismiss() {
