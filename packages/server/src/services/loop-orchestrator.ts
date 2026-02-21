@@ -178,16 +178,34 @@ class LoopOrchestrator {
         this.events.emit('loop_done', z.id);
       }
 
-      // Reset any stories stuck as 'in_progress' back to 'pending' so they
-      // can be retried when a new loop starts.
-      if (zombieLoops.length > 0) {
-        const reset = db
-          .query(
-            "UPDATE prd_stories SET status = 'pending', updated_at = ? WHERE status = 'in_progress'",
-          )
-          .run(now);
+      // Reset in_progress stories belonging to zombie loops back to 'pending'
+      // so they can be retried when a new loop starts.
+      // IMPORTANT: Only reset stories for zombie loops — a global reset would
+      // interfere with actively-running loops' current stories.
+      for (const z of zombieLoops) {
+        const zombieLoop = db
+          .query('SELECT prd_id, workspace_path FROM loops WHERE id = ?')
+          .get(z.id) as any;
+        if (!zombieLoop) continue;
+
+        let reset;
+        if (zombieLoop.prd_id) {
+          reset = db
+            .query(
+              "UPDATE prd_stories SET status = 'pending', updated_at = ? WHERE prd_id = ? AND status = 'in_progress'",
+            )
+            .run(now, zombieLoop.prd_id);
+        } else {
+          reset = db
+            .query(
+              "UPDATE prd_stories SET status = 'pending', updated_at = ? WHERE prd_id IS NULL AND workspace_path = ? AND status = 'in_progress'",
+            )
+            .run(now, zombieLoop.workspace_path);
+        }
         if (reset.changes > 0) {
-          console.log(`[loop] Reset ${reset.changes} in_progress stories → pending`);
+          console.log(
+            `[loop] Reset ${reset.changes} in_progress stories → pending for zombie loop ${z.id}`,
+          );
         }
       }
     } catch (err) {
@@ -470,6 +488,7 @@ class LoopRunner {
   async run(): Promise<void> {
     const db = getDb();
     let iteration = 0;
+    let noStoryNullCount = 0; // Tracks consecutive times selectNextStory returned null
     const mode = this.prdId ? `PRD:${this.prdId}` : 'standalone';
 
     console.log(
@@ -556,18 +575,42 @@ class LoopRunner {
         }
 
         if (!story) {
-          // Check if all done or all failed
-          const stories = this.getAllStories();
+          // Wrap exit-path logic in try/catch — an unhandled error here (e.g. from
+          // getAllStories() or storyFromRow() JSON parsing) would crash the entire
+          // loop, which was the root cause of silent loop termination after one story.
+          let stories: UserStory[] = [];
+          try {
+            stories = this.getAllStories();
+          } catch (exitErr) {
+            console.error(
+              `[loop:${this.loopId}] getAllStories() threw in exit path (non-fatal):`,
+              exitErr,
+            );
+            // Transient DB error — retry on next iteration instead of crashing
+            await new Promise((r) => setTimeout(r, 2000));
+            continue;
+          }
+
           console.log(
-            `[loop:${this.loopId}] No eligible story. ${stories.length} total stories: ${stories.map((s) => `${s.title}[${s.status}:${s.attempts}/${s.maxAttempts}]`).join(', ')}`,
+            `[loop:${this.loopId}] No eligible story. ${stories.length} total stories: ${stories.map((s) => `${s.title}[${s.status}:${s.attempts}/${s.maxAttempts}${s.researchOnly ? ':research' : ''}]`).join(', ')}`,
           );
 
           // Guard: empty stories array means the query returned nothing (possibly
           // a workspace_path mismatch or DB transient issue). [].every() returns
           // true which would incorrectly mark the loop as "completed".
           if (stories.length === 0) {
+            // Retry a few times before giving up — the stories might reappear
+            // (e.g. after a concurrent workspace_path update settles).
+            noStoryNullCount++;
+            if (noStoryNullCount < 3) {
+              console.warn(
+                `[loop:${this.loopId}] getAllStories() returned empty (attempt ${noStoryNullCount}/3). Retrying...`,
+              );
+              await new Promise((r) => setTimeout(r, 3000));
+              continue;
+            }
             console.warn(
-              `[loop:${this.loopId}] getAllStories() returned empty — cannot determine loop state. Marking as failed.`,
+              `[loop:${this.loopId}] getAllStories() returned empty after ${noStoryNullCount} attempts — cannot determine loop state. Marking as failed.`,
             );
             this.updateLoopDb({
               status: 'failed',
@@ -629,8 +672,9 @@ class LoopRunner {
               ),
           );
           if (pendingEligible.length > 0) {
+            noStoryNullCount++;
             console.warn(
-              `[loop:${this.loopId}] selectNextStory() returned null but ${pendingEligible.length} pending eligible stories exist: ${pendingEligible.map((s) => `"${s.title}"`).join(', ')}. Retrying...`,
+              `[loop:${this.loopId}] selectNextStory() returned null but ${pendingEligible.length} pending eligible stories exist (null-streak ${noStoryNullCount}): ${pendingEligible.map((s) => `"${s.title}"[attempts=${s.attempts}/${s.maxAttempts}]`).join(', ')}. Retrying...`,
             );
             // Brief delay then retry on next iteration
             await new Promise((r) => setTimeout(r, 2000));
@@ -666,6 +710,9 @@ class LoopRunner {
           this.events.emit('loop_done', this.loopId);
           return;
         }
+
+        // Story selected — reset the null-streak counter
+        noStoryNullCount = 0;
 
         iteration++;
         console.log(

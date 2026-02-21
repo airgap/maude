@@ -409,6 +409,7 @@ function migrateNullablePrdId(db: Database): void {
           estimate TEXT,
           dependency_reasons TEXT NOT NULL DEFAULT '{}',
           priority_recommendation TEXT,
+          research_only INTEGER NOT NULL DEFAULT 0,
           sort_order INTEGER NOT NULL DEFAULT 0,
           workspace_path TEXT,
           external_ref TEXT,
@@ -422,15 +423,15 @@ function migrateNullablePrdId(db: Database): void {
           id, prd_id, title, description, acceptance_criteria, priority,
           depends_on, status, task_id, agent_id, conversation_id, commit_sha,
           attempts, max_attempts, learnings, estimate, dependency_reasons,
-          priority_recommendation, sort_order, workspace_path, external_ref,
-          external_status, created_at, updated_at
+          priority_recommendation, research_only, sort_order, workspace_path,
+          external_ref, external_status, created_at, updated_at
         )
         SELECT
           id, prd_id, title, description, acceptance_criteria, priority,
           depends_on, status, task_id, agent_id, conversation_id, commit_sha,
           attempts, max_attempts, learnings, estimate, dependency_reasons,
-          priority_recommendation, sort_order, workspace_path, external_ref,
-          external_status, created_at, updated_at
+          priority_recommendation, COALESCE(research_only, 0), sort_order,
+          workspace_path, external_ref, external_status, created_at, updated_at
         FROM prd_stories;
 
         DROP TABLE prd_stories;
