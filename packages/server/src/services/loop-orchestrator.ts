@@ -14,6 +14,8 @@ import type {
   StoryPriority,
   AgentNote,
   StreamAgentNoteCreated,
+  GolemPhase,
+  GolemMood,
 } from '@e/shared';
 
 // Priority ordering for story selection
@@ -453,6 +455,10 @@ class LoopRunner {
     { subAttempts: number; lastResults: QualityCheckResult[] }
   >();
 
+  /** Golem mood tracker — derives from recent success/failure patterns */
+  private recentOutcomes: Array<'success' | 'failure'> = [];
+  private currentMood: GolemMood = 'neutral';
+
   constructor(
     private loopId: string,
     private prdId: string | null,
@@ -460,6 +466,46 @@ class LoopRunner {
     private config: LoopConfig,
     private events: EventEmitter,
   ) {}
+
+  /** Emit a golem thought event — tells the UI what the golem is thinking/doing */
+  private emitThought(
+    thought: string,
+    phase: GolemPhase,
+    extra?: Partial<StreamLoopEvent['data']>,
+  ): void {
+    this.emitEvent('golem_thought', {
+      thought,
+      phase,
+      mood: this.currentMood,
+      ...extra,
+    });
+  }
+
+  /** Update mood based on recent outcomes */
+  private updateMood(outcome?: 'success' | 'failure'): void {
+    if (outcome) {
+      this.recentOutcomes.push(outcome);
+      if (this.recentOutcomes.length > 5) this.recentOutcomes.shift();
+    }
+
+    const successes = this.recentOutcomes.filter((o) => o === 'success').length;
+    const failures = this.recentOutcomes.filter((o) => o === 'failure').length;
+    const total = this.recentOutcomes.length;
+
+    if (total === 0) {
+      this.currentMood = 'focused';
+    } else if (successes >= 3) {
+      this.currentMood = 'excited';
+    } else if (successes > failures) {
+      this.currentMood = 'proud';
+    } else if (failures >= 3) {
+      this.currentMood = 'frustrated';
+    } else if (failures > successes) {
+      this.currentMood = 'worried';
+    } else {
+      this.currentMood = 'determined';
+    }
+  }
 
   /** Update heartbeat timestamp so zombie recovery knows we're alive. */
   private sendHeartbeat(): void {
@@ -496,6 +542,8 @@ class LoopRunner {
     );
 
     this.startHeartbeat();
+    this.updateMood();
+    this.emitThought('Waking up... scanning the backlog', 'idle');
 
     // Apply maxAttemptsPerStory from loop config to all stories.
     // Stories have their own max_attempts (default 3), but the loop config
@@ -545,6 +593,7 @@ class LoopRunner {
         // If selectNextStory() returns null, it could be a transient issue (e.g. the
         // previous story's status update hasn't settled). Retry once after a brief
         // delay before deciding the loop is truly done.
+        this.emitThought('Scanning backlog for the next story...', 'selecting_story');
         let story: UserStory | null = null;
         try {
           story = this.selectNextStory();
@@ -738,6 +787,36 @@ class LoopRunner {
           const isStoryFixUp = this.fixUpState.has(story.id);
           const fixUpInfo = isStoryFixUp ? this.fixUpState.get(story.id)! : null;
           const maxFixUps = this.config.maxFixUpAttempts ?? 2;
+
+          // Emit golem thought about the new story
+          if (isStoryFixUp) {
+            this.emitThought(
+              `Fix-up pass ${fixUpInfo!.subAttempts}/${maxFixUps} for "${story.title}" — patching errors`,
+              'fixing_up',
+              {
+                storyId: story.id,
+                storyTitle: story.title,
+                iteration,
+                attempt: story.attempts,
+                maxAttempts: story.maxAttempts,
+                fixUpAttempt: fixUpInfo!.subAttempts,
+                maxFixUpAttempts: maxFixUps,
+              },
+            );
+          } else {
+            this.emitThought(
+              `Starting "${story.title}" — attempt ${story.attempts + 1}/${story.maxAttempts}`,
+              'preparing',
+              {
+                storyId: story.id,
+                storyTitle: story.title,
+                iteration,
+                attempt: story.attempts + 1,
+                maxAttempts: story.maxAttempts,
+              },
+            );
+          }
+
           this.addLogEntry({
             iteration,
             storyId: story.id,
@@ -763,6 +842,10 @@ class LoopRunner {
 
           // Create git snapshot if configured, linked to the upcoming assistant message
           if (this.config.autoSnapshot) {
+            this.emitThought('Taking a snapshot of the current state...', 'snapshot', {
+              storyId: story.id,
+              storyTitle: story.title,
+            });
             try {
               await this.createGitSnapshot(story.id, assistantMsgId);
             } catch (err) {
@@ -779,6 +862,10 @@ class LoopRunner {
           // fix-up pass on this same story — the agent needs that code in-place.
           const isFixUpPass = this.fixUpState.has(story.id);
           if (checksToRun.length > 0 && !isFixUpPass) {
+            this.emitThought('Running pre-flight quality checks...', 'pre_check', {
+              storyId: story.id,
+              storyTitle: story.title,
+            });
             const preCheckResults = await runAllQualityChecks(checksToRun, this.workspacePath);
             const preBuildBroken = preCheckResults.some((qr) => {
               const cfg = checksToRun.find((c) => c.id === qr.checkId);
@@ -844,6 +931,10 @@ class LoopRunner {
           ).run(nanoid(), conversationId, JSON.stringify([{ type: 'text', text: prompt }]), now);
 
           // Spawn Claude session
+          this.emitThought(`Summoning agent to work on "${story.title}"...`, 'spawning_agent', {
+            storyId: story.id,
+            storyTitle: story.title,
+          });
           let agentResult = '';
           let agentError: string | null = null;
           const AGENT_TIMEOUT_MS = 10 * 60 * 1000; // 10 minutes per story
@@ -859,6 +950,10 @@ class LoopRunner {
             this.updateLoopDb({ current_agent_id: sessionId });
 
             // Read the stream to completion with timeout
+            this.emitThought(`Agent is implementing "${story.title}"...`, 'implementing', {
+              storyId: story.id,
+              storyTitle: story.title,
+            });
             const stream = await claudeManager.sendMessage(sessionId, prompt);
             const reader = stream.getReader();
 
@@ -900,6 +995,10 @@ class LoopRunner {
           let qualityResults: QualityCheckResult[] = [];
 
           if (checksToRun.length > 0) {
+            this.emitThought('Agent done. Running quality checks...', 'quality_checking', {
+              storyId: story.id,
+              storyTitle: story.title,
+            });
             qualityResults = await runAllQualityChecks(checksToRun, this.workspacePath);
 
             for (const qr of qualityResults) {
@@ -931,9 +1030,18 @@ class LoopRunner {
           if (passed) {
             // Story succeeded! Clear any fix-up state if it was a fix-up pass.
             this.fixUpState.delete(story.id);
+            this.updateMood('success');
+            this.emitThought(`All checks passed for "${story.title}"!`, 'celebrating', {
+              storyId: story.id,
+              storyTitle: story.title,
+            });
 
             // Git commit BEFORE marking complete — task stays in_progress until changes are committed
             if (this.config.autoCommit) {
+              this.emitThought('Committing changes to git...', 'committing', {
+                storyId: story.id,
+                storyTitle: story.title,
+              });
               try {
                 const sha = await this.gitCommit(story);
                 if (sha) {
@@ -1022,6 +1130,7 @@ class LoopRunner {
             }
           } else {
             // Story failed
+            this.updateMood('failure');
             const failReason = hasAgentError
               ? `Agent error: ${agentError}`
               : `Quality checks failed: ${qualityResults
@@ -1060,6 +1169,10 @@ class LoopRunner {
             if (hasAgentError) {
               // Agent error — always revert, code may be in an inconsistent state
               this.fixUpState.delete(story.id);
+              this.emitThought('Agent error — reverting to clean state...', 'reverting', {
+                storyId: story.id,
+                storyTitle: story.title,
+              });
               console.log(
                 `[loop:${this.loopId}] Agent error — reverting to clean state for "${story.title}"`,
               );
@@ -1076,6 +1189,11 @@ class LoopRunner {
             } else if (requiredChecksFailed && fixUpsExhausted) {
               // All fix-up sub-attempts exhausted — revert and let the next fresh attempt start clean
               this.fixUpState.delete(story.id);
+              this.emitThought(
+                `Fix-up attempts exhausted for "${story.title}" — reverting...`,
+                'reverting',
+                { storyId: story.id, storyTitle: story.title },
+              );
               console.log(
                 `[loop:${this.loopId}] Fix-up attempts exhausted (${fixUpSubAttempts}/${maxFixUps}) — reverting to clean state for "${story.title}"`,
               );
@@ -1091,6 +1209,11 @@ class LoopRunner {
               didRevert = true;
             } else if (requiredChecksFailed) {
               // Fix-up sub-attempts remaining — keep the code, store/update errors for next fix-up
+              this.emitThought(
+                `Quality checks failed — preparing fix-up pass for "${story.title}"...`,
+                'fixing_up',
+                { storyId: story.id, storyTitle: story.title },
+              );
               const failedResults = qualityResults.filter((qr) => !qr.passed);
               const nextSubAttempt = fixUpSubAttempts + 1;
               this.fixUpState.set(story.id, {
@@ -1223,6 +1346,7 @@ class LoopRunner {
         }
 
         // Small delay between iterations
+        this.emitThought('Resting briefly before the next story...', 'resting');
         await new Promise((r) => setTimeout(r, 2000));
       }
 
@@ -1250,6 +1374,7 @@ class LoopRunner {
         );
 
       if (allDone) {
+        this.emitThought('All stories completed! Time to rest.', 'celebrating');
         this.updateLoopDb({
           status: 'completed',
           completed_at: Date.now(),
@@ -1627,6 +1752,10 @@ ${criteria}
     summary: string,
     qualityResults: QualityCheckResult[],
   ): void {
+    this.emitThought(`Recording learnings from "${story.title}"...`, 'recording_learnings', {
+      storyId: story.id,
+      storyTitle: story.title,
+    });
     const failedChecks = qualityResults.filter((qr) => !qr.passed);
     let learning = summary;
     if (failedChecks.length > 0) {

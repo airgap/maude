@@ -20,7 +20,8 @@ export type SidebarTab =
   | 'artifacts'
   | 'notes'
   | 'manager'
-  | 'commentary';
+  | 'commentary'
+  | 'golems';
 type ModalId =
   | 'settings'
   | 'command-palette'

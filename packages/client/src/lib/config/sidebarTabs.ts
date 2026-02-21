@@ -107,6 +107,11 @@ export const SIDEBAR_TABS: TabDefinition[] = [
     label: 'Commentary',
     icon: 'M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3zM19 10v2a7 7 0 0 1-14 0v-2M12 19v4M8 23h8',
   },
+  {
+    id: 'golems',
+    label: 'Golems',
+    icon: 'M12 2a4 4 0 0 0-4 4v1H6a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-2V6a4 4 0 0 0-4-4zM9 12a1.5 1.5 0 1 1 0 3 1.5 1.5 0 0 1 0-3zM15 12a1.5 1.5 0 1 1 0 3 1.5 1.5 0 0 1 0-3z',
+  },
 ];
 
 export function getTabDef(id: SidebarTab): TabDefinition {

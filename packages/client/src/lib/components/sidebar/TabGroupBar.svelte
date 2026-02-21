@@ -5,6 +5,7 @@
   import { sidebarLayoutStore } from '$lib/stores/sidebarLayout.svelte';
   import { panelDragStore } from '$lib/stores/panelDrag.svelte';
   import { loopStore } from '$lib/stores/loop.svelte';
+  import { golemsStore } from '$lib/stores/golems.svelte';
 
   interface Props {
     group: TabGroup;
@@ -648,8 +649,12 @@
         class:active={group.activeTab === tab}
         class:drag-source={drag?.isDragging && !drag.crossDrag && drag.tabId === tab}
         class:hidden-tab={tabHidden === tab}
-        class:golem-active-tab={tab === 'work' && loopStore.isRunning}
-        class:golem-paused-tab={tab === 'work' && loopStore.isPaused}
+        class:golem-active-tab={(tab === 'work' && loopStore.isRunning) ||
+          (tab === 'golems' && golemsStore.golems.some((g) => g.status === 'running'))}
+        class:golem-paused-tab={(tab === 'work' && loopStore.isPaused) ||
+          (tab === 'golems' &&
+            !golemsStore.golems.some((g) => g.status === 'running') &&
+            golemsStore.golems.some((g) => g.status === 'paused'))}
         onmousedown={(e) => handleDragStart(tab, i, e)}
         ontouchstart={(e) => handleDragStartTouch(tab, i, e)}
         onpointerdown={(e) => handleTabPointerDown(tab, e)}
@@ -674,6 +679,14 @@
             class="golem-activity-dot"
             class:running={loopStore.isRunning}
             class:paused={loopStore.isPaused}
+          ></span>
+        {/if}
+        {#if tab === 'golems' && golemsStore.hasActiveGolems}
+          <span
+            class="golem-activity-dot"
+            class:running={golemsStore.golems.some((g) => g.status === 'running')}
+            class:paused={!golemsStore.golems.some((g) => g.status === 'running') &&
+              golemsStore.golems.some((g) => g.status === 'paused')}
           ></span>
         {/if}
       </button>

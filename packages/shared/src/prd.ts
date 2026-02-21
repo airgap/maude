@@ -731,7 +731,8 @@ export interface StreamLoopEvent {
     | 'completed'
     | 'failed'
     | 'cancelled'
-    | 'learning';
+    | 'learning'
+    | 'golem_thought';
   data: {
     storyId?: string;
     storyTitle?: string;
@@ -742,5 +743,47 @@ export interface StreamLoopEvent {
     message?: string;
     /** When a story fails, indicates whether retries remain (true) or it's permanent (false) */
     willRetry?: boolean;
+    /** Golem thought: describes what the golem is currently doing/thinking */
+    thought?: string;
+    /** Golem phase: high-level phase of the current activity */
+    phase?: GolemPhase;
+    /** Golem mood: emotional state derived from recent outcomes */
+    mood?: GolemMood;
+    /** Current attempt number for the active story */
+    attempt?: number;
+    /** Max attempts for the active story */
+    maxAttempts?: number;
+    /** Fix-up sub-attempt number (if in fix-up mode) */
+    fixUpAttempt?: number;
+    /** Max fix-up sub-attempts */
+    maxFixUpAttempts?: number;
   };
 }
+
+/** High-level phases the golem goes through during work */
+export type GolemPhase =
+  | 'idle'
+  | 'selecting_story'
+  | 'preparing'
+  | 'snapshot'
+  | 'pre_check'
+  | 'spawning_agent'
+  | 'implementing'
+  | 'quality_checking'
+  | 'committing'
+  | 'recording_learnings'
+  | 'fixing_up'
+  | 'reverting'
+  | 'celebrating'
+  | 'resting';
+
+/** Emotional state of the golem, derived from recent outcomes */
+export type GolemMood =
+  | 'neutral'
+  | 'focused'
+  | 'determined'
+  | 'excited'
+  | 'proud'
+  | 'frustrated'
+  | 'worried'
+  | 'relieved';

@@ -472,6 +472,11 @@ function createLoopStore() {
     handleLoopEvent(event: StreamLoopEvent) {
       if (!activeLoop || event.loopId !== activeLoop.id) return;
 
+      // Forward ALL events to the golems store for the live status panel
+      import('../stores/golems.svelte').then(({ golemsStore }) => {
+        golemsStore.handleEvent(event);
+      });
+
       const isStandaloneLoop = !activeLoop.prdId;
 
       switch (event.event) {
@@ -815,6 +820,10 @@ function createLoopStore() {
           if (activeLoop && activeLoop.status === 'running') {
             this.connectEvents(activeLoop.id);
           }
+          // Sync golem status from loop state
+          if (activeLoop) {
+            this.syncGolemFromLoop(activeLoop);
+          }
         } else {
           // Check for paused loops
           const pausedRes = await api.loops.list('paused');
@@ -823,6 +832,10 @@ function createLoopStore() {
             log = activeLoop!.iterationLog || [];
             if (!activeLoop!.prdId) {
               this.restoreStandaloneStoryCount();
+            }
+            // Sync golem status for paused loop
+            if (activeLoop) {
+              this.syncGolemFromLoop(activeLoop);
             }
           } else {
             // Check for recently-failed loops that might have been "running" before
@@ -856,6 +869,58 @@ function createLoopStore() {
       standaloneStoryCount = count;
     },
 
+    /** Sync the golems store from existing loop state (for page load / reconnect) */
+    syncGolemFromLoop(loop: LoopState) {
+      // Determine the label from PRD or standalone
+      let label = 'Standalone Stories';
+      if (loop.prdId) {
+        const prd = prds.find((p) => p.id === loop.prdId);
+        label = prd ? prd.name : `PRD ${loop.prdId.slice(0, 8)}`;
+      }
+      // Get total stories count
+      let total = 0;
+      if (loop.prdId) {
+        const prd = prds.find((p) => p.id === loop.prdId);
+        total = prd?.stories?.length ?? 0;
+      } else {
+        total = standaloneStoryCount;
+      }
+      // Get current story title from log or PRD
+      let currentStoryTitle: string | null = null;
+      if (loop.currentStoryId) {
+        // Try to find the story title from PRDs
+        for (const prd of prds) {
+          const story = prd.stories?.find((s) => s.id === loop.currentStoryId);
+          if (story) {
+            currentStoryTitle = story.title;
+            break;
+          }
+        }
+        // Fallback: look in iteration log
+        if (!currentStoryTitle && loop.iterationLog.length > 0) {
+          const lastEntry = [...loop.iterationLog]
+            .reverse()
+            .find((e) => e.storyId === loop.currentStoryId);
+          if (lastEntry) currentStoryTitle = lastEntry.storyTitle;
+        }
+      }
+      import('../stores/golems.svelte').then(({ golemsStore }) => {
+        golemsStore.syncFromLoopState(
+          loop.id,
+          label,
+          loop.status,
+          total,
+          loop.totalStoriesCompleted,
+          loop.totalStoriesFailed,
+          loop.currentIteration,
+          loop.currentStoryId,
+          currentStoryTitle,
+          loop.startedAt,
+          loop.iterationLog,
+        );
+      });
+    },
+
     async startLoop(
       prdId: string | null,
       workspacePath: string,
@@ -870,6 +935,8 @@ function createLoopStore() {
             activeLoop = loopRes.data;
             log = [];
             this.connectEvents(res.data.loopId);
+            // Initialize the golem in the golems store
+            this.syncGolemFromLoop(loopRes.data);
           }
           return { ok: true };
         }

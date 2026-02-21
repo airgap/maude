@@ -215,6 +215,8 @@ export type {
   MatrixQuadrant,
   MatrixStoryPosition,
   EffortValueMatrix,
+  GolemPhase,
+  GolemMood,
 } from './prd.js';
 
 export type {
