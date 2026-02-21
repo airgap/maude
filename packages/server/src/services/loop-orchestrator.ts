@@ -1927,9 +1927,15 @@ ${criteria}
   // --- Git operations ---
 
   /**
-   * Revert all uncommitted changes (tracked modifications + untracked files)
+   * Revert all uncommitted changes (staged, tracked modifications, + untracked files)
    * so the working tree matches the last commit. Used to clean up after a
    * story fails quality checks, preventing cascading failures.
+   *
+   * The three-step sequence handles all cases:
+   *   1. git reset HEAD — unstage everything (critical when `git add -A` ran
+   *      but `git commit` failed, leaving new files in the index)
+   *   2. git checkout . — revert tracked file modifications
+   *   3. git clean -fd  — remove untracked files and directories
    */
   private async revertUncommittedChanges(): Promise<void> {
     try {
@@ -1940,6 +1946,15 @@ ${criteria}
       });
       const isRepo = (await new Response(checkProc.stdout).text()).trim() === 'true';
       if (!isRepo) return;
+
+      // Unstage everything — handles new files left in the index after
+      // a failed `git commit` (git checkout alone won't touch staged new files)
+      const resetProc = Bun.spawn(['git', 'reset', 'HEAD'], {
+        cwd: this.workspacePath,
+        stdout: 'pipe',
+        stderr: 'pipe',
+      });
+      await resetProc.exited;
 
       // Revert tracked file modifications
       const checkoutProc = Bun.spawn(['git', 'checkout', '.'], {
@@ -2019,48 +2034,55 @@ ${criteria}
   }
 
   private async gitCommit(story: UserStory): Promise<string | null> {
-    try {
-      // Stage all changes
-      const addProc = Bun.spawn(['git', 'add', '-A'], {
-        cwd: this.workspacePath,
-        stdout: 'pipe',
-        stderr: 'pipe',
-      });
-      await addProc.exited;
-
-      // Check if there are staged changes
-      const diffProc = Bun.spawn(['git', 'diff', '--cached', '--quiet'], {
-        cwd: this.workspacePath,
-        stdout: 'pipe',
-        stderr: 'pipe',
-      });
-      const diffExit = await diffProc.exited;
-      if (diffExit === 0) return null; // No changes to commit
-
-      // Commit
-      const msg = this.prdId
-        ? `[golem] ${story.title}\n\nImplemented by E Golem.\nPRD: ${this.prdId}\nStory: ${story.id}`
-        : `[golem] ${story.title}\n\nImplemented by E Golem.\nStory: ${story.id}`;
-      const commitProc = Bun.spawn(['git', 'commit', '-m', msg], {
-        cwd: this.workspacePath,
-        stdout: 'pipe',
-        stderr: 'pipe',
-      });
-      await commitProc.exited;
-
-      // Get commit SHA
-      const shaProc = Bun.spawn(['git', 'rev-parse', 'HEAD'], {
-        cwd: this.workspacePath,
-        stdout: 'pipe',
-        stderr: 'pipe',
-      });
-      const sha = (await new Response(shaProc.stdout).text()).trim();
-
-      return sha;
-    } catch (err) {
-      console.error(`[loop:${this.loopId}] Git commit failed:`, err);
-      return null;
+    // Stage all changes
+    const addProc = Bun.spawn(['git', 'add', '-A'], {
+      cwd: this.workspacePath,
+      stdout: 'pipe',
+      stderr: 'pipe',
+    });
+    const addExit = await addProc.exited;
+    if (addExit !== 0) {
+      const stderr = (await new Response(addProc.stderr).text()).trim();
+      throw new Error(`git add failed (exit ${addExit}): ${stderr.slice(0, 500)}`);
     }
+
+    // Check if there are staged changes
+    const diffProc = Bun.spawn(['git', 'diff', '--cached', '--quiet'], {
+      cwd: this.workspacePath,
+      stdout: 'pipe',
+      stderr: 'pipe',
+    });
+    const diffExit = await diffProc.exited;
+    if (diffExit === 0) return null; // No changes to commit
+
+    // Commit
+    const msg = this.prdId
+      ? `[golem] ${story.title}\n\nImplemented by E Golem.\nPRD: ${this.prdId}\nStory: ${story.id}`
+      : `[golem] ${story.title}\n\nImplemented by E Golem.\nStory: ${story.id}`;
+    const commitProc = Bun.spawn(['git', 'commit', '-m', msg], {
+      cwd: this.workspacePath,
+      stdout: 'pipe',
+      stderr: 'pipe',
+    });
+    const commitExit = await commitProc.exited;
+    if (commitExit !== 0) {
+      const stderr = (await new Response(commitProc.stderr).text()).trim();
+      throw new Error(`git commit failed (exit ${commitExit}): ${stderr.slice(0, 500)}`);
+    }
+
+    // Get commit SHA
+    const shaProc = Bun.spawn(['git', 'rev-parse', 'HEAD'], {
+      cwd: this.workspacePath,
+      stdout: 'pipe',
+      stderr: 'pipe',
+    });
+    const shaExit = await shaProc.exited;
+    const sha = (await new Response(shaProc.stdout).text()).trim();
+    if (shaExit !== 0 || !sha) {
+      throw new Error(`Failed to get commit SHA after successful commit (exit ${shaExit})`);
+    }
+
+    return sha;
   }
 
   // --- Pause/Resume/Cancel ---

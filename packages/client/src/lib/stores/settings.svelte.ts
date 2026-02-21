@@ -1,5 +1,4 @@
 import type {
-  ThemeId,
   CliProvider,
   Keybinding,
   PermissionMode,
