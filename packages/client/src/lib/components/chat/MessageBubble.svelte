@@ -7,7 +7,7 @@
   import ToolCallBlock from './ToolCallBlock.svelte';
   import AgentGroupStatic from './AgentGroupStatic.svelte';
   import MessageAnimation from './MessageAnimation.svelte';
-  import { renderMarkdown } from '$lib/utils/markdown';
+  import { renderMarkdown, renderMarkdownPartial } from '$lib/utils/markdown';
   import ProseBlock from './ProseBlock.svelte';
   import ConversationBranchButton from './ConversationBranchButton.svelte';
   import { ttsStore } from '$lib/services/tts.svelte';
@@ -550,6 +550,9 @@
                 {@const html = renderedTextBlocks.get(entry.index)}
                 {#if html}
                   <ProseBlock {html} />
+                {:else if entry.block.text}
+                  <!-- Synchronous fallback while async renderMarkdown() resolves -->
+                  <div class="prose">{@html renderMarkdownPartial(entry.block.text)}</div>
                 {/if}
               {:else if entry.block.type === 'thinking' && settingsStore.showThinkingBlocks}
                 <ThinkingBlock content={entry.block.thinking} />

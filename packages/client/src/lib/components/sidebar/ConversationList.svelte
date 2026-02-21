@@ -80,11 +80,15 @@
         // in PrimaryPane's reactive effect, which is meant for automatic updates, not user clicks)
         primaryPaneStore.openConversation(res.data.id, res.data.title ?? 'Conversation');
       }
-      // Only reset stream state if there's no active stream, or the stream
-      // belongs to the conversation we're switching TO (so UI syncs up).
-      // If the stream is for a different conversation, leave it running —
-      // it will continue updating its target conversation in the background.
-      if (!streamStore.isStreaming || streamStore.conversationId === id) {
+      // Only reset stream state if there's no active stream running.
+      // If the stream IS running (for any conversation), preserve its state:
+      //  - If the stream is for THIS conversation, we want to keep contentBlocks
+      //    intact so StreamingMessage can display the in-progress response.
+      //  - If the stream is for a DIFFERENT conversation, leave it running —
+      //    it continues updating its target conversation in the background.
+      // Resetting while a stream is active would wipe contentBlocks, causing
+      // subsequent content_block_delta events to silently fail (idx out of bounds).
+      if (!streamStore.isStreaming) {
         streamStore.reset();
       }
     } finally {

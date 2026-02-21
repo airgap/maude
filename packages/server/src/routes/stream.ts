@@ -290,8 +290,9 @@ app.post('/:conversationId', async (c) => {
     return new Response(stream, {
       headers: {
         'Content-Type': 'text/event-stream',
-        'Cache-Control': 'no-cache',
+        'Cache-Control': 'no-cache, no-transform',
         Connection: 'keep-alive',
+        'X-Accel-Buffering': 'no',
         'Access-Control-Expose-Headers': 'X-Session-Id',
       },
     });
@@ -329,8 +330,9 @@ app.post('/:conversationId', async (c) => {
     return new Response(stream, {
       headers: {
         'Content-Type': 'text/event-stream',
-        'Cache-Control': 'no-cache',
+        'Cache-Control': 'no-cache, no-transform',
         Connection: 'keep-alive',
+        'X-Accel-Buffering': 'no',
         'Access-Control-Expose-Headers': 'X-Session-Id',
       },
     });
@@ -368,8 +370,9 @@ app.post('/:conversationId', async (c) => {
     return new Response(stream, {
       headers: {
         'Content-Type': 'text/event-stream',
-        'Cache-Control': 'no-cache',
+        'Cache-Control': 'no-cache, no-transform',
         Connection: 'keep-alive',
+        'X-Accel-Buffering': 'no',
         'Access-Control-Expose-Headers': 'X-Session-Id',
       },
     });
@@ -413,8 +416,9 @@ app.post('/:conversationId', async (c) => {
     return new Response(stream, {
       headers: {
         'Content-Type': 'text/event-stream',
-        'Cache-Control': 'no-cache',
+        'Cache-Control': 'no-cache, no-transform',
         Connection: 'keep-alive',
+        'X-Accel-Buffering': 'no',
         'Access-Control-Expose-Headers': 'X-Session-Id',
       },
     });
@@ -466,8 +470,9 @@ app.post('/:conversationId', async (c) => {
     return new Response(stream, {
       headers: {
         'Content-Type': 'text/event-stream',
-        'Cache-Control': 'no-cache',
+        'Cache-Control': 'no-cache, no-transform',
         Connection: 'keep-alive',
+        'X-Accel-Buffering': 'no',
         'X-Session-Id': sessionId,
         'Access-Control-Expose-Headers': 'X-Session-Id',
       },
@@ -561,8 +566,9 @@ app.get('/reconnect/:sessionId', (c) => {
   return new Response(stream, {
     headers: {
       'Content-Type': 'text/event-stream',
-      'Cache-Control': 'no-cache',
+      'Cache-Control': 'no-cache, no-transform',
       Connection: 'keep-alive',
+      'X-Accel-Buffering': 'no',
       'X-Session-Id': sessionId,
       'Access-Control-Expose-Headers': 'X-Session-Id',
     },
