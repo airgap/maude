@@ -329,8 +329,18 @@ describe('ClaudeProcessManager', () => {
     expect(stream).toBeNull();
   });
 
-  test('reconnectStream returns null for session with empty event buffer', async () => {
+  test('reconnectStream returns stream for running session with empty event buffer', async () => {
+    // Running sessions (not yet complete) should return a live stream even if
+    // no events have buffered yet — the stream may have just started.
     const sessionId = await claudeManager.createSession('conv-reconnect-empty');
+    const stream = claudeManager.reconnectStream(sessionId);
+    expect(stream).toBeInstanceOf(ReadableStream);
+  });
+
+  test('reconnectStream returns null for completed session with empty event buffer', async () => {
+    const sessionId = await claudeManager.createSession('conv-reconnect-empty-complete');
+    const session = claudeManager.getSession(sessionId)!;
+    session.streamComplete = true;
     const stream = claudeManager.reconnectStream(sessionId);
     expect(stream).toBeNull();
   });
