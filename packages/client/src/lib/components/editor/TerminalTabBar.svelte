@@ -726,7 +726,7 @@
   }
 
   .default-badge {
-    font-size: 9px;
+    font-size: var(--fs-sans-xs);
     padding: 1px 5px;
     border-radius: var(--radius-sm);
     background: color-mix(in srgb, var(--accent-primary) 20%, transparent);
@@ -743,7 +743,7 @@
   }
 
   .dropdown-section-label {
-    font-size: 9px;
+    font-size: var(--fs-sans-xs);
     color: var(--text-tertiary);
     text-transform: uppercase;
     letter-spacing: 0.5px;

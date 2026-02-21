@@ -44,7 +44,7 @@
     gap: 4px;
     width: 100%;
     font-family: var(--font-family-mono, monospace);
-    font-size: 12px;
+    font-size: var(--fs-sm);
   }
 
   .rich-fallback {

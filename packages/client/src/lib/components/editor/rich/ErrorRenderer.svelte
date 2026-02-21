@@ -149,12 +149,12 @@
   .error-type {
     color: var(--accent-error, #ff3344);
     font-weight: 700;
-    font-size: 12px;
+    font-size: var(--fs-sans-sm);
   }
 
   .error-message {
     color: var(--text-primary, #c9d1d9);
-    font-size: 12px;
+    font-size: var(--fs-sans-sm);
     word-break: break-word;
   }
 
@@ -168,7 +168,7 @@
     background: none;
     color: var(--accent-primary, #00b4ff);
     font-family: var(--font-family-mono, monospace);
-    font-size: 11px;
+    font-size: var(--fs-xs);
     cursor: pointer;
     padding: 0;
     text-decoration: underline;
@@ -193,7 +193,7 @@
 
   .stack-label {
     color: var(--text-tertiary, #6e7681);
-    font-size: 10px;
+    font-size: var(--fs-sans-xxs);
     font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 0.5px;
@@ -204,7 +204,7 @@
     background: none;
     color: var(--text-tertiary, #6e7681);
     font-family: var(--font-family-mono, monospace);
-    font-size: 10px;
+    font-size: var(--fs-xxs);
     cursor: pointer;
     padding: 1px 6px;
     border-radius: 3px;
@@ -223,7 +223,7 @@
     align-items: baseline;
     gap: 8px;
     padding: 2px 10px 2px 20px;
-    font-size: 11px;
+    font-size: var(--fs-xs);
   }
 
   .stack-frame.internal {
@@ -240,7 +240,7 @@
     background: none;
     color: var(--accent-primary, #00b4ff);
     font-family: var(--font-family-mono, monospace);
-    font-size: 11px;
+    font-size: var(--fs-xs);
     cursor: pointer;
     padding: 0;
     text-decoration: none;

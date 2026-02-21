@@ -317,6 +317,38 @@
         uiStore.toast(`Profile: ${profile.name}`, 'success');
       }
     }
+    // Ctrl+= / Ctrl+Plus: Increase font size
+    if ((e.ctrlKey || e.metaKey) && (e.key === '=' || e.key === '+')) {
+      e.preventDefault();
+      const newCode = Math.min(28, settingsStore.fontSize + 1);
+      if (settingsStore.uiFontSize !== null) {
+        settingsStore.update({
+          fontSize: newCode,
+          uiFontSize: Math.min(28, settingsStore.uiFontSize + 1),
+        });
+      } else {
+        settingsStore.update({ fontSize: newCode });
+      }
+    }
+    // Ctrl+- / Ctrl+Minus: Decrease font size
+    if ((e.ctrlKey || e.metaKey) && e.key === '-') {
+      e.preventDefault();
+      const newCode = Math.max(10, settingsStore.fontSize - 1);
+      if (settingsStore.uiFontSize !== null) {
+        settingsStore.update({
+          fontSize: newCode,
+          uiFontSize: Math.max(10, settingsStore.uiFontSize - 1),
+        });
+      } else {
+        settingsStore.update({ fontSize: newCode });
+      }
+    }
+    // Ctrl+0: Reset font size to defaults
+    if ((e.ctrlKey || e.metaKey) && e.key === '0') {
+      e.preventDefault();
+      settingsStore.update({ fontSize: 14, uiFontSize: null });
+      uiStore.toast('Font size reset to default', 'success');
+    }
     // Escape: Close modal
     if (e.key === 'Escape' && uiStore.activeModal) {
       e.preventDefault();

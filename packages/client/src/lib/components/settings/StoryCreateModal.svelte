@@ -569,7 +569,7 @@
   .form-checkbox:checked + .checkbox-custom::after {
     content: '✓';
     color: var(--text-on-accent);
-    font-size: 11px;
+    font-size: var(--fs-sans-xs);
     font-weight: 700;
   }
   .form-hint-inline {
@@ -581,7 +581,7 @@
     border-radius: 50%;
     background: var(--bg-tertiary);
     border: 1px solid var(--border-primary);
-    font-size: 9px;
+    font-size: var(--fs-sans-xs);
     font-weight: 700;
     color: var(--text-tertiary);
     cursor: help;
@@ -712,7 +712,7 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 9px;
+    font-size: var(--fs-sans-xs);
     font-weight: 700;
     flex-shrink: 0;
     transition: all var(--transition);

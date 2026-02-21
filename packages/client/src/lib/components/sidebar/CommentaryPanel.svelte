@@ -1589,7 +1589,7 @@
     border-right: 1px solid var(--border-secondary);
     cursor: pointer;
     color: var(--text-tertiary);
-    font-size: 10px;
+    font-size: var(--fs-sans-xxs);
     font-weight: 600;
     transition: all var(--transition);
     white-space: nowrap;

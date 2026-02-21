@@ -52,7 +52,7 @@
     align-items: baseline;
     gap: 8px;
     padding: 2px 0;
-    font-size: 10px;
+    font-size: var(--fs-sans-xxs);
   }
 
   .progress-label {

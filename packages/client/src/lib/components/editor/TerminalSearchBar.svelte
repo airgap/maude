@@ -313,7 +313,7 @@
     background: transparent;
     color: var(--text-tertiary);
     font-family: var(--font-mono);
-    font-size: 11px;
+    font-size: var(--fs-xs);
     font-weight: 600;
     cursor: pointer;
     transition:
@@ -342,7 +342,7 @@
     min-width: 56px;
     text-align: center;
     color: var(--text-secondary);
-    font-size: 11px;
+    font-size: var(--fs-sans-xs);
     font-variant-numeric: tabular-nums;
     white-space: nowrap;
     flex-shrink: 0;

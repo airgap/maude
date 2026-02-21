@@ -131,7 +131,7 @@
     padding: 6px 10px;
     background: color-mix(in srgb, var(--bg-secondary, #161b22) 80%, transparent);
     border-bottom: 1px solid color-mix(in srgb, var(--text-tertiary, #6e7681) 15%, transparent);
-    font-size: 11px;
+    font-size: var(--fs-sans-xs);
   }
 
   .diff-stats {
@@ -160,7 +160,7 @@
     background: color-mix(in srgb, var(--text-tertiary, #6e7681) 15%, transparent);
     color: var(--text-tertiary, #6e7681);
     font-family: var(--font-family-mono, monospace);
-    font-size: 10px;
+    font-size: var(--fs-xxs);
     border-radius: 3px;
     cursor: pointer;
   }
@@ -188,7 +188,7 @@
     background: color-mix(in srgb, var(--bg-secondary, #161b22) 50%, transparent);
     color: var(--text-secondary, #8b949e);
     font-family: var(--font-family-mono, monospace);
-    font-size: 11px;
+    font-size: var(--fs-xs);
     cursor: pointer;
     text-align: left;
   }
@@ -198,7 +198,7 @@
   }
 
   .chevron {
-    font-size: 8px;
+    font-size: var(--fs-xxs);
     transition: transform 0.12s;
     flex-shrink: 0;
   }
@@ -224,7 +224,7 @@
   .binary-badge {
     padding: 1px 5px;
     border-radius: 3px;
-    font-size: 9px;
+    font-size: var(--fs-xs);
     font-weight: 600;
   }
 
@@ -241,7 +241,7 @@
   .file-stats {
     display: flex;
     gap: 4px;
-    font-size: 10px;
+    font-size: var(--fs-xxs);
     flex-shrink: 0;
   }
 
@@ -256,13 +256,13 @@
   .hunk-header {
     padding: 3px 10px;
     color: var(--text-tertiary, #6e7681);
-    font-size: 10px;
+    font-size: var(--fs-xxs);
     background: color-mix(in srgb, var(--accent-primary, #00b4ff) 5%, transparent);
   }
 
   .diff-line {
     display: flex;
-    font-size: 11px;
+    font-size: var(--fs-xs);
     line-height: 1.5;
   }
 

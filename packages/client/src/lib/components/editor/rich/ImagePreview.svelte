@@ -96,7 +96,7 @@
     padding: 4px 8px;
     background: color-mix(in srgb, var(--bg-secondary, #161b22) 80%, transparent);
     border-bottom: 1px solid color-mix(in srgb, var(--text-tertiary, #6e7681) 15%, transparent);
-    font-size: 10px;
+    font-size: var(--fs-sans-xxs);
     color: var(--text-tertiary, #6e7681);
   }
 
@@ -136,7 +136,7 @@
   }
 
   .thumb-label {
-    font-size: 9px;
+    font-size: var(--fs-sans-xs);
     color: var(--text-tertiary, #6e7681);
     overflow: hidden;
     text-overflow: ellipsis;
@@ -159,7 +159,7 @@
 
   .lightbox-path {
     flex: 1;
-    font-size: 10px;
+    font-size: var(--fs-sans-xxs);
     color: var(--text-tertiary, #6e7681);
     overflow: hidden;
     text-overflow: ellipsis;

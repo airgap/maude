@@ -1433,7 +1433,7 @@
     padding: 0 4px;
   }
   .verbosity-label-text {
-    font-size: 8px;
+    font-size: var(--fs-xxs);
     font-weight: 700;
     text-transform: uppercase;
     letter-spacing: 0.02em;
@@ -1733,7 +1733,7 @@
     position: relative;
   }
   .exp-badge {
-    font-size: 8px;
+    font-size: var(--fs-xxs);
     font-weight: 700;
     letter-spacing: 0.06em;
     color: var(--accent-warning, #f59e0b);
@@ -1777,7 +1777,7 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    font-size: 8px;
+    font-size: var(--fs-xxs);
     font-weight: 700;
     letter-spacing: 0.08em;
     color: var(--accent-primary);

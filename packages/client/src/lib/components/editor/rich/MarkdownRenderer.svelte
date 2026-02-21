@@ -26,7 +26,7 @@
 
   .markdown-body {
     padding: 12px 16px;
-    font-size: 13px;
+    font-size: var(--fs-sans-base);
     line-height: 1.6;
     color: var(--text-primary, #c9d1d9);
   }
@@ -62,7 +62,7 @@
     border-radius: var(--radius-sm, 4px);
     background: var(--bg-secondary, #161b22);
     overflow-x: auto;
-    font-size: 12px;
+    font-size: var(--fs-sm);
   }
 
   .markdown-body :global(pre code) {

@@ -269,7 +269,7 @@
 
   /* Small orbiting sparkle 1 */
   .star-orbit-1 {
-    font-size: 9px;
+    font-size: var(--fs-xs);
     color: var(--accent-secondary);
     text-shadow: 0 0 6px var(--accent-secondary);
     animation: orbit-1 2.5s linear infinite;
@@ -278,7 +278,7 @@
 
   /* Small orbiting sparkle 2 */
   .star-orbit-2 {
-    font-size: 7px;
+    font-size: var(--fs-xxs);
     color: var(--accent-warning);
     text-shadow: 0 0 4px var(--accent-warning);
     animation: orbit-2 3.2s linear infinite reverse;

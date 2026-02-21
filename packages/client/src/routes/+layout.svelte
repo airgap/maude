@@ -58,9 +58,10 @@
     // Base font size (used by mono / code contexts)
     root.style.setProperty('--font-size', `${basePx}px`);
 
-    // Sans font size — some typefaces (e.g. Inter) render visually smaller, so
-    // they carry a per-font sizeAdjust offset to compensate.
-    const sansPx = basePx + (sansFont?.sizeAdjust ?? 0);
+    // UI (sans) font size — independent control when set, otherwise follows code font.
+    // Some typefaces carry a per-font sizeAdjust offset to compensate for visual sizing.
+    const uiBasePx = Math.max(12, settingsStore.effectiveUiFontSize);
+    const sansPx = uiBasePx + (sansFont?.sizeAdjust ?? 0);
     root.style.setProperty('--font-size-sans', `${sansPx}px`);
   });
 

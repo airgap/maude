@@ -934,7 +934,7 @@
   .fixup-dot {
     width: 18px;
     height: 18px;
-    font-size: 9px;
+    font-size: var(--fs-xs);
   }
   .fixup-dot.active {
     border-color: var(--accent-warning);
@@ -1014,7 +1014,7 @@
   }
   .qc-output {
     font-family: var(--font-mono);
-    font-size: 11px;
+    font-size: var(--fs-xs);
     line-height: 1.4;
     background: var(--bg-tertiary);
     border: 1px solid var(--border-secondary);
@@ -1037,7 +1037,7 @@
     flex-shrink: 0;
   }
   .priority-badge.small {
-    font-size: 9px;
+    font-size: var(--fs-xs);
   }
 
   /* ── Pipeline ── */
@@ -1272,7 +1272,7 @@
   }
   .tl-time {
     font-family: var(--font-mono);
-    font-size: 10px;
+    font-size: var(--fs-xxs);
     color: var(--text-muted);
     flex-shrink: 0;
     min-width: 60px;
@@ -1286,7 +1286,7 @@
     color: var(--text-secondary);
   }
   .tl-expand {
-    font-size: 10px;
+    font-size: var(--fs-sans-xxs);
     color: var(--accent-primary);
     background: none;
     border: none;

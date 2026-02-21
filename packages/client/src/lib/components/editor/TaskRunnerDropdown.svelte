@@ -408,7 +408,7 @@
 
   .dropdown-hint {
     padding: 2px 10px 12px;
-    font-size: 10px;
+    font-size: var(--fs-sans-xxs);
     color: var(--text-quaternary, var(--text-tertiary));
     text-align: center;
     opacity: 0.7;
@@ -416,7 +416,7 @@
 
   .task-group-label {
     padding: 6px 10px 2px;
-    font-size: 10px;
+    font-size: var(--fs-sans-xxs);
     font-weight: 600;
     color: var(--text-tertiary);
     text-transform: uppercase;
@@ -468,7 +468,7 @@
 
   .task-command {
     color: var(--text-tertiary);
-    font-size: 10px;
+    font-size: var(--fs-sans-xxs);
     overflow: hidden;
     text-overflow: ellipsis;
     flex: 1;
@@ -477,7 +477,7 @@
 
   .task-source {
     color: var(--text-tertiary);
-    font-size: 10px;
+    font-size: var(--fs-sans-xxs);
     opacity: 0.7;
     flex-shrink: 0;
   }

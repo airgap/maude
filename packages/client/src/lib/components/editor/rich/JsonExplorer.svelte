@@ -167,7 +167,7 @@
     background: color-mix(in srgb, var(--text-tertiary, #6e7681) 15%, transparent);
     color: var(--text-tertiary, #6e7681);
     font-family: var(--font-family-mono, monospace);
-    font-size: 10px;
+    font-size: var(--fs-xxs);
     border-radius: 3px;
     cursor: pointer;
     transition:
@@ -184,7 +184,7 @@
     padding: 4px 0;
     max-height: 500px;
     overflow-y: auto;
-    font-size: 11px;
+    font-size: var(--fs-xs);
     line-height: 1.6;
   }
 
@@ -206,7 +206,7 @@
     color: var(--text-tertiary, #6e7681);
     cursor: pointer;
     padding: 0;
-    font-size: 8px;
+    font-size: var(--fs-xxs);
     flex-shrink: 0;
   }
 
@@ -258,6 +258,6 @@
     margin: 0;
     padding: 8px;
     color: var(--accent-error, #ff3344);
-    font-size: 11px;
+    font-size: var(--fs-sans-xs);
   }
 </style>

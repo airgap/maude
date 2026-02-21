@@ -153,7 +153,7 @@
     gap: 3px;
     padding: 2px 6px;
     border-radius: var(--radius-sm, 4px);
-    font-size: 10px;
+    font-size: var(--fs-xxs);
     font-weight: 600;
     font-family: var(--font-family-mono, monospace);
     line-height: 1;
@@ -171,6 +171,6 @@
     background: color-mix(in srgb, var(--accent-error, #ff3344) 15%, transparent);
   }
   .exit-code-num {
-    font-size: 9px;
+    font-size: var(--fs-xs);
   }
 </style>

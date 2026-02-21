@@ -993,15 +993,152 @@
           </div>
 
           <div class="setting-group">
-            <label class="setting-label">Font size: {settingsStore.fontSize}px</label>
+            <label class="setting-label">Font Size Presets</label>
+            <div class="font-size-presets">
+              {#each [{ label: 'S', code: 12, ui: 12 }, { label: 'M', code: 14, ui: 14 }, { label: 'L', code: 16, ui: 16 }, { label: 'XL', code: 18, ui: 18 }, { label: '2XL', code: 20, ui: 20 }] as preset (preset.label)}
+                <button
+                  class="preset-btn"
+                  class:active={settingsStore.fontSize === preset.code &&
+                    settingsStore.effectiveUiFontSize === preset.ui}
+                  onclick={() =>
+                    settingsStore.update({
+                      fontSize: preset.code,
+                      uiFontSize: preset.ui === preset.code ? null : preset.ui,
+                    })}>{preset.label}</button
+                >
+              {/each}
+              <button
+                class="preset-btn reset-btn"
+                onclick={() => settingsStore.update({ fontSize: 14, uiFontSize: null })}
+                title="Reset to defaults"
+              >
+                <svg
+                  viewBox="0 0 24 24"
+                  width="14"
+                  height="14"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  ><path d="M3 12a9 9 0 1 1 3 6.75" /><polyline points="3 17 3 12 8 12" /></svg
+                >
+              </button>
+            </div>
+          </div>
+
+          <div class="setting-group">
+            <label class="setting-label">Code font size: {settingsStore.fontSize}px</label>
             <input
               type="range"
-              min="12"
-              max="24"
+              min="10"
+              max="28"
               value={settingsStore.fontSize}
               oninput={(e) =>
                 settingsStore.update({ fontSize: Number((e.target as HTMLInputElement).value) })}
             />
+            <div class="font-size-input-row">
+              <button
+                class="font-size-step"
+                onclick={() =>
+                  settingsStore.update({ fontSize: Math.max(10, settingsStore.fontSize - 1) })}
+                >−</button
+              >
+              <input
+                type="number"
+                class="font-size-number"
+                min="10"
+                max="28"
+                value={settingsStore.fontSize}
+                onchange={(e) => {
+                  const v = Math.min(
+                    28,
+                    Math.max(10, Number((e.target as HTMLInputElement).value)),
+                  );
+                  settingsStore.update({ fontSize: v });
+                }}
+              />
+              <button
+                class="font-size-step"
+                onclick={() =>
+                  settingsStore.update({ fontSize: Math.min(28, settingsStore.fontSize + 1) })}
+                >+</button
+              >
+            </div>
+          </div>
+
+          <div class="setting-group">
+            <label class="setting-label">
+              UI font size: {settingsStore.effectiveUiFontSize}px
+              {#if settingsStore.uiFontSize === null}<span class="setting-badge">linked</span>{/if}
+            </label>
+            <div class="ui-font-link">
+              <label class="toggle" title="Link UI font size to code font size">
+                <input
+                  type="checkbox"
+                  checked={settingsStore.uiFontSize === null}
+                  onchange={() => {
+                    if (settingsStore.uiFontSize === null) {
+                      settingsStore.update({ uiFontSize: settingsStore.fontSize });
+                    } else {
+                      settingsStore.update({ uiFontSize: null });
+                    }
+                  }}
+                />
+                <span class="toggle-slider"></span>
+              </label>
+              <span class="setting-desc" style="margin:0">Follow code font size</span>
+            </div>
+            {#if settingsStore.uiFontSize !== null}
+              <input
+                type="range"
+                min="10"
+                max="28"
+                value={settingsStore.uiFontSize}
+                oninput={(e) =>
+                  settingsStore.update({
+                    uiFontSize: Number((e.target as HTMLInputElement).value),
+                  })}
+              />
+              <div class="font-size-input-row">
+                <button
+                  class="font-size-step"
+                  onclick={() =>
+                    settingsStore.update({
+                      uiFontSize: Math.max(
+                        10,
+                        (settingsStore.uiFontSize ?? settingsStore.fontSize) - 1,
+                      ),
+                    })}>−</button
+                >
+                <input
+                  type="number"
+                  class="font-size-number"
+                  min="10"
+                  max="28"
+                  value={settingsStore.uiFontSize}
+                  onchange={(e) => {
+                    const v = Math.min(
+                      28,
+                      Math.max(10, Number((e.target as HTMLInputElement).value)),
+                    );
+                    settingsStore.update({ uiFontSize: v });
+                  }}
+                />
+                <button
+                  class="font-size-step"
+                  onclick={() =>
+                    settingsStore.update({
+                      uiFontSize: Math.min(
+                        28,
+                        (settingsStore.uiFontSize ?? settingsStore.fontSize) + 1,
+                      ),
+                    })}>+</button
+                >
+              </div>
+            {/if}
+            <p class="setting-desc">
+              Tip: Use <kbd>Ctrl</kbd>+<kbd>=</kbd> / <kbd>Ctrl</kbd>+<kbd>−</kbd> to adjust
+              quickly, <kbd>Ctrl</kbd>+<kbd>0</kbd> to reset
+            </p>
           </div>
 
           <div class="setting-group">
@@ -3258,6 +3395,111 @@
     border-color: var(--accent-primary);
     outline: none;
   }
+  /* Font size presets & controls */
+  .font-size-presets {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+  }
+  .preset-btn {
+    padding: 4px 12px;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-secondary);
+    border-radius: var(--radius);
+    color: var(--text-secondary);
+    font-family: var(--font-family-sans);
+    font-size: var(--fs-sans-sm);
+    font-weight: 600;
+    cursor: pointer;
+    transition: all var(--transition);
+  }
+  .preset-btn:hover {
+    background: var(--bg-elevated);
+    color: var(--text-primary);
+    border-color: var(--border-focus);
+  }
+  .preset-btn.active {
+    background: var(--accent-primary);
+    color: var(--bg-primary);
+    border-color: var(--accent-primary);
+  }
+  .preset-btn.reset-btn {
+    padding: 4px 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .font-size-input-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 6px;
+  }
+  .font-size-step {
+    width: 28px;
+    height: 28px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-secondary);
+    border-radius: var(--radius);
+    color: var(--text-secondary);
+    font-size: var(--fs-sans-md);
+    font-weight: 700;
+    cursor: pointer;
+    transition: all var(--transition);
+  }
+  .font-size-step:hover {
+    background: var(--bg-elevated);
+    color: var(--text-primary);
+    border-color: var(--border-focus);
+  }
+  .font-size-number {
+    width: 56px;
+    height: 28px;
+    text-align: center;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-secondary);
+    border-radius: var(--radius);
+    color: var(--text-primary);
+    font-family: var(--font-family);
+    font-size: var(--fs-sm);
+  }
+  .font-size-number:focus {
+    border-color: var(--accent-primary);
+    outline: none;
+  }
+  .ui-font-link {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 6px;
+  }
+  .setting-badge {
+    display: inline-block;
+    margin-left: 6px;
+    padding: 1px 6px;
+    background: var(--accent-primary);
+    color: var(--bg-primary);
+    font-size: var(--fs-sans-xxs);
+    font-weight: 700;
+    border-radius: var(--radius-sm);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  kbd {
+    display: inline-block;
+    padding: 1px 5px;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-secondary);
+    border-radius: var(--radius-sm);
+    font-family: var(--font-family);
+    font-size: var(--fs-xs);
+    color: var(--text-secondary);
+    line-height: 1.4;
+  }
+
   .font-preview {
     margin-top: 8px;
     padding: 10px 12px;
@@ -3563,7 +3805,7 @@
 
   .experimental-badge {
     display: inline-block;
-    font-size: 9px;
+    font-size: var(--fs-sans-xs);
     font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 0.05em;
@@ -3990,7 +4232,7 @@
     font-weight: 500;
   }
   .term-profile-path {
-    font-size: 11px;
+    font-size: var(--fs-xs);
     color: var(--text-tertiary);
     font-family: var(--font-family-mono, monospace);
     overflow: hidden;
@@ -4031,7 +4273,7 @@
     background: color-mix(in srgb, var(--accent-error) 12%, transparent);
   }
   .term-profile-badge {
-    font-size: 9px;
+    font-size: var(--fs-sans-xs);
     padding: 1px 5px;
     border-radius: var(--radius-sm);
     text-transform: uppercase;
@@ -4074,7 +4316,7 @@
   }
   .term-profile-field-hint {
     display: block;
-    font-size: 11px;
+    font-size: var(--fs-sans-xs);
     color: var(--text-tertiary);
     margin-top: 2px;
   }

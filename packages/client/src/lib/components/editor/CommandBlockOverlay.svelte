@@ -376,7 +376,7 @@
     border-left: 2px solid transparent;
     border-radius: 0 var(--radius-sm, 4px) var(--radius-sm, 4px) 0;
     font-family: var(--font-family-mono, monospace);
-    font-size: 11px;
+    font-size: var(--fs-xs);
     line-height: 1;
     transition:
       background 0.15s ease,
@@ -453,7 +453,7 @@
 
   .line-count {
     color: var(--text-tertiary, #6e7681);
-    font-size: 10px;
+    font-size: var(--fs-xxs);
     flex-shrink: 0;
     padding: 1px 6px;
     border-radius: var(--radius-sm, 4px);
@@ -468,7 +468,7 @@
     gap: 2px;
     padding: 1px 4px;
     border-radius: var(--radius-sm, 4px);
-    font-size: 10px;
+    font-size: var(--fs-sans-xxs);
     font-weight: 600;
     flex-shrink: 0;
   }
@@ -484,7 +484,7 @@
   }
 
   .exit-code-num {
-    font-size: 9px;
+    font-size: var(--fs-xs);
   }
 
   /* ── Running indicator ── */
@@ -657,7 +657,7 @@
     gap: 6px;
     padding: 4px 12px;
     font-family: var(--font-family-mono, monospace);
-    font-size: 11px;
+    font-size: var(--fs-xs);
     color: var(--text-tertiary, #6e7681);
   }
 
@@ -675,7 +675,7 @@
     background: color-mix(in srgb, var(--accent-primary, #00b4ff) 15%, transparent);
     color: var(--accent-primary, #00b4ff);
     font-family: var(--font-family-mono, monospace);
-    font-size: 10px;
+    font-size: var(--fs-xxs);
     font-weight: 600;
     padding: 1px 8px;
     border-radius: var(--radius-sm, 4px);

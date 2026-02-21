@@ -25,6 +25,7 @@ interface SettingsState {
   keybindings: Keybinding[];
   autoMemoryEnabled: boolean;
   fontSize: number;
+  uiFontSize: number | null; // null = follow code font size
   fontFamily: string;
   fontFamilySans: string;
   showThinkingBlocks: boolean;
@@ -126,6 +127,7 @@ const defaults: SettingsState = {
   ],
   autoMemoryEnabled: true,
   fontSize: 14,
+  uiFontSize: null,
   fontFamily: 'share-tech-mono',
   fontFamilySans: 'rajdhani',
   showThinkingBlocks: true,
@@ -333,6 +335,13 @@ function createSettingsStore() {
     },
     get fontSize() {
       return state.fontSize;
+    },
+    get uiFontSize() {
+      return state.uiFontSize;
+    },
+    /** Effective UI font size — falls back to code font size when null */
+    get effectiveUiFontSize() {
+      return state.uiFontSize ?? state.fontSize;
     },
     get fontFamily() {
       return state.fontFamily;
