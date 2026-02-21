@@ -199,13 +199,14 @@
       if (skillFiles.length > 0) {
         registerSkillCommands(skillFiles);
         // Also populate installedSkills for the registry tab
-        installedSkills = skillFiles
-          .map((f) => {
-            // Extract skill name from path: .claude/skills/{name}/SKILL.md
-            const parts = f.path.split('/');
-            return parts[parts.length - 2] || '';
-          })
-          .filter(Boolean);
+        const skillNames = new Set<string>();
+        for (const f of skillFiles) {
+          // Extract skill name from path: .claude/skills/{name}/SKILL.md or .e/skills/{name}/SKILL.md
+          const parts = f.path.split('/');
+          const name = parts[parts.length - 2] || '';
+          if (name) skillNames.add(name);
+        }
+        installedSkills = Array.from(skillNames);
       }
     } catch {}
     if (settingsStore.workspacePath) {
@@ -268,10 +269,17 @@
     return labels[type] || type;
   }
 
-  function ruleTypeLabel(type: string): string {
+  function ruleTypeLabel(type: string, name?: string): string {
+    if (type === 'project') {
+      // Show actual filename for project-level files (CLAUDE.md, E.md, etc.)
+      if (name) {
+        const base = name.split('/').pop() || name;
+        return base;
+      }
+      return 'Project';
+    }
     const labels: Record<string, string> = {
       rules: 'Rule',
-      project: 'CLAUDE.md',
       'compat-rules': 'Compat',
     };
     return labels[type] || type;
@@ -494,14 +502,16 @@
         {#if rulesLoading}
           <div class="empty">Loading rules...</div>
         {:else if ruleFiles.length === 0}
-          <div class="empty">No rules found. Create a rule or add .md files to .claude/rules/</div>
+          <div class="empty">
+            No rules found. Create a rule or add .md files to .e/rules/ or .claude/rules/
+          </div>
         {:else}
           <div class="rules-list">
             {#each ruleFiles as rule (rule.path)}
               <div class="rule-item">
                 <div class="rule-header">
                   <div class="rule-info">
-                    <span class="rule-type-badge">{ruleTypeLabel(rule.type)}</span>
+                    <span class="rule-type-badge">{ruleTypeLabel(rule.type, rule.name)}</span>
                     <span class="rule-name truncate">{rule.name}</span>
                   </div>
                   <div class="rule-controls">

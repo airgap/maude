@@ -223,6 +223,17 @@ const commands: SlashCommand[] = [
     },
   },
   {
+    name: 'e-init',
+    description: 'Initialize project with E.md',
+    execute: () => {
+      return {
+        handled: true,
+        sendAsMessage:
+          'Create an E.md file in the project root. Analyze the project structure, tech stack, and conventions. Write a comprehensive E.md that describes the project, its key conventions, important patterns, and guidelines for working in this codebase. Follow the same format as a CLAUDE.md file — include project overview, key architecture decisions, coding conventions, and common patterns.',
+      };
+    },
+  },
+  {
     name: 'commit',
     description: 'Create a git commit from changes',
     execute: () => {

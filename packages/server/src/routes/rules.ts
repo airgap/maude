@@ -8,7 +8,7 @@ import type { RuleMode } from '@e/shared';
 const app = new Hono();
 
 /** Compatible rule files from other tools */
-const COMPAT_FILES = ['.cursorrules', 'AGENTS.md', '.github/copilot-instructions.md'];
+const COMPAT_FILES = ['.cursorrules', '.erules', 'AGENTS.md', '.github/copilot-instructions.md'];
 
 /**
  * GET /api/rules?workspacePath=...
@@ -35,34 +35,36 @@ app.get('/', async (c) => {
     return row ? row.mode : 'active';
   }
 
-  // 1. .claude/rules/*.md
-  const rulesDir = join(workspacePath, '.claude', 'rules');
-  try {
-    const entries = await readdir(rulesDir, { recursive: true });
-    for (const entry of entries) {
-      if (!String(entry).endsWith('.md')) continue;
-      const full = join(rulesDir, String(entry));
-      try {
-        const content = await readFile(full, 'utf-8');
-        const s = await stat(full);
-        rules.push({
-          path: full,
-          name: String(entry),
-          content,
-          type: 'rules',
-          mode: getMode(full),
-          lastModified: s.mtimeMs,
-        });
-      } catch {
-        // Skip unreadable files
+  // 1. .claude/rules/*.md and .e/rules/*.md
+  for (const rulesParent of ['.claude', '.e']) {
+    const rulesDir = join(workspacePath, rulesParent, 'rules');
+    try {
+      const entries = await readdir(rulesDir, { recursive: true });
+      for (const entry of entries) {
+        if (!String(entry).endsWith('.md')) continue;
+        const full = join(rulesDir, String(entry));
+        try {
+          const content = await readFile(full, 'utf-8');
+          const s = await stat(full);
+          rules.push({
+            path: full,
+            name: String(entry),
+            content,
+            type: 'rules',
+            mode: getMode(full),
+            lastModified: s.mtimeMs,
+          });
+        } catch {
+          // Skip unreadable files
+        }
       }
+    } catch {
+      // Directory doesn't exist
     }
-  } catch {
-    // Directory doesn't exist
   }
 
-  // 2. CLAUDE.md in workspace root
-  for (const p of ['CLAUDE.md', '.claude/CLAUDE.md']) {
+  // 2. CLAUDE.md / E.md in workspace root
+  for (const p of ['CLAUDE.md', '.claude/CLAUDE.md', 'E.md', '.e/E.md']) {
     const full = join(workspacePath, p);
     try {
       const content = await readFile(full, 'utf-8');
@@ -104,18 +106,20 @@ app.get('/', async (c) => {
 
 /**
  * POST /api/rules
- * Create a new rule file in .claude/rules/
+ * Create a new rule file in .e/rules/ (or .claude/rules/ via rulesDir param)
  */
 app.post('/', async (c) => {
   const body = await c.req.json();
-  const { workspacePath, name, content } = body;
+  const { workspacePath, name, content, useClaudeDir } = body;
 
   if (!workspacePath || !name) {
     return c.json({ ok: false, error: 'workspacePath and name are required' }, 400);
   }
 
   const fileName = name.endsWith('.md') ? name : `${name}.md`;
-  const rulesDir = join(workspacePath, '.claude', 'rules');
+  // Default to .e/rules/ for new rules; use .claude/rules/ only if explicitly requested
+  const rulesParent = useClaudeDir ? '.claude' : '.e';
+  const rulesDir = join(workspacePath, rulesParent, 'rules');
   await mkdir(rulesDir, { recursive: true });
 
   const filePath = join(rulesDir, fileName);
@@ -220,25 +224,27 @@ app.get('/active', async (c) => {
 
   const activeContents: string[] = [];
 
-  // Scan .claude/rules/*.md
-  const rulesDir = join(workspacePath, '.claude', 'rules');
-  try {
-    const entries = await readdir(rulesDir, { recursive: true });
-    for (const entry of entries) {
-      if (!String(entry).endsWith('.md')) continue;
-      const full = join(rulesDir, String(entry));
-      if (onDemandPaths.has(full)) continue;
-      try {
-        const content = await readFile(full, 'utf-8');
-        if (content.trim()) {
-          activeContents.push(`### Rule: ${String(entry)}\n${content.trim()}`);
+  // Scan .claude/rules/*.md and .e/rules/*.md
+  for (const rulesParent of ['.claude', '.e']) {
+    const rulesDir = join(workspacePath, rulesParent, 'rules');
+    try {
+      const entries = await readdir(rulesDir, { recursive: true });
+      for (const entry of entries) {
+        if (!String(entry).endsWith('.md')) continue;
+        const full = join(rulesDir, String(entry));
+        if (onDemandPaths.has(full)) continue;
+        try {
+          const content = await readFile(full, 'utf-8');
+          if (content.trim()) {
+            activeContents.push(`### Rule: ${String(entry)}\n${content.trim()}`);
+          }
+        } catch {
+          // Skip
         }
-      } catch {
-        // Skip
       }
+    } catch {
+      // Directory doesn't exist
     }
-  } catch {
-    // Directory doesn't exist
   }
 
   // Scan compatible files that are active
@@ -269,9 +275,15 @@ app.get('/by-name/:name', async (c) => {
   const name = c.req.param('name');
   const workspacePath = c.req.query('workspacePath') || process.cwd();
 
-  // Search in .claude/rules/ first
-  const rulesDir = join(workspacePath, '.claude', 'rules');
-  const candidates = [join(rulesDir, name), join(rulesDir, `${name}.md`)];
+  // Search in .claude/rules/ and .e/rules/
+  const claudeRulesDir = join(workspacePath, '.claude', 'rules');
+  const eRulesDir = join(workspacePath, '.e', 'rules');
+  const candidates = [
+    join(claudeRulesDir, name),
+    join(claudeRulesDir, `${name}.md`),
+    join(eRulesDir, name),
+    join(eRulesDir, `${name}.md`),
+  ];
 
   // Also check compat files
   for (const p of COMPAT_FILES) {

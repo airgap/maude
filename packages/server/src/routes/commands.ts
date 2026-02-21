@@ -1,11 +1,13 @@
 import { Hono } from 'hono';
 import { getDb } from '../db/database';
+import { writeFile, stat } from 'fs/promises';
+import { join } from 'path';
 
 const app = new Hono();
 
 /**
  * Execute a slash command that requires backend processing.
- * Currently supports /compact and /init.
+ * Currently supports /compact, /init, and /e-init.
  */
 app.post('/:conversationId/execute', async (c) => {
   const conversationId = c.req.param('conversationId');
@@ -37,6 +39,27 @@ app.post('/:conversationId/execute', async (c) => {
         ok: exitCode === 0,
         data: { output: output.trim() },
         error: exitCode !== 0 ? `Process exited with code ${exitCode}` : undefined,
+      });
+    }
+
+    case 'e-init': {
+      // Creates an E.md file in the project directory
+      const cwd = conv.workspace_path || process.cwd();
+      const eMdPath = join(cwd, 'E.md');
+      try {
+        await stat(eMdPath);
+        return c.json({
+          ok: false,
+          error: 'E.md already exists in this project',
+        });
+      } catch {
+        // File doesn't exist, create it
+      }
+      const defaultContent = `# E.md — Project Guide\n\n## Overview\n\nDescribe your project here.\n\n## Conventions\n\n- List coding conventions\n- Style guidelines\n- Naming patterns\n\n## Architecture\n\n- Key architectural decisions\n- Important patterns\n\n## Common Patterns\n\n- Frequently used patterns in this codebase\n`;
+      await writeFile(eMdPath, defaultContent, 'utf-8');
+      return c.json({
+        ok: true,
+        data: { output: `Created E.md in ${cwd}`, path: eMdPath },
       });
     }
 

@@ -220,11 +220,14 @@ app.post('/install', async (c) => {
       return c.json({ ok: false, error: `Skill '${skillName}' not found in registry` }, 404);
     }
 
-    // Write to .claude/skills/{name}/SKILL.md
-    const skillDir = join(workspacePath, '.claude', 'skills', skillName);
-    await mkdir(skillDir, { recursive: true });
-    const skillFile = join(skillDir, 'SKILL.md');
-    await writeFile(skillFile, skill.content, 'utf-8');
+    // Write to both .e/skills/ (primary) and .claude/skills/ (backward compat)
+    for (const parent of ['.e', '.claude']) {
+      const skillDir = join(workspacePath, parent, 'skills', skillName);
+      await mkdir(skillDir, { recursive: true });
+      const skillFile = join(skillDir, 'SKILL.md');
+      await writeFile(skillFile, skill.content, 'utf-8');
+    }
+    const skillFile = join(workspacePath, '.e', 'skills', skillName, 'SKILL.md');
 
     return c.json({ ok: true, data: { path: skillFile } });
   } catch (err) {
@@ -237,17 +240,20 @@ app.post('/install', async (c) => {
 app.get('/installed', async (c) => {
   const workspacePath = c.req.query('workspacePath') || getWorkspacePath();
   try {
-    const skillsDir = join(workspacePath, '.claude', 'skills');
-    const entries = await readdir(skillsDir).catch(() => []);
-    const installed: string[] = [];
-    for (const entry of entries) {
-      try {
-        const skillFile = join(skillsDir, entry, 'SKILL.md');
-        await stat(skillFile);
-        installed.push(entry);
-      } catch {}
+    const installedSet = new Set<string>();
+    // Discover skills from both .claude/skills/ and .e/skills/
+    for (const parent of ['.claude', '.e']) {
+      const skillsDir = join(workspacePath, parent, 'skills');
+      const entries = await readdir(skillsDir).catch(() => []);
+      for (const entry of entries) {
+        try {
+          const skillFile = join(skillsDir, entry, 'SKILL.md');
+          await stat(skillFile);
+          installedSet.add(entry);
+        } catch {}
+      }
     }
-    return c.json({ ok: true, data: installed });
+    return c.json({ ok: true, data: Array.from(installedSet) });
   } catch (err) {
     return c.json({ ok: true, data: [] });
   }

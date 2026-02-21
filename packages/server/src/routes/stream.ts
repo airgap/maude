@@ -110,7 +110,12 @@ function getWorkspaceMemoryContext(workspacePath: string | null): string {
 }
 
 /** Compatible rule files from other tools */
-const COMPAT_RULE_FILES = ['.cursorrules', 'AGENTS.md', '.github/copilot-instructions.md'];
+const COMPAT_RULE_FILES = [
+  '.cursorrules',
+  '.erules',
+  'AGENTS.md',
+  '.github/copilot-instructions.md',
+];
 
 /**
  * Get the content of all active rules for injection into the system prompt.
@@ -128,25 +133,27 @@ async function getActiveRulesContext(workspacePath: string | null): Promise<stri
 
     const activeContents: string[] = [];
 
-    // Scan .claude/rules/*.md
-    const rulesDir = join(workspacePath, '.claude', 'rules');
-    try {
-      const entries = await readdir(rulesDir, { recursive: true });
-      for (const entry of entries) {
-        if (!String(entry).endsWith('.md')) continue;
-        const full = join(rulesDir, String(entry));
-        if (onDemandPaths.has(full)) continue;
-        try {
-          const content = await readFile(full, 'utf-8');
-          if (content.trim()) {
-            activeContents.push(`### Rule: ${String(entry)}\n${content.trim()}`);
+    // Scan .claude/rules/*.md and .e/rules/*.md
+    for (const rulesParent of ['.claude', '.e']) {
+      const rulesDir = join(workspacePath, rulesParent, 'rules');
+      try {
+        const entries = await readdir(rulesDir, { recursive: true });
+        for (const entry of entries) {
+          if (!String(entry).endsWith('.md')) continue;
+          const full = join(rulesDir, String(entry));
+          if (onDemandPaths.has(full)) continue;
+          try {
+            const content = await readFile(full, 'utf-8');
+            if (content.trim()) {
+              activeContents.push(`### Rule: ${String(entry)}\n${content.trim()}`);
+            }
+          } catch {
+            // Skip unreadable files
           }
-        } catch {
-          // Skip unreadable files
         }
+      } catch {
+        // Directory doesn't exist
       }
-    } catch {
-      // Directory doesn't exist
     }
 
     // Scan compatible files that are active
