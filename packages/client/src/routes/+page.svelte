@@ -3,10 +3,26 @@
   import ChatInput from '$lib/components/input/ChatInput.svelte';
   import ChangeSummary from '$lib/components/chat/ChangeSummary.svelte';
   import { conversationStore } from '$lib/stores/conversation.svelte';
+  import { loopStore } from '$lib/stores/loop.svelte';
+
+  const pageTitle = $derived.by(() => {
+    const base = conversationStore.active?.title ?? 'E';
+    if (loopStore.isRunning) {
+      const progress =
+        loopStore.totalStories > 0
+          ? ` ${loopStore.completedStories}/${loopStore.totalStories}`
+          : '';
+      return `⚡ Golem${progress} — ${base}`;
+    }
+    if (loopStore.isPaused) {
+      return `⏸ Golem Paused — ${base}`;
+    }
+    return base;
+  });
 </script>
 
 <svelte:head>
-  <title>{conversationStore.active?.title ?? 'E'}</title>
+  <title>{pageTitle}</title>
 </svelte:head>
 
 <div class="chat-page">

@@ -3,6 +3,7 @@
   import { workspaceListStore } from '$lib/stores/projects.svelte';
   import { uiStore } from '$lib/stores/ui.svelte';
   import { streamStore } from '$lib/stores/stream.svelte';
+  import { loopStore } from '$lib/stores/loop.svelte';
   import { api } from '$lib/api/client';
   import { onMount } from 'svelte';
 
@@ -62,6 +63,14 @@
     return workspaceStore.workspaces.some((w) => w.workspaceId === workspaceId);
   }
 
+  function workspaceGolemStatus(workspacePath: string): 'running' | 'paused' | null {
+    if (!loopStore.isActive || !loopStore.activeLoop) return null;
+    if (loopStore.activeLoop.workspacePath === workspacePath) {
+      return loopStore.isRunning ? 'running' : loopStore.isPaused ? 'paused' : null;
+    }
+    return null;
+  }
+
   async function browseDirectories(parentPath?: string) {
     browseLoading = true;
     try {
@@ -100,10 +109,13 @@
 <div class="workspace-tabs">
   <div class="tab-list" role="tablist">
     {#each workspaceStore.workspaces as workspace (workspace.workspaceId)}
+      {@const golemStatus = workspaceGolemStatus(workspace.workspacePath)}
       <!-- svelte-ignore a11y_no_static_element_interactions -->
       <div
         class="tab"
         class:active={workspace.workspaceId === workspaceStore.activeWorkspaceId}
+        class:golem-running={golemStatus === 'running'}
+        class:golem-paused={golemStatus === 'paused'}
         role="tab"
         tabindex="0"
         aria-selected={workspace.workspaceId === workspaceStore.activeWorkspaceId}
@@ -114,6 +126,29 @@
         onmousedown={(e) => onMiddleClick(e, workspace.workspaceId)}
         title={workspace.workspacePath}
       >
+        {#if golemStatus}
+          <span
+            class="golem-tab-indicator"
+            class:paused={golemStatus === 'paused'}
+            title="Golem {golemStatus}"
+          >
+            <svg
+              width="12"
+              height="12"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2.5"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <circle cx="12" cy="12" r="3" />
+              <path
+                d="M12 1v4M12 19v4M4.22 4.22l2.83 2.83M16.95 16.95l2.83 2.83M1 12h4M19 12h4M4.22 19.78l2.83-2.83M16.95 7.05l2.83-2.83"
+              />
+            </svg>
+          </span>
+        {/if}
         <span class="tab-name">{workspace.workspaceName}</span>
         {#if workspaceStore.hasDirtyTabs(workspace.workspaceId)}
           <span class="dirty-dot" title="Unsaved changes"></span>
@@ -347,6 +382,57 @@
   .close-btn:hover {
     background: var(--bg-hover);
     color: var(--text-primary);
+  }
+
+  /* ── Golem indicators on workspace tabs ── */
+  .tab.golem-running {
+    border-color: var(--accent-primary);
+    box-shadow: 0 0 8px color-mix(in srgb, var(--accent-primary) 25%, transparent);
+    animation: golemTabGlow 2s ease-in-out infinite;
+  }
+  .tab.golem-paused {
+    border-color: var(--accent-warning);
+    box-shadow: 0 0 6px color-mix(in srgb, var(--accent-warning) 20%, transparent);
+  }
+  .tab.golem-running .tab-name,
+  .tab.golem-paused .tab-name {
+    font-weight: 700;
+  }
+
+  .golem-tab-indicator {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--accent-primary);
+    flex-shrink: 0;
+    line-height: 0;
+    animation: golemTabSpin 3s linear infinite;
+    filter: drop-shadow(0 0 3px var(--accent-primary));
+  }
+  .golem-tab-indicator.paused {
+    color: var(--accent-warning);
+    animation: none;
+    filter: drop-shadow(0 0 3px var(--accent-warning));
+  }
+
+  @keyframes golemTabGlow {
+    0%,
+    100% {
+      box-shadow: 0 0 6px color-mix(in srgb, var(--accent-primary) 20%, transparent);
+    }
+    50% {
+      box-shadow:
+        0 0 12px color-mix(in srgb, var(--accent-primary) 40%, transparent),
+        0 0 20px color-mix(in srgb, var(--accent-primary) 15%, transparent);
+    }
+  }
+  @keyframes golemTabSpin {
+    0% {
+      transform: rotate(0deg);
+    }
+    100% {
+      transform: rotate(360deg);
+    }
   }
 
   @keyframes pulse {

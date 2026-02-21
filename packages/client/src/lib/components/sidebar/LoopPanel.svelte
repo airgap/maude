@@ -1337,18 +1337,34 @@
 
   .loop-badge {
     font-size: var(--fs-xxs);
-    padding: 1px 6px;
-    border-radius: 3px;
-    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: var(--radius-sm);
+    font-weight: 700;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
   }
   .loop-badge.running {
     background: var(--accent-primary);
     color: var(--text-on-accent);
-    animation: pulse 2s infinite;
+    animation: loopBadgePulse 2s ease-in-out infinite;
+    box-shadow: 0 0 8px color-mix(in srgb, var(--accent-primary) 50%, transparent);
   }
   .loop-badge.paused {
     background: var(--accent-warning, #e6a817);
     color: #000;
+    box-shadow: 0 0 6px color-mix(in srgb, var(--accent-warning) 40%, transparent);
+  }
+
+  @keyframes loopBadgePulse {
+    0%,
+    100% {
+      box-shadow: 0 0 6px color-mix(in srgb, var(--accent-primary) 40%, transparent);
+    }
+    50% {
+      box-shadow:
+        0 0 14px color-mix(in srgb, var(--accent-primary) 60%, transparent),
+        0 0 24px color-mix(in srgb, var(--accent-primary) 25%, transparent);
+    }
   }
 
   .prd-section select {

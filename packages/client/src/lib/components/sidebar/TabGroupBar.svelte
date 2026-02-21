@@ -4,6 +4,7 @@
   import { SIDEBAR_TABS } from '$lib/config/sidebarTabs';
   import { sidebarLayoutStore } from '$lib/stores/sidebarLayout.svelte';
   import { panelDragStore } from '$lib/stores/panelDrag.svelte';
+  import { loopStore } from '$lib/stores/loop.svelte';
 
   interface Props {
     group: TabGroup;
@@ -647,6 +648,8 @@
         class:active={group.activeTab === tab}
         class:drag-source={drag?.isDragging && !drag.crossDrag && drag.tabId === tab}
         class:hidden-tab={tabHidden === tab}
+        class:golem-active-tab={tab === 'work' && loopStore.isRunning}
+        class:golem-paused-tab={tab === 'work' && loopStore.isPaused}
         onmousedown={(e) => handleDragStart(tab, i, e)}
         ontouchstart={(e) => handleDragStartTouch(tab, i, e)}
         onpointerdown={(e) => handleTabPointerDown(tab, e)}
@@ -666,6 +669,13 @@
         >
           <path d={tabDef.icon} />
         </svg>
+        {#if tab === 'work' && loopStore.isActive}
+          <span
+            class="golem-activity-dot"
+            class:running={loopStore.isRunning}
+            class:paused={loopStore.isPaused}
+          ></span>
+        {/if}
       </button>
     {/if}
   {/each}
@@ -885,6 +895,54 @@
   .tab-btn.hidden-tab {
     opacity: 0.3;
     pointer-events: none;
+  }
+
+  /* ── Golem activity indicator on Work sidebar tab ── */
+  .tab-btn.golem-active-tab {
+    color: var(--accent-primary);
+    animation: golemTabBtnPulse 2s ease-in-out infinite;
+  }
+  .tab-btn.golem-paused-tab {
+    color: var(--accent-warning);
+  }
+
+  .golem-activity-dot {
+    position: absolute;
+    top: 4px;
+    right: 4px;
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+  }
+  .golem-activity-dot.running {
+    background: var(--accent-primary);
+    box-shadow: 0 0 6px var(--accent-primary);
+    animation: golemDotBlink 1.5s ease-in-out infinite;
+  }
+  .golem-activity-dot.paused {
+    background: var(--accent-warning);
+    box-shadow: 0 0 4px var(--accent-warning);
+  }
+
+  @keyframes golemTabBtnPulse {
+    0%,
+    100% {
+      opacity: 1;
+    }
+    50% {
+      opacity: 0.7;
+    }
+  }
+  @keyframes golemDotBlink {
+    0%,
+    100% {
+      opacity: 1;
+      box-shadow: 0 0 4px var(--accent-primary);
+    }
+    50% {
+      opacity: 0.5;
+      box-shadow: 0 0 10px var(--accent-primary);
+    }
   }
 
   .tab-group-bar.dragging {
