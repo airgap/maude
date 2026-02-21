@@ -400,6 +400,566 @@ describe('ClaudeProcessManager', () => {
   });
 });
 
+// ============================================================================
+// reconnectStream — comprehensive tests
+// ============================================================================
+describe('reconnectStream', () => {
+  test('returns null for unknown session', () => {
+    expect(claudeManager.reconnectStream('nonexistent-reconnect')).toBeNull();
+  });
+
+  test('returns null for completed session with no buffered events', async () => {
+    const sessionId = await claudeManager.createSession('conv-reconnect-no-events');
+    const session = claudeManager.getSession(sessionId)!;
+    session.streamComplete = true;
+    session.eventBuffer = [];
+
+    expect(claudeManager.reconnectStream(sessionId)).toBeNull();
+  });
+
+  test('returns ReadableStream for idle session with empty buffer (not complete)', async () => {
+    // Session just started, no events yet but stream is not complete
+    const sessionId = await claudeManager.createSession('conv-reconnect-idle');
+    const session = claudeManager.getSession(sessionId)!;
+    session.streamComplete = false;
+    session.eventBuffer = [];
+
+    const stream = claudeManager.reconnectStream(sessionId);
+    expect(stream).toBeInstanceOf(ReadableStream);
+  });
+
+  test('replays all buffered events for completed session', async () => {
+    const sessionId = await claudeManager.createSession('conv-reconnect-replay');
+    const session = claudeManager.getSession(sessionId)!;
+
+    const events = [
+      'data: {"type":"message_start","message":{"id":"m1","role":"assistant"}}\n\n',
+      'data: {"type":"content_block_start","index":0,"content_block":{"type":"text","text":""}}\n\n',
+      'data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"Hello world"}}\n\n',
+      'data: {"type":"content_block_stop","index":0}\n\n',
+      'data: {"type":"message_delta","delta":{"stop_reason":"end_turn"},"usage":{"input_tokens":10,"output_tokens":5}}\n\n',
+      'data: {"type":"message_stop"}\n\n',
+    ];
+
+    session.eventBuffer = [...events];
+    session.streamComplete = true;
+
+    const stream = claudeManager.reconnectStream(sessionId)!;
+    const reader = stream.getReader();
+    const decoder = new TextDecoder();
+    let allData = '';
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      allData += decoder.decode(value, { stream: true });
+    }
+
+    // All events should be present in the output
+    expect(allData).toContain('message_start');
+    expect(allData).toContain('content_block_start');
+    expect(allData).toContain('Hello world');
+    expect(allData).toContain('content_block_stop');
+    expect(allData).toContain('message_delta');
+    expect(allData).toContain('message_stop');
+  });
+
+  test('replays events and then sends new events for running session', async () => {
+    const sessionId = await claudeManager.createSession('conv-reconnect-live');
+    const session = claudeManager.getSession(sessionId)!;
+
+    // Initial buffered events
+    session.eventBuffer = [
+      'data: {"type":"message_start","message":{"id":"m1","role":"assistant"}}\n\n',
+      'data: {"type":"content_block_start","index":0,"content_block":{"type":"text","text":""}}\n\n',
+    ];
+    session.streamComplete = false;
+
+    const stream = claudeManager.reconnectStream(sessionId)!;
+    const reader = stream.getReader();
+    const decoder = new TextDecoder();
+
+    // Read the first batch (buffered events + possibly a ping)
+    let allData = '';
+    const { done: done1, value: value1 } = await reader.read();
+    if (!done1 && value1) {
+      allData += decoder.decode(value1, { stream: true });
+    }
+
+    // Should have received at least message_start
+    expect(allData).toContain('message_start');
+
+    // Now simulate new events arriving while connected
+    session.eventBuffer.push(
+      'data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"new text"}}\n\n',
+    );
+
+    // Wait for the 100ms poll interval to pick up the new event
+    await new Promise((resolve) => setTimeout(resolve, 200));
+
+    // Read more data
+    const { done: done2, value: value2 } = await reader.read();
+    if (!done2 && value2) {
+      allData += decoder.decode(value2, { stream: true });
+    }
+
+    // Now mark stream complete
+    session.streamComplete = true;
+
+    // Wait for poll to detect completion and close
+    await new Promise((resolve) => setTimeout(resolve, 200));
+
+    // Drain remaining
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      if (value) allData += decoder.decode(value, { stream: true });
+    }
+
+    expect(allData).toContain('new text');
+  });
+
+  test('closes when client cancels via reader.cancel()', async () => {
+    const sessionId = await claudeManager.createSession('conv-reconnect-cancel');
+    const session = claudeManager.getSession(sessionId)!;
+    session.streamComplete = false;
+    session.eventBuffer = ['data: {"type":"ping"}\n\n'];
+
+    const stream = claudeManager.reconnectStream(sessionId)!;
+    const reader = stream.getReader();
+
+    // Read the initial event
+    await reader.read();
+
+    // Cancel the reader (simulates client disconnect / page navigation)
+    await reader.cancel();
+
+    // Should not throw — cleanup intervals should be cleared
+  });
+
+  test('preserves event ordering during replay', async () => {
+    const sessionId = await claudeManager.createSession('conv-reconnect-order');
+    const session = claudeManager.getSession(sessionId)!;
+
+    // Add events in specific order
+    for (let i = 0; i < 10; i++) {
+      session.eventBuffer.push(
+        `data: {"type":"content_block_delta","index":0,"sequence":${i}}\n\n`,
+      );
+    }
+    session.streamComplete = true;
+
+    const stream = claudeManager.reconnectStream(sessionId)!;
+    const reader = stream.getReader();
+    const decoder = new TextDecoder();
+    let allData = '';
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      allData += decoder.decode(value, { stream: true });
+    }
+
+    // Check ordering is preserved
+    for (let i = 0; i < 10; i++) {
+      expect(allData).toContain(`"sequence":${i}`);
+    }
+
+    // Verify ordering by checking positions
+    let lastPos = -1;
+    for (let i = 0; i < 10; i++) {
+      const pos = allData.indexOf(`"sequence":${i}`);
+      expect(pos).toBeGreaterThan(lastPos);
+      lastPos = pos;
+    }
+  });
+
+  test('handles large event buffers', async () => {
+    const sessionId = await claudeManager.createSession('conv-reconnect-large');
+    const session = claudeManager.getSession(sessionId)!;
+
+    // Simulate a large buffer (100 events)
+    for (let i = 0; i < 100; i++) {
+      session.eventBuffer.push(
+        `data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"chunk-${i} "}}\n\n`,
+      );
+    }
+    session.streamComplete = true;
+
+    const stream = claudeManager.reconnectStream(sessionId)!;
+    const reader = stream.getReader();
+    const decoder = new TextDecoder();
+    let allData = '';
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      allData += decoder.decode(value, { stream: true });
+    }
+
+    // All 100 events should be present
+    for (let i = 0; i < 100; i++) {
+      expect(allData).toContain(`chunk-${i}`);
+    }
+  });
+
+  test('handles empty event buffer with running session', async () => {
+    const sessionId = await claudeManager.createSession('conv-reconnect-empty-running');
+    const session = claudeManager.getSession(sessionId)!;
+    session.streamComplete = false;
+    session.eventBuffer = [];
+
+    const stream = claudeManager.reconnectStream(sessionId)!;
+    expect(stream).toBeInstanceOf(ReadableStream);
+
+    // Mark complete immediately so the polling loop closes
+    session.streamComplete = true;
+
+    const reader = stream.getReader();
+    const decoder = new TextDecoder();
+    let allData = '';
+
+    // Wait for poll to detect completion
+    await new Promise((resolve) => setTimeout(resolve, 200));
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      if (value) allData += decoder.decode(value, { stream: true });
+    }
+
+    // Should at minimum contain a ping from the keep-alive interval,
+    // or just close cleanly
+  });
+
+  test('buffers events added after reconnection starts', async () => {
+    const sessionId = await claudeManager.createSession('conv-reconnect-buffered-after');
+    const session = claudeManager.getSession(sessionId)!;
+    session.streamComplete = false;
+    session.eventBuffer = ['data: {"type":"message_start","message":{"id":"m1"}}\n\n'];
+
+    const stream = claudeManager.reconnectStream(sessionId)!;
+    const reader = stream.getReader();
+    const decoder = new TextDecoder();
+
+    // First read gets the replayed event
+    const result1 = await reader.read();
+    const data1 = decoder.decode(result1.value, { stream: true });
+    expect(data1).toContain('message_start');
+
+    // Push new events after replay
+    session.eventBuffer.push(
+      'data: {"type":"content_block_delta","index":0,"delta":{"text":"hello"}}\n\n',
+    );
+    session.eventBuffer.push('data: {"type":"message_stop"}\n\n');
+    session.streamComplete = true;
+
+    // Wait for poll to pick up new events
+    await new Promise((resolve) => setTimeout(resolve, 200));
+
+    let allData = '';
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      if (value) allData += decoder.decode(value, { stream: true });
+    }
+
+    expect(allData).toContain('content_block_delta');
+    expect(allData).toContain('message_stop');
+  });
+});
+
+// ============================================================================
+// createLightweightSession
+// ============================================================================
+describe('createLightweightSession', () => {
+  test('creates session with correct defaults', () => {
+    const sessionId = claudeManager.createLightweightSession('conv-lightweight-1');
+    const session = claudeManager.getSession(sessionId);
+
+    expect(session).toBeDefined();
+    expect(session!.conversationId).toBe('conv-lightweight-1');
+    expect(session!.status).toBe('running');
+    expect(session!.eventBuffer).toEqual([]);
+    expect(session!.streamComplete).toBe(false);
+    expect(session!.pendingNudges).toEqual([]);
+  });
+
+  test('creates unique session IDs', () => {
+    const id1 = claudeManager.createLightweightSession('conv-lw-unique-1');
+    const id2 = claudeManager.createLightweightSession('conv-lw-unique-2');
+    expect(id1).not.toBe(id2);
+  });
+
+  test('session appears in listSessions', () => {
+    const sessionId = claudeManager.createLightweightSession('conv-lw-list');
+    const sessions = claudeManager.listSessions();
+    const found = sessions.find((s) => s.id === sessionId);
+
+    expect(found).toBeDefined();
+    expect(found!.conversationId).toBe('conv-lw-list');
+    expect(found!.status).toBe('running');
+    expect(found!.bufferedEvents).toBe(0);
+  });
+});
+
+// ============================================================================
+// wrapProviderStream
+// ============================================================================
+describe('wrapProviderStream', () => {
+  test('passes through all events from provider stream', async () => {
+    const sessionId = claudeManager.createLightweightSession('conv-wrap-1');
+    const encoder = new TextEncoder();
+
+    const providerStream = new ReadableStream({
+      start(controller) {
+        controller.enqueue(
+          encoder.encode('data: {"type":"message_start","message":{"id":"m1"}}\n\n'),
+        );
+        controller.enqueue(
+          encoder.encode(
+            'data: {"type":"content_block_delta","index":0,"delta":{"text":"hello"}}\n\n',
+          ),
+        );
+        controller.enqueue(encoder.encode('data: {"type":"message_stop"}\n\n'));
+        controller.close();
+      },
+    });
+
+    const wrappedStream = claudeManager.wrapProviderStream(sessionId, providerStream);
+    const reader = wrappedStream.getReader();
+    const decoder = new TextDecoder();
+    let allData = '';
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      allData += decoder.decode(value, { stream: true });
+    }
+
+    expect(allData).toContain('message_start');
+    expect(allData).toContain('hello');
+    expect(allData).toContain('message_stop');
+  });
+
+  test('buffers SSE events for reconnection', async () => {
+    const sessionId = claudeManager.createLightweightSession('conv-wrap-buffer');
+    const encoder = new TextEncoder();
+
+    const providerStream = new ReadableStream({
+      start(controller) {
+        controller.enqueue(
+          encoder.encode('data: {"type":"message_start","message":{"id":"m1"}}\n\n'),
+        );
+        controller.enqueue(encoder.encode('data: {"type":"message_stop"}\n\n'));
+        controller.close();
+      },
+    });
+
+    const wrappedStream = claudeManager.wrapProviderStream(sessionId, providerStream);
+    const reader = wrappedStream.getReader();
+
+    // Drain the stream
+    while (true) {
+      const { done } = await reader.read();
+      if (done) break;
+    }
+
+    // Check that events were buffered
+    const session = claudeManager.getSession(sessionId)!;
+    expect(session.eventBuffer.length).toBeGreaterThan(0);
+    expect(session.streamComplete).toBe(true);
+
+    // Verify buffered events contain the expected data
+    const bufferContent = session.eventBuffer.join('');
+    expect(bufferContent).toContain('message_start');
+    expect(bufferContent).toContain('message_stop');
+  });
+
+  test('marks session as complete when provider stream ends', async () => {
+    const sessionId = claudeManager.createLightweightSession('conv-wrap-complete');
+    const encoder = new TextEncoder();
+
+    const providerStream = new ReadableStream({
+      start(controller) {
+        controller.enqueue(encoder.encode('data: {"type":"ping"}\n\n'));
+        controller.close();
+      },
+    });
+
+    const wrappedStream = claudeManager.wrapProviderStream(sessionId, providerStream);
+    const reader = wrappedStream.getReader();
+
+    // Drain the stream
+    while (true) {
+      const { done } = await reader.read();
+      if (done) break;
+    }
+
+    const session = claudeManager.getSession(sessionId)!;
+    expect(session.streamComplete).toBe(true);
+    expect(session.status).toBe('idle');
+  });
+
+  test('returns unwrapped stream for unknown session', async () => {
+    const encoder = new TextEncoder();
+    const providerStream = new ReadableStream({
+      start(controller) {
+        controller.enqueue(encoder.encode('data: {"type":"ping"}\n\n'));
+        controller.close();
+      },
+    });
+
+    const result = claudeManager.wrapProviderStream('nonexistent-wrap', providerStream);
+
+    // Should return the original stream (fallback)
+    expect(result).toBeInstanceOf(ReadableStream);
+
+    const reader = result.getReader();
+    const decoder = new TextDecoder();
+    let allData = '';
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      allData += decoder.decode(value, { stream: true });
+    }
+    expect(allData).toContain('ping');
+  });
+
+  test('handles provider stream error gracefully', async () => {
+    const sessionId = claudeManager.createLightweightSession('conv-wrap-error');
+
+    const providerStream = new ReadableStream({
+      start(controller) {
+        controller.error(new Error('Provider crashed'));
+      },
+    });
+
+    const wrappedStream = claudeManager.wrapProviderStream(sessionId, providerStream);
+    const reader = wrappedStream.getReader();
+    const decoder = new TextDecoder();
+    let allData = '';
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      if (value) allData += decoder.decode(value, { stream: true });
+    }
+
+    // Should have buffered an error event
+    const session = claudeManager.getSession(sessionId)!;
+    expect(session.streamComplete).toBe(true);
+    const errorEvent = session.eventBuffer.find((e) => e.includes('"stream_error"'));
+    expect(errorEvent).toBeTruthy();
+  });
+
+  test('supports reconnection after wrapping', async () => {
+    const sessionId = claudeManager.createLightweightSession('conv-wrap-reconnect');
+    const encoder = new TextEncoder();
+
+    const providerStream = new ReadableStream({
+      start(controller) {
+        controller.enqueue(
+          encoder.encode('data: {"type":"message_start","message":{"id":"m1"}}\n\n'),
+        );
+        controller.enqueue(
+          encoder.encode(
+            'data: {"type":"content_block_delta","index":0,"delta":{"text":"wrapped"}}\n\n',
+          ),
+        );
+        controller.enqueue(encoder.encode('data: {"type":"message_stop"}\n\n'));
+        controller.close();
+      },
+    });
+
+    const wrappedStream = claudeManager.wrapProviderStream(sessionId, providerStream);
+    const reader = wrappedStream.getReader();
+
+    // Drain the original stream
+    while (true) {
+      const { done } = await reader.read();
+      if (done) break;
+    }
+
+    // Now reconnect and verify buffered events are replayed
+    const reconnectStream = claudeManager.reconnectStream(sessionId);
+    expect(reconnectStream).not.toBeNull();
+
+    const reconnectReader = reconnectStream!.getReader();
+    const decoder = new TextDecoder();
+    let allData = '';
+
+    while (true) {
+      const { done, value } = await reconnectReader.read();
+      if (done) break;
+      allData += decoder.decode(value, { stream: true });
+    }
+
+    expect(allData).toContain('message_start');
+    expect(allData).toContain('wrapped');
+    expect(allData).toContain('message_stop');
+  });
+});
+
+// ============================================================================
+// Session lifecycle and cleanup
+// ============================================================================
+describe('session lifecycle', () => {
+  test('session pendingNudges initializes empty', async () => {
+    const sessionId = await claudeManager.createSession('conv-nudge-init');
+    const session = claudeManager.getSession(sessionId)!;
+    expect(session.pendingNudges).toEqual([]);
+  });
+
+  test('queueNudge adds nudge to session', async () => {
+    const sessionId = await claudeManager.createSession('conv-nudge-queue');
+    claudeManager.queueNudge(sessionId, 'Please also handle edge cases');
+    const session = claudeManager.getSession(sessionId)!;
+    expect(session.pendingNudges).toContain('Please also handle edge cases');
+  });
+
+  test('queueNudge returns false for unknown session', () => {
+    const result = claudeManager.queueNudge('nonexistent-nudge', 'test');
+    expect(result).toBe(false);
+  });
+
+  test('multiple nudges accumulate', async () => {
+    const sessionId = await claudeManager.createSession('conv-nudge-multi');
+    claudeManager.queueNudge(sessionId, 'First nudge');
+    claudeManager.queueNudge(sessionId, 'Second nudge');
+    const session = claudeManager.getSession(sessionId)!;
+    expect(session.pendingNudges).toEqual(['First nudge', 'Second nudge']);
+  });
+
+  test('session emitter is an EventEmitter', async () => {
+    const sessionId = await claudeManager.createSession('conv-emitter');
+    const session = claudeManager.getSession(sessionId)!;
+    expect(session.emitter).toBeDefined();
+    expect(typeof session.emitter.emit).toBe('function');
+    expect(typeof session.emitter.on).toBe('function');
+  });
+
+  test('listSessions includes bufferedEvents count', async () => {
+    const sessionId = await claudeManager.createSession('conv-list-buffer');
+    const session = claudeManager.getSession(sessionId)!;
+    session.eventBuffer = ['event1\n\n', 'event2\n\n', 'event3\n\n'];
+
+    const sessions = claudeManager.listSessions();
+    const found = sessions.find((s) => s.id === sessionId);
+    expect(found!.bufferedEvents).toBe(3);
+  });
+
+  test('listSessions reflects streamComplete status', async () => {
+    const sessionId = await claudeManager.createSession('conv-list-complete');
+    const session = claudeManager.getSession(sessionId)!;
+    session.streamComplete = true;
+
+    const sessions = claudeManager.listSessions();
+    const found = sessions.find((s) => s.id === sessionId);
+    expect(found!.streamComplete).toBe(true);
+  });
+});
+
 describe('translateCliEvent edge cases', () => {
   test('handles tool_use block with missing id and name', () => {
     const events = translateCliEvent({
