@@ -534,7 +534,7 @@ index abc..def 100644
       expect(spawnSpy).toHaveBeenCalledTimes(3);
     });
 
-    test('returns 400 when not a git repo', async () => {
+    test('returns 200 with skipped when not a git repo', async () => {
       spawnSpy = spyOn(Bun, 'spawn').mockReturnValue(mockProc('false\n', 0) as any);
 
       const res = await app.request('/snapshot', {
@@ -543,13 +543,14 @@ index abc..def 100644
         headers: { 'Content-Type': 'application/json' },
       });
 
-      expect(res.status).toBe(400);
+      expect(res.status).toBe(200);
       const json = await res.json();
       expect(json.ok).toBe(false);
-      expect(json.error).toBe('Not a git repo');
+      expect(json.skipped).toBe(true);
+      expect(json.reason).toBe('not-a-git-repo');
     });
 
-    test('returns 400 when no commits yet', async () => {
+    test('returns 200 with skipped when no commits yet', async () => {
       let callIndex = 0;
       spawnSpy = spyOn(Bun, 'spawn').mockImplementation(() => {
         callIndex++;
@@ -569,10 +570,11 @@ index abc..def 100644
         headers: { 'Content-Type': 'application/json' },
       });
 
-      expect(res.status).toBe(400);
+      expect(res.status).toBe(200);
       const json = await res.json();
       expect(json.ok).toBe(false);
-      expect(json.error).toBe('No commits yet');
+      expect(json.skipped).toBe(true);
+      expect(json.reason).toBe('no-commits');
     });
 
     test('returns 500 when an unexpected error occurs', async () => {
