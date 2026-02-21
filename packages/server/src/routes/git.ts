@@ -90,14 +90,14 @@ app.post('/snapshot', async (c) => {
   if (!rootPath) return c.json({ ok: false, error: 'path required' }, 400);
 
   try {
-    // Check if this is a git repo
+    // Check if this is a git repo (not an error — workspace may not be git-initialized)
     const checkProc = Bun.spawn(['git', 'rev-parse', '--is-inside-work-tree'], {
       cwd: rootPath,
       stdout: 'pipe',
       stderr: 'pipe',
     });
     const isRepo = (await new Response(checkProc.stdout).text()).trim() === 'true';
-    if (!isRepo) return c.json({ ok: false, error: 'Not a git repo' }, 400);
+    if (!isRepo) return c.json({ ok: false, skipped: true, reason: 'not-a-git-repo' });
 
     // Get current HEAD
     const headProc = Bun.spawn(['git', 'rev-parse', 'HEAD'], {
@@ -108,7 +108,7 @@ app.post('/snapshot', async (c) => {
     const headSha = (await new Response(headProc.stdout).text()).trim();
     const headExited = await headProc.exited;
     if (headExited !== 0) {
-      return c.json({ ok: false, error: 'No commits yet' }, 400);
+      return c.json({ ok: false, skipped: true, reason: 'no-commits' });
     }
 
     // Check if there are changes to snapshot
