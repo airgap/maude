@@ -256,8 +256,11 @@
         Standalone{workStore.standaloneCount > 0 ? ` (${workStore.standaloneCount})` : ''}
       </option>
       {#each loopStore.prds as prd}
+        {@const incompleteCount = (prd.stories || []).filter(
+          (s) => s.status !== 'completed' && s.status !== 'skipped' && s.status !== 'archived',
+        ).length}
         <option value={prd.id}>
-          {prd.name}{prd.stories?.length > 0 ? ` (${prd.stories.length})` : ''}
+          {prd.name}{incompleteCount > 0 ? ` (${incompleteCount})` : ''}
         </option>
       {/each}
       {#if workStore.hasExternalStories}

@@ -232,7 +232,11 @@
       {#if loopStore.selectedPrd}
         <div class="prd-info">
           <strong>{loopStore.selectedPrd.name}</strong>
-          <span class="prd-stories">{loopStore.selectedPrd.stories?.length || 0} stories</span>
+          <span class="prd-stories"
+            >{(loopStore.selectedPrd.stories || []).filter(
+              (s) => s.status !== 'completed' && s.status !== 'skipped' && s.status !== 'archived',
+            ).length} stories remaining</span
+          >
         </div>
       {:else if isStandalone}
         <div class="prd-info">

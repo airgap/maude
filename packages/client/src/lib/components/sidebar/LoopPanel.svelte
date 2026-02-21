@@ -725,7 +725,9 @@
     <div class="stories-section">
       <div class="section-header">
         <h4>
-          Stories ({loopStore.selectedPrd.stories?.length || 0}){#if totalStoryPoints > 0}<span
+          Stories ({(loopStore.selectedPrd.stories || []).filter(
+            (s) => s.status !== 'completed' && s.status !== 'skipped' && s.status !== 'archived',
+          ).length}){#if totalStoryPoints > 0}<span
               class="total-points"
               title="{estimatedCount} of {loopStore.selectedPrd.stories?.length || 0} estimated"
             >
