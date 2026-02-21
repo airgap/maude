@@ -561,6 +561,28 @@ class LoopRunner {
           console.log(
             `[loop:${this.loopId}] No eligible story. ${stories.length} total stories: ${stories.map((s) => `${s.title}[${s.status}:${s.attempts}/${s.maxAttempts}]`).join(', ')}`,
           );
+
+          // Guard: empty stories array means the query returned nothing (possibly
+          // a workspace_path mismatch or DB transient issue). [].every() returns
+          // true which would incorrectly mark the loop as "completed".
+          if (stories.length === 0) {
+            console.warn(
+              `[loop:${this.loopId}] getAllStories() returned empty — cannot determine loop state. Marking as failed.`,
+            );
+            this.updateLoopDb({
+              status: 'failed',
+              completed_at: Date.now(),
+              current_story_id: null,
+              current_agent_id: null,
+            });
+            this.emitEvent('failed', {
+              message:
+                'No stories found. They may have been deleted or the workspace path changed.',
+            });
+            this.events.emit('loop_done', this.loopId);
+            return;
+          }
+
           const allCompleted = stories.every(
             (s) => s.status === 'completed' || s.status === 'skipped' || s.researchOnly,
           );
@@ -594,8 +616,30 @@ class LoopRunner {
             continue;
           }
 
+          // Check if there are pending stories that SHOULD be eligible (no unmet deps,
+          // attempts < maxAttempts, not researchOnly). If selectNextStory() returned
+          // null but these exist, it's a transient issue — retry instead of quitting.
+          const pendingEligible = stories.filter(
+            (s) =>
+              s.status === 'pending' &&
+              s.attempts < s.maxAttempts &&
+              !s.researchOnly &&
+              (s.dependsOn || []).every((depId) =>
+                stories.some((d) => d.id === depId && d.status === 'completed'),
+              ),
+          );
+          if (pendingEligible.length > 0) {
+            console.warn(
+              `[loop:${this.loopId}] selectNextStory() returned null but ${pendingEligible.length} pending eligible stories exist: ${pendingEligible.map((s) => `"${s.title}"`).join(', ')}. Retrying...`,
+            );
+            // Brief delay then retry on next iteration
+            await new Promise((r) => setTimeout(r, 2000));
+            continue;
+          }
+
           // Check if there are pending stories with unmet dependencies — they're
           // not eligible yet but may become eligible as other stories complete.
+          // However, since no eligible stories exist to unblock them, this is a deadlock.
           const hasPendingWithDeps = stories.some(
             (s) =>
               s.status === 'pending' &&
@@ -609,7 +653,7 @@ class LoopRunner {
             );
           }
 
-          // No eligible stories left (all failed/maxed out)
+          // No eligible stories left (all failed/maxed out or blocked by deps)
           this.updateLoopDb({
             status: 'failed',
             completed_at: Date.now(),
@@ -1119,9 +1163,11 @@ class LoopRunner {
       console.log(
         `[loop:${this.loopId}] Loop ended after ${iteration} iterations. Stories: ${finalStories.map((s) => `${s.title}[${s.status}]`).join(', ')}`,
       );
-      const allDone = finalStories.every(
-        (s) => s.status === 'completed' || s.status === 'skipped' || s.researchOnly,
-      );
+      const allDone =
+        finalStories.length > 0 &&
+        finalStories.every(
+          (s) => s.status === 'completed' || s.status === 'skipped' || s.researchOnly,
+        );
 
       if (allDone) {
         this.updateLoopDb({
