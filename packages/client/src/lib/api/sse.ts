@@ -179,6 +179,13 @@ export async function sendAndStream(
         const data = line.slice(6).trim();
         if (!data) continue;
 
+        // Clear dedup set on new message_start — indices reset each turn, so
+        // text/thinking blocks at index 0 in turn 2 would otherwise collide
+        // with turn 1's keys and get incorrectly dropped.
+        if (data.includes('"message_start"')) {
+          seenEvents.clear();
+        }
+
         // Skip duplicate events (can happen during HMR race conditions)
         // Use the raw JSON string as a fingerprint for content_block_start and tool events
         const eventKey = deduplicationKey(data);
@@ -423,6 +430,11 @@ export async function reconnectActiveStream(): Promise<string | null> {
         if (!line.startsWith('data: ')) continue;
         const data = line.slice(6).trim();
         if (!data) continue;
+
+        // Clear dedup set on new message_start — indices reset each turn
+        if (data.includes('"message_start"')) {
+          seenEvents.clear();
+        }
 
         // Skip duplicate events
         const eventKey = deduplicationKey(data);
