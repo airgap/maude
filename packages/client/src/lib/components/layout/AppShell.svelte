@@ -34,10 +34,12 @@
   import QuickOpen from '../editor/QuickOpen.svelte';
   import ProjectSetup from '../common/ProjectSetup.svelte';
   import AmbientBackground from './AmbientBackground.svelte';
+  import MobileShell from './MobileShell.svelte';
   import InteractiveTutorial from '../common/InteractiveTutorial.svelte';
   import StartupTip from '../common/StartupTip.svelte';
-  import { waitForServer } from '$lib/api/client';
+  import { waitForServer, api } from '$lib/api/client';
   import { reconnectActiveStream } from '$lib/api/sse';
+  import { conversationStore } from '$lib/stores/conversation.svelte';
   import { deviceStore } from '$lib/stores/device.svelte';
   import { tutorialStore } from '$lib/stores/tutorial.svelte';
   import { settingsStore } from '$lib/stores/settings.svelte';
@@ -66,9 +68,26 @@
       }
 
       // Check for in-flight streaming sessions and reconnect if found.
-      // This handles page reloads during active Claude responses.
+      // This handles page reloads during active responses from any provider.
       try {
-        await reconnectActiveStream();
+        const reconnectedId = await reconnectActiveStream();
+
+        // If reconnection didn't load a conversation, ensure the saved one
+        // is restored. This handles the case where reconnection finds no
+        // active sessions but ConversationList hasn't loaded yet.
+        if (!reconnectedId && !conversationStore.active) {
+          const savedId = workspaceStore.activeWorkspace?.snapshot.activeConversationId;
+          if (savedId) {
+            try {
+              const convRes = await api.conversations.get(savedId);
+              if (convRes.ok && convRes.data) {
+                conversationStore.setActive(convRes.data);
+              }
+            } catch {
+              // Conversation may no longer exist
+            }
+          }
+        }
       } catch {
         // Non-critical — user can manually reload
       }
@@ -245,7 +264,11 @@
     // Ctrl+`: Toggle terminal (without Shift)
     if ((e.ctrlKey || e.metaKey) && !e.shiftKey && e.key === '`') {
       e.preventDefault();
-      terminalStore.toggle();
+      if (isMobileUI) {
+        uiStore.setMobileView(uiStore.mobileActiveView === 'terminal' ? 'chat' : 'terminal');
+      } else {
+        terminalStore.toggle();
+      }
     }
     // Ctrl+Shift+`: New terminal tab
     if ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === '~' || e.key === '`')) {
@@ -378,89 +401,92 @@
   class:golem-paused-active={loopStore.isPaused}
 >
   <AmbientBackground />
-  <TopBar />
 
-  <div class="app-body">
-    <!-- Left edge drop zone (when no left column exists) -->
-    {#if isDragging && !(uiStore.sidebarOpen && sidebarLayoutStore.leftColumn)}
-      <!-- svelte-ignore a11y_no_static_element_interactions -->
-      <div
-        class="edge-drop-zone edge-left"
-        class:active={isEdgeDropTarget('left')}
-        onmouseenter={() => handleEdgeEnter('left')}
-        onmouseleave={() => handleEdgeLeave('left')}
-      >
-        <div class="edge-drop-indicator"></div>
-      </div>
-    {/if}
+  {#if isMobileUI}
+    <!-- ── Mobile: fullscreen single-view with bottom tab bar ── -->
+    <MobileShell>
+      {#snippet children()}
+        {@render appChildren()}
+      {/snippet}
+    </MobileShell>
+  {:else}
+    <!-- ── Desktop: multi-column layout with sidebar panels ── -->
+    <TopBar />
 
-    {#if uiStore.sidebarOpen && sidebarLayoutStore.leftColumn}
-      <PanelColumn column={sidebarLayoutStore.leftColumn} side="left" />
-      <!-- svelte-ignore a11y_no_static_element_interactions -->
-      <div
-        class="resize-handle"
-        onmousedown={(e) => onColumnResizeStart('left', e)}
-        ontouchstart={(e) => onColumnTouchResizeStart('left', e)}
-        ontouchmove={onColumnTouchResizeMove}
-        ontouchend={onColumnTouchResizeEnd}
-      ></div>
-    {/if}
-
-    <main
-      class="main-content"
-      class:resizing-terminal={resizingTerminal}
-      onclick={onMainContentClick}
-    >
-      <!-- Mobile sidebar overlay backdrop -->
-      {#if isMobileUI && uiStore.sidebarOpen}
+    <div class="app-body">
+      <!-- Left edge drop zone (when no left column exists) -->
+      {#if isDragging && !(uiStore.sidebarOpen && sidebarLayoutStore.leftColumn)}
         <!-- svelte-ignore a11y_no_static_element_interactions -->
-        <div class="mobile-sidebar-backdrop" onclick={onMainContentClick}></div>
+        <div
+          class="edge-drop-zone edge-left"
+          class:active={isEdgeDropTarget('left')}
+          onmouseenter={() => handleEdgeEnter('left')}
+          onmouseleave={() => handleEdgeLeave('left')}
+        >
+          <div class="edge-drop-indicator"></div>
+        </div>
       {/if}
-      <div class="main-content-upper">
-        <MainContent>
-          {#snippet children()}
-            {@render appChildren()}
-          {/snippet}
-        </MainContent>
-      </div>
-      {#if terminalStore.isOpen}
+
+      {#if uiStore.sidebarOpen && sidebarLayoutStore.leftColumn}
+        <PanelColumn column={sidebarLayoutStore.leftColumn} side="left" />
         <!-- svelte-ignore a11y_no_static_element_interactions -->
-        <div class="terminal-resize-handle" onmousedown={onTerminalResizeStart}></div>
-        <TerminalPanel />
+        <div
+          class="resize-handle"
+          onmousedown={(e) => onColumnResizeStart('left', e)}
+          ontouchstart={(e) => onColumnTouchResizeStart('left', e)}
+          ontouchmove={onColumnTouchResizeMove}
+          ontouchend={onColumnTouchResizeEnd}
+        ></div>
       {/if}
-    </main>
 
-    {#if sidebarLayoutStore.rightColumn}
-      <!-- svelte-ignore a11y_no_static_element_interactions -->
-      <div
-        class="resize-handle"
-        onmousedown={(e) => onColumnResizeStart('right', e)}
-        ontouchstart={(e) => onColumnTouchResizeStart('right', e)}
-        ontouchmove={onColumnTouchResizeMove}
-        ontouchend={onColumnTouchResizeEnd}
-      ></div>
-      <PanelColumn column={sidebarLayoutStore.rightColumn} side="right" />
-    {/if}
+      <main class="main-content" class:resizing-terminal={resizingTerminal}>
+        <div class="main-content-upper">
+          <MainContent>
+            {#snippet children()}
+              {@render appChildren()}
+            {/snippet}
+          </MainContent>
+        </div>
+        {#if terminalStore.isOpen}
+          <!-- svelte-ignore a11y_no_static_element_interactions -->
+          <div class="terminal-resize-handle" onmousedown={onTerminalResizeStart}></div>
+          <TerminalPanel />
+        {/if}
+      </main>
 
-    <!-- Right edge drop zone (when no right column exists) -->
-    {#if isDragging && !sidebarLayoutStore.rightColumn}
-      <!-- svelte-ignore a11y_no_static_element_interactions -->
-      <div
-        class="edge-drop-zone edge-right"
-        class:active={isEdgeDropTarget('right')}
-        onmouseenter={() => handleEdgeEnter('right')}
-        onmouseleave={() => handleEdgeLeave('right')}
-      >
-        <div class="edge-drop-indicator"></div>
-      </div>
-    {/if}
-  </div>
+      {#if sidebarLayoutStore.rightColumn}
+        <!-- svelte-ignore a11y_no_static_element_interactions -->
+        <div
+          class="resize-handle"
+          onmousedown={(e) => onColumnResizeStart('right', e)}
+          ontouchstart={(e) => onColumnTouchResizeStart('right', e)}
+          ontouchmove={onColumnTouchResizeMove}
+          ontouchend={onColumnTouchResizeEnd}
+        ></div>
+        <PanelColumn column={sidebarLayoutStore.rightColumn} side="right" />
+      {/if}
 
-  <StatusBar />
+      <!-- Right edge drop zone (when no right column exists) -->
+      {#if isDragging && !sidebarLayoutStore.rightColumn}
+        <!-- svelte-ignore a11y_no_static_element_interactions -->
+        <div
+          class="edge-drop-zone edge-right"
+          class:active={isEdgeDropTarget('right')}
+          onmouseenter={() => handleEdgeEnter('right')}
+          onmouseleave={() => handleEdgeLeave('right')}
+        >
+          <div class="edge-drop-indicator"></div>
+        </div>
+      {/if}
+    </div>
 
-  <FloatingPanelContainer />
-  <DragOverlay />
+    <StatusBar />
 
+    <FloatingPanelContainer />
+    <DragOverlay />
+  {/if}
+
+  <!-- Modals — work on both mobile and desktop -->
   {#if uiStore.activeModal === 'settings'}
     <SettingsModal />
   {/if}
@@ -748,6 +774,8 @@
     top: 0;
     bottom: 0;
     z-index: 100;
+    width: var(--sidebar-width) !important;
+    max-width: 100vw;
     box-shadow: 4px 0 24px rgba(0, 0, 0, 0.5);
   }
   :global([data-mobile] .panel-column.column-left) {

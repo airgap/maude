@@ -22,6 +22,9 @@ export type SidebarTab =
   | 'manager'
   | 'commentary'
   | 'golems';
+
+/** Mobile navigation view — either a special view or any sidebar tab rendered fullscreen */
+export type MobileView = 'chat' | 'terminal' | SidebarTab;
 type ModalId =
   | 'settings'
   | 'command-palette'
@@ -73,6 +76,10 @@ function createUIStore() {
   let contextMenuPos = $state<{ x: number; y: number } | null>(null);
   let focusedPane = $state<FocusedPane>('chat');
 
+  // ── Mobile navigation state ──
+  let mobileActiveView = $state<MobileView>('chat');
+  let mobileMoreOpen = $state(false);
+
   return {
     get sidebarOpen() {
       return sidebarOpen;
@@ -95,6 +102,12 @@ function createUIStore() {
     get focusedPane() {
       return focusedPane;
     },
+    get mobileActiveView() {
+      return mobileActiveView;
+    },
+    get mobileMoreOpen() {
+      return mobileMoreOpen;
+    },
 
     toggleSidebar() {
       sidebarOpen = !sidebarOpen;
@@ -108,6 +121,11 @@ function createUIStore() {
       // Notify the layout store to focus the tab wherever it lives.
       // Uses a callback to avoid circular import (sidebarLayout imports SidebarTab type from here).
       _onSidebarTabChange?.(tab);
+      // On mobile, also navigate to the tab fullscreen
+      if (typeof window !== 'undefined' && document.documentElement.hasAttribute('data-mobile')) {
+        mobileActiveView = tab;
+        mobileMoreOpen = false;
+      }
     },
     setSidebarWidth(w: number) {
       sidebarWidth = Math.max(200, Math.min(500, w));
@@ -151,6 +169,22 @@ function createUIStore() {
 
     focusChatInput() {
       _onFocusChatInput?.();
+    },
+
+    // ── Mobile navigation ──
+
+    setMobileView(view: MobileView) {
+      mobileActiveView = view;
+      mobileMoreOpen = false;
+      // Keep sidebarTab in sync if navigating to a sidebar panel
+      if (view !== 'chat' && view !== 'terminal') {
+        sidebarTab = view;
+        _onSidebarTabChange?.(view);
+      }
+    },
+
+    setMobileMoreOpen(open: boolean) {
+      mobileMoreOpen = open;
     },
 
     restoreState(state: { sidebarTab: SidebarTab; sidebarOpen: boolean }) {
