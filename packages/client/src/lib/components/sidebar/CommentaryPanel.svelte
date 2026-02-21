@@ -2,7 +2,7 @@
   import { commentaryStore, type CommentaryEntry } from '$lib/stores/commentary.svelte';
   import { workspaceStore } from '$lib/stores/workspace.svelte';
   import { settingsStore } from '$lib/stores/settings.svelte';
-  import { findHypertheme } from '$lib/config/hyperthemes';
+  import { findTheme } from '$lib/config/themes';
   import { api } from '$lib/api/client';
   import { uiStore } from '$lib/stores/ui.svelte';
   import CommentaryExportModal from '$lib/components/commentary/CommentaryExportModal.svelte';
@@ -167,7 +167,7 @@
           // Auto-start commentary when panel is opened.
           // If no saved personality, check whether the active hypertheme
           // suggests one (e.g. Wizard's Study → wizard personality).
-          const themeSuggested = findHypertheme(settingsStore.hypertheme)?.suggestedPersonality as
+          const themeSuggested = findTheme(settingsStore.theme)?.suggestedPersonality as
             | CommentaryPersonality
             | undefined;
           const personality = savedPersonality || themeSuggested || 'sports_announcer';
@@ -176,7 +176,7 @@
           console.error('[commentary] Failed to load workspace settings:', err);
           // Fall back to theme-suggested personality or default
           const fallback =
-            findHypertheme(settingsStore.hypertheme)?.suggestedPersonality || 'sports_announcer';
+            findTheme(settingsStore.theme)?.suggestedPersonality || 'sports_announcer';
           commentaryStore.startCommentary(workspaceId, fallback);
         }
       })();
@@ -184,12 +184,12 @@
   });
 
   // Auto-activate wizard personality when Wizard's Study theme is selected
-  let previousHypertheme = $state(settingsStore.hypertheme);
+  let previousTheme = $state(settingsStore.hypertheme);
   $effect(() => {
-    const currentHypertheme = settingsStore.hypertheme;
-    if (currentHypertheme !== previousHypertheme) {
-      previousHypertheme = currentHypertheme;
-      const ht = findHypertheme(currentHypertheme);
+    const currentTheme = settingsStore.hypertheme;
+    if (currentTheme !== previousTheme) {
+      previousTheme = currentTheme;
+      const ht = findTheme(currentTheme);
       if (ht?.suggestedPersonality && workspaceId && isActive) {
         const suggested = ht.suggestedPersonality as CommentaryPersonality;
         if (suggested !== currentPersonality) {

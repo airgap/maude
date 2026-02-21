@@ -5,10 +5,26 @@
   import { onMount } from 'svelte';
   import type { GolemMood, GolemPhase } from '@e/shared';
 
-  // Ensure the golems store gets synced from the loop store on mount
+  // Ensure the golems store gets synced from the loop store on mount.
+  // If the loop state hasn't been loaded yet (e.g., page reload with golems tab
+  // active while WorkPanel isn't mounted), trigger the load ourselves.
   onMount(() => {
     if (loopStore.activeLoop) {
       loopStore.syncGolemFromLoop(loopStore.activeLoop);
+    } else if (!loopStore.activeLoopChecked) {
+      loopStore.loadActiveLoop();
+    }
+  });
+
+  // Reactively sync golem state when the active loop loads after initial mount.
+  // This handles the async case where loadActiveLoop() completes after the panel
+  // has already rendered the empty state.
+  let lastSyncedLoopId = $state<string | null>(null);
+  $effect(() => {
+    const loop = loopStore.activeLoop;
+    if (loop && loop.id !== lastSyncedLoopId && golemsStore.golems.length === 0) {
+      lastSyncedLoopId = loop.id;
+      loopStore.syncGolemFromLoop(loop);
     }
   });
 

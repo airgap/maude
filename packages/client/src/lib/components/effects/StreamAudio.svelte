@@ -52,10 +52,10 @@
     chirpEngine.setStyle(settingsStore.soundStyle);
   });
 
-  // Keep reverb in sync with hypertheme
+  // Keep reverb in sync with visual style
   $effect(() => {
     if (settingsStore.soundEnabled) {
-      chirpEngine.setReverb(settingsStore.hypertheme);
+      chirpEngine.setReverb(settingsStore.visualStyle);
     } else {
       chirpEngine.clearReverb();
     }

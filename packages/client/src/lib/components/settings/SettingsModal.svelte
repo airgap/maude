@@ -5,7 +5,6 @@
   import { onMount } from 'svelte';
   import { desktopNotifications } from '$lib/notifications/desktop-notifications';
   import type {
-    ThemeId,
     CliProvider,
     PermissionRule,
     PermissionRulePreset,
@@ -20,7 +19,7 @@
   import { profilesStore } from '$lib/stores/profiles.svelte';
   import { MONO_FONTS, SANS_FONTS, findFont } from '$lib/config/fonts';
   import { SIDEBAR_TABS } from '$lib/config/sidebarTabs';
-  import { HYPERTHEMES } from '$lib/config/hyperthemes';
+  import { THEMES } from '$lib/config/themes';
   import { workspaceStore } from '$lib/stores/workspace.svelte';
 
   const cliProviders: { id: CliProvider; label: string; desc: string }[] = [
@@ -354,37 +353,6 @@
     };
     reader.readAsText(file);
   }
-
-  const themes: { id: ThemeId; label: string }[] = [
-    { id: 'dark', label: 'Dark' },
-    { id: 'light', label: 'Light' },
-    { id: 'dark-colorblind', label: 'Dark (Colorblind)' },
-    { id: 'light-colorblind', label: 'Light (Colorblind)' },
-    { id: 'dark-ansi', label: 'Dark (ANSI)' },
-    { id: 'light-ansi', label: 'Light (ANSI)' },
-    { id: 'monokai', label: 'Monokai' },
-    { id: 'dracula', label: 'Dracula' },
-    { id: 'nord', label: 'Nord' },
-    { id: 'gruvbox-dark', label: 'Gruvbox Dark' },
-    { id: 'gruvbox-light', label: 'Gruvbox Light' },
-    { id: 'solarized-dark', label: 'Solarized Dark' },
-    { id: 'solarized-light', label: 'Solarized Light' },
-    { id: 'catppuccin-mocha', label: 'Catppuccin Mocha' },
-    { id: 'catppuccin-latte', label: 'Catppuccin Latte' },
-    { id: 'tokyo-night', label: 'Tokyo Night' },
-    { id: 'rose-pine', label: 'Rosé Pine' },
-    { id: 'rose-pine-dawn', label: 'Rosé Pine Dawn' },
-    { id: 'synthwave', label: "Synthwave '84" },
-    { id: 'github-dark', label: 'GitHub Dark' },
-    { id: 'github-light', label: 'GitHub Light' },
-    { id: 'one-dark', label: 'One Dark' },
-    { id: 'everforest', label: 'Everforest' },
-    { id: 'goth', label: 'Redrum' },
-    { id: 'sakura-light', label: 'Sakura Light' },
-    { id: 'sakura', label: 'Sakura Dark' },
-    { id: 'high-contrast', label: 'High Contrast Dark' },
-    { id: 'high-contrast-light', label: 'High Contrast Light' },
-  ];
 
   const cloudModels = [
     { id: 'claude-opus-4-6', label: 'Claude Opus 4.6' },
@@ -1008,13 +976,13 @@
           </div>
         {:else if activeTab === 'appearance'}
           <div class="setting-group">
-            <label class="setting-label">Visual Style</label>
+            <label class="setting-label">Immersive Themes</label>
             <div class="hypertheme-grid">
-              {#each HYPERTHEMES as ht}
+              {#each THEMES.filter((t) => t.category === 'immersive') as ht}
                 <button
                   class="hypertheme-option"
-                  class:active={settingsStore.hypertheme === ht.id}
-                  onclick={() => settingsStore.setHypertheme(ht.id)}
+                  class:active={settingsStore.theme === ht.id}
+                  onclick={() => settingsStore.setTheme(ht.id)}
                 >
                   <span class="ht-icon"
                     ><svg
@@ -1035,9 +1003,9 @@
           </div>
 
           <div class="setting-group">
-            <label class="setting-label">Theme</label>
+            <label class="setting-label">Color Palettes</label>
             <div class="theme-grid">
-              {#each themes as theme}
+              {#each THEMES.filter((t) => t.category === 'standard') as theme}
                 <button
                   class="theme-option"
                   class:active={settingsStore.theme === theme.id}

@@ -1,7 +1,7 @@
 /**
- * Ambient FX — Visual effects for hyperthemes
+ * Ambient FX — Visual effects for themes
  *
- * Each magic hypertheme gets a unique effect system:
+ * Each magic theme gets a unique effect system:
  * - Arcane: Rotating sigil circles with Elder Futhark runes (Canvas2D)
  * - Ethereal: Floating luminous motes (Canvas2D)
  * - Study: Rising embers, smoke wisps & candle glow pools (Canvas2D)
@@ -11,7 +11,7 @@
  * the WebGLRenderer directly). The Canvas2D ConstellationEffect serves as
  * fallback if WebGL is unavailable.
  *
- * Tech hypertheme uses CSS-only effects (no canvas needed).
+ * Standard themes use CSS-only effects (no canvas needed).
  */
 
 export { SigilEffect } from './sigil';
@@ -20,11 +20,11 @@ export { EmberEffect } from './embers';
 export { StarsEffect } from './stars';
 export { ConstellationEffect } from './constellation';
 export { WebGLRenderer } from './webgl-renderer';
-export { HYPERTHEME_EFFECTS } from './types';
+export { THEME_EFFECTS, HYPERTHEME_EFFECTS } from './types';
 export type { AmbientEffect, AmbientThemeColors, ParticleConfig } from './types';
 
 import type { AmbientEffect } from './types';
-import { HYPERTHEME_EFFECTS } from './types';
+import { THEME_EFFECTS } from './types';
 import { SigilEffect } from './sigil';
 import { MotesEffect } from './motes';
 import { EmberEffect } from './embers';
@@ -32,10 +32,10 @@ import { StarsEffect } from './stars';
 import { ConstellationEffect } from './constellation';
 
 /**
- * Create the appropriate effect for a hypertheme
+ * Create the appropriate effect for a theme
  */
-export function createEffect(hyperthemeId: string): AmbientEffect | null {
-  const config = HYPERTHEME_EFFECTS[hyperthemeId];
+export function createEffect(themeId: string): AmbientEffect | null {
+  const config = THEME_EFFECTS[themeId];
   if (!config) return null;
 
   switch (config.type) {
@@ -55,8 +55,8 @@ export function createEffect(hyperthemeId: string): AmbientEffect | null {
 }
 
 /**
- * Check if a hypertheme has canvas-based ambient effects
+ * Check if a theme has canvas-based ambient effects
  */
-export function hasAmbientEffects(hyperthemeId: string): boolean {
-  return hyperthemeId in HYPERTHEME_EFFECTS;
+export function hasAmbientEffects(themeId: string): boolean {
+  return themeId in THEME_EFFECTS;
 }

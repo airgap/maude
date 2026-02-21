@@ -57,6 +57,11 @@
       primaryPaneStore.init();
       profilesStore.load();
 
+      // Always load active loop state on startup so that golem indicators
+      // (TopBar badge, StatusBar, AppShell glow, GolemsPanel) work regardless
+      // of which sidebar tab is restored from the session.
+      loopStore.loadActiveLoop();
+
       // On mobile, start with sidebar closed
       if (deviceStore.isMobileUI) {
         // sidebarLayoutStore.init() may open it — close after init

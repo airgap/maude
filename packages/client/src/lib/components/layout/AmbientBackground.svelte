@@ -14,7 +14,7 @@
   import { settingsStore } from '$lib/stores/settings.svelte';
   import { scrollStore } from '$lib/stores/scroll.svelte';
   import { createEffect, hasAmbientEffects, type AmbientEffect } from '$lib/ambient-fx';
-  import { HYPERTHEME_EFFECTS } from '$lib/ambient-fx/types';
+  import { THEME_EFFECTS } from '$lib/ambient-fx/types';
   import { WebGLRenderer } from '$lib/ambient-fx/webgl-renderer';
 
   let canvas: HTMLCanvasElement;
@@ -47,12 +47,12 @@
   const CANVAS2D_FRAME_INTERVAL = 1000 / 24;
 
   function isConstellationType(hyperthemeId: string): boolean {
-    const config = HYPERTHEME_EFFECTS[hyperthemeId];
+    const config = THEME_EFFECTS[hyperthemeId];
     return config?.type === 'constellation';
   }
 
   function isSigilType(hyperthemeId: string): boolean {
-    const config = HYPERTHEME_EFFECTS[hyperthemeId];
+    const config = THEME_EFFECTS[hyperthemeId];
     return config?.type === 'sigil';
   }
 
@@ -109,7 +109,7 @@
   /**
    * Draw background image with cover-fit, darkened and tinted to blend
    * with the theme's backgroundColor. Only called for themes that specify
-   * a backgroundImage in their HYPERTHEME_EFFECTS config.
+   * a backgroundImage in their THEME_EFFECTS config.
    */
   function drawBgImage(target: CanvasRenderingContext2D, w: number, h: number, bgColor: string) {
     if (!bgImage || !bgImageReady) return;
@@ -179,7 +179,7 @@
     }
 
     // Load background image if the theme specifies one
-    const themeConfig = HYPERTHEME_EFFECTS[hyperthemeId];
+    const themeConfig = THEME_EFFECTS[hyperthemeId];
     if (themeConfig?.backgroundImage) {
       const img = new Image();
       img.src = themeConfig.backgroundImage;
@@ -247,7 +247,7 @@
 
     activeEffect.update(deltaTime);
 
-    const themeConfig = HYPERTHEME_EFFECTS[currentHypertheme];
+    const themeConfig = THEME_EFFECTS[currentHypertheme];
 
     if (useDownsampledRendering && offscreenCtx && offscreenCanvas) {
       // ── Quarter-res path: render → box blur → scale up ──────
@@ -353,7 +353,7 @@
     };
   });
 
-  // React to hypertheme changes
+  // React to theme changes
   $effect(() => {
     const ht = settingsStore.hypertheme;
     if (mounted && ht !== currentHypertheme) {

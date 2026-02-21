@@ -19,13 +19,14 @@
       try {
         var s = JSON.parse(localStorage.getItem('e-settings') || '{}');
         var bg = {
-          tech: '#0c0c0c',
-          arcane: '#0d0818',
-          ethereal: '#0c0a08',
+          arcane: '#0a0612',
+          ethereal: '#08090f',
           astral: '#020817',
           'astral-midnight': '#000000',
-          study: '#1a1410',
-        }[s.hypertheme];
+          study: '#110d14',
+          goth: '#080808',
+          'magic-forest': '#070d08',
+        }[s.theme];
         if (bg) document.documentElement.style.setProperty('--bg-primary', bg);
       } catch (e) {}
 

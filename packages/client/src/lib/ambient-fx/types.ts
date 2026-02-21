@@ -1,5 +1,5 @@
 /**
- * Ambient FX types — adapted from lyku/ambient-fx for E hyperthemes
+ * Ambient FX types — adapted from lyku/ambient-fx for E themes
  */
 
 export interface AmbientThemeColors {
@@ -37,9 +37,9 @@ export interface AmbientEffect {
 }
 
 /**
- * Hypertheme ambient effect configurations
+ * Theme ambient effect configurations
  */
-export const HYPERTHEME_EFFECTS: Record<
+export const THEME_EFFECTS: Record<
   string,
   { type: string; config: ParticleConfig; colors: AmbientThemeColors; backgroundImage?: string }
 > = {
@@ -145,3 +145,6 @@ export const HYPERTHEME_EFFECTS: Record<
     backgroundImage: '/study-bg.jpg',
   },
 };
+
+/** @deprecated Use THEME_EFFECTS instead */
+export { THEME_EFFECTS as HYPERTHEME_EFFECTS };

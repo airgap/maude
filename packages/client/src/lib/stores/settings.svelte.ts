@@ -9,14 +9,13 @@ import type {
 } from '@e/shared';
 import { convertVsCodeSnippets, type ConvertedSnippet } from '$lib/utils/vscode-snippet-converter';
 import { convertVsCodeTheme, type ConvertedTheme } from '$lib/utils/vscode-theme-converter';
-import { findHypertheme, getDefaultHypertheme } from '$lib/config/hyperthemes';
+import { findTheme, getDefaultTheme, getVisualStyle } from '$lib/config/themes';
 import { getBaseUrl } from '$lib/api/client';
 
 const STORAGE_KEY = 'e-settings';
 
 interface SettingsState {
-  theme: ThemeId;
-  hypertheme: string;
+  theme: string;
   cliProvider: CliProvider;
   model: string;
   permissionMode: PermissionMode;
@@ -109,7 +108,6 @@ interface SettingsState {
 
 const defaults: SettingsState = {
   theme: 'dark',
-  hypertheme: 'tech',
   cliProvider: 'claude',
   model: 'claude-sonnet-4-5-20250929',
   permissionMode: 'safe',
@@ -199,17 +197,20 @@ function loadFromStorage(): SettingsState {
       if (!parsed.fontFamilySans) {
         parsed.fontFamilySans = defaults.fontFamilySans;
       }
-      // Migrate: ensure hypertheme exists
-      if (!parsed.hypertheme) {
-        parsed.hypertheme = defaults.hypertheme;
+      // ── Migration: unify separate theme + hypertheme into single theme ──
+      if (parsed.hypertheme) {
+        if (parsed.hypertheme !== 'tech') {
+          parsed.theme = parsed.hypertheme;
+        }
+        delete parsed.hypertheme;
       }
       // Migrate: slot-machine sound style was removed
       if (parsed.soundStyle === 'slot-machine') {
         parsed.soundStyle = defaults.soundStyle;
       }
       // Migrate: candyland theme was removed
-      if (parsed.hypertheme === 'candyland') {
-        parsed.hypertheme = defaults.hypertheme;
+      if (parsed.theme === 'candyland') {
+        parsed.theme = defaults.theme;
       }
       return parsed;
     }
@@ -232,7 +233,6 @@ function createSettingsStore() {
     if (typeof window === 'undefined') return;
     localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
     applyTheme(state.theme);
-    applyHypertheme(state.hypertheme);
   }
 
   function syncToServer(partial: Partial<SettingsState>) {
@@ -251,69 +251,64 @@ function createSettingsStore() {
     });
   }
 
-  function applyTheme(theme: ThemeId) {
+  function applyTheme(themeId: string) {
     if (typeof document === 'undefined') return;
 
-    // Clear any previously applied custom CSS vars (but preserve --ht-* vars)
     const root = document.documentElement;
+    const config = findTheme(themeId);
+    const visualStyle = getVisualStyle(themeId);
+
+    // Clear all previously applied inline CSS vars
     for (const key of Array.from(root.style)) {
-      if (key.startsWith('--') && !key.startsWith('--ht-')) root.style.removeProperty(key);
+      if (key.startsWith('--')) root.style.removeProperty(key);
     }
 
-    if (theme.startsWith('custom-') && state.customThemes[theme]) {
-      const ct = state.customThemes[theme];
-      // Apply the base dark/light theme first for fallback vars
+    // Set data-theme attribute for CSS color selectors
+    if (config?.category === 'immersive') {
+      root.setAttribute('data-theme', config.type);
+    } else if (themeId.startsWith('custom-') && state.customThemes[themeId]) {
+      const ct = state.customThemes[themeId];
       root.setAttribute('data-theme', ct.type);
-      // Then override with custom CSS vars
       for (const [varName, value] of Object.entries(ct.cssVars)) {
         root.style.setProperty(varName, value);
       }
     } else {
-      root.setAttribute('data-theme', theme);
+      root.setAttribute('data-theme', themeId);
     }
-  }
 
-  function applyHypertheme(hyperthemeId: string) {
-    if (typeof document === 'undefined') return;
-    const root = document.documentElement;
-    const ht = findHypertheme(hyperthemeId) || getDefaultHypertheme();
+    // Set data-hypertheme attribute for structural CSS selectors
+    root.setAttribute('data-hypertheme', visualStyle);
 
-    // Set data attribute for CSS selectors
-    root.setAttribute('data-hypertheme', ht.id);
-
-    // Clear old --ht-* vars and apply new ones
-    for (const key of Array.from(root.style)) {
-      if (key.startsWith('--ht-')) root.style.removeProperty(key);
-    }
-    for (const [varName, value] of Object.entries(ht.cssVars)) {
+    // Apply structural CSS vars (--ht-*)
+    const effectiveConfig = config || getDefaultTheme();
+    for (const [varName, value] of Object.entries(effectiveConfig.cssVars)) {
       root.style.setProperty(varName, value);
     }
 
-    // Apply color overrides for magic hyperthemes.
-    // applyTheme() runs first in persist() and clears non-ht inline vars,
-    // so we can safely layer color overrides on top here.
-    if (ht.colorOverrides) {
-      for (const [varName, value] of Object.entries(ht.colorOverrides)) {
+    // Apply color overrides for immersive themes
+    if (effectiveConfig.colorOverrides) {
+      for (const [varName, value] of Object.entries(effectiveConfig.colorOverrides)) {
         root.style.setProperty(varName, value);
       }
     }
   }
 
-  // Apply theme + hypertheme on load
+  // Apply theme on load
   if (typeof window !== 'undefined') {
-    // Capture initial values to avoid Svelte state_referenced_locally warning
     const initialTheme = state.theme;
-    const initialHypertheme = state.hypertheme;
     applyTheme(initialTheme);
-    applyHypertheme(initialHypertheme);
   }
 
   return {
     get theme() {
       return state.theme;
     },
+    get visualStyle() {
+      return getVisualStyle(state.theme);
+    },
+    /** @deprecated Use visualStyle instead */
     get hypertheme() {
-      return state.hypertheme;
+      return getVisualStyle(state.theme);
     },
     get cliProvider() {
       return state.cliProvider;
@@ -506,12 +501,13 @@ function createSettingsStore() {
       return state;
     },
 
-    setTheme(theme: ThemeId) {
-      state.theme = theme;
+    setTheme(themeId: string) {
+      state.theme = themeId;
       persist();
     },
-    setHypertheme(hyperthemeId: string) {
-      state.hypertheme = hyperthemeId;
+    /** @deprecated Use setTheme() instead */
+    setHypertheme(themeId: string) {
+      state.theme = themeId;
       persist();
     },
     setModel(model: string) {

@@ -113,9 +113,9 @@ export const STARTUP_TIPS: StartupTip[] = [
     text: 'Type /digest to see a summary of everything that happened in your workspace today.',
   },
   {
-    id: 'hyperthemes',
+    id: 'themes',
     category: 'Customization',
-    text: 'Open Settings (Ctrl+,) to explore Hyperthemes — complete aesthetic packages with ambient effects.',
+    text: 'Open Settings (Ctrl+,) to explore themes — complete aesthetic packages with ambient effects.',
     shortcut: 'Ctrl+,',
     actionLabel: 'Open Settings',
     actionId: 'open-settings',
