@@ -57,11 +57,66 @@
     let animId: number;
     let isHoveringClickable = false;
 
-    // Hide the system cursor globally
-    document.documentElement.style.cursor = 'none';
+    // Touch detection: disable the cursor effect when a touch event fires.
+    // On hybrid devices (e.g. touchscreen laptops), re-enable on mousemove.
+    let touchActive = false;
+    let cursorStyleInjected = false;
     const style = document.createElement('style');
-    style.textContent = '*, *::before, *::after { cursor: none !important; }';
-    document.head.appendChild(style);
+
+    function enableCursorEffect() {
+      if (cursorStyleInjected) return;
+      document.documentElement.style.cursor = 'none';
+      style.textContent = '*, *::before, *::after { cursor: none !important; }';
+      document.head.appendChild(style);
+      cursorStyleInjected = true;
+      container.style.display = '';
+    }
+
+    function disableCursorEffect() {
+      if (!cursorStyleInjected) return;
+      document.documentElement.style.cursor = '';
+      style.textContent = '';
+      if (style.parentNode) style.remove();
+      cursorStyleInjected = false;
+      container.style.display = 'none';
+
+      // Hide all active sparkles and clear the array
+      for (const s of sparkles) {
+        s.el.style.display = 'none';
+      }
+      sparkles.length = 0;
+
+      // Move cursor offscreen
+      cursorX = -100;
+      cursorY = -100;
+      cursorEl.style.transform = `translate(-100px, -100px)`;
+    }
+
+    function onTouchStart() {
+      if (!touchActive) {
+        touchActive = true;
+        disableCursorEffect();
+      }
+    }
+
+    // Check if the primary pointer is coarse (touch-only device).
+    // On touch-only devices we start disabled; on hybrid devices we start
+    // enabled and toggle on the first touch event.
+    const isTouchOnly =
+      window.matchMedia('(pointer: coarse)').matches &&
+      !window.matchMedia('(any-pointer: fine)').matches;
+
+    if (isTouchOnly) {
+      touchActive = true;
+    }
+
+    // Only inject cursor-hiding styles if not in touch mode
+    if (!touchActive) {
+      enableCursorEffect();
+    } else {
+      // Ensure container starts hidden for touch-only devices
+      container.style.display = 'none';
+    }
 
     // Pre-create sparkle pool
     for (let i = 0; i < POOL_SIZE; i++) {
@@ -74,6 +129,8 @@
     }
 
     function spawnSparkle(x: number, y: number, burst = false) {
+      if (touchActive) return;
+
       const el = pool.find((p) => p.style.display === 'none');
       if (!el) return;
 
@@ -112,6 +169,11 @@
     }
 
     function update() {
+      if (touchActive) {
+        animId = requestAnimationFrame(update);
+        return;
+      }
+
       // Update main cursor at the FTL-predicted position (slightly ahead of actual)
       const isStudyTheme = document.documentElement.getAttribute('data-hypertheme') === 'study';
       const scale = isStudyTheme && isHoveringClickable ? 1.25 : 1;
@@ -144,6 +206,27 @@
     }
 
     function onMouseMove(e: MouseEvent) {
+      // On hybrid devices, re-enable the cursor effect when the mouse is used.
+      // Only re-enable for real mouse events (not synthesized from touch).
+      // sourceCapabilities is a non-standard Chrome/Chromium API that reliably
+      // distinguishes real mouse events from touch-synthesized ones.
+      const caps = (e as MouseEvent & { sourceCapabilities?: { firesTouchEvents: boolean } })
+        .sourceCapabilities;
+      if (touchActive && caps && !caps.firesTouchEvents) {
+        touchActive = false;
+        enableCursorEffect();
+      } else if (touchActive) {
+        // Fallback: if sourceCapabilities is not available (Firefox/Safari),
+        // use a heuristic — real mouse moves typically have non-zero movement
+        // deltas, while synthesized events from touch do not.
+        if (!caps && (e.movementX !== 0 || e.movementY !== 0)) {
+          touchActive = false;
+          enableCursorEffect();
+        } else {
+          return;
+        }
+      }
+
       rawMouseX = e.clientX;
       rawMouseY = e.clientY;
 
@@ -186,6 +269,7 @@
     }
 
     function onClick(e: MouseEvent) {
+      if (touchActive) return;
       for (let i = 0; i < CLICK_BURST; i++) {
         spawnSparkle(e.clientX, e.clientY, true);
       }
@@ -194,16 +278,18 @@
       setTimeout(() => cursorEl.classList.remove('click'), 300);
     }
 
+    document.addEventListener('touchstart', onTouchStart, { passive: true });
     document.addEventListener('mousemove', onMouseMove);
     document.addEventListener('click', onClick);
     animId = requestAnimationFrame(update);
 
     return () => {
+      document.removeEventListener('touchstart', onTouchStart);
       document.removeEventListener('mousemove', onMouseMove);
       document.removeEventListener('click', onClick);
       cancelAnimationFrame(animId);
       document.documentElement.style.cursor = '';
-      style.remove();
+      if (style.parentNode) style.remove();
     };
   });
 </script>
