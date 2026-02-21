@@ -268,9 +268,11 @@
                         stroke-linecap="round"
                         stroke-linejoin="round"
                       >
-                        <path
-                          d="M12 2L15.09 8.26L22 9.27L17 14.14L18.18 21.02L12 17.77L5.82 21.02L7 14.14L2 9.27L8.91 8.26L12 2Z"
-                        />
+                        <path d="M15 4V2" /><path d="M15 16v-2" /><path d="M8 9h2" /><path
+                          d="M20 9h2"
+                        /><path d="M17.8 11.8L19 13" /><path d="M15 9h0" /><path
+                          d="M17.8 6.2L19 5"
+                        /><path d="M3 21l9-9" /><path d="M12.2 6.2L11 5" />
                       </svg>
                     {/if}
                   </button>
