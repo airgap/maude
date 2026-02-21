@@ -255,14 +255,26 @@
   async function selectVerbosity(verbosity: CommentaryVerbosity) {
     currentVerbosity = verbosity;
 
-    // Persist to workspace settings
+    // Persist to workspace settings via the workspace route (same reliable
+    // mechanism used by selectPersonality).
     if (workspaceId) {
       try {
-        await api.commentary.updateSettings(workspaceId, { verbosity });
+        await api.workspaces.update(workspaceId, {
+          settings: {
+            commentaryVerbosity: verbosity,
+          },
+        });
       } catch (err) {
         console.error('[commentary] Failed to save verbosity preference:', err);
         uiStore.toast('Failed to save verbosity preference', 'error');
       }
+
+      // Also try to update the live commentator's verbosity in real-time
+      // (best effort — the preference is already persisted above).
+      api.commentary.updateSettings(workspaceId, { verbosity }).catch(() => {
+        // Silent: live update failed but preference is saved and will
+        // apply automatically the next time commentary starts.
+      });
     }
   }
 
