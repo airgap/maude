@@ -15,7 +15,7 @@ bun install
 bun run dev
 ```
 
-This starts the API server (port 3002) and SvelteKit dev server (port 5173).
+This starts the API server (port 3002) and SvelteKit dev server (port 3333).
 
 ## Web UI (single process)
 

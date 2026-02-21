@@ -8,6 +8,7 @@
   import { terminalStore } from '$lib/stores/terminal.svelte';
   import { loopStore } from '$lib/stores/loop.svelte';
   import { uiStore } from '$lib/stores/ui.svelte';
+  import { api } from '$lib/api/client';
 
   // Client-side pricing table (per million tokens)
   const PRICING: Record<string, { input: number; output: number }> = {
@@ -21,6 +22,71 @@
     const p = PRICING[model] || DEFAULT_PRICING;
     const cost = (inputTokens / 1_000_000) * p.input + (outputTokens / 1_000_000) * p.output;
     return cost < 0.01 ? cost.toFixed(4) : cost.toFixed(2);
+  }
+
+  // ── Git gutter popover state ──
+  let gitMenuOpen = $state(false);
+  let gitMenuMode = $state<'actions' | 'commit' | 'confirm-clean'>('actions');
+  let commitMessage = $state('');
+  let gitBusy = $state(false);
+  let gitError = $state('');
+  let generating = $state(false);
+
+  async function handleGenerateMessage() {
+    if (generating || gitBusy) return;
+    generating = true;
+    gitError = '';
+    try {
+      const res = await api.git.generateCommitMessage(settingsStore.workspacePath);
+      if (res.ok && res.data.message) {
+        commitMessage = res.data.message;
+      } else {
+        gitError = 'Could not generate message';
+      }
+    } catch {
+      gitError = 'Failed to generate message';
+    }
+    generating = false;
+  }
+
+  function toggleGitMenu(e: MouseEvent) {
+    e.stopPropagation();
+    gitMenuOpen = !gitMenuOpen;
+    if (gitMenuOpen) {
+      gitMenuMode = 'actions';
+      commitMessage = '';
+      gitError = '';
+    }
+  }
+
+  function closeGitMenu() {
+    gitMenuOpen = false;
+  }
+
+  async function handleCommit() {
+    if (!commitMessage.trim() || gitBusy) return;
+    gitBusy = true;
+    gitError = '';
+    const result = await gitStore.commit(settingsStore.workspacePath, commitMessage.trim());
+    gitBusy = false;
+    if (result.ok) {
+      gitMenuOpen = false;
+    } else {
+      gitError = result.error || 'Commit failed';
+    }
+  }
+
+  async function handleClean() {
+    if (gitBusy) return;
+    gitBusy = true;
+    gitError = '';
+    const result = await gitStore.clean(settingsStore.workspacePath);
+    gitBusy = false;
+    if (result.ok) {
+      gitMenuOpen = false;
+    } else {
+      gitError = result.error || 'Clean failed';
+    }
   }
 
   // Accumulate session-wide spend
@@ -38,6 +104,8 @@
     }
   });
 </script>
+
+<svelte:window onclick={closeGitMenu} />
 
 <footer class="statusbar">
   {#if streamStore.isStreaming && settingsStore.streamingProgressBar !== 'none'}
@@ -57,23 +125,197 @@
     </span>
 
     {#if gitStore.isRepo && gitStore.branch}
-      <span class="status-item git-branch">
-        <svg
-          width="12"
-          height="12"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="2"
+      <div class="git-gutter-wrapper">
+        <button
+          class="status-item git-branch"
+          class:dirty={gitStore.isDirty}
+          onclick={toggleGitMenu}
+          aria-haspopup="menu"
+          aria-expanded={gitMenuOpen}
+          title={gitStore.isDirty
+            ? `${gitStore.branch} — ${gitStore.dirtyCount} uncommitted change${gitStore.dirtyCount === 1 ? '' : 's'}`
+            : `${gitStore.branch} — clean`}
         >
-          <line x1="6" y1="3" x2="6" y2="15" /><circle cx="18" cy="6" r="3" /><circle
-            cx="6"
-            cy="18"
-            r="3"
-          /><path d="M18 9a9 9 0 0 1-9 9" />
-        </svg>
-        {gitStore.branch}
-      </span>
+          <svg
+            width="12"
+            height="12"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+          >
+            <line x1="6" y1="3" x2="6" y2="15" /><circle cx="18" cy="6" r="3" /><circle
+              cx="6"
+              cy="18"
+              r="3"
+            /><path d="M18 9a9 9 0 0 1-9 9" />
+          </svg>
+          {gitStore.branch}
+          {#if gitStore.isDirty}
+            <span class="git-dirty-badge">{gitStore.dirtyCount}</span>
+          {/if}
+        </button>
+
+        {#if gitMenuOpen}
+          <div class="git-popover" role="menu" onclick={(e) => e.stopPropagation()}>
+            {#if !gitStore.isDirty}
+              <div class="git-popover-item disabled">Working tree clean</div>
+            {:else if gitMenuMode === 'actions'}
+              <button class="git-popover-item" onclick={() => (gitMenuMode = 'commit')}>
+                <svg
+                  width="14"
+                  height="14"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <circle cx="12" cy="12" r="4" /><line x1="1.05" y1="12" x2="7" y2="12" /><line
+                    x1="17.01"
+                    y1="12"
+                    x2="22.96"
+                    y2="12"
+                  />
+                </svg>
+                Commit all changes
+              </button>
+              <button
+                class="git-popover-item danger"
+                onclick={() => (gitMenuMode = 'confirm-clean')}
+              >
+                <svg
+                  width="14"
+                  height="14"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <polyline points="3 6 5 6 21 6" /><path
+                    d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"
+                  />
+                </svg>
+                Discard all changes
+              </button>
+            {:else if gitMenuMode === 'commit'}
+              <div class="git-popover-form">
+                <div class="git-commit-row">
+                  <input
+                    class="git-commit-input"
+                    type="text"
+                    placeholder="Commit message..."
+                    bind:value={commitMessage}
+                    onkeydown={(e) => {
+                      if (e.key === 'Enter') handleCommit();
+                      if (e.key === 'Escape') {
+                        gitMenuMode = 'actions';
+                      }
+                    }}
+                    disabled={gitBusy || generating}
+                  />
+                  <button
+                    class="git-generate-btn"
+                    onclick={handleGenerateMessage}
+                    disabled={generating || gitBusy}
+                    title="Auto-generate commit message"
+                  >
+                    {#if generating}
+                      <svg
+                        class="spin"
+                        width="14"
+                        height="14"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                      >
+                        <line x1="12" y1="2" x2="12" y2="6" /><line
+                          x1="12"
+                          y1="18"
+                          x2="12"
+                          y2="22"
+                        /><line x1="4.93" y1="4.93" x2="7.76" y2="7.76" /><line
+                          x1="16.24"
+                          y1="16.24"
+                          x2="19.07"
+                          y2="19.07"
+                        /><line x1="2" y1="12" x2="6" y2="12" /><line
+                          x1="18"
+                          y1="12"
+                          x2="22"
+                          y2="12"
+                        /><line x1="4.93" y1="19.07" x2="7.76" y2="16.24" /><line
+                          x1="16.24"
+                          y1="7.76"
+                          x2="19.07"
+                          y2="4.93"
+                        />
+                      </svg>
+                    {:else}
+                      <svg
+                        width="14"
+                        height="14"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                      >
+                        <path
+                          d="M12 2L15.09 8.26L22 9.27L17 14.14L18.18 21.02L12 17.77L5.82 21.02L7 14.14L2 9.27L8.91 8.26L12 2Z"
+                        />
+                      </svg>
+                    {/if}
+                  </button>
+                </div>
+                <div class="git-popover-actions">
+                  <button
+                    class="git-action-btn cancel"
+                    onclick={() => (gitMenuMode = 'actions')}
+                    disabled={gitBusy}>Cancel</button
+                  >
+                  <button
+                    class="git-action-btn confirm"
+                    onclick={handleCommit}
+                    disabled={!commitMessage.trim() || gitBusy || generating}
+                    >{gitBusy ? 'Committing...' : 'Commit'}</button
+                  >
+                </div>
+                {#if gitError}
+                  <div class="git-error">{gitError}</div>
+                {/if}
+              </div>
+            {:else if gitMenuMode === 'confirm-clean'}
+              <div class="git-popover-form">
+                <div class="git-confirm-text">
+                  Discard {gitStore.dirtyCount} change{gitStore.dirtyCount === 1 ? '' : 's'}? This
+                  cannot be undone.
+                </div>
+                <div class="git-popover-actions">
+                  <button
+                    class="git-action-btn cancel"
+                    onclick={() => (gitMenuMode = 'actions')}
+                    disabled={gitBusy}>Cancel</button
+                  >
+                  <button class="git-action-btn danger" onclick={handleClean} disabled={gitBusy}
+                    >{gitBusy ? 'Cleaning...' : 'Discard'}</button
+                  >
+                </div>
+                {#if gitError}
+                  <div class="git-error">{gitError}</div>
+                {/if}
+              </div>
+            {/if}
+          </div>
+        {/if}
+      </div>
     {/if}
 
     {#if loopStore.isActive}
@@ -681,10 +923,247 @@
     box-shadow: 0 0 6px var(--accent-error);
   }
 
+  .git-gutter-wrapper {
+    position: relative;
+  }
+
   .git-branch {
     font-size: var(--fs-xs);
     color: var(--text-secondary);
     text-transform: none;
+    cursor: pointer;
+    border: none;
+    background: none;
+    padding: 2px 6px;
+    border-radius: var(--radius-sm);
+    transition: all var(--transition);
+    font-weight: 600;
+    font-family: inherit;
+    letter-spacing: inherit;
+  }
+  .git-branch:hover {
+    color: var(--text-primary);
+    background: var(--bg-hover);
+  }
+  .git-branch.dirty {
+    color: var(--accent-warning);
+  }
+
+  .git-dirty-badge {
+    font-size: var(--fs-xxs);
+    font-weight: 700;
+    min-width: 16px;
+    height: 16px;
+    line-height: 16px;
+    text-align: center;
+    border-radius: 8px;
+    background: var(--accent-warning);
+    color: var(--bg-primary);
+    margin-left: 2px;
+    padding: 0 4px;
+  }
+
+  /* ── Git popover (opens upward from statusbar) ── */
+  .git-popover {
+    position: absolute;
+    bottom: calc(100% + 6px);
+    left: 0;
+    z-index: 200;
+    min-width: 220px;
+    background: var(--bg-elevated, var(--bg-secondary));
+    border: 1px solid var(--border-primary);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow-lg);
+    padding: 4px;
+    animation: gitPopIn 0.12s ease;
+  }
+
+  @keyframes gitPopIn {
+    from {
+      opacity: 0;
+      transform: translateY(4px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  .git-popover-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    padding: 6px 10px;
+    border: none;
+    background: none;
+    color: var(--text-primary);
+    font-size: var(--fs-xs);
+    font-family: inherit;
+    font-weight: 500;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    text-align: left;
+    transition: background var(--transition);
+    text-transform: none;
+    letter-spacing: normal;
+  }
+  .git-popover-item:hover {
+    background: var(--bg-hover);
+  }
+  .git-popover-item.danger {
+    color: var(--accent-error);
+  }
+  .git-popover-item.danger:hover {
+    background: color-mix(in srgb, var(--accent-error) 12%, transparent);
+  }
+  .git-popover-item.disabled {
+    color: var(--text-tertiary);
+    cursor: default;
+    font-style: italic;
+  }
+  .git-popover-item.disabled:hover {
+    background: none;
+  }
+
+  .git-popover-form {
+    padding: 6px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .git-commit-input {
+    width: 100%;
+    padding: 6px 8px;
+    border: 1px solid var(--border-primary);
+    border-radius: var(--radius-sm);
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    font-size: var(--fs-xs);
+    font-family: inherit;
+    outline: none;
+    transition: border-color var(--transition);
+  }
+  .git-commit-input:focus {
+    border-color: var(--accent-primary);
+  }
+  .git-commit-input:disabled {
+    opacity: 0.5;
+  }
+
+  .git-commit-row {
+    display: flex;
+    gap: 4px;
+    align-items: center;
+  }
+  .git-commit-row .git-commit-input {
+    flex: 1;
+  }
+
+  .git-generate-btn {
+    flex-shrink: 0;
+    width: 28px;
+    height: 28px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid var(--border-primary);
+    border-radius: var(--radius-sm);
+    background: var(--bg-tertiary);
+    color: var(--accent-primary);
+    cursor: pointer;
+    transition: all var(--transition);
+    padding: 0;
+  }
+  .git-generate-btn:hover:not(:disabled) {
+    background: var(--accent-primary);
+    color: var(--bg-primary);
+    border-color: var(--accent-primary);
+  }
+  .git-generate-btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+  }
+  .git-generate-btn .spin {
+    animation: gitSpin 1s linear infinite;
+  }
+
+  @keyframes gitSpin {
+    from {
+      transform: rotate(0deg);
+    }
+    to {
+      transform: rotate(360deg);
+    }
+  }
+
+  .git-popover-actions {
+    display: flex;
+    gap: 6px;
+    justify-content: flex-end;
+  }
+
+  .git-action-btn {
+    padding: 4px 10px;
+    border: 1px solid var(--border-primary);
+    border-radius: var(--radius-sm);
+    font-size: var(--fs-xxs);
+    font-family: inherit;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all var(--transition);
+    text-transform: none;
+    letter-spacing: normal;
+  }
+  .git-action-btn.cancel {
+    background: var(--bg-tertiary);
+    color: var(--text-secondary);
+  }
+  .git-action-btn.cancel:hover {
+    background: var(--bg-hover);
+    color: var(--text-primary);
+  }
+  .git-action-btn.confirm {
+    background: var(--accent-primary);
+    color: var(--bg-primary);
+    border-color: var(--accent-primary);
+  }
+  .git-action-btn.confirm:hover {
+    filter: brightness(1.1);
+  }
+  .git-action-btn.confirm:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+  }
+  .git-action-btn.danger {
+    background: var(--accent-error);
+    color: var(--bg-primary);
+    border-color: var(--accent-error);
+  }
+  .git-action-btn.danger:hover {
+    filter: brightness(1.1);
+  }
+  .git-action-btn.danger:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+  }
+
+  .git-confirm-text {
+    font-size: var(--fs-xs);
+    color: var(--accent-error);
+    font-weight: 500;
+    padding: 2px 0;
+    text-transform: none;
+    letter-spacing: normal;
+  }
+
+  .git-error {
+    font-size: var(--fs-xxs);
+    color: var(--accent-error);
+    padding: 2px 4px;
+    text-transform: none;
+    letter-spacing: normal;
   }
 
   /* ── Golem status in statusbar ── */

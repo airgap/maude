@@ -19,7 +19,7 @@ export function getDirectWsBase(): string {
   if (typeof window === 'undefined') return 'ws://localhost:3002/api';
   // In dev mode, Vite serves on a different port than the API server.
   // Connect directly to the API server to skip the proxy hop.
-  const isDev = window.location.port === '5173';
+  const isDev = window.location.port === '3333';
   if (isDev) {
     return 'ws://localhost:3002/api';
   }
@@ -724,6 +724,21 @@ export const api = {
       request<{ ok: boolean; data: { diff: string } }>(
         `/git/diff?path=${encodeURIComponent(path)}&file=${encodeURIComponent(file)}&staged=${staged}`,
       ),
+    commit: (path: string, message: string) =>
+      request<{ ok: boolean; data: { sha: string } }>('/git/commit', {
+        method: 'POST',
+        body: JSON.stringify({ path, message }),
+      }),
+    clean: (path: string) =>
+      request<{ ok: boolean; data: { cleaned: boolean } }>('/git/clean', {
+        method: 'POST',
+        body: JSON.stringify({ path }),
+      }),
+    generateCommitMessage: (path: string) =>
+      request<{ ok: boolean; data: { message: string } }>('/git/generate-commit-message', {
+        method: 'POST',
+        body: JSON.stringify({ path }),
+      }),
   },
 
   // --- Workspace Memory ---

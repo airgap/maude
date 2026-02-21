@@ -51,6 +51,35 @@ function createGitStore() {
     }
   }
 
+  async function commit(
+    rootPath: string,
+    message: string,
+  ): Promise<{ ok: boolean; sha?: string; error?: string }> {
+    try {
+      const res = await api.git.commit(rootPath, message);
+      if (res.ok) {
+        await refresh(rootPath);
+        return { ok: true, sha: res.data.sha };
+      }
+      return { ok: false, error: 'Commit failed' };
+    } catch (err) {
+      return { ok: false, error: String(err) };
+    }
+  }
+
+  async function clean(rootPath: string): Promise<{ ok: boolean; error?: string }> {
+    try {
+      const res = await api.git.clean(rootPath);
+      if (res.ok) {
+        await refresh(rootPath);
+        return { ok: true };
+      }
+      return { ok: false, error: 'Clean failed' };
+    } catch (err) {
+      return { ok: false, error: String(err) };
+    }
+  }
+
   return {
     get isRepo() {
       return isRepo;
@@ -61,10 +90,18 @@ function createGitStore() {
     get fileStatuses() {
       return fileStatuses;
     },
+    get isDirty() {
+      return fileStatuses.length > 0;
+    },
+    get dirtyCount() {
+      return fileStatuses.length;
+    },
     getStatus,
     refresh,
     startPolling,
     stopPolling,
+    commit,
+    clean,
   };
 }
 

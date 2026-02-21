@@ -2,6 +2,7 @@ import { Hono } from 'hono';
 import { nanoid } from 'nanoid';
 import { resolve } from 'path';
 import { getDb } from '../db/database';
+import { callLlm } from '../services/llm-oneshot';
 
 const app = new Hono();
 
@@ -320,6 +321,161 @@ app.post('/snapshot/:id/restore', async (c) => {
     }
 
     return c.json({ ok: true, data: { restored: true } });
+  } catch (err) {
+    return c.json({ ok: false, error: String(err) }, 500);
+  }
+});
+
+// Stage all + commit
+app.post('/commit', async (c) => {
+  const body = await c.req.json();
+  const { path: rootPath, message } = body;
+
+  if (!rootPath) return c.json({ ok: false, error: 'path required' }, 400);
+  if (!message || typeof message !== 'string' || !message.trim()) {
+    return c.json({ ok: false, error: 'commit message required' }, 400);
+  }
+
+  const pathCheck = validateWorkspacePath(rootPath);
+  if (!pathCheck.valid) {
+    return c.json({ ok: false, error: pathCheck.reason }, 403);
+  }
+
+  try {
+    // Stage all changes
+    const addProc = Bun.spawn(['git', 'add', '-A'], {
+      cwd: pathCheck.resolved,
+      stdout: 'pipe',
+      stderr: 'pipe',
+    });
+    const addExit = await addProc.exited;
+    if (addExit !== 0) {
+      const err = await new Response(addProc.stderr).text();
+      return c.json({ ok: false, error: `git add failed: ${err}` }, 500);
+    }
+
+    // Commit
+    const commitProc = Bun.spawn(['git', 'commit', '-m', message.trim()], {
+      cwd: pathCheck.resolved,
+      stdout: 'pipe',
+      stderr: 'pipe',
+    });
+    const commitExit = await commitProc.exited;
+    if (commitExit !== 0) {
+      const err = await new Response(commitProc.stderr).text();
+      return c.json({ ok: false, error: `git commit failed: ${err}` }, 500);
+    }
+
+    // Get the new HEAD sha
+    const shaProc = Bun.spawn(['git', 'rev-parse', 'HEAD'], {
+      cwd: pathCheck.resolved,
+      stdout: 'pipe',
+      stderr: 'pipe',
+    });
+    const sha = (await new Response(shaProc.stdout).text()).trim();
+
+    return c.json({ ok: true, data: { sha } });
+  } catch (err) {
+    return c.json({ ok: false, error: String(err) }, 500);
+  }
+});
+
+// Generate a commit message from the current diff
+app.post('/generate-commit-message', async (c) => {
+  const body = await c.req.json();
+  const { path: rootPath } = body;
+
+  if (!rootPath) return c.json({ ok: false, error: 'path required' }, 400);
+
+  const pathCheck = validateWorkspacePath(rootPath);
+  if (!pathCheck.valid) {
+    return c.json({ ok: false, error: pathCheck.reason }, 403);
+  }
+
+  try {
+    // Get staged + unstaged diff
+    const diffProc = Bun.spawn(['git', 'diff', 'HEAD'], {
+      cwd: pathCheck.resolved,
+      stdout: 'pipe',
+      stderr: 'pipe',
+    });
+    let diffText = await new Response(diffProc.stdout).text();
+    await diffProc.exited;
+
+    // Also capture untracked file names
+    const untrackedProc = Bun.spawn(['git', 'ls-files', '--others', '--exclude-standard'], {
+      cwd: pathCheck.resolved,
+      stdout: 'pipe',
+      stderr: 'pipe',
+    });
+    const untrackedFiles = (await new Response(untrackedProc.stdout).text()).trim();
+    await untrackedProc.exited;
+
+    if (!diffText.trim() && !untrackedFiles) {
+      return c.json({ ok: false, error: 'No changes to describe' }, 400);
+    }
+
+    // Truncate very large diffs to avoid blowing the context
+    const MAX_DIFF_CHARS = 12_000;
+    if (diffText.length > MAX_DIFF_CHARS) {
+      diffText = diffText.slice(0, MAX_DIFF_CHARS) + '\n\n... [diff truncated]';
+    }
+
+    let prompt = '';
+    if (diffText.trim()) {
+      prompt += `Git diff:\n\`\`\`\n${diffText}\n\`\`\`\n`;
+    }
+    if (untrackedFiles) {
+      prompt += `\nNew untracked files:\n${untrackedFiles}\n`;
+    }
+
+    const message = await callLlm({
+      system:
+        'You generate concise git commit messages. Output ONLY the commit message, nothing else. ' +
+        'Use the imperative mood (e.g. "Add feature" not "Added feature"). ' +
+        'Keep it to one line, under 72 characters if possible. ' +
+        'If the changes are substantial, add a blank line followed by a brief body (2-3 bullet points max).',
+      user: prompt,
+      model: 'claude-haiku-4-5-20251001',
+      timeoutMs: 15_000,
+    });
+
+    return c.json({ ok: true, data: { message: message.trim() } });
+  } catch (err) {
+    return c.json({ ok: false, error: String(err) }, 500);
+  }
+});
+
+// Discard all uncommitted changes
+app.post('/clean', async (c) => {
+  const body = await c.req.json();
+  const { path: rootPath } = body;
+
+  if (!rootPath) return c.json({ ok: false, error: 'path required' }, 400);
+
+  const pathCheck = validateWorkspacePath(rootPath);
+  if (!pathCheck.valid) {
+    return c.json({ ok: false, error: pathCheck.reason }, 403);
+  }
+
+  try {
+    // Restore tracked files
+    const checkoutProc = Bun.spawn(['git', 'checkout', '--', '.'], {
+      cwd: pathCheck.resolved,
+      stdout: 'pipe',
+      stderr: 'pipe',
+    });
+    await checkoutProc.exited;
+
+    // Remove untracked files and directories
+    const cleanProc = Bun.spawn(['git', 'clean', '-fd'], {
+      cwd: pathCheck.resolved,
+      stdout: 'pipe',
+      stderr: 'pipe',
+    });
+    await cleanProc.exited;
+
+    return c.json({ ok: true, data: { cleaned: true } });
   } catch (err) {
     return c.json({ ok: false, error: String(err) }, 500);
   }

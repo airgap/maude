@@ -8,7 +8,7 @@ export default defineConfig({
   },
   server: {
     host: true,
-    port: 5173,
+    port: 3333,
     proxy: {
       '/api/stream': {
         target: 'http://localhost:3002',
