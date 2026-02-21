@@ -3,6 +3,24 @@ import { uiStore } from './ui.svelte';
 import { uuid } from '$lib/utils/uuid';
 import type { EditorConfigProps } from '@e/shared';
 
+const FOLLOW_ALONG_KEY = 'e-follow-along';
+
+function loadFollowAlong(): boolean {
+  if (typeof localStorage === 'undefined') return true;
+  try {
+    const raw = localStorage.getItem(FOLLOW_ALONG_KEY);
+    if (raw !== null) return JSON.parse(raw);
+  } catch {}
+  return true;
+}
+
+function persistFollowAlong(enabled: boolean) {
+  if (typeof localStorage === 'undefined') return;
+  try {
+    localStorage.setItem(FOLLOW_ALONG_KEY, JSON.stringify(enabled));
+  } catch {}
+}
+
 export interface EditorTab {
   id: string;
   filePath: string;
@@ -103,7 +121,7 @@ function createEditorStore() {
   let splitRatio = $state(0.5);
   let previewTabId = $state<string | null>(null);
   let pendingGoTo = $state<{ line: number; col: number } | null>(null);
-  let followAlong = $state(true);
+  let followAlong = $state(loadFollowAlong());
   /** Set when Follow Along detects a file edit — CodeEditor scrolls to this line after content sync. */
   let followAlongTarget = $state<{ filePath: string; line: number } | null>(null);
 
@@ -148,9 +166,11 @@ function createEditorStore() {
     },
     setFollowAlong(enabled: boolean) {
       followAlong = enabled;
+      persistFollowAlong(enabled);
     },
     toggleFollowAlong() {
       followAlong = !followAlong;
+      persistFollowAlong(followAlong);
     },
 
     get pendingGoTo() {
