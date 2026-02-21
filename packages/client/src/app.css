@@ -1721,6 +1721,104 @@ body {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   letter-spacing: 0.3px;
+  /* Disable text selection globally for a native-app feel.
+     Content areas (messages, code, errors, inputs) are whitelisted below. */
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+/* ── Selectable-content whitelist ─────────────────────────────────────────────
+   Re-enable text selection for areas where users need to read, copy, or
+   interact with textual content.  Everything else stays non-selectable
+   so the UI feels like a native application.                                  */
+
+/* Form controls — always selectable */
+input,
+textarea,
+select,
+[contenteditable='true'] {
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+/* Chat message content */
+.prose,
+.message-body,
+.streaming-text-wrapper,
+.nudge-text,
+.artifact-prose {
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+/* Code blocks & inline code */
+pre,
+code,
+.code-body,
+.code-pre,
+.code-inner,
+.code-line,
+.code-meta {
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+/* Thinking & tool-call detail blocks */
+.thinking-content,
+.detail-content {
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+/* Error displays */
+.error-renderer,
+.error-message,
+.error-output,
+.error-type,
+.error-location,
+.stack-trace,
+.stream-error,
+.context-warning-text {
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+/* Terminal & editor content */
+.xterm,
+.terminal-content,
+.line-content,
+.command-text {
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+/* Diff & commit content */
+.diff-text,
+.commit-text,
+.rich-block-content {
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+/* File paths & links in errors — useful for copying */
+.file-link,
+.frame-fn,
+.frame-file {
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+/* Ask-mode option text & event logs */
+.ask-option-content,
+.event-list-text {
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+/* Mention / context preview text */
+.mention-context-text {
+  -webkit-user-select: text;
+  user-select: text;
 }
 
 /* Scrollbar — thin cyan HUD lines */
