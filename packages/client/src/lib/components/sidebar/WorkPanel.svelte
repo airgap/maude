@@ -356,7 +356,7 @@
             <button class="btn-sm btn-primary" onclick={startStandaloneLoop}
               ><svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor" stroke="none"
                 ><polygon points="5 3 19 12 5 21 5 3" /></svg
-              > Loop
+              > Activate Golem
             </button>
           {/if}
         </div>
@@ -796,7 +796,7 @@
             <button class="btn-sm btn-primary" onclick={startStandaloneLoop}
               ><svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor" stroke="none"
                 ><polygon points="5 3 19 12 5 21 5 3" /></svg
-              > Loop
+              > Activate Golem
             </button>
           {/if}
         </div>
