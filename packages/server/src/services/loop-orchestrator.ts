@@ -931,15 +931,8 @@ class LoopRunner {
           if (passed) {
             // Story succeeded! Clear any fix-up state if it was a fix-up pass.
             this.fixUpState.delete(story.id);
-            this.updateStory(story.id, { status: 'completed' });
 
-            // Increment completed counter
-            const loop = db.query('SELECT * FROM loops WHERE id = ?').get(this.loopId) as any;
-            this.updateLoopDb({
-              total_stories_completed: (loop?.total_stories_completed || 0) + 1,
-            });
-
-            // Git commit if configured
+            // Git commit BEFORE marking complete — task stays in_progress until changes are committed
             if (this.config.autoCommit) {
               try {
                 const sha = await this.gitCommit(story);
@@ -955,9 +948,49 @@ class LoopRunner {
                   });
                 }
               } catch (err) {
-                console.error(`[loop:${this.loopId}] Git commit failed:`, err);
+                console.error(
+                  `[loop:${this.loopId}] Git commit failed for story ${story.id}:`,
+                  err,
+                );
+                // Don't mark complete if commit fails — revert and retry
+                const commitErrMsg = err instanceof Error ? err.message : String(err);
+                this.addLogEntry({
+                  iteration,
+                  storyId: story.id,
+                  storyTitle: story.title,
+                  action: 'failed',
+                  detail: `Git commit failed: ${commitErrMsg}`,
+                  timestamp: Date.now(),
+                });
+                await this.revertUncommittedChanges();
+                this.updateStory(story.id, { status: 'pending' });
+                this.emitEvent('story_failed', {
+                  storyId: story.id,
+                  storyTitle: story.title,
+                  iteration,
+                  conversationId,
+                  message: `Git commit failed: ${commitErrMsg}`,
+                  willRetry: true,
+                });
+                // Fall through to iteration_end cleanup
+                this.updateLoopDb({ current_story_id: null, current_agent_id: null });
+                this.emitEvent('iteration_end', {
+                  storyId: story.id,
+                  storyTitle: story.title,
+                  iteration,
+                });
+                continue;
               }
             }
+
+            // Now safe to mark as completed — all changes are committed
+            this.updateStory(story.id, { status: 'completed' });
+
+            // Increment completed counter
+            const loop = db.query('SELECT * FROM loops WHERE id = ?').get(this.loopId) as any;
+            this.updateLoopDb({
+              total_stories_completed: (loop?.total_stories_completed || 0) + 1,
+            });
 
             this.emitEvent('story_completed', {
               storyId: story.id,
