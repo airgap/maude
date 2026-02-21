@@ -345,6 +345,7 @@
   .tabs-scroll {
     display: flex;
     overflow-x: auto;
+    overflow-y: hidden;
     scrollbar-width: none;
     flex: 1;
     align-items: stretch;
