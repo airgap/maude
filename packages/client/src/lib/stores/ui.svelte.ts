@@ -29,6 +29,7 @@ type ModalId =
   | 'workspace-setup'
   | 'snapshots'
   | 'loop-config'
+  | 'story-create'
   | 'story-generate'
   | 'story-refine'
   | 'criteria-validation'

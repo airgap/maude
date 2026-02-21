@@ -17,6 +17,7 @@
   import SettingsModal from '../settings/SettingsModal.svelte';
   import SnapshotModal from '../settings/SnapshotModal.svelte';
   import LoopConfigModal from '../settings/LoopConfigModal.svelte';
+  import StoryCreateModal from '../settings/StoryCreateModal.svelte';
   import StoryGenerateModal from '../settings/StoryGenerateModal.svelte';
   import StoryRefineModal from '../settings/StoryRefineModal.svelte';
   import CriteriaValidationModal from '../settings/CriteriaValidationModal.svelte';
@@ -432,6 +433,10 @@
 
   {#if uiStore.activeModal === 'loop-config'}
     <LoopConfigModal />
+  {/if}
+
+  {#if uiStore.activeModal === 'story-create'}
+    <StoryCreateModal />
   {/if}
 
   {#if uiStore.activeModal === 'story-generate'}

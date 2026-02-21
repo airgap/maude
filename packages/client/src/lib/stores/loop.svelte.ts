@@ -125,6 +125,9 @@ function createLoopStore() {
   let generating = $state(false);
   let generateError = $state<string | null>(null);
 
+  // Story create/edit state
+  let editingStoryId = $state<string | null>(null);
+
   // Story refinement state
   let refiningStoryId = $state<string | null>(null);
   let refining = $state(false);
@@ -256,6 +259,9 @@ function createLoopStore() {
     },
     get generateError() {
       return generateError;
+    },
+    get editingStoryId() {
+      return editingStoryId;
     },
     get refiningStoryId() {
       return refiningStoryId;
@@ -998,6 +1004,12 @@ function createLoopStore() {
 
     removeGeneratedStory(index: number) {
       generatedStories = generatedStories.filter((_, i) => i !== index);
+    },
+
+    // --- Story create/edit ---
+
+    setEditingStoryId(id: string | null) {
+      editingStoryId = id;
     },
 
     // --- Story refinement ---

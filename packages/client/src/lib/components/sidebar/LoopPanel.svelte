@@ -392,6 +392,16 @@
     uiStore.openModal('effort-value-matrix');
   }
 
+  function openCreateStoryModal() {
+    loopStore.setEditingStoryId(null);
+    uiStore.openModal('story-create');
+  }
+
+  function openEditStoryModal(storyId: string) {
+    loopStore.setEditingStoryId(storyId);
+    uiStore.openModal('story-create');
+  }
+
   let estimatingAll = $state(false);
   let recommendingAllPriorities = $state(false);
   let showStoriesMenu = $state(false);
@@ -748,9 +758,28 @@
               </svg>
             </button>
           {/if}
-          <button class="icon-btn" title="Add story" onclick={() => (showAddStory = !showAddStory)}
-            >+</button
+          <button
+            class="icon-btn"
+            title="Quick add story"
+            onclick={() => (showAddStory = !showAddStory)}>+</button
           >
+          <button class="icon-btn" title="Create story (full form)" onclick={openCreateStoryModal}>
+            <svg
+              width="12"
+              height="12"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+              <polyline points="14 2 14 8 20 8"></polyline>
+              <line x1="12" y1="18" x2="12" y2="12"></line>
+              <line x1="9" y1="15" x2="15" y2="15"></line>
+            </svg>
+          </button>
           <div class="stories-menu-wrap">
             <button
               class="icon-btn"
@@ -872,7 +901,11 @@
       <div class="story-list">
         {#if (loopStore.selectedPrd.stories || []).length === 0}
           <div class="empty-stories">
-            <span class="empty-hint">No stories yet. Click + to add one.</span>
+            <span class="empty-hint"
+              >No stories yet. Click + for quick add or
+              <button class="empty-create-link" onclick={openCreateStoryModal}>create one</button
+              >.</span
+            >
           </div>
         {:else}
           {#each loopStore.selectedPrd.stories || [] as story (story.id)}
@@ -884,7 +917,13 @@
                 <span class="story-status" style:color={statusColor(story.status)}>
                   {statusIcon(story.status)}
                 </span>
-                <span class="story-title">{story.title}</span>
+                <!-- svelte-ignore a11y_no_static_element_interactions a11y_click_events_have_key_events -->
+                <span
+                  class="story-title"
+                  class:clickable={!loopStore.isActive}
+                  onclick={() => !loopStore.isActive && openEditStoryModal(story.id)}
+                  >{story.title}</span
+                >
                 {#if priorityLabel(story.priority)}
                   <span class="priority-badge">{priorityLabel(story.priority)}</span>
                 {/if}
@@ -942,6 +981,25 @@
                       {/if}
                     </button>
                   {/if}
+                  <button
+                    class="edit-story-btn"
+                    title="Edit story"
+                    onclick={() => openEditStoryModal(story.id)}
+                  >
+                    <svg
+                      width="10"
+                      height="10"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2.5"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                      <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                    </svg>
+                  </button>
                   <button
                     class="validate-btn"
                     title="Validate acceptance criteria"
@@ -1366,6 +1424,18 @@
     font-size: var(--fs-xs);
     color: var(--text-tertiary);
   }
+  .empty-create-link {
+    color: var(--accent-primary);
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-size: var(--fs-xs);
+    text-decoration: underline;
+    padding: 0;
+  }
+  .empty-create-link:hover {
+    opacity: 0.8;
+  }
 
   .story-item {
     padding: 6px 8px;
@@ -1397,11 +1467,19 @@
     text-overflow: ellipsis;
     white-space: nowrap;
   }
+  .story-title.clickable {
+    cursor: pointer;
+  }
+  .story-title.clickable:hover {
+    color: var(--accent-primary);
+    text-decoration: underline;
+  }
   .priority-badge {
     font-size: var(--fs-xxs);
     color: var(--accent-warning, #e6a817);
     font-weight: bold;
   }
+  .edit-story-btn,
   .validate-btn,
   .refine-btn,
   .estimate-btn,
@@ -1419,6 +1497,7 @@
     display: flex;
     align-items: center;
   }
+  .story-item:hover .edit-story-btn,
   .story-item:hover .validate-btn,
   .story-item:hover .refine-btn,
   .story-item:hover .estimate-btn,
@@ -1426,6 +1505,9 @@
   .story-item:hover .delete-btn,
   .story-item:hover .archive-btn {
     opacity: 1;
+  }
+  .edit-story-btn:hover {
+    color: var(--accent-primary);
   }
   .validate-btn:hover {
     color: var(--accent-secondary);
