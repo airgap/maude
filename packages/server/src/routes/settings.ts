@@ -174,14 +174,6 @@ app.post('/permission-rules/apply-preset', async (c) => {
   return c.json({ ok: true, data: rules });
 });
 
-// Get single setting
-app.get('/:key', (c) => {
-  const db = getDb();
-  const row = db.query('SELECT value FROM settings WHERE key = ?').get(c.req.param('key')) as any;
-  if (!row) return c.json({ ok: false, error: 'Not found' }, 404);
-  return c.json({ ok: true, data: JSON.parse(row.value) });
-});
-
 // Ollama model discovery
 app.get('/ollama/status', async (c) => {
   const healthy = await checkOllamaHealth();
@@ -283,6 +275,14 @@ app.put('/budget', async (c) => {
   }
 
   return c.json({ ok: true });
+});
+
+// Get single setting by key (catch-all — must be last to avoid shadowing specific routes like /budget)
+app.get('/:key', (c) => {
+  const db = getDb();
+  const row = db.query('SELECT value FROM settings WHERE key = ?').get(c.req.param('key')) as any;
+  if (!row) return c.json({ ok: false, error: 'Not found' }, 404);
+  return c.json({ ok: true, data: JSON.parse(row.value) });
 });
 
 export { app as settingsRoutes };
