@@ -4,6 +4,7 @@
   import { streamStore } from '$lib/stores/stream.svelte';
   import { uiStore } from '$lib/stores/ui.svelte';
   import { loopStore } from '$lib/stores/loop.svelte';
+  import { deviceStore } from '$lib/stores/device.svelte';
   import { api } from '$lib/api/client';
   import WorkspaceTabBar from './WorkspaceTabBar.svelte';
   import WindowControls from './WindowControls.svelte';
@@ -40,23 +41,25 @@
 <header class="topbar">
   <div class="topbar-left">
     <WindowControls side="left" />
-    <button
-      class="icon-btn"
-      onclick={() => uiStore.toggleSidebar()}
-      title="Toggle sidebar (Ctrl+/)"
-    >
-      <svg
-        width="18"
-        height="18"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        stroke-width="2"
+    {#if !deviceStore.isMobileUI}
+      <button
+        class="icon-btn"
+        onclick={() => uiStore.toggleSidebar()}
+        title="Toggle sidebar (Ctrl+/)"
       >
-        <rect x="3" y="3" width="18" height="18" rx="2" />
-        <line x1="9" y1="3" x2="9" y2="21" />
-      </svg>
-    </button>
+        <svg
+          width="18"
+          height="18"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+        >
+          <rect x="3" y="3" width="18" height="18" rx="2" />
+          <line x1="9" y1="3" x2="9" y2="21" />
+        </svg>
+      </button>
+    {/if}
     <WorkspaceTabBar />
   </div>
 

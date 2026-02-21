@@ -4,6 +4,35 @@ import { getDb } from '../db/database';
 
 export const customToolRoutes = new Hono();
 
+/**
+ * Validate handler commands against a blocklist of dangerous patterns.
+ * This is defense-in-depth — CSRF + CORS should prevent external creation,
+ * but we also block obviously malicious commands.
+ */
+function isCommandSafe(command: string): { safe: boolean; reason?: string } {
+  const normalized = command.toLowerCase().trim();
+  const dangerousPatterns = [
+    /curl\s.*\|\s*(ba)?sh/, // curl | sh / curl | bash
+    /wget\s.*\|\s*(ba)?sh/, // wget | sh / wget | bash
+    /\beval\s/, // eval
+    />\s*\/dev\/sd/, // write to block devices
+    /rm\s+-rf\s+[\/~]/, // rm -rf / or ~
+    /mkfs/, // format drives
+    /dd\s+if=/, // raw disk write
+    /:\(\)\s*\{.*\|.*&\s*\}\s*;/, // fork bomb
+    /chmod\s+-R\s+777\s+\//, // open everything
+    />\s*\/etc\//, // write to /etc
+  ];
+
+  for (const pattern of dangerousPatterns) {
+    if (pattern.test(normalized)) {
+      return { safe: false, reason: 'Command contains a blocked dangerous pattern' };
+    }
+  }
+
+  return { safe: true };
+}
+
 function ensureTable() {
   const db = getDb();
   db.exec(`
@@ -113,6 +142,21 @@ customToolRoutes.post('/', async (c) => {
     return c.json({ ok: false, error: 'handlerCommand is required' }, 400);
   }
 
+  // Validate the command isn't obviously dangerous
+  const cmdCheck = isCommandSafe(handlerCommand);
+  if (!cmdCheck.safe) {
+    return c.json({ ok: false, error: cmdCheck.reason }, 400);
+  }
+
+  // Require explicit confirmation header for creating tools with shell commands
+  const confirmed = c.req.header('X-Confirm-Dangerous');
+  if (!confirmed) {
+    return c.json(
+      { ok: false, error: 'Custom tool creation requires X-Confirm-Dangerous header' },
+      400,
+    );
+  }
+
   const db = getDb();
   const id = nanoid(12);
   const now = Date.now();
@@ -195,6 +239,19 @@ customToolRoutes.patch('/:id', async (c) => {
     values.push(body.handlerType);
   }
   if (body.handlerCommand !== undefined) {
+    // Validate the command isn't obviously dangerous
+    const cmdCheck = isCommandSafe(body.handlerCommand);
+    if (!cmdCheck.safe) {
+      return c.json({ ok: false, error: cmdCheck.reason }, 400);
+    }
+    // Require explicit confirmation header for updating shell commands
+    const confirmed = c.req.header('X-Confirm-Dangerous');
+    if (!confirmed) {
+      return c.json(
+        { ok: false, error: 'Updating handler commands requires X-Confirm-Dangerous header' },
+        400,
+      );
+    }
     updates.push('handler_command = ?');
     values.push(body.handlerCommand);
   }

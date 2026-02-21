@@ -41,10 +41,23 @@ import { managerRoutes } from './routes/manager';
 import { taskRunnerRoutes } from './routes/task-runner';
 import { commentaryRoutes } from './routes/commentary';
 import { authMiddleware } from './middleware/auth';
+import { csrfMiddleware } from './middleware/csrf';
 import { websocket } from './ws';
 import { initDatabase } from './db/database';
 import { existsSync } from 'fs';
 import { resolve } from 'path';
+
+/**
+ * Allowed TLS origins — set E_ALLOWED_ORIGINS env var to a comma-separated list
+ * of origins that should be allowed when TLS is enabled (e.g. Tailscale hostnames).
+ * Example: E_ALLOWED_ORIGINS=https://my-machine.tail1234.ts.net
+ */
+const allowedTlsOrigins = new Set(
+  (process.env.E_ALLOWED_ORIGINS || '')
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean),
+);
 
 const app = new Hono();
 
@@ -59,21 +72,28 @@ app.use(
   '*',
   cors({
     origin: (origin) => {
-      // No origin: same-origin request, Tauri on Linux (webkit sends empty origin), or tools
-      if (!origin) return '*';
-      // When TLS is enabled, allow the request's own origin (e.g. Tailscale hostname)
-      if (tls) return origin;
-      // Allow any localhost port (dev mode, Tauri on other platforms)
+      // Deny requests with no Origin header — prevents cross-origin attacks
+      // from iframes, forms, or fetches that omit the Origin.
+      // Same-origin requests from the bundled client DO include Origin.
+      if (!origin) return null;
+      // Allow any localhost port (dev mode, Tauri, bundled client)
       if (/^https?:\/\/localhost(:\d+)?$/.test(origin)) return origin;
       if (origin === 'tauri://localhost' || origin === 'https://tauri.localhost') return origin;
+      // When TLS is enabled, only allow explicitly configured origins
+      if (tls && allowedTlsOrigins.has(origin)) return origin;
       return null;
     },
+    allowHeaders: ['Content-Type', 'Authorization', 'X-CSRF-Token', 'X-Requested-With'],
+    allowMethods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   }),
 );
 app.use('*', logger());
 
 // Auth middleware (no-op in single-user mode)
 app.use('/api/*', authMiddleware);
+
+// CSRF protection — validates token + origin on all mutations
+app.use('/api/*', csrfMiddleware);
 
 // Health check
 app.get('/health', (c) => c.json({ ok: true, version: '0.1.0' }));

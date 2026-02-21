@@ -52,6 +52,34 @@ export function getAuthToken(): string | null {
   return _authToken;
 }
 
+// CSRF token — fetched once at startup, required for all mutations
+let _csrfToken: string | null = null;
+let _csrfFetching: Promise<void> | null = null;
+
+/** Fetch and cache the CSRF token from the server. Called once at app init. */
+export async function initCsrfToken(): Promise<void> {
+  if (_csrfToken) return;
+  if (_csrfFetching) return _csrfFetching;
+  _csrfFetching = (async () => {
+    try {
+      const res = await fetch(`${getBaseUrl()}/auth/csrf-token`);
+      if (res.ok) {
+        const body = await res.json();
+        _csrfToken = body?.data?.token || null;
+      }
+    } catch {
+      // Server not ready yet — will retry on first request failure
+    } finally {
+      _csrfFetching = null;
+    }
+  })();
+  return _csrfFetching;
+}
+
+export function getCsrfToken(): string | null {
+  return _csrfToken;
+}
+
 async function request<T>(path: string, opts: RequestInit = {}): Promise<T> {
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
@@ -59,6 +87,8 @@ async function request<T>(path: string, opts: RequestInit = {}): Promise<T> {
   };
   const token = getAuthToken();
   if (token) headers['Authorization'] = `Bearer ${token}`;
+  // Include CSRF token on all requests (server validates on mutations)
+  if (_csrfToken) headers['X-CSRF-Token'] = _csrfToken;
 
   let res: Response;
   try {
@@ -161,6 +191,7 @@ export const api = {
       const headers: Record<string, string> = { 'Content-Type': 'application/json' };
       const token = getAuthToken();
       if (token) headers['Authorization'] = `Bearer ${token}`;
+      if (_csrfToken) headers['X-CSRF-Token'] = _csrfToken;
       if (sessionId) headers['X-Session-Id'] = sessionId;
 
       // Build images array for provider compatibility
@@ -200,6 +231,7 @@ export const api = {
       const headers: Record<string, string> = {};
       const token = getAuthToken();
       if (token) headers['Authorization'] = `Bearer ${token}`;
+      if (_csrfToken) headers['X-CSRF-Token'] = _csrfToken;
       return fetch(`${getBaseUrl()}/stream/reconnect/${sessionId}`, { headers, signal });
     },
     answerQuestion: (
@@ -627,6 +659,7 @@ export const api = {
     install: (language: string) =>
       request<{ ok: boolean; error?: string }>('/lsp/install', {
         method: 'POST',
+        headers: { 'X-Confirm-Install': 'true' },
         body: JSON.stringify({ language }),
       }),
   },
@@ -1391,11 +1424,13 @@ export const api = {
     }) =>
       request<{ ok: boolean; data: any }>('/custom-tools', {
         method: 'POST',
+        headers: { 'X-Confirm-Dangerous': 'true' },
         body: JSON.stringify(body),
       }),
     update: (id: string, body: Record<string, any>) =>
       request<{ ok: boolean; data: any }>(`/custom-tools/${id}`, {
         method: 'PATCH',
+        headers: { 'X-Confirm-Dangerous': 'true' },
         body: JSON.stringify(body),
       }),
     delete: (id: string) => request<{ ok: boolean }>(`/custom-tools/${id}`, { method: 'DELETE' }),

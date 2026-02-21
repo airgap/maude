@@ -1,16 +1,44 @@
 import { Hono } from 'hono';
 import { nanoid } from 'nanoid';
+import { resolve } from 'path';
 import { getDb } from '../db/database';
 
 const app = new Hono();
+
+/**
+ * Validate that a path is a plausible workspace directory.
+ * Prevents path traversal attacks via the cwd parameter.
+ */
+function validateWorkspacePath(rawPath: string): {
+  valid: boolean;
+  resolved: string;
+  reason?: string;
+} {
+  const resolved = resolve(rawPath);
+
+  // Block obvious system directories that shouldn't be used as cwd
+  const blockedPrefixes = ['/proc', '/sys', '/dev', '/boot', '/sbin'];
+  for (const prefix of blockedPrefixes) {
+    if (resolved.startsWith(prefix)) {
+      return { valid: false, resolved, reason: `Path ${prefix} is not a valid workspace` };
+    }
+  }
+
+  return { valid: true, resolved };
+}
 
 // Git status
 app.get('/status', async (c) => {
   const rootPath = c.req.query('path') || process.cwd();
 
+  const pathCheck = validateWorkspacePath(rootPath);
+  if (!pathCheck.valid) {
+    return c.json({ ok: false, error: pathCheck.reason }, 403);
+  }
+
   try {
     const proc = Bun.spawn(['git', 'status', '--porcelain', '-uall'], {
-      cwd: rootPath,
+      cwd: pathCheck.resolved,
       stdout: 'pipe',
       stderr: 'pipe',
     });
@@ -62,9 +90,14 @@ app.get('/status', async (c) => {
 app.get('/branch', async (c) => {
   const rootPath = c.req.query('path') || process.cwd();
 
+  const pathCheck = validateWorkspacePath(rootPath);
+  if (!pathCheck.valid) {
+    return c.json({ ok: false, error: pathCheck.reason }, 403);
+  }
+
   try {
     const proc = Bun.spawn(['git', 'rev-parse', '--abbrev-ref', 'HEAD'], {
-      cwd: rootPath,
+      cwd: pathCheck.resolved,
       stdout: 'pipe',
       stderr: 'pipe',
     });
@@ -89,10 +122,15 @@ app.post('/snapshot', async (c) => {
 
   if (!rootPath) return c.json({ ok: false, error: 'path required' }, 400);
 
+  const snapshotPathCheck = validateWorkspacePath(rootPath);
+  if (!snapshotPathCheck.valid) {
+    return c.json({ ok: false, error: snapshotPathCheck.reason }, 403);
+  }
+
   try {
     // Check if this is a git repo (not an error — workspace may not be git-initialized)
     const checkProc = Bun.spawn(['git', 'rev-parse', '--is-inside-work-tree'], {
-      cwd: rootPath,
+      cwd: snapshotPathCheck.resolved,
       stdout: 'pipe',
       stderr: 'pipe',
     });
@@ -168,13 +206,18 @@ app.get('/diff', async (c) => {
     return c.json({ ok: false, error: 'file parameter required' }, 400);
   }
 
+  const diffPathCheck = validateWorkspacePath(rootPath);
+  if (!diffPathCheck.valid) {
+    return c.json({ ok: false, error: diffPathCheck.reason }, 403);
+  }
+
   try {
     const args = staged
       ? ['git', 'diff', '--cached', '--', filePath]
       : ['git', 'diff', '--', filePath];
 
     const proc = Bun.spawn(args, {
-      cwd: rootPath,
+      cwd: diffPathCheck.resolved,
       stdout: 'pipe',
       stderr: 'pipe',
     });

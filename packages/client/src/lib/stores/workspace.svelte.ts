@@ -12,6 +12,7 @@ import {
   type FloatingPanelState,
   type PanelColumn,
 } from './sidebarLayout.svelte';
+import { api } from '$lib/api/client';
 import type { TerminalPreferences } from '@e/shared';
 
 const STORAGE_KEY = 'e-workspaces';
@@ -275,6 +276,31 @@ function createWorkspaceStore() {
           workspaceListStore.setActiveWorkspaceId(active.workspaceId);
           gitStore.startPolling(active.workspacePath);
         }
+      } else {
+        // No localStorage state — try to recover from the server.
+        // Auto-open the most recently used workspace so features like
+        // Commentary don't show "open a workspace" on fresh sessions.
+        this._recoverFromServer();
+      }
+    },
+
+    /** Fetch workspaces from the server and auto-open the most recent one. */
+    async _recoverFromServer() {
+      try {
+        const res = await api.workspaces.list();
+        const serverWorkspaces = res.data;
+        if (!serverWorkspaces || serverWorkspaces.length === 0) return;
+
+        // Pick the most recently opened workspace
+        const sorted = [...serverWorkspaces].sort(
+          (a, b) => (b.lastOpened ?? 0) - (a.lastOpened ?? 0),
+        );
+        const best = sorted[0];
+
+        // Open it as if the user clicked it
+        this.openWorkspace({ id: best.id, name: best.name, path: best.path });
+      } catch {
+        // Server not ready or no workspaces — nothing to recover
       }
     },
 

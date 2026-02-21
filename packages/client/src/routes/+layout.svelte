@@ -2,7 +2,7 @@
   import '../app.css';
   import AppShell from '$lib/components/layout/AppShell.svelte';
   import LoginPage from '$lib/components/auth/LoginPage.svelte';
-  import { api, getAuthToken } from '$lib/api/client';
+  import { api, getAuthToken, initCsrfToken } from '$lib/api/client';
   import { streamStore, STREAM_CONTEXT_KEY } from '$lib/stores/stream.svelte';
   import { settingsStore } from '$lib/stores/settings.svelte';
   import { findFont, buildGoogleFontsUrl, type FontOption } from '$lib/config/fonts';
@@ -81,6 +81,9 @@
   }
 
   onMount(async () => {
+    // Fetch CSRF token before any mutations can happen
+    await initCsrfToken();
+
     try {
       const status = await api.auth.status();
       authRequired = status.data.enabled;

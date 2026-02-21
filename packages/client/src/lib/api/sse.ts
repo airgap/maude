@@ -294,11 +294,32 @@ export async function sendAndStream(
 }
 
 /**
+ * Promise that resolves when the reconnection attempt completes.
+ * Other code (e.g. ConversationList auto-restore) can await this to avoid
+ * race conditions where they skip loading because reconnection is in progress
+ * but then reconnection fails, leaving no conversation loaded.
+ */
+let reconnectionDone: Promise<string | null> = Promise.resolve(null);
+
+/** Get the promise for the current reconnection attempt. */
+export function getReconnectionPromise(): Promise<string | null> {
+  return reconnectionDone;
+}
+
+/**
  * Check for active streaming sessions and reconnect if found.
  * Called on page load to resume displaying in-progress streams.
  * Returns the conversation ID of the reconnected session, or null.
  */
 export async function reconnectActiveStream(): Promise<string | null> {
+  const doReconnect = async (): Promise<string | null> => {
+    return _reconnectActiveStreamImpl();
+  };
+  reconnectionDone = doReconnect();
+  return reconnectionDone;
+}
+
+async function _reconnectActiveStreamImpl(): Promise<string | null> {
   // Abort any existing stream reader to prevent duplicate processing
   abortActiveStream();
   const myGeneration = streamGeneration;
@@ -321,6 +342,10 @@ export async function reconnectActiveStream(): Promise<string | null> {
       }
     }
     if (!sessionsRes || !sessionsRes.ok || !sessionsRes.data.length) {
+      console.log(
+        '[sse] No active sessions found for reconnection',
+        sessionsRes ? `(${sessionsRes.data?.length ?? 0} sessions)` : '(request failed)',
+      );
       // If all session retries failed and we were streaming, clear streaming
       // state so the UI doesn't get stuck in a "streaming" indicator.
       if (!sessionsRes) {
@@ -338,17 +363,32 @@ export async function reconnectActiveStream(): Promise<string | null> {
       (s) => s.status === 'running' || (s.bufferedEvents > 0 && !s.streamComplete),
     );
 
-    // For completed sessions, only reconnect if the conversation matches the
-    // one the user was last looking at. Otherwise stale completed sessions
-    // (whose events were never consumed) hijack the page on reload and load
-    // an old conversation instead of the most recent one.
+    // For completed sessions, prefer one that matches the user's last conversation.
+    // If savedConversationId is unavailable (e.g. workspace not yet loaded), fall
+    // back to the most recent completed session to avoid silently dropping the response.
     const savedConversationId = workspaceStore.activeWorkspace?.snapshot.activeConversationId;
-    const justCompleted = sessionsRes.data.find(
-      (s) => s.streamComplete && s.bufferedEvents > 0 && s.conversationId === savedConversationId,
+    const completedCandidates = sessionsRes.data.filter(
+      (s) => s.streamComplete && s.bufferedEvents > 0,
     );
+    const justCompleted =
+      completedCandidates.find((s) => s.conversationId === savedConversationId) ||
+      (savedConversationId ? null : completedCandidates[0]) ||
+      null;
 
     const target = active || justCompleted;
     if (!target) {
+      console.log(
+        '[sse] Sessions exist but none matched reconnection criteria:',
+        sessionsRes.data.map((s) => ({
+          id: s.id,
+          status: s.status,
+          complete: s.streamComplete,
+          events: s.bufferedEvents,
+          conv: s.conversationId,
+        })),
+        'savedConvId:',
+        savedConversationId,
+      );
       streamStore.setReconnecting(false);
       return null;
     }

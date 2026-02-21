@@ -72,9 +72,20 @@ async function installBinaryFromZip(url: string, commandName: string): Promise<v
 }
 
 // POST: install a language server into ~/.e/lsp/
+// Requires X-Confirm-Install header — downloads and runs external binaries,
+// so must be explicitly triggered by the UI (not by a cross-origin request).
 lspRoutes.post('/install', async (c) => {
+  const confirmed = c.req.header('X-Confirm-Install');
+  if (!confirmed) {
+    return c.json({ ok: false, error: 'LSP install requires X-Confirm-Install header' }, 400);
+  }
+
   const body = await c.req.json<{ language: string }>();
   const { language } = body;
+
+  if (!language || typeof language !== 'string' || language.length > 50) {
+    return c.json({ ok: false, error: 'Invalid language parameter' }, 400);
+  }
 
   const info = getInstallInfo(language);
   if (!info) {

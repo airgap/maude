@@ -8,12 +8,19 @@ import {
   isAuthEnabled,
   listUsers,
 } from '../services/auth';
+import { getCsrfToken } from '../middleware/csrf';
 
 const app = new Hono();
 
 // Check if auth is enabled
 app.get('/status', (c) => {
   return c.json({ ok: true, data: { enabled: isAuthEnabled() } });
+});
+
+// Get CSRF token — the client must include this in X-CSRF-Token header for all mutations.
+// This endpoint is safe because CORS restricts which origins can read the response.
+app.get('/csrf-token', (c) => {
+  return c.json({ ok: true, data: { token: getCsrfToken() } });
 });
 
 // Register a new user

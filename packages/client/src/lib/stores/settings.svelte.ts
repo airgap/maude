@@ -103,6 +103,8 @@ interface SettingsState {
   googleTtsApiKey?: string;
   // Experimental: spatial audio for multi-workspace TTS
   spatialAudioEnabled: boolean;
+  // Mobile bottom nav bar tabs (up to 10, "more" is always appended)
+  mobileNavTabs: string[];
 }
 
 const defaults: SettingsState = {
@@ -181,6 +183,7 @@ const defaults: SettingsState = {
   elevenLabsApiKey: undefined,
   googleTtsApiKey: undefined,
   spatialAudioEnabled: false,
+  mobileNavTabs: ['chat', 'files', 'terminal', 'work'],
 };
 
 function loadFromStorage(): SettingsState {
@@ -495,6 +498,9 @@ function createSettingsStore() {
     },
     get spatialAudioEnabled() {
       return state.spatialAudioEnabled;
+    },
+    get mobileNavTabs() {
+      return state.mobileNavTabs;
     },
     get all() {
       return state;

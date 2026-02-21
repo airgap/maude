@@ -1357,6 +1357,11 @@ class ClaudeProcessManager {
           }
         })(); // end async IIFE — not awaited so start() returns immediately
       },
+      cancel() {
+        // Client disconnected (e.g. page refresh). The CLI process continues
+        // running and events keep being buffered in session.eventBuffer so the
+        // client can reconnect and resume the stream.
+      },
     });
   }
 
@@ -1435,7 +1440,10 @@ class ClaudeProcessManager {
   reconnectStream(sessionId: string): ReadableStream | null {
     const session = this.sessions.get(sessionId);
     if (!session) return null;
-    if (session.eventBuffer.length === 0) return null;
+    // Allow reconnection to running sessions even with empty buffers —
+    // the stream may have just started and events haven't arrived yet.
+    // For completed sessions, require at least one buffered event.
+    if (session.eventBuffer.length === 0 && session.streamComplete) return null;
 
     const encoder = new TextEncoder();
     const buffer = session.eventBuffer;
@@ -1508,6 +1516,95 @@ class ClaudeProcessManager {
       },
       cancel() {
         session.emitter.emit('reconnect_close');
+      },
+    });
+  }
+
+  /**
+   * Create a lightweight session for non-Claude provider streams (Ollama, OpenAI, etc.).
+   * These sessions only buffer SSE events for reconnection — they don't manage a CLI process.
+   */
+  createLightweightSession(conversationId: string): string {
+    const sessionId = nanoid();
+    const session: ClaudeSession = {
+      id: sessionId,
+      conversationId,
+      status: 'running',
+      emitter: new EventEmitter(),
+      eventBuffer: [],
+      streamComplete: false,
+      pendingNudges: [],
+    };
+    this.sessions.set(sessionId, session);
+    return sessionId;
+  }
+
+  /**
+   * Wrap a provider ReadableStream with event buffering for reconnection support.
+   * All SSE events flowing through the stream are captured in the session's eventBuffer.
+   * When the stream completes, the session is marked complete and scheduled for cleanup.
+   */
+  wrapProviderStream(sessionId: string, providerStream: ReadableStream): ReadableStream {
+    const session = this.sessions.get(sessionId);
+    if (!session) return providerStream; // fallback: return unwrapped
+
+    const encoder = new TextEncoder();
+    const reader = providerStream.getReader();
+    const scheduleCleanup = () => this.scheduleCleanup(sessionId);
+
+    return new ReadableStream({
+      async start(controller) {
+        const decoder = new TextDecoder();
+        try {
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+
+            // Forward data to client
+            try {
+              controller.enqueue(value);
+            } catch {
+              // Client disconnected — continue reading to buffer events
+            }
+
+            // Buffer SSE events for reconnection
+            const text = decoder.decode(value, { stream: true });
+            const lines = text.split('\n');
+            for (const line of lines) {
+              if (line.startsWith('data: ') && line.trim().length > 6) {
+                session.eventBuffer.push(line + '\n\n');
+              }
+            }
+          }
+        } catch (err) {
+          // Stream error
+          const errEvt = `data: ${JSON.stringify({
+            type: 'error',
+            error: { type: 'stream_error', message: String(err) },
+          })}\n\n`;
+          session.eventBuffer.push(errEvt);
+          try {
+            controller.enqueue(encoder.encode(errEvt));
+          } catch {
+            /* client gone */
+          }
+        } finally {
+          session.streamComplete = true;
+          scheduleCleanup();
+          try {
+            controller.close();
+          } catch {
+            /* already closed */
+          }
+          session.status = 'idle';
+        }
+      },
+      cancel() {
+        // Client disconnected (e.g. page refresh). Do NOT cancel the upstream
+        // reader or mark the session complete — the start() loop will continue
+        // reading from the provider and buffering events so the client can
+        // reconnect and resume the stream. The start() loop's finally block
+        // handles cleanup when the provider stream actually finishes.
       },
     });
   }

@@ -284,7 +284,7 @@ app.post('/:conversationId', async (c) => {
     // Extract images from body if provided
     const images = body.images || [];
 
-    const stream = createOllamaStreamV2({
+    const rawStream = createOllamaStreamV2({
       model: ollamaModel,
       content,
       conversationId,
@@ -294,12 +294,16 @@ app.post('/:conversationId', async (c) => {
       disallowedTools,
       images,
     });
+    // Wrap with session for reconnection support on page reload
+    const ollamaSessionId = claudeManager.createLightweightSession(conversationId);
+    const stream = claudeManager.wrapProviderStream(ollamaSessionId, rawStream);
     return new Response(stream, {
       headers: {
         'Content-Type': 'text/event-stream',
         'Cache-Control': 'no-cache, no-transform',
         Connection: 'keep-alive',
         'X-Accel-Buffering': 'no',
+        'X-Session-Id': ollamaSessionId,
         'Access-Control-Expose-Headers': 'X-Session-Id',
       },
     });
@@ -324,7 +328,7 @@ app.post('/:conversationId', async (c) => {
       if (conv.disallowed_tools) disallowedTools = JSON.parse(conv.disallowed_tools);
     } catch {}
     const images = body.images || [];
-    const stream = createOpenAIStreamV2({
+    const rawStream = createOpenAIStreamV2({
       model: openaiModel,
       content,
       conversationId,
@@ -334,12 +338,16 @@ app.post('/:conversationId', async (c) => {
       disallowedTools,
       images,
     });
+    // Wrap with session for reconnection support on page reload
+    const openaiSessionId = claudeManager.createLightweightSession(conversationId);
+    const stream = claudeManager.wrapProviderStream(openaiSessionId, rawStream);
     return new Response(stream, {
       headers: {
         'Content-Type': 'text/event-stream',
         'Cache-Control': 'no-cache, no-transform',
         Connection: 'keep-alive',
         'X-Accel-Buffering': 'no',
+        'X-Session-Id': openaiSessionId,
         'Access-Control-Expose-Headers': 'X-Session-Id',
       },
     });
@@ -364,7 +372,7 @@ app.post('/:conversationId', async (c) => {
       if (conv.disallowed_tools) disallowedTools = JSON.parse(conv.disallowed_tools);
     } catch {}
     const images = body.images || [];
-    const stream = createGeminiStreamV2({
+    const rawStream = createGeminiStreamV2({
       model: geminiModel,
       content,
       conversationId,
@@ -374,12 +382,16 @@ app.post('/:conversationId', async (c) => {
       disallowedTools,
       images,
     });
+    // Wrap with session for reconnection support on page reload
+    const geminiSessionId = claudeManager.createLightweightSession(conversationId);
+    const stream = claudeManager.wrapProviderStream(geminiSessionId, rawStream);
     return new Response(stream, {
       headers: {
         'Content-Type': 'text/event-stream',
         'Cache-Control': 'no-cache, no-transform',
         Connection: 'keep-alive',
         'X-Accel-Buffering': 'no',
+        'X-Session-Id': geminiSessionId,
         'Access-Control-Expose-Headers': 'X-Session-Id',
       },
     });
@@ -409,7 +421,7 @@ app.post('/:conversationId', async (c) => {
     // Extract images from body if provided
     const images = body.images || [];
 
-    const stream = createBedrockStreamV2({
+    const rawStream = createBedrockStreamV2({
       model: bedrockModel,
       content,
       conversationId,
@@ -420,12 +432,16 @@ app.post('/:conversationId', async (c) => {
       permissionMode: conv.permission_mode,
       images,
     });
+    // Wrap with session for reconnection support on page reload
+    const bedrockSessionId = claudeManager.createLightweightSession(conversationId);
+    const stream = claudeManager.wrapProviderStream(bedrockSessionId, rawStream);
     return new Response(stream, {
       headers: {
         'Content-Type': 'text/event-stream',
         'Cache-Control': 'no-cache, no-transform',
         Connection: 'keep-alive',
         'X-Accel-Buffering': 'no',
+        'X-Session-Id': bedrockSessionId,
         'Access-Control-Expose-Headers': 'X-Session-Id',
       },
     });
@@ -565,6 +581,11 @@ app.get('/sessions', (c) => {
 // Replays all buffered SSE events and continues streaming if still active.
 app.get('/reconnect/:sessionId', (c) => {
   const sessionId = c.req.param('sessionId');
+  const session = claudeManager.getSession(sessionId);
+  if (!session) {
+    return c.json({ ok: false, error: 'No active or recent stream for this session' }, 404);
+  }
+
   const stream = claudeManager.reconnectStream(sessionId);
   if (!stream) {
     return c.json({ ok: false, error: 'No active or recent stream for this session' }, 404);

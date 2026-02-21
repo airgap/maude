@@ -50,7 +50,7 @@ export interface CommentarySettings {
 
 /** Default commentary settings applied when none are configured. */
 export const DEFAULT_COMMENTARY_SETTINGS: CommentarySettings = {
-  enabled: false,
+  enabled: true,
   personality: 'technical_analyst',
   verbosity: 'strategic',
 };

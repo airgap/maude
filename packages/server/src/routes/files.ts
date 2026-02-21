@@ -1,16 +1,53 @@
 import { Hono } from 'hono';
 import { readFile, readdir, stat, writeFile, mkdir, unlink, rename } from 'fs/promises';
-import { join, relative, dirname } from 'path';
+import { join, relative, dirname, resolve } from 'path';
 import { homedir } from 'os';
 import editorconfig from 'editorconfig';
 import type { EditorConfigProps } from '@e/shared';
 
 const app = new Hono();
 
+/**
+ * Validate that a path is safe to access.
+ * Blocks obvious traversal attempts and sensitive system paths.
+ */
+function isSafePath(filePath: string): { safe: boolean; reason?: string } {
+  const resolved = resolve(filePath);
+  const home = homedir();
+
+  // Block access to sensitive system directories
+  const blockedPrefixes = ['/etc/shadow', '/proc/', '/sys/'];
+  for (const prefix of blockedPrefixes) {
+    if (resolved.startsWith(prefix)) {
+      return { safe: false, reason: `Access to ${prefix} is blocked` };
+    }
+  }
+
+  // Block access to SSH keys, credentials, etc.
+  const blockedPatterns = [
+    /\.ssh\/.*(?:id_|known_hosts|authorized_keys)/,
+    /\.gnupg\//,
+    /\.aws\/credentials/,
+    /\.env(?:\.local|\.production)?$/,
+  ];
+  for (const pattern of blockedPatterns) {
+    if (pattern.test(resolved)) {
+      return { safe: false, reason: 'Access to sensitive files is blocked' };
+    }
+  }
+
+  return { safe: true };
+}
+
 // Read file
 app.get('/read', async (c) => {
   const filePath = c.req.query('path');
   if (!filePath) return c.json({ ok: false, error: 'path required' }, 400);
+
+  const pathCheck = isSafePath(filePath);
+  if (!pathCheck.safe) {
+    return c.json({ ok: false, error: pathCheck.reason }, 403);
+  }
 
   try {
     const content = await readFile(filePath, 'utf-8');
@@ -108,6 +145,11 @@ app.put('/write', async (c) => {
   if (!filePath) return c.json({ ok: false, error: 'path required' }, 400);
   if (typeof content !== 'string') return c.json({ ok: false, error: 'content required' }, 400);
 
+  const pathCheck = isSafePath(filePath);
+  if (!pathCheck.safe) {
+    return c.json({ ok: false, error: pathCheck.reason }, 403);
+  }
+
   try {
     // Ensure parent directory exists
     await mkdir(dirname(filePath), { recursive: true });
@@ -123,6 +165,11 @@ app.post('/create', async (c) => {
   const body = await c.req.json();
   const { path: filePath, content = '' } = body;
   if (!filePath) return c.json({ ok: false, error: 'path required' }, 400);
+
+  const pathCheck = isSafePath(filePath);
+  if (!pathCheck.safe) {
+    return c.json({ ok: false, error: pathCheck.reason }, 403);
+  }
 
   try {
     // Check if file already exists
@@ -145,6 +192,11 @@ app.delete('/delete', async (c) => {
   const filePath = c.req.query('path');
   if (!filePath) return c.json({ ok: false, error: 'path required' }, 400);
 
+  const pathCheck = isSafePath(filePath);
+  if (!pathCheck.safe) {
+    return c.json({ ok: false, error: pathCheck.reason }, 403);
+  }
+
   try {
     await unlink(filePath);
     return c.json({ ok: true });
@@ -159,6 +211,15 @@ app.post('/rename', async (c) => {
   const { oldPath, newPath } = body;
   if (!oldPath || !newPath)
     return c.json({ ok: false, error: 'oldPath and newPath required' }, 400);
+
+  const oldCheck = isSafePath(oldPath);
+  if (!oldCheck.safe) {
+    return c.json({ ok: false, error: oldCheck.reason }, 403);
+  }
+  const newCheck = isSafePath(newPath);
+  if (!newCheck.safe) {
+    return c.json({ ok: false, error: newCheck.reason }, 403);
+  }
 
   try {
     await mkdir(dirname(newPath), { recursive: true });

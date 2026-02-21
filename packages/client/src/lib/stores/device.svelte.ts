@@ -33,17 +33,10 @@ function createDeviceStore() {
       if (!e.matches) hasHardwareKeyboard = true;
     });
 
-    // Any physical keypress means hardware keyboard is present.
-    // We listen for non-modifier, non-IME keys to avoid false positives.
-    const onKeydown = (e: KeyboardEvent) => {
-      if (hasHardwareKeyboard) return;
-      // Ignore pure modifier keys and synthetic events from virtual keyboards
-      if (['Meta', 'Control', 'Alt', 'Shift', 'CapsLock', 'Tab'].includes(e.key)) return;
-      // isComposing = true means IME virtual input, not physical key
-      if (e.isComposing) return;
-      hasHardwareKeyboard = true;
-    };
-    window.addEventListener('keydown', onKeydown, { passive: true });
+    // Track whether the on-screen (software) keyboard is currently visible.
+    // When it is, keydown events come from the virtual keyboard and should
+    // NOT be treated as evidence of a hardware keyboard.
+    let softwareKeyboardOpen = false;
 
     // If the on-screen keyboard pops up (viewport height shrinks significantly
     // on input focus), we know there's NO hardware keyboard.
@@ -52,14 +45,31 @@ function createDeviceStore() {
       const current = window.visualViewport?.height ?? window.innerHeight;
       // >30% shrink = software keyboard appeared
       if (current < baseHeight * 0.7) {
+        softwareKeyboardOpen = true;
         hasHardwareKeyboard = false;
       } else {
+        softwareKeyboardOpen = false;
         baseHeight = Math.max(baseHeight, current);
       }
     };
     if (window.visualViewport) {
       window.visualViewport.addEventListener('resize', onViewportResize);
     }
+
+    // Any physical keypress means hardware keyboard is present.
+    // We listen for non-modifier, non-IME keys to avoid false positives.
+    const onKeydown = (e: KeyboardEvent) => {
+      if (hasHardwareKeyboard) return;
+      // Ignore pure modifier keys and synthetic events from virtual keyboards
+      if (['Meta', 'Control', 'Alt', 'Shift', 'CapsLock', 'Tab'].includes(e.key)) return;
+      // isComposing = true means IME virtual input, not physical key
+      if (e.isComposing) return;
+      // If the software keyboard is currently visible, these keydown events
+      // come from it — not a hardware keyboard.
+      if (softwareKeyboardOpen) return;
+      hasHardwareKeyboard = true;
+    };
+    window.addEventListener('keydown', onKeydown, { passive: true });
 
     // Apply/remove data-mobile on <html> reactively
     $effect(() => {

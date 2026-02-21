@@ -5,7 +5,7 @@
 
 import { readFileSync, writeFileSync, existsSync } from 'fs';
 import { join } from 'path';
-import { execSync } from 'child_process';
+import { execSync, spawnSync } from 'child_process';
 import { isMcpTool, executeMcpTool } from './mcp-tool-adapter';
 
 export interface ToolResult {
@@ -198,8 +198,8 @@ async function executeGrepTool(
   const context = input.context ? Number(input.context) : undefined;
 
   try {
-    // Build rg command
-    const args = [pattern];
+    // Build rg command as array — avoids shell metacharacter injection
+    const args: string[] = [];
 
     if (caseInsensitive) args.push('-i');
     if (globPattern) args.push('--glob', globPattern);
@@ -210,26 +210,35 @@ async function executeGrepTool(
       args.push('-c');
     } else if (outputMode === 'content') {
       args.push('-n');
-      if (context) args.push(`-C ${context}`);
+      if (context) args.push('-C', String(context));
     }
 
-    args.push(searchPath);
+    // Pattern and path as separate args — no shell interpolation
+    args.push('--', pattern, searchPath);
 
-    const result = execSync(`rg ${args.join(' ')}`, {
+    const result = spawnSync('rg', args, {
       encoding: 'utf-8',
       maxBuffer: 10 * 1024 * 1024, // 10MB
     });
 
-    return {
-      content: result || 'No matches found',
-    };
-  } catch (error: any) {
+    if (result.status === 0) {
+      return {
+        content: result.stdout || 'No matches found',
+      };
+    }
+
     // rg returns exit code 1 when no matches found
-    if (error.status === 1) {
+    if (result.status === 1) {
       return {
         content: 'No matches found',
       };
     }
+
+    return {
+      content: `Error searching: ${result.stderr || 'rg failed'}`,
+      is_error: true,
+    };
+  } catch (error: any) {
     return {
       content: `Error searching: ${error.message}`,
       is_error: true,

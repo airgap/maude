@@ -19,6 +19,7 @@
   import { PERMISSION_PRESETS } from '@e/shared';
   import { profilesStore } from '$lib/stores/profiles.svelte';
   import { MONO_FONTS, SANS_FONTS, findFont } from '$lib/config/fonts';
+  import { SIDEBAR_TABS } from '$lib/config/sidebarTabs';
   import { HYPERTHEMES } from '$lib/config/hyperthemes';
   import { workspaceStore } from '$lib/stores/workspace.svelte';
 
@@ -394,6 +395,43 @@
   let ollamaAvailable = $state(false);
   let ollamaModels = $state<Array<{ name: string; size: number }>>([]);
   let models = $state(cloudModels);
+
+  // --- Mobile nav tab customization ---
+  /** All available choices for mobile nav bar (special views + sidebar tabs) */
+  const MOBILE_NAV_CHOICES: Array<{ id: string; label: string; icon: string }> = [
+    {
+      id: 'chat',
+      label: 'Chat',
+      icon: 'M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z',
+    },
+    { id: 'terminal', label: 'Terminal', icon: 'M4 17l6-6-6-6M12 19h8' },
+    ...SIDEBAR_TABS.map((t) => ({ id: t.id, label: t.label, icon: t.icon })),
+  ];
+
+  function mobileNavIsSelected(id: string): boolean {
+    return settingsStore.mobileNavTabs.includes(id);
+  }
+
+  function mobileNavToggle(id: string) {
+    const current = [...settingsStore.mobileNavTabs];
+    const idx = current.indexOf(id);
+    if (idx >= 0) {
+      current.splice(idx, 1);
+    } else if (current.length < 10) {
+      current.push(id);
+    }
+    settingsStore.update({ mobileNavTabs: current });
+  }
+
+  function mobileNavMove(id: string, direction: -1 | 1) {
+    const current = [...settingsStore.mobileNavTabs];
+    const idx = current.indexOf(id);
+    if (idx < 0) return;
+    const target = idx + direction;
+    if (target < 0 || target >= current.length) return;
+    [current[idx], current[target]] = [current[target], current[idx]];
+    settingsStore.update({ mobileNavTabs: current });
+  }
 
   // --- Terminal settings state ---
   let detectedShells = $state<ShellInfo[]>([]);
@@ -888,6 +926,85 @@
               />
               <span class="toggle-slider"></span>
             </label>
+          </div>
+
+          <!-- Mobile Navigation Bar -->
+          <div class="setting-group">
+            <label class="setting-label">Mobile navigation bar</label>
+            <p class="setting-desc">
+              Choose up to 10 tabs for the bottom nav bar on mobile. "More" is always appended.
+            </p>
+
+            <!-- Currently selected tabs (ordered) -->
+            {#if settingsStore.mobileNavTabs.length > 0}
+              <div class="mobile-nav-selected">
+                {#each settingsStore.mobileNavTabs as tabId, i (tabId)}
+                  {@const choice = MOBILE_NAV_CHOICES.find((c) => c.id === tabId)}
+                  {#if choice}
+                    <div class="mobile-nav-chip">
+                      <span class="mobile-nav-chip-order">{i + 1}</span>
+                      <svg
+                        class="mobile-nav-chip-icon"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                      >
+                        <path d={choice.icon} />
+                      </svg>
+                      <span class="mobile-nav-chip-label">{choice.label}</span>
+                      <div class="mobile-nav-chip-actions">
+                        <button
+                          class="mobile-nav-chip-btn"
+                          title="Move up"
+                          disabled={i === 0}
+                          onclick={() => mobileNavMove(tabId, -1)}>&#x25B2;</button
+                        >
+                        <button
+                          class="mobile-nav-chip-btn"
+                          title="Move down"
+                          disabled={i === settingsStore.mobileNavTabs.length - 1}
+                          onclick={() => mobileNavMove(tabId, 1)}>&#x25BC;</button
+                        >
+                        <button
+                          class="mobile-nav-chip-btn remove"
+                          title="Remove"
+                          onclick={() => mobileNavToggle(tabId)}>&#x2715;</button
+                        >
+                      </div>
+                    </div>
+                  {/if}
+                {/each}
+              </div>
+            {/if}
+
+            <!-- Available tabs to add -->
+            <div class="mobile-nav-available">
+              {#each MOBILE_NAV_CHOICES as choice (choice.id)}
+                {#if !mobileNavIsSelected(choice.id)}
+                  <button
+                    class="mobile-nav-add-btn"
+                    disabled={settingsStore.mobileNavTabs.length >= 10}
+                    onclick={() => mobileNavToggle(choice.id)}
+                    title="Add {choice.label}"
+                  >
+                    <svg
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <path d={choice.icon} />
+                    </svg>
+                    {choice.label}
+                  </button>
+                {/if}
+              {/each}
+            </div>
           </div>
         {:else if activeTab === 'appearance'}
           <div class="setting-group">
@@ -2796,6 +2913,7 @@
     flex: 1;
     padding: 16px 20px;
     overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
   }
 
   .setting-group {
@@ -4358,5 +4476,148 @@
   .btn-primary:disabled {
     opacity: 0.4;
     cursor: not-allowed;
+  }
+
+  /* ── Mobile nav tab customization ── */
+  .mobile-nav-selected {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    margin-bottom: 12px;
+  }
+  .mobile-nav-chip {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 8px;
+    background: var(--bg-input);
+    border: 1px solid var(--border-primary);
+    border-radius: var(--radius-sm);
+  }
+  .mobile-nav-chip-order {
+    font-size: var(--fs-xs);
+    color: var(--text-tertiary);
+    width: 16px;
+    text-align: center;
+    flex-shrink: 0;
+  }
+  .mobile-nav-chip-icon {
+    width: 16px;
+    height: 16px;
+    flex-shrink: 0;
+    color: var(--text-secondary);
+  }
+  .mobile-nav-chip-label {
+    flex: 1;
+    font-size: var(--fs-sm);
+    color: var(--text-primary);
+  }
+  .mobile-nav-chip-actions {
+    display: flex;
+    gap: 2px;
+    flex-shrink: 0;
+  }
+  .mobile-nav-chip-btn {
+    width: 24px;
+    height: 24px;
+    min-height: 24px;
+    min-width: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: none;
+    border: 1px solid var(--border-primary);
+    border-radius: var(--radius-xs);
+    color: var(--text-tertiary);
+    font-size: 10px;
+    cursor: pointer;
+    padding: 0;
+  }
+  .mobile-nav-chip-btn:hover:not(:disabled) {
+    background: var(--bg-hover);
+    color: var(--text-primary);
+  }
+  .mobile-nav-chip-btn:disabled {
+    opacity: 0.3;
+    cursor: not-allowed;
+  }
+  .mobile-nav-chip-btn.remove:hover:not(:disabled) {
+    color: var(--accent-error);
+    border-color: var(--accent-error);
+  }
+  .mobile-nav-available {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+  .mobile-nav-add-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 10px;
+    background: none;
+    border: 1px dashed var(--border-primary);
+    border-radius: var(--radius-sm);
+    color: var(--text-secondary);
+    font-size: var(--fs-xs);
+    cursor: pointer;
+    min-height: 28px;
+    min-width: 28px;
+  }
+  .mobile-nav-add-btn svg {
+    width: 14px;
+    height: 14px;
+    flex-shrink: 0;
+  }
+  .mobile-nav-add-btn:hover:not(:disabled) {
+    background: var(--bg-hover);
+    border-color: var(--accent-primary);
+    color: var(--accent-primary);
+  }
+  .mobile-nav-add-btn:disabled {
+    opacity: 0.3;
+    cursor: not-allowed;
+  }
+
+  /* ── Mobile settings modal overrides ── */
+  @media (max-width: 640px) {
+    .modal-overlay {
+      align-items: stretch;
+      justify-content: stretch;
+      padding: 0;
+    }
+    .modal {
+      width: 100%;
+      max-height: 100%;
+      height: 100%;
+      border-radius: 0;
+      border: none;
+    }
+    .modal-body {
+      flex-direction: column;
+      min-height: 0;
+    }
+    .settings-tabs {
+      flex-direction: row;
+      flex-wrap: wrap;
+      min-width: 0;
+      border-right: none;
+      border-bottom: 1px solid var(--border-secondary);
+      padding: 6px;
+      gap: 2px;
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+    }
+    .settings-section-header {
+      display: none;
+    }
+    .settings-tab {
+      padding: 6px 10px;
+      font-size: var(--fs-xs);
+      white-space: nowrap;
+    }
+    .settings-content {
+      padding: 12px 16px;
+    }
   }
 </style>

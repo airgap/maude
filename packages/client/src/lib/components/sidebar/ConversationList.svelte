@@ -6,6 +6,7 @@
   import { primaryPaneStore } from '$lib/stores/primaryPane.svelte';
   import { uiStore } from '$lib/stores/ui.svelte';
   import { api } from '$lib/api/client';
+  import { getReconnectionPromise } from '$lib/api/sse';
   import { onMount } from 'svelte';
 
   let search = $state('');
@@ -33,10 +34,21 @@
       const res = await api.conversations.list();
       conversationStore.setList(res.data);
 
+      // If a reconnection attempt is in progress, wait for it to complete
+      // before deciding whether to auto-restore. This prevents a race where
+      // we skip auto-restore because isStreaming is true (due to reconnecting),
+      // but reconnection then fails, leaving no conversation loaded.
+      if (streamStore.isReconnecting) {
+        try {
+          await getReconnectionPromise();
+        } catch {
+          // Reconnection failed — proceed with auto-restore below
+        }
+      }
+
       // Auto-restore the previously active conversation after page reload,
-      // but skip if a stream reconnection is already in progress (it handles
-      // loading the conversation itself and calling streamStore.reset() here
-      // would destroy its state).
+      // but skip if a stream reconnection successfully loaded a conversation
+      // (calling streamStore.reset() would destroy its state).
       if (!conversationStore.active && !streamStore.isStreaming) {
         const savedId = workspaceStore.activeWorkspace?.snapshot.activeConversationId;
         if (savedId && res.data.some((c: any) => c.id === savedId)) {
