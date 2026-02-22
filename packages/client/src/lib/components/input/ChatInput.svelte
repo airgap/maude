@@ -738,6 +738,8 @@
 
   async function handleTaskConfirmAndLoop(tasks: DetectedTask[]) {
     await handleTaskConfirm(tasks);
+    // Clear PRD selection so loop runs on the newly created standalone stories
+    loopStore.setSelectedPrdId(null);
     // Open loop config so user can configure and start (only if no loop is already running)
     if (!loopStore.isActive) {
       uiStore.openModal('loop-config');
