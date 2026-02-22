@@ -22,7 +22,9 @@
   let lastSyncedLoopId = $state<string | null>(null);
   $effect(() => {
     const loop = loopStore.activeLoop;
-    if (loop && loop.id !== lastSyncedLoopId && golemsStore.golems.length === 0) {
+    // Sync if we have an active loop that hasn't been synced yet, OR if the golem doesn't exist in the store
+    const golemExists = loop && golemsStore.golems.some((g) => g.id === loop.id);
+    if (loop && loop.id !== lastSyncedLoopId && !golemExists) {
       lastSyncedLoopId = loop.id;
       loopStore.syncGolemFromLoop(loop);
     }
