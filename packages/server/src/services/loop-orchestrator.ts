@@ -2035,6 +2035,8 @@ ${criteria}
 
   private async gitCommit(story: UserStory): Promise<string | null> {
     const tag = `[loop:${this.loopId}]`;
+    // Git commits should have a very long timeout to accommodate slow pre-commit hooks
+    const GIT_COMMIT_TIMEOUT_MS = 30 * 60 * 1000; // 30 minutes
 
     // Check status BEFORE staging
     const beforeStatusProc = Bun.spawn(['git', 'status', '--porcelain'], {
@@ -2080,20 +2082,41 @@ ${criteria}
       return null;
     }
 
-    // Commit
+    // Commit with timeout to handle slow pre-commit hooks
     const msg = this.prdId
       ? `[golem] ${story.title}\n\nImplemented by E Golem.\nPRD: ${this.prdId}\nStory: ${story.id}`
       : `[golem] ${story.title}\n\nImplemented by E Golem.\nStory: ${story.id}`;
+
+    console.log(
+      `${tag} [gitCommit] Starting commit (timeout: ${GIT_COMMIT_TIMEOUT_MS / 1000}s)...`,
+    );
     const commitProc = Bun.spawn(['git', 'commit', '-m', msg], {
       cwd: this.workspacePath,
       stdout: 'pipe',
       stderr: 'pipe',
     });
-    const commitExit = await commitProc.exited;
+
+    // Race commit against timeout to handle slow pre-commit hooks
+    const commitTimeout = new Promise<number>((resolve) =>
+      setTimeout(() => resolve(-1), GIT_COMMIT_TIMEOUT_MS),
+    );
+    const commitExit = await Promise.race([commitProc.exited, commitTimeout]);
+
+    if (commitExit === -1) {
+      // Timeout hit - kill the process
+      console.error(`${tag} [gitCommit] Commit timed out after ${GIT_COMMIT_TIMEOUT_MS / 1000}s`);
+      commitProc.kill();
+      throw new Error(
+        `git commit timed out after ${GIT_COMMIT_TIMEOUT_MS / 1000}s - pre-commit hooks may be too slow`,
+      );
+    }
+
     if (commitExit !== 0) {
       const stderr = (await new Response(commitProc.stderr).text()).trim();
       throw new Error(`git commit failed (exit ${commitExit}): ${stderr.slice(0, 500)}`);
     }
+
+    console.log(`${tag} [gitCommit] Commit succeeded`);
 
     // Check status AFTER commit
     const afterCommitProc = Bun.spawn(['git', 'status', '--porcelain'], {
