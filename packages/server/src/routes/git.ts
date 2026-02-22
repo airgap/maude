@@ -342,6 +342,16 @@ app.post('/commit', async (c) => {
   }
 
   try {
+    // Check status BEFORE staging
+    const beforeStatusProc = Bun.spawn(['git', 'status', '--porcelain'], {
+      cwd: pathCheck.resolved,
+      stdout: 'pipe',
+      stderr: 'pipe',
+    });
+    const beforeStatus = await new Response(beforeStatusProc.stdout).text();
+    await beforeStatusProc.exited;
+    console.log('[git/commit] Status BEFORE git add:', beforeStatus);
+
     // Stage all changes
     console.log('[git/commit] Running git add -A in:', pathCheck.resolved);
     const addProc = Bun.spawn(['git', 'add', '-A'], {
@@ -361,6 +371,16 @@ app.post('/commit', async (c) => {
       return c.json({ ok: false, error: `git add failed: ${addErr}` }, 500);
     }
 
+    // Check status AFTER staging, BEFORE commit
+    const afterAddProc = Bun.spawn(['git', 'status', '--porcelain'], {
+      cwd: pathCheck.resolved,
+      stdout: 'pipe',
+      stderr: 'pipe',
+    });
+    const afterAddStatus = await new Response(afterAddProc.stdout).text();
+    await afterAddProc.exited;
+    console.log('[git/commit] Status AFTER git add:', afterAddStatus);
+
     // Commit
     console.log('[git/commit] Running git commit -m:', message.trim());
     const commitProc = Bun.spawn(['git', 'commit', '-m', message.trim()], {
@@ -379,6 +399,16 @@ app.post('/commit', async (c) => {
     if (commitExit !== 0) {
       return c.json({ ok: false, error: `git commit failed: ${commitErr}` }, 500);
     }
+
+    // Check status AFTER commit
+    const afterCommitProc = Bun.spawn(['git', 'status', '--porcelain'], {
+      cwd: pathCheck.resolved,
+      stdout: 'pipe',
+      stderr: 'pipe',
+    });
+    const afterCommitStatus = await new Response(afterCommitProc.stdout).text();
+    await afterCommitProc.exited;
+    console.log('[git/commit] Status AFTER commit:', afterCommitStatus);
 
     // Get the new HEAD sha
     const shaProc = Bun.spawn(['git', 'rev-parse', 'HEAD'], {
