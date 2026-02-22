@@ -1323,6 +1323,25 @@
             </p>
           </div>
 
+          {#if settingsStore.visualStyle === 'study'}
+            <div class="setting-group">
+              <label class="setting-label">Snappy cursor</label>
+              <label class="toggle">
+                <input
+                  type="checkbox"
+                  checked={settingsStore.snappyCursor}
+                  onchange={() =>
+                    settingsStore.update({ snappyCursor: !settingsStore.snappyCursor })}
+                />
+                <span class="toggle-slider"></span>
+              </label>
+              <p class="setting-desc">
+                Enable velocity prediction for the sparkle cursor (reduces jitter but makes cursor
+                feel more responsive)
+              </p>
+            </div>
+          {/if}
+
           <div class="setting-group">
             <label class="setting-label">Streaming Animations</label>
             <div class="streaming-options">

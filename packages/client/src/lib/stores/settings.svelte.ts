@@ -103,6 +103,8 @@ interface SettingsState {
   spatialAudioEnabled: boolean;
   // Mobile bottom nav bar tabs (up to 10, "more" is always appended)
   mobileNavTabs: string[];
+  // Snappy cursor effect (FTL prediction)
+  snappyCursor: boolean;
 }
 
 const defaults: SettingsState = {
@@ -181,6 +183,7 @@ const defaults: SettingsState = {
   googleTtsApiKey: undefined,
   spatialAudioEnabled: false,
   mobileNavTabs: ['chat', 'files', 'terminal', 'work'],
+  snappyCursor: false,
 };
 
 function loadFromStorage(): SettingsState {
@@ -495,6 +498,9 @@ function createSettingsStore() {
     },
     get mobileNavTabs() {
       return state.mobileNavTabs;
+    },
+    get snappyCursor() {
+      return state.snappyCursor;
     },
     get all() {
       return state;

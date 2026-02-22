@@ -1,11 +1,13 @@
 <script lang="ts">
   import { onMount } from 'svelte';
+  import { settingsStore } from '$lib/stores/settings.svelte';
   // FTL (ftl.rocks) — cursor hover prediction library.
   // Importing for side-effects: adds .prehover class to elements the cursor is
   // heading toward, making hover states feel instant. We also implement its
-  // velocity-extrapolation algorithm at a very low multiplier (1.0 vs the
-  // default 4) to nudge the sparkle cursor slightly ahead of the actual pointer,
-  // compensating for the inherent JS rendering lag.
+  // velocity-extrapolation algorithm at a very low multiplier (0.5 when enabled,
+  // vs the default 4) to nudge the sparkle cursor slightly ahead of the actual
+  // pointer, compensating for the inherent JS rendering lag. Disabled by default
+  // to reduce jitteriness unless "Snappy cursor" is enabled in settings.
   import 'ftl.rocks';
 
   interface Sparkle {
@@ -26,9 +28,8 @@
   const CLICK_BURST = 8;
 
   // FTL-inspired prediction: very low multiplier (default in ftl.rocks is 4).
-  // At 1.0 we extrapolate exactly one frame of velocity — just enough to
-  // counteract the ~1-frame delay between mousemove and rAF paint.
-  const FTL_MULTIPLIER = 1.0;
+  // At 0.5 we extrapolate half a frame of velocity — just enough to reduce lag
+  // without being jittery. Disabled (0.0) by default unless "Snappy cursor" is enabled.
   const FTL_MAX_OFFSET = 200; // same clamp as ftl.rocks uses (lock200)
 
   let container: HTMLElement;
@@ -233,10 +234,12 @@
       // FTL-inspired velocity extrapolation (ftl.rocks algorithm at low multiplier).
       // Nudge the visual cursor slightly ahead of the actual pointer to compensate
       // for the ~1-frame lag inherent in JS cursor rendering.
+      // Use 0.5 multiplier when snappy cursor is enabled, 0 (disabled) otherwise.
+      const ftlMultiplier = settingsStore.snappyCursor ? 0.5 : 0;
       const velX = rawMouseX - prevRawX;
       const velY = rawMouseY - prevRawY;
-      cursorX = rawMouseX + ftlClamp(velX * FTL_MULTIPLIER, FTL_MAX_OFFSET);
-      cursorY = rawMouseY + ftlClamp(velY * FTL_MULTIPLIER, FTL_MAX_OFFSET);
+      cursorX = rawMouseX + ftlClamp(velX * ftlMultiplier, FTL_MAX_OFFSET);
+      cursorY = rawMouseY + ftlClamp(velY * ftlMultiplier, FTL_MAX_OFFSET);
       prevRawX = rawMouseX;
       prevRawY = rawMouseY;
 
