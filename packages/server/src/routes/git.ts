@@ -343,27 +343,41 @@ app.post('/commit', async (c) => {
 
   try {
     // Stage all changes
+    console.log('[git/commit] Running git add -A in:', pathCheck.resolved);
     const addProc = Bun.spawn(['git', 'add', '-A'], {
       cwd: pathCheck.resolved,
       stdout: 'pipe',
       stderr: 'pipe',
     });
+    const addOut = await new Response(addProc.stdout).text();
+    const addErr = await new Response(addProc.stderr).text();
     const addExit = await addProc.exited;
+    console.log('[git/commit] git add result:', {
+      exitCode: addExit,
+      stdout: addOut,
+      stderr: addErr,
+    });
     if (addExit !== 0) {
-      const err = await new Response(addProc.stderr).text();
-      return c.json({ ok: false, error: `git add failed: ${err}` }, 500);
+      return c.json({ ok: false, error: `git add failed: ${addErr}` }, 500);
     }
 
     // Commit
+    console.log('[git/commit] Running git commit -m:', message.trim());
     const commitProc = Bun.spawn(['git', 'commit', '-m', message.trim()], {
       cwd: pathCheck.resolved,
       stdout: 'pipe',
       stderr: 'pipe',
     });
+    const commitOut = await new Response(commitProc.stdout).text();
+    const commitErr = await new Response(commitProc.stderr).text();
     const commitExit = await commitProc.exited;
+    console.log('[git/commit] git commit result:', {
+      exitCode: commitExit,
+      stdout: commitOut,
+      stderr: commitErr,
+    });
     if (commitExit !== 0) {
-      const err = await new Response(commitProc.stderr).text();
-      return c.json({ ok: false, error: `git commit failed: ${err}` }, 500);
+      return c.json({ ok: false, error: `git commit failed: ${commitErr}` }, 500);
     }
 
     // Get the new HEAD sha
