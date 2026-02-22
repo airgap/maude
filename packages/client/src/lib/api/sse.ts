@@ -534,6 +534,178 @@ async function _reconnectActiveStreamImpl(): Promise<string | null> {
   }
 }
 
+/**
+ * Check if the server has an active streaming session for a specific conversation
+ * and reconnect to it if found. This handles the case where a user navigates to
+ * a conversation that's being actively streamed to (e.g., by a golem loop or
+ * another agent) but the client doesn't have an in-flight reference.
+ *
+ * Returns the session ID if reconnection was initiated, or null if no active
+ * session was found for that conversation.
+ */
+export async function reconnectToConversation(conversationId: string): Promise<string | null> {
+  const doReconnect = async (): Promise<string | null> => {
+    return _reconnectToConversationImpl(conversationId);
+  };
+  reconnectionDone = doReconnect();
+  return reconnectionDone;
+}
+
+async function _reconnectToConversationImpl(targetConversationId: string): Promise<string | null> {
+  // Don't interrupt an existing active stream
+  if (streamStore.isStreaming && !streamStore.isReconnecting) {
+    return null;
+  }
+
+  try {
+    // Check if the server has any active sessions
+    const sessionsRes = await api.stream.sessions();
+    if (!sessionsRes?.ok || !sessionsRes.data.length) {
+      return null;
+    }
+
+    // Find an active or recently-completed session for THIS conversation
+    const target =
+      sessionsRes.data.find(
+        (s) =>
+          s.conversationId === targetConversationId &&
+          (s.status === 'running' || (s.bufferedEvents > 0 && !s.streamComplete)),
+      ) ||
+      sessionsRes.data.find(
+        (s) =>
+          s.conversationId === targetConversationId && s.streamComplete && s.bufferedEvents > 0,
+      );
+
+    if (!target) {
+      return null;
+    }
+
+    console.log(
+      '[sse] Found active session for conversation:',
+      targetConversationId,
+      'session:',
+      target.id,
+    );
+
+    // Abort any existing stream reader to prevent duplicate processing
+    abortActiveStream();
+    const myGeneration = streamGeneration;
+
+    streamStore.setReconnecting(true);
+    streamStore.startStream(targetConversationId);
+    streamStore.setSessionId(target.id);
+
+    // Load the conversation so the UI can display it
+    const convRes = await api.conversations.get(targetConversationId);
+    if (!convRes.ok || !convRes.data) {
+      streamStore.handleEvent({ type: 'message_stop' } as any);
+      streamStore.setReconnecting(false);
+      return null;
+    }
+    conversationStore.setActive(convRes.data);
+    const targetConversation = convRes.data as Conversation;
+
+    const abortController = new AbortController();
+    streamStore.setAbortController(abortController);
+    const response = await api.stream.reconnect(target.id, abortController.signal);
+    if (!response.ok || !response.body) {
+      streamStore.handleEvent({ type: 'message_stop' } as any);
+      streamStore.setReconnecting(false);
+      return null;
+    }
+
+    // Track as in-flight so navigating back finds the partial response
+    conversationStore.setInflight(targetConversationId, targetConversation);
+
+    // Check if the conversation already has a partial assistant message at the end
+    const lastMsg = targetConversation.messages?.[targetConversation.messages.length - 1];
+    if (!lastMsg || lastMsg.role !== 'assistant') {
+      conversationStore.addMessageTo(targetConversation, {
+        id: uuid(),
+        role: 'assistant',
+        content: [],
+        timestamp: Date.now(),
+        model: targetConversation.model,
+      });
+    }
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+    const seenEvents = new Set<string>();
+
+    while (true) {
+      if (myGeneration !== streamGeneration) {
+        reader.cancel().catch(() => {});
+        streamStore.setReconnecting(false);
+        return target.id;
+      }
+
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop() ?? '';
+
+      for (const line of lines) {
+        if (!line.startsWith('data: ')) continue;
+        const data = line.slice(6).trim();
+        if (!data) continue;
+
+        if (data.includes('"message_start"')) {
+          seenEvents.clear();
+        }
+
+        const eventKey = deduplicationKey(data);
+        if (eventKey && seenEvents.has(eventKey)) continue;
+        if (eventKey) seenEvents.add(eventKey);
+
+        try {
+          const event: StreamEvent = JSON.parse(data);
+          streamStore.handleEvent(event);
+          conversationStore.updateLastAssistantMessageIn(targetConversation, [
+            ...streamStore.contentBlocks,
+          ]);
+        } catch {
+          // Non-JSON line
+        }
+      }
+    }
+
+    if (myGeneration !== streamGeneration) {
+      streamStore.setReconnecting(false);
+      return target.id;
+    }
+
+    // Final sync
+    if (streamStore.contentBlocks.length > 0) {
+      conversationStore.updateLastAssistantMessageIn(targetConversation, [
+        ...streamStore.contentBlocks,
+      ]);
+    }
+
+    const s = streamStore.status;
+    if (s === 'streaming' || s === 'connecting') {
+      streamStore.handleEvent({ type: 'message_stop' } as any);
+    }
+
+    conversationStore.clearInflight(targetConversationId);
+    await conversationStore.reloadById(targetConversationId);
+    streamStore.setReconnecting(false);
+
+    return target.id;
+  } catch (err) {
+    console.error('[sse] Reconnect to conversation failed:', err);
+    const errStatus = streamStore.status;
+    if (errStatus === 'streaming' || errStatus === 'connecting') {
+      streamStore.handleEvent({ type: 'message_stop' } as any);
+    }
+    streamStore.setReconnecting(false);
+    return null;
+  }
+}
+
 export async function cancelStream(conversationId: string): Promise<void> {
   streamStore.cancel();
   if (streamStore.sessionId) {

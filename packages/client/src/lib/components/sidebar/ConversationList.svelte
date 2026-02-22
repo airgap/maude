@@ -6,7 +6,7 @@
   import { primaryPaneStore } from '$lib/stores/primaryPane.svelte';
   import { uiStore } from '$lib/stores/ui.svelte';
   import { api } from '$lib/api/client';
-  import { getReconnectionPromise } from '$lib/api/sse';
+  import { getReconnectionPromise, reconnectToConversation } from '$lib/api/sse';
   import { onMount } from 'svelte';
 
   let search = $state('');
@@ -63,6 +63,10 @@
               conversationStore.setActive(convRes.data);
             }
             streamStore.reset();
+            // Check if the server has an active streaming session for this
+            // conversation (e.g. a golem loop started between the initial
+            // reconnect check and now). If so, connect to it.
+            reconnectToConversation(savedId).catch(() => {});
           } finally {
             conversationStore.setLoading(false);
           }
@@ -91,6 +95,19 @@
         // Explicitly open the conversation tab (bypasses the "don't override file/diff" guard
         // in PrimaryPane's reactive effect, which is meant for automatic updates, not user clicks)
         primaryPaneStore.openConversation(res.data.id, res.data.title ?? 'Conversation');
+
+        // If no client-side stream is active, check the server for an active
+        // streaming session for this conversation (e.g. from a golem loop or
+        // another agent running in the background). If found, reconnect to it
+        // so the user sees the live stream instead of a stale snapshot.
+        if (!streamStore.isStreaming) {
+          // Reset stale stream state first (before the async reconnection check),
+          // then attempt to reconnect. The reconnect function will re-initialize
+          // stream state if it finds an active session.
+          streamStore.reset();
+          reconnectToConversation(id).catch(() => {});
+          return; // Skip the reset below — we already handled it
+        }
       }
       // Only reset stream state if there's no active stream running.
       // If the stream IS running (for any conversation), preserve its state:

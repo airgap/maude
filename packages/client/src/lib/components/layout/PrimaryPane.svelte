@@ -5,6 +5,7 @@
   import { streamStore } from '$lib/stores/stream.svelte';
   import { editorStore, type EditorTab } from '$lib/stores/editor.svelte';
   import { api } from '$lib/api/client';
+  import { reconnectToConversation } from '$lib/api/sse';
   import { uiStore } from '$lib/stores/ui.svelte';
   import { onMount } from 'svelte';
   import PrimaryTabBar from './PrimaryTabBar.svelte';
@@ -42,14 +43,18 @@
       if (!streamStore.isStreaming) streamStore.reset();
       uiStore.focusChatInput();
     } else if (tab.conversationId !== conversationStore.activeId) {
+      const tabConvId = tab.conversationId;
       conversationStore.setLoading(true);
       api.conversations
-        .get(tab.conversationId)
+        .get(tabConvId)
         .then((res) => {
           conversationStore.setActive(res.data);
           // Only reset if not streaming, or if streaming to a different conversation
-          if (!streamStore.isStreaming || streamStore.conversationId !== tab.conversationId) {
+          if (!streamStore.isStreaming || streamStore.conversationId !== tabConvId) {
             streamStore.reset();
+            // Check if the server has an active streaming session for this
+            // conversation (e.g. from a golem loop). If so, connect to it.
+            reconnectToConversation(tabConvId).catch(() => {});
           }
         })
         .catch((err) => {
