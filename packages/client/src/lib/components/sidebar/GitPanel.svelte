@@ -29,6 +29,11 @@
   let gitError = $state('');
   let showCommitSection = $state(false);
 
+  // ── Diagnostics state ────────────────────────────────────────────────────
+
+  let showDiagnostics = $state(false);
+  let showCommitDiagnostics = $state(true);
+
   // ── Lifecycle ────────────────────────────────────────────────────────────
 
   onMount(() => {
@@ -152,20 +157,38 @@
     committing = true;
     gitError = '';
     commitProgress = [];
+    gitStore.clearCommitDiagnostics();
     showCommitSection = true;
+    showCommitDiagnostics = true;
+
+    // Update shared store
+    gitOperationsStore.startCommit();
 
     const result = await api.git.commitStream(workspacePath, commitMessage.trim(), (event) => {
       if (event.type === 'status') {
         commitProgress = [...commitProgress, event.message || ''];
+        gitOperationsStore.addCommitProgress(event.message || '');
       } else if (event.type === 'output') {
         commitProgress = [...commitProgress, event.message || ''];
+        gitOperationsStore.addCommitProgress(event.message || '');
+      } else if (event.type === 'diagnostic') {
+        // Capture diagnostic phase events for debugging display
+        gitStore.addCommitDiagnostic({
+          phase: event.phase!,
+          message: event.message || '',
+          porcelain: event.porcelain || '',
+          fileCount: event.fileCount || 0,
+          timestamp: Date.now(),
+        });
       } else if (event.type === 'error') {
         gitError = event.message || 'Commit failed';
+        gitOperationsStore.setCommitError(event.message || 'Commit failed');
       }
     });
 
     committing = false;
     if (result.ok) {
+      gitOperationsStore.endCommit(true);
       await gitStore.refresh(workspacePath);
       // Auto-clear on success
       setTimeout(() => {
@@ -176,6 +199,8 @@
       }, 2000);
     } else {
       gitError = result.error || 'Commit failed';
+      gitOperationsStore.setCommitError(result.error || 'Commit failed');
+      gitOperationsStore.endCommit(false);
     }
   }
 
@@ -186,18 +211,25 @@
     pushProgress = [];
     showCommitSection = true;
 
+    // Update shared store
+    gitOperationsStore.startPush();
+
     const result = await api.git.pushStream(workspacePath, (event) => {
       if (event.type === 'status') {
         pushProgress = [...pushProgress, event.message || ''];
+        gitOperationsStore.addPushProgress(event.message || '');
       } else if (event.type === 'output') {
         pushProgress = [...pushProgress, event.message || ''];
+        gitOperationsStore.addPushProgress(event.message || '');
       } else if (event.type === 'error') {
         gitError = event.message || 'Push failed';
+        gitOperationsStore.setPushError(event.message || 'Push failed');
       }
     });
 
     pushing = false;
     if (result.ok) {
+      gitOperationsStore.endPush(true);
       // Auto-clear on success
       setTimeout(() => {
         if (!gitError) {
@@ -206,6 +238,8 @@
       }, 2000);
     } else {
       gitError = result.error || 'Push failed';
+      gitOperationsStore.setPushError(result.error || 'Push failed');
+      gitOperationsStore.endPush(false);
     }
   }
 
@@ -227,6 +261,40 @@
     commitProgress = [];
     pushProgress = [];
     gitError = '';
+    gitStore.clearCommitDiagnostics();
+  }
+
+  async function handleDiagnose() {
+    if (gitStore.diagnosing || !workspacePath) return;
+    showDiagnostics = true;
+    const result = await gitStore.diagnose(workspacePath);
+    if (!result.ok) {
+      gitError = result.error || 'Diagnostics failed';
+    }
+  }
+
+  function diagStatusIcon(status: 'ok' | 'warn' | 'error'): string {
+    switch (status) {
+      case 'ok':
+        return '✓';
+      case 'warn':
+        return '⚠';
+      case 'error':
+        return '✗';
+    }
+  }
+
+  function phaseLabel(phase: string): string {
+    switch (phase) {
+      case 'before-staging':
+        return 'Before Staging';
+      case 'after-staging':
+        return 'After Staging';
+      case 'after-commit':
+        return 'After Commit';
+      default:
+        return phase;
+    }
   }
 </script>
 
@@ -366,31 +434,155 @@
             </button>
           </div>
 
-          <!-- Commit progress output -->
-          {#if commitProgress.length > 0}
+          <!-- Diagnose button -->
+          <button
+            class="action-btn diagnose-btn"
+            onclick={handleDiagnose}
+            disabled={gitStore.diagnosing}
+            title="Run git diagnostics to check for common staging and commit issues"
+          >
+            {#if gitStore.diagnosing}
+              <svg
+                class="spin diag-icon"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+              >
+                <line x1="12" y1="2" x2="12" y2="6" />
+                <line x1="12" y1="18" x2="12" y2="22" />
+                <line x1="4.93" y1="4.93" x2="7.76" y2="7.76" />
+                <line x1="16.24" y1="16.24" x2="19.07" y2="19.07" />
+                <line x1="2" y1="12" x2="6" y2="12" />
+                <line x1="18" y1="12" x2="22" y2="12" />
+                <line x1="4.93" y1="19.07" x2="7.76" y2="16.24" />
+                <line x1="16.24" y1="7.76" x2="19.07" y2="4.93" />
+              </svg>
+              Diagnosing...
+            {:else}
+              <svg
+                class="diag-icon"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+              >
+                <path
+                  d="M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z"
+                />
+                <path d="M12 16v-4" />
+                <path d="M12 8h.01" />
+              </svg>
+              Diagnose
+            {/if}
+          </button>
+
+          <!-- Commit progress output (from shared store - shows ANY ongoing commit) -->
+          {#if gitOperationsStore.commitOperation.progress.length > 0 || gitOperationsStore.commitOperation.inProgress}
             <div class="progress-output">
               <div class="progress-header">
                 <span>Commit Output</span>
-                <button class="clear-btn" onclick={clearOutput} title="Clear">✕</button>
+                <button
+                  class="clear-btn"
+                  onclick={() => gitOperationsStore.clearCommit()}
+                  title="Clear"
+                >
+                  ✕
+                </button>
               </div>
               <div class="progress-lines">
-                {#each commitProgress.slice(-15) as line}
+                {#each gitOperationsStore.commitOperation.progress.slice(-15) as line}
                   <div class="progress-line">{line}</div>
                 {/each}
               </div>
             </div>
           {/if}
 
-          <!-- Push progress output -->
-          {#if pushProgress.length > 0}
+          <!-- Push progress output (from shared store - shows ANY ongoing push) -->
+          {#if gitOperationsStore.pushOperation.progress.length > 0 || gitOperationsStore.pushOperation.inProgress}
             <div class="progress-output">
               <div class="progress-header">
                 <span>Push Output</span>
-                <button class="clear-btn" onclick={clearOutput} title="Clear">✕</button>
+                <button
+                  class="clear-btn"
+                  onclick={() => gitOperationsStore.clearPush()}
+                  title="Clear">✕</button
+                >
               </div>
               <div class="progress-lines">
-                {#each pushProgress.slice(-15) as line}
+                {#each gitOperationsStore.pushOperation.progress.slice(-15) as line}
                   <div class="progress-line">{line}</div>
+                {/each}
+              </div>
+            </div>
+          {/if}
+
+          <!-- Commit phase diagnostics (from streaming commit) -->
+          {#if gitStore.commitDiagnostics.length > 0}
+            <div class="diagnostics-panel">
+              <button
+                class="diagnostics-header"
+                onclick={() => (showCommitDiagnostics = !showCommitDiagnostics)}
+              >
+                <svg
+                  class="expand-icon"
+                  class:expanded={showCommitDiagnostics}
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                >
+                  <polyline points="9 18 15 12 9 6" />
+                </svg>
+                <span>Commit Flow Details</span>
+                <span class="diag-count">{gitStore.commitDiagnostics.length} phases</span>
+              </button>
+              {#if showCommitDiagnostics}
+                <div class="diagnostics-content">
+                  {#each gitStore.commitDiagnostics as diag}
+                    <div class="commit-phase">
+                      <div class="phase-header">
+                        <span class="phase-label">{phaseLabel(diag.phase)}</span>
+                        <span class="phase-count"
+                          >{diag.fileCount} file{diag.fileCount === 1 ? '' : 's'}</span
+                        >
+                      </div>
+                      <div class="phase-message">{diag.message}</div>
+                      {#if diag.porcelain}
+                        <pre class="phase-porcelain">{diag.porcelain}</pre>
+                      {/if}
+                    </div>
+                  {/each}
+                </div>
+              {/if}
+            </div>
+          {/if}
+
+          <!-- Diagnostic check results (from /diagnose endpoint) -->
+          {#if showDiagnostics && gitStore.diagnosticChecks.length > 0}
+            <div class="diagnostics-panel">
+              <div class="diagnostics-header-row">
+                <span class="diagnostics-title">Git Diagnostics</span>
+                <button
+                  class="clear-btn"
+                  onclick={() => {
+                    gitStore.clearDiagnostics();
+                    showDiagnostics = false;
+                  }}
+                  title="Dismiss">✕</button
+                >
+              </div>
+              <div class="diagnostics-content">
+                {#each gitStore.diagnosticChecks as check}
+                  <div class="diag-check diag-{check.status}">
+                    <span class="diag-status-icon">{diagStatusIcon(check.status)}</span>
+                    <div class="diag-info">
+                      <div class="diag-message">{check.message}</div>
+                      {#if check.detail}
+                        <pre class="diag-detail">{check.detail}</pre>
+                      {/if}
+                    </div>
+                  </div>
                 {/each}
               </div>
             </div>
@@ -1007,5 +1199,210 @@
     border-radius: 4px;
     color: var(--text-danger, #ef4444);
     font-size: var(--fs-sm);
+  }
+
+  /* ── Diagnose button ── */
+  .diagnose-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    width: 100%;
+    background: var(--bg);
+    color: var(--text-muted);
+    border-color: var(--border);
+  }
+
+  .diagnose-btn:hover:not(:disabled) {
+    color: var(--text);
+    background: var(--bg-hover);
+  }
+
+  .diag-icon {
+    width: 14px;
+    height: 14px;
+    flex-shrink: 0;
+  }
+
+  .diagnose-btn .spin {
+    animation: spin 1s linear infinite;
+  }
+
+  /* ── Diagnostics panel ── */
+  .diagnostics-panel {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    overflow: hidden;
+  }
+
+  .diagnostics-header {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    width: 100%;
+    padding: 5px 8px;
+    background: var(--bg-hover);
+    border: none;
+    border-bottom: 1px solid var(--border);
+    cursor: pointer;
+    color: var(--text);
+    font-size: var(--fs-xxs);
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    transition: background 0.1s;
+  }
+
+  .diagnostics-header:hover {
+    background: var(--bg-active);
+  }
+
+  .diagnostics-header-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 5px 8px;
+    background: var(--bg-hover);
+    border-bottom: 1px solid var(--border);
+  }
+
+  .diagnostics-title {
+    font-size: var(--fs-xxs);
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-muted);
+  }
+
+  .diag-count {
+    margin-left: auto;
+    font-size: var(--fs-xxs);
+    color: var(--text-muted);
+    font-weight: 400;
+    text-transform: none;
+    letter-spacing: 0;
+  }
+
+  .diagnostics-content {
+    max-height: 200px;
+    overflow-y: auto;
+  }
+
+  /* ── Commit phase diagnostics ── */
+  .commit-phase {
+    padding: 6px 8px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .commit-phase:last-child {
+    border-bottom: none;
+  }
+
+  .phase-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 2px;
+  }
+
+  .phase-label {
+    font-size: var(--fs-xxs);
+    font-weight: 600;
+    color: var(--accent);
+  }
+
+  .phase-count {
+    font-size: var(--fs-xxs);
+    color: var(--text-muted);
+  }
+
+  .phase-message {
+    font-size: var(--fs-xxs);
+    color: var(--text-muted);
+    line-height: 1.4;
+  }
+
+  .phase-porcelain {
+    margin: 4px 0 0;
+    padding: 4px 6px;
+    background: var(--bg-hover);
+    border-radius: 3px;
+    font-size: var(--fs-xxs);
+    color: var(--text-muted);
+    line-height: 1.3;
+    white-space: pre-wrap;
+    word-break: break-all;
+    font-family: var(--font-mono, monospace);
+    max-height: 80px;
+    overflow-y: auto;
+  }
+
+  /* ── Diagnostic check items ── */
+  .diag-check {
+    display: flex;
+    gap: 8px;
+    padding: 5px 8px;
+    border-bottom: 1px solid var(--border);
+    align-items: flex-start;
+  }
+
+  .diag-check:last-child {
+    border-bottom: none;
+  }
+
+  .diag-status-icon {
+    flex-shrink: 0;
+    width: 16px;
+    text-align: center;
+    font-size: var(--fs-sm);
+    font-weight: 700;
+    line-height: 1.4;
+  }
+
+  .diag-ok .diag-status-icon {
+    color: #22c55e;
+  }
+
+  .diag-warn .diag-status-icon {
+    color: #eab308;
+  }
+
+  .diag-error .diag-status-icon {
+    color: #ef4444;
+  }
+
+  .diag-info {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .diag-message {
+    font-size: var(--fs-xxs);
+    color: var(--text);
+    line-height: 1.4;
+  }
+
+  .diag-warn .diag-message {
+    color: #eab308;
+  }
+
+  .diag-error .diag-message {
+    color: #ef4444;
+  }
+
+  .diag-detail {
+    margin: 3px 0 0;
+    padding: 4px 6px;
+    background: var(--bg-hover);
+    border-radius: 3px;
+    font-size: var(--fs-xxs);
+    color: var(--text-muted);
+    line-height: 1.3;
+    white-space: pre-wrap;
+    word-break: break-all;
+    font-family: var(--font-mono, monospace);
+    max-height: 80px;
+    overflow-y: auto;
   }
 </style>

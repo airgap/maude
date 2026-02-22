@@ -4,6 +4,7 @@
   import { workStore } from '$lib/stores/work.svelte';
   import { editorStore } from '$lib/stores/editor.svelte';
   import { gitStore } from '$lib/stores/git.svelte';
+  import { gitOperationsStore } from '$lib/stores/gitOperations.svelte';
   import { lspStore } from '$lib/stores/lsp.svelte';
   import { terminalStore } from '$lib/stores/terminal.svelte';
   import { loopStore } from '$lib/stores/loop.svelte';
@@ -138,16 +139,22 @@
     commitProgress = [];
     console.log('[StatusBar] Committing with message:', commitMessage.trim());
 
+    // Update shared store
+    gitOperationsStore.startCommit();
+
     const result = await api.git.commitStream(
       settingsStore.workspacePath,
       commitMessage.trim(),
       (event) => {
         if (event.type === 'status') {
           commitProgress = [...commitProgress, event.message || ''];
+          gitOperationsStore.addCommitProgress(event.message || '');
         } else if (event.type === 'output') {
           commitProgress = [...commitProgress, event.message || ''];
+          gitOperationsStore.addCommitProgress(event.message || '');
         } else if (event.type === 'error') {
           gitError = event.message || 'Commit failed';
+          gitOperationsStore.setCommitError(event.message || 'Commit failed');
         }
       },
     );
@@ -156,6 +163,7 @@
     console.log('[StatusBar] Commit result:', result);
     if (result.ok) {
       console.log('[StatusBar] Commit succeeded, SHA:', result.sha);
+      gitOperationsStore.endCommit(true);
       // Refresh git status
       await gitStore.refresh(settingsStore.workspacePath);
       // Auto-close only on success, keep output visible briefly
@@ -168,6 +176,8 @@
     } else {
       console.log('[StatusBar] Commit failed:', result.error);
       gitError = result.error || 'Commit failed';
+      gitOperationsStore.setCommitError(result.error || 'Commit failed');
+      gitOperationsStore.endCommit(false);
       // Keep menu open on error so user can see what happened
     }
   }
@@ -192,18 +202,25 @@
     pushProgress = [];
     gitMenuMode = 'confirm-push';
 
+    // Update shared store
+    gitOperationsStore.startPush();
+
     const result = await api.git.pushStream(settingsStore.workspacePath, (event) => {
       if (event.type === 'status') {
         pushProgress = [...pushProgress, event.message || ''];
+        gitOperationsStore.addPushProgress(event.message || '');
       } else if (event.type === 'output') {
         pushProgress = [...pushProgress, event.message || ''];
+        gitOperationsStore.addPushProgress(event.message || '');
       } else if (event.type === 'error') {
         gitError = event.message || 'Push failed';
+        gitOperationsStore.setPushError(event.message || 'Push failed');
       }
     });
 
     gitBusy = false;
     if (result.ok) {
+      gitOperationsStore.endPush(true);
       // Auto-close after showing success
       setTimeout(() => {
         if (!gitError) {
@@ -213,6 +230,8 @@
       }, 1000);
     } else {
       gitError = result.error || 'Push failed';
+      gitOperationsStore.setPushError(result.error || 'Push failed');
+      gitOperationsStore.endPush(false);
       // Keep menu open on error
     }
   }
