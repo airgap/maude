@@ -244,11 +244,61 @@
         editorStore.setLayoutMode('split-horizontal');
       }
     }
-    // Ctrl+W: Close active tab
+    // Ctrl+W / Cmd+W: Close active tab (prevent browser from closing the window)
     if ((e.ctrlKey || e.metaKey) && e.key === 'w') {
-      if (editorStore.activeTabId && uiStore.focusedPane === 'editor') {
+      // Try to close the active tab based on what's currently focused/visible
+      let tabClosed = false;
+
+      // Priority 1: Primary pane (chat/conversation) tabs
+      const activePane = primaryPaneStore.panes.find((p) => p.id === primaryPaneStore.activePaneId);
+      if (activePane && activePane.activeTabId) {
+        e.preventDefault();
+        primaryPaneStore.closeTab(activePane.id, activePane.activeTabId);
+        tabClosed = true;
+      }
+
+      // Priority 2: Editor tabs when editor pane is focused
+      if (!tabClosed && editorStore.activeTabId && uiStore.focusedPane === 'editor') {
         e.preventDefault();
         editorStore.closeTab(editorStore.activeTabId);
+        tabClosed = true;
+      }
+
+      // Priority 3: Terminal tabs when terminal is open
+      if (!tabClosed && terminalStore.isOpen && terminalStore.activeTabId) {
+        e.preventDefault();
+        terminalStore.closeTab(terminalStore.activeTabId);
+        tabClosed = true;
+      }
+
+      // Priority 4: Workspace tabs (but only if there's more than one)
+      if (!tabClosed && workspaceStore.activeWorkspaceId && workspaceStore.workspaces.length > 1) {
+        e.preventDefault();
+        // Check for unsaved changes or active streams
+        if (workspaceStore.hasDirtyTabs(workspaceStore.activeWorkspaceId)) {
+          if (confirm('This workspace has unsaved changes. Close anyway?')) {
+            workspaceStore.closeWorkspace(workspaceStore.activeWorkspaceId);
+            tabClosed = true;
+          }
+        } else if (workspaceStore.hasActiveStream(workspaceStore.activeWorkspaceId)) {
+          if (confirm('A stream is running in this workspace. Close and cancel it?')) {
+            workspaceStore.closeWorkspace(workspaceStore.activeWorkspaceId);
+            tabClosed = true;
+          }
+        } else {
+          workspaceStore.closeWorkspace(workspaceStore.activeWorkspaceId);
+          tabClosed = true;
+        }
+      }
+
+      // If nothing was closed but we have tabs, still prevent browser close
+      if (
+        !tabClosed &&
+        (editorStore.hasOpenTabs ||
+          terminalStore.tabs.length > 0 ||
+          primaryPaneStore.panes.some((p) => p.tabs.length > 0))
+      ) {
+        e.preventDefault();
       }
     }
     // Ctrl+Tab / Ctrl+Shift+Tab: Cycle tabs
