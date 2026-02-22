@@ -808,6 +808,76 @@ export const api = {
         method: 'POST',
         body: JSON.stringify({ path, remote, branch }),
       }),
+    /**
+     * Streaming push with real-time output
+     * @param onProgress - Callback for progress updates
+     */
+    pushStream: async (
+      path: string,
+      onProgress: (event: {
+        type: 'status' | 'output' | 'error' | 'complete';
+        message?: string;
+        setUpstream?: boolean;
+      }) => void,
+      remote?: string,
+      branch?: string,
+    ): Promise<{ ok: boolean; setUpstream?: boolean; error?: string }> => {
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+      };
+      const token = getAuthToken();
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+      if (_csrfToken) headers['X-CSRF-Token'] = _csrfToken;
+
+      const response = await fetch(`${getBaseUrl()}/git/push/stream`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ path, remote, branch }),
+      });
+
+      if (!response.ok || !response.body) {
+        const body = await response.json().catch(() => ({ error: response.statusText }));
+        return { ok: false, error: body.error || `HTTP ${response.status}` };
+      }
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+      let setUpstream = false;
+
+      try {
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split('\n');
+          buffer = lines.pop() || '';
+
+          for (const line of lines) {
+            if (line.startsWith('data: ')) {
+              const data = line.slice(6);
+              try {
+                const event = JSON.parse(data);
+                onProgress(event);
+                if (event.type === 'complete' && event.setUpstream) {
+                  setUpstream = true;
+                }
+                if (event.type === 'error') {
+                  return { ok: false, error: event.message };
+                }
+              } catch {
+                // Ignore malformed JSON
+              }
+            }
+          }
+        }
+
+        return { ok: true, setUpstream };
+      } catch (err) {
+        return { ok: false, error: String(err) };
+      }
+    },
     generateCommitMessage: (path: string) =>
       request<{ ok: boolean; data: { message: string } }>('/git/generate-commit-message', {
         method: 'POST',

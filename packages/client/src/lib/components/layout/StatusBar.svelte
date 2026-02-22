@@ -35,7 +35,8 @@
         const state = JSON.parse(saved);
         return {
           commitMessage: state.commitMessage || '',
-          commitProgress: state.commitProgress || [],
+          // Don't persist progress logs - they're session-specific
+          commitProgress: [],
           // Don't persist errors across page reloads - they're stale if page reloaded
           gitError: '',
           lastMode: state.lastMode || 'actions',
@@ -59,7 +60,7 @@
         GIT_STATE_KEY,
         JSON.stringify({
           commitMessage,
-          commitProgress,
+          // Don't persist progress logs - they're session-specific
           // Don't persist errors - they're session-specific
           lastMode: gitMenuMode,
         }),
@@ -79,12 +80,12 @@
   let gitError = $state(savedState.gitError);
   let generating = $state(false);
   let commitProgress = $state<string[]>(savedState.commitProgress);
+  let pushProgress = $state<string[]>([]);
 
   // Auto-save state when it changes
   $effect(() => {
-    // Track dependencies
+    // Track dependencies (progress logs are not persisted, only commitMessage and mode)
     commitMessage;
-    commitProgress;
     gitMenuMode;
     // Save on next tick to batch updates
     queueMicrotask(saveGitState);
@@ -110,10 +111,11 @@
   function toggleGitMenu(e: MouseEvent) {
     e.stopPropagation();
     gitMenuOpen = !gitMenuOpen;
-    // Don't clear state - it persists now
-    // If we're opening and have progress/error, stay in commit mode
-    if (gitMenuOpen && (commitProgress.length > 0 || gitError)) {
-      gitMenuMode = 'commit';
+    // Clear session-specific state when opening fresh
+    if (gitMenuOpen && !gitBusy) {
+      commitProgress = [];
+      pushProgress = [];
+      gitError = '';
     }
   }
 
@@ -124,6 +126,7 @@
   function clearCommitState() {
     commitMessage = '';
     commitProgress = [];
+    pushProgress = [];
     gitError = '';
     gitMenuMode = 'actions';
   }
@@ -186,12 +189,31 @@
     if (gitBusy) return;
     gitBusy = true;
     gitError = '';
-    const result = await gitStore.push(settingsStore.workspacePath);
+    pushProgress = [];
+    gitMenuMode = 'confirm-push';
+
+    const result = await api.git.pushStream(settingsStore.workspacePath, (event) => {
+      if (event.type === 'status') {
+        pushProgress = [...pushProgress, event.message || ''];
+      } else if (event.type === 'output') {
+        pushProgress = [...pushProgress, event.message || ''];
+      } else if (event.type === 'error') {
+        gitError = event.message || 'Push failed';
+      }
+    });
+
     gitBusy = false;
     if (result.ok) {
-      gitMenuOpen = false;
+      // Auto-close after showing success
+      setTimeout(() => {
+        if (!gitError) {
+          gitMenuOpen = false;
+          pushProgress = [];
+        }
+      }, 1000);
     } else {
       gitError = result.error || 'Push failed';
+      // Keep menu open on error
     }
   }
 
@@ -266,8 +288,8 @@
           {#if gitStore.isDirty}
             <span class="git-dirty-badge">{gitStore.dirtyCount}</span>
           {/if}
-          {#if commitProgress.length > 0 || gitError}
-            <span class="git-output-badge" title="Commit output available">●</span>
+          {#if commitProgress.length > 0 || pushProgress.length > 0 || gitError}
+            <span class="git-output-badge" title="Git output available">●</span>
           {/if}
         </button>
 
@@ -540,6 +562,24 @@
                     disabled={gitBusy}>{gitBusy ? 'Pushing...' : 'Push'}</button
                   >
                 </div>
+                {#if pushProgress.length > 0}
+                  <div class="git-progress">
+                    <div class="git-progress-header">
+                      <span class="git-progress-title">Push Output</span>
+                      <button
+                        type="button"
+                        class="git-clear-btn"
+                        onclick={clearCommitState}
+                        title="Clear output"
+                      >
+                        ✕
+                      </button>
+                    </div>
+                    {#each pushProgress.slice(-10) as line}
+                      <div class="git-progress-line">{line}</div>
+                    {/each}
+                  </div>
+                {/if}
                 {#if gitError}
                   <div class="git-error">{gitError}</div>
                 {/if}

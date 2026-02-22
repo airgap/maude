@@ -18,6 +18,17 @@
   let refreshing = $state(false);
   let pollTimer: ReturnType<typeof setInterval> | null = null;
 
+  // ── Commit state ─────────────────────────────────────────────────────────
+
+  let commitMessage = $state('');
+  let generating = $state(false);
+  let committing = $state(false);
+  let pushing = $state(false);
+  let commitProgress = $state<string[]>([]);
+  let pushProgress = $state<string[]>([]);
+  let gitError = $state('');
+  let showCommitSection = $state(false);
+
   // ── Lifecycle ────────────────────────────────────────────────────────────
 
   onMount(() => {
@@ -116,6 +127,107 @@
     await gitStore.refresh(workspacePath);
     refreshing = false;
   }
+
+  // ── Commit actions ───────────────────────────────────────────────────────
+
+  async function handleGenerateMessage() {
+    if (generating || committing) return;
+    generating = true;
+    gitError = '';
+    try {
+      const res = await api.git.generateCommitMessage(workspacePath);
+      if (res.ok && res.data.message) {
+        commitMessage = res.data.message;
+      } else {
+        gitError = 'Could not generate message';
+      }
+    } catch {
+      gitError = 'Failed to generate message';
+    }
+    generating = false;
+  }
+
+  async function handleCommit() {
+    if (!commitMessage.trim() || committing) return;
+    committing = true;
+    gitError = '';
+    commitProgress = [];
+    showCommitSection = true;
+
+    const result = await api.git.commitStream(workspacePath, commitMessage.trim(), (event) => {
+      if (event.type === 'status') {
+        commitProgress = [...commitProgress, event.message || ''];
+      } else if (event.type === 'output') {
+        commitProgress = [...commitProgress, event.message || ''];
+      } else if (event.type === 'error') {
+        gitError = event.message || 'Commit failed';
+      }
+    });
+
+    committing = false;
+    if (result.ok) {
+      await gitStore.refresh(workspacePath);
+      // Auto-clear on success
+      setTimeout(() => {
+        if (!gitError) {
+          commitMessage = '';
+          commitProgress = [];
+        }
+      }, 2000);
+    } else {
+      gitError = result.error || 'Commit failed';
+    }
+  }
+
+  async function handlePush() {
+    if (pushing) return;
+    pushing = true;
+    gitError = '';
+    pushProgress = [];
+    showCommitSection = true;
+
+    const result = await api.git.pushStream(workspacePath, (event) => {
+      if (event.type === 'status') {
+        pushProgress = [...pushProgress, event.message || ''];
+      } else if (event.type === 'output') {
+        pushProgress = [...pushProgress, event.message || ''];
+      } else if (event.type === 'error') {
+        gitError = event.message || 'Push failed';
+      }
+    });
+
+    pushing = false;
+    if (result.ok) {
+      // Auto-clear on success
+      setTimeout(() => {
+        if (!gitError) {
+          pushProgress = [];
+        }
+      }, 2000);
+    } else {
+      gitError = result.error || 'Push failed';
+    }
+  }
+
+  async function handleDiscard() {
+    if (committing) return;
+    const confirmed = confirm(
+      `Discard ${gitStore.dirtyCount} change${gitStore.dirtyCount === 1 ? '' : 's'}? This cannot be undone.`,
+    );
+    if (!confirmed) return;
+
+    const result = await gitStore.clean(workspacePath);
+    if (!result.ok) {
+      gitError = result.error || 'Failed to discard changes';
+    }
+  }
+
+  function clearOutput() {
+    commitMessage = '';
+    commitProgress = [];
+    pushProgress = [];
+    gitError = '';
+  }
 </script>
 
 <div class="git-panel">
@@ -156,6 +268,142 @@
       </svg>
     </button>
   </div>
+
+  <!-- ── Commit Section ─────────────────────────────────────────────────── -->
+  {#if gitStore.isRepo && gitStore.isDirty}
+    <div class="commit-section">
+      <button
+        class="commit-header"
+        onclick={() => (showCommitSection = !showCommitSection)}
+        title={showCommitSection ? 'Collapse' : 'Expand'}
+      >
+        <svg
+          class="expand-icon"
+          class:expanded={showCommitSection}
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+        >
+          <polyline points="9 18 15 12 9 6" />
+        </svg>
+        <span>Commit & Actions</span>
+      </button>
+
+      {#if showCommitSection}
+        <div class="commit-content">
+          <!-- Message input with generate button -->
+          <div class="commit-input-row">
+            <input
+              class="commit-input"
+              type="text"
+              placeholder="Commit message..."
+              bind:value={commitMessage}
+              onkeydown={(e) => e.key === 'Enter' && handleCommit()}
+              disabled={committing || pushing}
+            />
+            <button
+              class="generate-btn"
+              onclick={handleGenerateMessage}
+              disabled={generating || committing || pushing}
+              title="Auto-generate commit message"
+            >
+              {#if generating}
+                <svg
+                  class="spin"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                >
+                  <line x1="12" y1="2" x2="12" y2="6" />
+                  <line x1="12" y1="18" x2="12" y2="22" />
+                  <line x1="4.93" y1="4.93" x2="7.76" y2="7.76" />
+                  <line x1="16.24" y1="16.24" x2="19.07" y2="19.07" />
+                  <line x1="2" y1="12" x2="6" y2="12" />
+                  <line x1="18" y1="12" x2="22" y2="12" />
+                  <line x1="4.93" y1="19.07" x2="7.76" y2="16.24" />
+                  <line x1="16.24" y1="7.76" x2="19.07" y2="4.93" />
+                </svg>
+              {:else}
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M15 4V2" />
+                  <path d="M15 16v-2" />
+                  <path d="M8 9h2" />
+                  <path d="M20 9h2" />
+                  <path d="M17.8 11.8L19 13" />
+                  <path d="M15 9h0" />
+                  <path d="M17.8 6.2L19 5" />
+                  <path d="M3 21l9-9" />
+                  <path d="M12.2 6.2L11 5" />
+                </svg>
+              {/if}
+            </button>
+          </div>
+
+          <!-- Action buttons -->
+          <div class="action-buttons">
+            <button
+              class="action-btn commit-btn"
+              onclick={handleCommit}
+              disabled={!commitMessage.trim() || committing || pushing}
+            >
+              {committing ? 'Committing...' : 'Commit'}
+            </button>
+            <button
+              class="action-btn push-btn"
+              onclick={handlePush}
+              disabled={committing || pushing}
+            >
+              {pushing ? 'Pushing...' : 'Push'}
+            </button>
+            <button
+              class="action-btn discard-btn"
+              onclick={handleDiscard}
+              disabled={committing || pushing}
+            >
+              Discard All
+            </button>
+          </div>
+
+          <!-- Commit progress output -->
+          {#if commitProgress.length > 0}
+            <div class="progress-output">
+              <div class="progress-header">
+                <span>Commit Output</span>
+                <button class="clear-btn" onclick={clearOutput} title="Clear">✕</button>
+              </div>
+              <div class="progress-lines">
+                {#each commitProgress.slice(-15) as line}
+                  <div class="progress-line">{line}</div>
+                {/each}
+              </div>
+            </div>
+          {/if}
+
+          <!-- Push progress output -->
+          {#if pushProgress.length > 0}
+            <div class="progress-output">
+              <div class="progress-header">
+                <span>Push Output</span>
+                <button class="clear-btn" onclick={clearOutput} title="Clear">✕</button>
+              </div>
+              <div class="progress-lines">
+                {#each pushProgress.slice(-15) as line}
+                  <div class="progress-line">{line}</div>
+                {/each}
+              </div>
+            </div>
+          {/if}
+
+          <!-- Error display -->
+          {#if gitError}
+            <div class="error-message">{gitError}</div>
+          {/if}
+        </div>
+      {/if}
+    </div>
+  {/if}
 
   <!-- ── Empty / no-repo states ─────────────────────────────────────────── -->
   {#if !gitStore.isRepo}
@@ -538,5 +786,226 @@
     flex-shrink: 0;
     color: var(--text-muted);
     animation: spin 0.8s linear infinite;
+  }
+
+  /* ── Commit Section ── */
+  .commit-section {
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+
+  .commit-header {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    width: 100%;
+    padding: 8px 10px;
+    background: var(--bg-hover);
+    border: none;
+    cursor: pointer;
+    color: var(--text);
+    font-weight: 600;
+    font-size: var(--fs-sm);
+    transition: background 0.1s;
+  }
+
+  .commit-header:hover {
+    background: var(--bg-active);
+  }
+
+  .expand-icon {
+    width: 12px;
+    height: 12px;
+    transition: transform 0.2s;
+  }
+
+  .expand-icon.expanded {
+    transform: rotate(90deg);
+  }
+
+  .commit-content {
+    padding: 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .commit-input-row {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+  }
+
+  .commit-input {
+    flex: 1;
+    padding: 6px 8px;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    background: var(--bg);
+    color: var(--text);
+    font-size: var(--fs-sm);
+    font-family: inherit;
+  }
+
+  .commit-input:focus {
+    outline: none;
+    border-color: var(--accent);
+  }
+
+  .commit-input:disabled {
+    opacity: 0.5;
+  }
+
+  .generate-btn {
+    width: 28px;
+    height: 28px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    background: var(--bg-hover);
+    color: var(--accent);
+    cursor: pointer;
+    padding: 0;
+    transition: all 0.15s;
+  }
+
+  .generate-btn svg {
+    width: 14px;
+    height: 14px;
+  }
+
+  .generate-btn:hover:not(:disabled) {
+    background: var(--accent);
+    color: var(--bg);
+  }
+
+  .generate-btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+  }
+
+  .generate-btn .spin {
+    animation: spin 1s linear infinite;
+  }
+
+  .action-buttons {
+    display: flex;
+    gap: 6px;
+  }
+
+  .action-btn {
+    flex: 1;
+    padding: 6px 10px;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    font-size: var(--fs-sm);
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+
+  .commit-btn {
+    background: var(--accent);
+    color: var(--bg);
+    border-color: var(--accent);
+  }
+
+  .commit-btn:hover:not(:disabled) {
+    opacity: 0.9;
+  }
+
+  .commit-btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+  }
+
+  .push-btn {
+    background: var(--bg-hover);
+    color: var(--text);
+  }
+
+  .push-btn:hover:not(:disabled) {
+    background: var(--bg-active);
+  }
+
+  .push-btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+  }
+
+  .discard-btn {
+    background: transparent;
+    color: var(--text-danger, #ef4444);
+    border-color: var(--text-danger, #ef4444);
+  }
+
+  .discard-btn:hover:not(:disabled) {
+    background: rgba(239, 68, 68, 0.1);
+  }
+
+  .discard-btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+  }
+
+  .progress-output {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    overflow: hidden;
+  }
+
+  .progress-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 4px 8px;
+    background: var(--bg-hover);
+    border-bottom: 1px solid var(--border);
+    font-size: var(--fs-xxs);
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-muted);
+  }
+
+  .clear-btn {
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    cursor: pointer;
+    padding: 0 4px;
+    font-size: var(--fs-sm);
+    transition: color 0.15s;
+  }
+
+  .clear-btn:hover {
+    color: var(--text-danger, #ef4444);
+  }
+
+  .progress-lines {
+    max-height: 150px;
+    overflow-y: auto;
+    padding: 6px 8px;
+  }
+
+  .progress-line {
+    font-size: var(--fs-xxs);
+    color: var(--text-muted);
+    line-height: 1.4;
+    white-space: pre-wrap;
+    word-break: break-word;
+    font-family: var(--font-mono, monospace);
+  }
+
+  .error-message {
+    padding: 6px 8px;
+    background: rgba(239, 68, 68, 0.1);
+    border: 1px solid var(--text-danger, #ef4444);
+    border-radius: 4px;
+    color: var(--text-danger, #ef4444);
+    font-size: var(--fs-sm);
   }
 </style>

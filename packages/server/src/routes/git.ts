@@ -711,4 +711,149 @@ app.post('/push', async (c) => {
   }
 });
 
+// Streaming push endpoint with real-time output
+app.post('/push/stream', async (c) => {
+  const body = await c.req.json();
+  const { path: rootPath, remote, branch } = body;
+
+  if (!rootPath) return c.json({ ok: false, error: 'path required' }, 400);
+
+  const pathCheck = validateWorkspacePath(rootPath);
+  if (!pathCheck.valid) {
+    return c.json({ ok: false, error: pathCheck.reason }, 403);
+  }
+
+  return streamSSE(c, async (stream) => {
+    try {
+      await stream.writeSSE({
+        data: JSON.stringify({ type: 'status', message: 'Determining branch...' }),
+      });
+
+      // Get current branch if not specified
+      let targetBranch = branch;
+      if (!targetBranch) {
+        const branchProc = Bun.spawn(['git', 'rev-parse', '--abbrev-ref', 'HEAD'], {
+          cwd: pathCheck.resolved,
+          stdout: 'pipe',
+          stderr: 'pipe',
+        });
+        targetBranch = (await new Response(branchProc.stdout).text()).trim();
+        const branchExit = await branchProc.exited;
+        if (branchExit !== 0 || !targetBranch) {
+          await stream.writeSSE({
+            data: JSON.stringify({ type: 'error', message: 'Could not determine current branch' }),
+          });
+          return;
+        }
+      }
+
+      const targetRemote = remote || 'origin';
+      await stream.writeSSE({
+        data: JSON.stringify({
+          type: 'status',
+          message: `Pushing ${targetBranch} to ${targetRemote}...`,
+        }),
+      });
+
+      // Push to remote with streaming output
+      const pushProc = Bun.spawn(['git', 'push', targetRemote, targetBranch], {
+        cwd: pathCheck.resolved,
+        stdout: 'pipe',
+        stderr: 'pipe',
+      });
+
+      const decoder = new TextDecoder();
+      const outputs: Promise<string>[] = [];
+
+      const readStream = async (readable: ReadableStream): Promise<string> => {
+        const reader = readable.getReader();
+        let fullOutput = '';
+        try {
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            const chunk = decoder.decode(value, { stream: true });
+            fullOutput += chunk;
+            // Stream non-empty chunks immediately
+            if (chunk.trim()) {
+              await stream.writeSSE({ data: JSON.stringify({ type: 'output', message: chunk }) });
+            }
+          }
+        } finally {
+          reader.releaseLock();
+        }
+        return fullOutput;
+      };
+
+      // Read both streams concurrently
+      outputs.push(readStream(pushProc.stdout));
+      outputs.push(readStream(pushProc.stderr));
+
+      const [pushOut, pushErr] = await Promise.all(outputs);
+      const pushExit = await pushProc.exited;
+
+      if (pushExit !== 0) {
+        // Check if it's an upstream tracking error
+        if (pushErr.includes('no upstream branch') || pushErr.includes('has no upstream')) {
+          await stream.writeSSE({
+            data: JSON.stringify({
+              type: 'status',
+              message: 'Setting upstream and pushing...',
+            }),
+          });
+
+          // Try push with --set-upstream
+          const upstreamProc = Bun.spawn(
+            ['git', 'push', '--set-upstream', targetRemote, targetBranch],
+            {
+              cwd: pathCheck.resolved,
+              stdout: 'pipe',
+              stderr: 'pipe',
+            },
+          );
+
+          const upstreamOutputs: Promise<string>[] = [];
+          upstreamOutputs.push(readStream(upstreamProc.stdout));
+          upstreamOutputs.push(readStream(upstreamProc.stderr));
+
+          await Promise.all(upstreamOutputs);
+          const upstreamExit = await upstreamProc.exited;
+
+          if (upstreamExit !== 0) {
+            await stream.writeSSE({
+              data: JSON.stringify({
+                type: 'error',
+                message: 'Push failed - check output above',
+              }),
+            });
+            return;
+          }
+
+          await stream.writeSSE({
+            data: JSON.stringify({
+              type: 'complete',
+              message: 'Push successful (upstream set)!',
+              setUpstream: true,
+            }),
+          });
+          return;
+        }
+
+        await stream.writeSSE({
+          data: JSON.stringify({ type: 'error', message: 'Push failed - check output above' }),
+        });
+        return;
+      }
+
+      await stream.writeSSE({
+        data: JSON.stringify({ type: 'complete', message: 'Push successful!', setUpstream: false }),
+      });
+    } catch (err) {
+      await stream.writeSSE({
+        data: JSON.stringify({ type: 'error', message: String(err) }),
+      });
+    }
+  });
+});
+
 export { app as gitRoutes };
