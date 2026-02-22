@@ -6,6 +6,7 @@
   import { panelDragStore } from '$lib/stores/panelDrag.svelte';
   import { loopStore } from '$lib/stores/loop.svelte';
   import { golemsStore } from '$lib/stores/golems.svelte';
+  import { gitStore } from '$lib/stores/git.svelte';
 
   interface Props {
     group: TabGroup;
@@ -625,6 +626,14 @@
   function isPlaced(tabId: SidebarTab): boolean {
     return !sidebarLayoutStore.unplacedTabs.some((t) => t.id === tabId);
   }
+
+  /** Get badge count for a tab */
+  function getTabBadge(tabId: SidebarTab): number | null {
+    if (tabId === 'git' && gitStore.isDirty) {
+      return gitStore.dirtyCount;
+    }
+    return null;
+  }
 </script>
 
 <!-- svelte-ignore a11y_no_static_element_interactions -->
@@ -688,6 +697,9 @@
             class:paused={!golemsStore.golems.some((g) => g.status === 'running') &&
               golemsStore.golems.some((g) => g.status === 'paused')}
           ></span>
+        {/if}
+        {#if getTabBadge(tab) !== null}
+          <span class="tab-badge">{getTabBadge(tab)}</span>
         {/if}
       </button>
     {/if}
@@ -956,6 +968,29 @@
       opacity: 0.5;
       box-shadow: 0 0 10px var(--accent-primary);
     }
+  }
+
+  /* Tab badge (e.g., uncommitted change count on git tab) */
+  .tab-badge {
+    position: absolute;
+    top: 2px;
+    right: 2px;
+    min-width: 14px;
+    height: 14px;
+    padding: 0 3px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 9px;
+    font-weight: 700;
+    line-height: 1;
+    color: var(--bg-primary);
+    background: var(--accent-warning);
+    border-radius: 7px;
+    border: 1px solid var(--bg-elevated);
+  }
+  .tab-btn.active .tab-badge {
+    border-color: var(--bg-active);
   }
 
   .tab-group-bar.dragging {
