@@ -1,11 +1,12 @@
 <script lang="ts">
   import { api } from '$lib/api/client';
+  import { scheduledTasksApi } from '$lib/api/scheduled-tasks';
   import { workspaceListStore } from '$lib/stores/projects.svelte';
   import { primaryPaneStore } from '$lib/stores/primaryPane.svelte';
   import { uiStore } from '$lib/stores/ui.svelte';
   import { managerCommentaryStore } from '$lib/stores/manager-commentary.svelte';
   import { onMount, onDestroy } from 'svelte';
-  import type { WorkspaceSettings } from '@e/shared';
+  import type { WorkspaceSettings, ScheduledTaskWithStats } from '@e/shared';
 
   // ---- Types ----
   type CommentaryPersonality =
@@ -123,6 +124,8 @@
   let evtSource: EventSource | null = null;
   let openPersonalityDropdown = $state<string | null>(null);
   let openVerbosityDropdown = $state<string | null>(null);
+  let scheduledTasks = $state<Map<string, ScheduledTaskWithStats[]>>(new Map());
+  let showScheduledTasks = $state(false);
 
   // Derived: expanded workspace from the manager commentary store
   let expandedWsId = $derived(managerCommentaryStore.expandedWorkspaceId);
@@ -135,11 +138,29 @@
       const res = await api.manager.overview();
       data = res.data;
       lastRefresh = new Date();
+      // Load scheduled tasks for all workspaces
+      await loadScheduledTasks();
     } catch (e: any) {
       error = e?.message ?? 'Failed to load manager overview';
     } finally {
       loading = false;
     }
+  }
+
+  async function loadScheduledTasks() {
+    if (!data?.workspaces) return;
+    const tasksMap = new Map<string, ScheduledTaskWithStats[]>();
+    for (const ws of data.workspaces) {
+      try {
+        const tasks = await scheduledTasksApi.list(ws.id);
+        if (tasks.length > 0) {
+          tasksMap.set(ws.id, tasks);
+        }
+      } catch (e) {
+        console.error(`Failed to load scheduled tasks for workspace ${ws.id}:`, e);
+      }
+    }
+    scheduledTasks = tasksMap;
   }
 
   // ---- SSE for real-time updates ----
@@ -623,6 +644,73 @@
             </div>
           {/each}
         </div>
+      </div>
+    {/if}
+
+    <!-- Scheduled Tasks -->
+    {#if scheduledTasks.size > 0}
+      {@const totalTasks = Array.from(scheduledTasks.values()).reduce(
+        (sum, tasks) => sum + tasks.length,
+        0,
+      )}
+      {@const upcomingTasks = Array.from(scheduledTasks.values())
+        .flat()
+        .filter((t) => t.status === 'active' && t.nextRun)
+        .sort((a, b) => (a.nextRun || 0) - (b.nextRun || 0))
+        .slice(0, 5)}
+      <div class="section">
+        <div class="section-header">
+          <button
+            class="section-title-btn"
+            onclick={() => (showScheduledTasks = !showScheduledTasks)}
+          >
+            <span class="section-title">
+              <svg
+                width="10"
+                height="10"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                class="expand-icon"
+                class:expanded={showScheduledTasks}
+              >
+                <polyline points="9 18 15 12 9 6"></polyline>
+              </svg>
+              <span class="dot" style:background="var(--accent-info, #3b82f6)"></span>
+              Scheduled Tasks
+              <span class="badge">{totalTasks}</span>
+            </span>
+          </button>
+        </div>
+        {#if showScheduledTasks}
+          <div class="item-list">
+            {#each upcomingTasks as task (task.id)}
+              {@const ws = data.workspaces.find((w) => w.id === task.workspaceId)}
+              <div class="inbox-item">
+                <div class="inbox-item-top">
+                  <span class="story-title">{task.name}</span>
+                  {#if task.nextRun}
+                    <span class="task-next-badge">{formatTime(task.nextRun)}</span>
+                  {/if}
+                </div>
+                <div class="inbox-item-sub">
+                  {ws?.name || 'Unknown workspace'}
+                  {#if task.cronExpression}
+                    · Cron: {task.cronExpression}
+                  {:else if task.intervalMinutes}
+                    · Every {task.intervalMinutes}m
+                  {/if}
+                </div>
+              </div>
+            {/each}
+            {#if upcomingTasks.length === 0}
+              <div class="empty-msg">No active scheduled tasks</div>
+            {/if}
+          </div>
+        {/if}
       </div>
     {/if}
 
@@ -1789,5 +1877,41 @@
     min-width: 14px;
     text-align: center;
     flex-shrink: 0;
+  }
+
+  /* Scheduled Tasks */
+  .section-title-btn {
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 0;
+    width: 100%;
+    text-align: left;
+  }
+
+  .expand-icon {
+    transition: transform 0.2s ease;
+    margin-right: 4px;
+  }
+
+  .expand-icon.expanded {
+    transform: rotate(90deg);
+  }
+
+  .task-next-badge {
+    font-size: 10px;
+    padding: 2px 6px;
+    border-radius: 3px;
+    background: var(--accent-info, #3b82f6);
+    color: white;
+    font-weight: 500;
+    margin-left: auto;
+  }
+
+  .empty-msg {
+    padding: 16px;
+    text-align: center;
+    color: var(--text-tertiary);
+    font-size: 12px;
   }
 </style>

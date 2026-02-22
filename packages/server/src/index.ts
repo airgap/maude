@@ -40,10 +40,12 @@ import { agentNoteRoutes } from './routes/agent-notes';
 import { managerRoutes } from './routes/manager';
 import { taskRunnerRoutes } from './routes/task-runner';
 import { commentaryRoutes } from './routes/commentary';
+import scheduledTasksRoutes from './routes/scheduled-tasks';
 import { authMiddleware } from './middleware/auth';
 import { csrfMiddleware, isOriginAllowed } from './middleware/csrf';
 import { websocket } from './ws';
 import { initDatabase } from './db/database';
+import { taskScheduler } from './services/task-scheduler';
 import { existsSync } from 'fs';
 import { resolve } from 'path';
 
@@ -136,9 +138,13 @@ app.route('/api/agent-notes', agentNoteRoutes);
 app.route('/api/manager', managerRoutes);
 app.route('/api/task-runner', taskRunnerRoutes);
 app.route('/api/commentary', commentaryRoutes);
+app.route('/api/scheduled-tasks', scheduledTasksRoutes);
 
 // Initialize database
 initDatabase();
+
+// Ensure task scheduler is initialized (singleton auto-starts)
+void taskScheduler;
 
 // Serve static client build when available (for `bun run start` single-process mode)
 const clientBuildPath = process.env.CLIENT_DIST || resolve(import.meta.dir, '../../client/build');

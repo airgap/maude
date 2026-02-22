@@ -279,6 +279,45 @@ export function initDatabase(): void {
       FOREIGN KEY (conversation_id) REFERENCES conversations(id) ON DELETE CASCADE
     );
 
+    CREATE TABLE IF NOT EXISTS scheduled_tasks (
+      id TEXT PRIMARY KEY,
+      workspace_id TEXT NOT NULL,
+      name TEXT NOT NULL,
+      description TEXT NOT NULL DEFAULT '',
+      cron_expression TEXT,
+      interval_minutes INTEGER,
+      prompt TEXT NOT NULL,
+      profile_id TEXT,
+      status TEXT NOT NULL DEFAULT 'active',
+      retry_on_failure INTEGER NOT NULL DEFAULT 1,
+      max_retries INTEGER NOT NULL DEFAULT 3,
+      last_run INTEGER,
+      next_run INTEGER,
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL,
+      FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE,
+      FOREIGN KEY (profile_id) REFERENCES agent_profiles(id) ON DELETE SET NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS scheduled_task_executions (
+      id TEXT PRIMARY KEY,
+      task_id TEXT NOT NULL,
+      conversation_id TEXT,
+      status TEXT NOT NULL DEFAULT 'running',
+      started_at INTEGER NOT NULL,
+      completed_at INTEGER,
+      duration_ms INTEGER,
+      error_message TEXT,
+      output_summary TEXT,
+      FOREIGN KEY (task_id) REFERENCES scheduled_tasks(id) ON DELETE CASCADE,
+      FOREIGN KEY (conversation_id) REFERENCES conversations(id) ON DELETE CASCADE
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_scheduled_tasks_workspace ON scheduled_tasks(workspace_id);
+    CREATE INDEX IF NOT EXISTS idx_scheduled_tasks_status ON scheduled_tasks(status);
+    CREATE INDEX IF NOT EXISTS idx_scheduled_tasks_next_run ON scheduled_tasks(next_run);
+    CREATE INDEX IF NOT EXISTS idx_scheduled_task_executions_task ON scheduled_task_executions(task_id, started_at DESC);
+
   `);
 
   // Migrate: add new conversation columns (safe ALTER TABLE — no-ops if already exist)

@@ -271,3 +271,14 @@ export type {
   WorkspaceTask,
   TaskDiscoveryResponse,
 } from './task-runner.js';
+
+export type {
+  ScheduledTaskStatus,
+  ScheduledTaskExecutionStatus,
+  ScheduledTask,
+  ScheduledTaskExecution,
+  ScheduledTaskCreateInput,
+  ScheduledTaskUpdateInput,
+  ScheduledTaskWithStats,
+  StreamScheduledTaskEvent,
+} from './scheduled-tasks.js';
