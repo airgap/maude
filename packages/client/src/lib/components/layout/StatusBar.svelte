@@ -183,7 +183,11 @@
           <div class="git-popover" role="menu" onclick={(e) => e.stopPropagation()}>
             {#if !gitStore.isDirty}
               <div class="git-popover-item disabled">Working tree clean</div>
-              <button class="git-popover-item" onclick={() => (gitMenuMode = 'confirm-push')}>
+              <button
+                type="button"
+                class="git-popover-item"
+                onclick={() => (gitMenuMode = 'confirm-push')}
+              >
                 <svg
                   width="14"
                   height="14"
@@ -201,7 +205,7 @@
                 Push to remote
               </button>
             {:else if gitMenuMode === 'actions'}
-              <button class="git-popover-item" onclick={handleViewChanges}>
+              <button type="button" class="git-popover-item" onclick={handleViewChanges}>
                 <svg
                   width="14"
                   height="14"
@@ -218,7 +222,11 @@
                 </svg>
                 View changes
               </button>
-              <button class="git-popover-item" onclick={() => (gitMenuMode = 'commit')}>
+              <button
+                type="button"
+                class="git-popover-item"
+                onclick={() => (gitMenuMode = 'commit')}
+              >
                 <svg
                   width="14"
                   height="14"
@@ -238,7 +246,11 @@
                 </svg>
                 Commit all changes
               </button>
-              <button class="git-popover-item" onclick={() => (gitMenuMode = 'confirm-push')}>
+              <button
+                type="button"
+                class="git-popover-item"
+                onclick={() => (gitMenuMode = 'confirm-push')}
+              >
                 <svg
                   width="14"
                   height="14"
@@ -256,6 +268,7 @@
                 Push to remote
               </button>
               <button
+                type="button"
                 class="git-popover-item danger"
                 onclick={() => (gitMenuMode = 'confirm-clean')}
               >
@@ -284,7 +297,10 @@
                     placeholder="Commit message..."
                     bind:value={commitMessage}
                     onkeydown={(e) => {
-                      if (e.key === 'Enter') handleCommit();
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        handleCommit();
+                      }
                       if (e.key === 'Escape') {
                         gitMenuMode = 'actions';
                       }
@@ -292,6 +308,7 @@
                     disabled={gitBusy || generating}
                   />
                   <button
+                    type="button"
                     class="git-generate-btn"
                     onclick={handleGenerateMessage}
                     disabled={generating || gitBusy}
@@ -353,11 +370,13 @@
                 </div>
                 <div class="git-popover-actions">
                   <button
+                    type="button"
                     class="git-action-btn cancel"
                     onclick={() => (gitMenuMode = 'actions')}
                     disabled={gitBusy}>Cancel</button
                   >
                   <button
+                    type="button"
                     class="git-action-btn confirm"
                     onclick={handleCommit}
                     disabled={!commitMessage.trim() || gitBusy || generating}
@@ -376,12 +395,16 @@
                 </div>
                 <div class="git-popover-actions">
                   <button
+                    type="button"
                     class="git-action-btn cancel"
                     onclick={() => (gitMenuMode = 'actions')}
                     disabled={gitBusy}>Cancel</button
                   >
-                  <button class="git-action-btn danger" onclick={handleClean} disabled={gitBusy}
-                    >{gitBusy ? 'Cleaning...' : 'Discard'}</button
+                  <button
+                    type="button"
+                    class="git-action-btn danger"
+                    onclick={handleClean}
+                    disabled={gitBusy}>{gitBusy ? 'Cleaning...' : 'Discard'}</button
                   >
                 </div>
                 {#if gitError}
@@ -395,12 +418,16 @@
                 </div>
                 <div class="git-popover-actions">
                   <button
+                    type="button"
                     class="git-action-btn cancel"
                     onclick={() => (gitMenuMode = 'actions')}
                     disabled={gitBusy}>Cancel</button
                   >
-                  <button class="git-action-btn confirm" onclick={handlePush} disabled={gitBusy}
-                    >{gitBusy ? 'Pushing...' : 'Push'}</button
+                  <button
+                    type="button"
+                    class="git-action-btn confirm"
+                    onclick={handlePush}
+                    disabled={gitBusy}>{gitBusy ? 'Pushing...' : 'Push'}</button
                   >
                 </div>
                 {#if gitError}
