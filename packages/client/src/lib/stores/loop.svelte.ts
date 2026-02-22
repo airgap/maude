@@ -1,3 +1,4 @@
+import { golemsStore } from './golems.svelte';
 import type {
   PRD,
   LoopState,
@@ -473,9 +474,7 @@ function createLoopStore() {
       if (!activeLoop || event.loopId !== activeLoop.id) return;
 
       // Forward ALL events to the golems store for the live status panel
-      import('../stores/golems.svelte').then(({ golemsStore }) => {
-        golemsStore.handleEvent(event);
-      });
+      golemsStore.handleEvent(event);
 
       const isStandaloneLoop = !activeLoop.prdId;
 
@@ -904,21 +903,19 @@ function createLoopStore() {
           if (lastEntry) currentStoryTitle = lastEntry.storyTitle;
         }
       }
-      import('../stores/golems.svelte').then(({ golemsStore }) => {
-        golemsStore.syncFromLoopState(
-          loop.id,
-          label,
-          loop.status,
-          total,
-          loop.totalStoriesCompleted,
-          loop.totalStoriesFailed,
-          loop.currentIteration,
-          loop.currentStoryId,
-          currentStoryTitle,
-          loop.startedAt,
-          loop.iterationLog,
-        );
-      });
+      golemsStore.syncFromLoopState(
+        loop.id,
+        label,
+        loop.status,
+        total,
+        loop.totalStoriesCompleted,
+        loop.totalStoriesFailed,
+        loop.currentIteration,
+        loop.currentStoryId,
+        currentStoryTitle,
+        loop.startedAt,
+        loop.iterationLog,
+      );
     },
 
     async startLoop(

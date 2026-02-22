@@ -442,7 +442,7 @@ app.post('/commit/stream', async (c) => {
 
   return streamSSE(c, async (stream) => {
     try {
-      // Check status BEFORE staging
+      // Check status BEFORE staging — stream it to client for debugging
       const beforeStatusProc = Bun.spawn(['git', 'status', '--porcelain'], {
         cwd: pathCheck.resolved,
         stdout: 'pipe',
@@ -451,6 +451,16 @@ app.post('/commit/stream', async (c) => {
       const beforeStatus = await new Response(beforeStatusProc.stdout).text();
       await beforeStatusProc.exited;
       console.log('[git/commit/stream] Status BEFORE git add:', beforeStatus);
+
+      await stream.writeSSE({
+        data: JSON.stringify({
+          type: 'diagnostic',
+          phase: 'before-staging',
+          message: 'Working tree status before staging',
+          porcelain: beforeStatus.trim(),
+          fileCount: beforeStatus.trim() ? beforeStatus.trim().split('\n').length : 0,
+        }),
+      });
 
       await stream.writeSSE({
         data: JSON.stringify({ type: 'status', message: 'Staging changes...' }),
@@ -482,7 +492,7 @@ app.post('/commit/stream', async (c) => {
         return;
       }
 
-      // Check status AFTER staging, BEFORE commit
+      // Check status AFTER staging, BEFORE commit — stream to client
       const afterAddProc = Bun.spawn(['git', 'status', '--porcelain'], {
         cwd: pathCheck.resolved,
         stdout: 'pipe',
@@ -491,6 +501,16 @@ app.post('/commit/stream', async (c) => {
       const afterAddStatus = await new Response(afterAddProc.stdout).text();
       await afterAddProc.exited;
       console.log('[git/commit/stream] Status AFTER git add:', afterAddStatus);
+
+      await stream.writeSSE({
+        data: JSON.stringify({
+          type: 'diagnostic',
+          phase: 'after-staging',
+          message: 'Index status after staging (all files should show staged)',
+          porcelain: afterAddStatus.trim(),
+          fileCount: afterAddStatus.trim() ? afterAddStatus.trim().split('\n').length : 0,
+        }),
+      });
 
       await stream.writeSSE({
         data: JSON.stringify({
@@ -545,7 +565,7 @@ app.post('/commit/stream', async (c) => {
         return;
       }
 
-      // Check status AFTER commit
+      // Check status AFTER commit — stream to client
       const afterCommitProc = Bun.spawn(['git', 'status', '--porcelain'], {
         cwd: pathCheck.resolved,
         stdout: 'pipe',
@@ -554,6 +574,19 @@ app.post('/commit/stream', async (c) => {
       const afterCommitStatus = await new Response(afterCommitProc.stdout).text();
       await afterCommitProc.exited;
       console.log('[git/commit/stream] Status AFTER commit:', afterCommitStatus);
+
+      const afterCommitClean = afterCommitStatus.trim().length === 0;
+      await stream.writeSSE({
+        data: JSON.stringify({
+          type: 'diagnostic',
+          phase: 'after-commit',
+          message: afterCommitClean
+            ? 'Working tree is clean after commit'
+            : 'WARNING: Working tree still has changes after commit — some files may not have been included',
+          porcelain: afterCommitStatus.trim(),
+          fileCount: afterCommitStatus.trim() ? afterCommitStatus.trim().split('\n').length : 0,
+        }),
+      });
 
       // Get the new HEAD sha
       const shaProc = Bun.spawn(['git', 'rev-parse', 'HEAD'], {
@@ -653,13 +686,39 @@ app.post('/clean', async (c) => {
   }
 
   try {
+    // Log status BEFORE clean
+    const beforeStatusProc = Bun.spawn(['git', 'status', '--porcelain'], {
+      cwd: pathCheck.resolved,
+      stdout: 'pipe',
+      stderr: 'pipe',
+    });
+    const beforeStatus = await new Response(beforeStatusProc.stdout).text();
+    await beforeStatusProc.exited;
+    console.log('[git/clean] Status BEFORE clean:', beforeStatus);
+
+    // Unstage everything first — handles files left in the index after a failed commit
+    const resetProc = Bun.spawn(['git', 'reset', 'HEAD'], {
+      cwd: pathCheck.resolved,
+      stdout: 'pipe',
+      stderr: 'pipe',
+    });
+    const resetExit = await resetProc.exited;
+    if (resetExit !== 0) {
+      const resetErr = await new Response(resetProc.stderr).text();
+      console.warn('[git/clean] git reset HEAD failed (non-fatal):', resetErr.trim());
+    }
+
     // Restore tracked files
     const checkoutProc = Bun.spawn(['git', 'checkout', '--', '.'], {
       cwd: pathCheck.resolved,
       stdout: 'pipe',
       stderr: 'pipe',
     });
-    await checkoutProc.exited;
+    const checkoutExit = await checkoutProc.exited;
+    if (checkoutExit !== 0) {
+      const checkoutErr = await new Response(checkoutProc.stderr).text();
+      console.warn('[git/clean] git checkout -- . failed:', checkoutErr.trim());
+    }
 
     // Remove untracked files and directories
     const cleanProc = Bun.spawn(['git', 'clean', '-fd'], {
@@ -667,9 +726,39 @@ app.post('/clean', async (c) => {
       stdout: 'pipe',
       stderr: 'pipe',
     });
-    await cleanProc.exited;
+    const cleanExit = await cleanProc.exited;
+    if (cleanExit !== 0) {
+      const cleanErr = await new Response(cleanProc.stderr).text();
+      console.warn('[git/clean] git clean -fd failed:', cleanErr.trim());
+    }
 
-    return c.json({ ok: true, data: { cleaned: true } });
+    // Log status AFTER clean
+    const afterStatusProc = Bun.spawn(['git', 'status', '--porcelain'], {
+      cwd: pathCheck.resolved,
+      stdout: 'pipe',
+      stderr: 'pipe',
+    });
+    const afterStatus = await new Response(afterStatusProc.stdout).text();
+    await afterStatusProc.exited;
+    console.log('[git/clean] Status AFTER clean:', afterStatus);
+
+    const stillDirty = afterStatus.trim().length > 0;
+    if (stillDirty) {
+      console.warn(
+        '[git/clean] WARNING: Working tree still has changes after clean:',
+        afterStatus.trim(),
+      );
+    }
+
+    return c.json({
+      ok: true,
+      data: {
+        cleaned: true,
+        beforeFileCount: beforeStatus.trim() ? beforeStatus.trim().split('\n').length : 0,
+        afterFileCount: afterStatus.trim() ? afterStatus.trim().split('\n').length : 0,
+        fullyClean: !stillDirty,
+      },
+    });
   } catch (err) {
     return c.json({ ok: false, error: String(err) }, 500);
   }
@@ -884,6 +973,278 @@ app.post('/push/stream', async (c) => {
       });
     }
   });
+});
+
+// ---------------------------------------------------------------------------
+// Git diagnostics — helps debug staging and commit flow issues
+// ---------------------------------------------------------------------------
+
+interface DiagnosticCheck {
+  name: string;
+  status: 'ok' | 'warn' | 'error';
+  message: string;
+  detail?: string;
+}
+
+app.get('/diagnose', async (c) => {
+  const rootPath = c.req.query('path') || process.cwd();
+
+  const pathCheck = validateWorkspacePath(rootPath);
+  if (!pathCheck.valid) {
+    return c.json({ ok: false, error: pathCheck.reason }, 403);
+  }
+
+  const checks: DiagnosticCheck[] = [];
+
+  try {
+    // 1. Check if it's a git repo
+    const repoProc = Bun.spawn(['git', 'rev-parse', '--is-inside-work-tree'], {
+      cwd: pathCheck.resolved,
+      stdout: 'pipe',
+      stderr: 'pipe',
+    });
+    const isRepo = (await new Response(repoProc.stdout).text()).trim() === 'true';
+    await repoProc.exited;
+
+    if (!isRepo) {
+      checks.push({
+        name: 'git-repo',
+        status: 'error',
+        message: 'Not a git repository',
+        detail: `Path "${pathCheck.resolved}" is not inside a git work tree.`,
+      });
+      return c.json({ ok: true, data: { checks } });
+    }
+    checks.push({ name: 'git-repo', status: 'ok', message: 'Valid git repository' });
+
+    // 2. Check for index.lock (indicates interrupted git operation)
+    const lockProc = Bun.spawn(['git', 'rev-parse', '--git-dir'], {
+      cwd: pathCheck.resolved,
+      stdout: 'pipe',
+      stderr: 'pipe',
+    });
+    const gitDir = (await new Response(lockProc.stdout).text()).trim();
+    await lockProc.exited;
+
+    const lockPath = `${pathCheck.resolved}/${gitDir}/index.lock`;
+    const lockExists = await Bun.file(lockPath).exists();
+    if (lockExists) {
+      checks.push({
+        name: 'index-lock',
+        status: 'error',
+        message: 'Git index.lock file exists — a previous git operation may have been interrupted',
+        detail: `Lock file at: ${lockPath}. Remove it manually if no git process is running.`,
+      });
+    } else {
+      checks.push({ name: 'index-lock', status: 'ok', message: 'No stale lock files' });
+    }
+
+    // 3. Check HEAD validity
+    const headProc = Bun.spawn(['git', 'rev-parse', 'HEAD'], {
+      cwd: pathCheck.resolved,
+      stdout: 'pipe',
+      stderr: 'pipe',
+    });
+    const headSha = (await new Response(headProc.stdout).text()).trim();
+    const headExit = await headProc.exited;
+    if (headExit !== 0) {
+      checks.push({
+        name: 'head-ref',
+        status: 'warn',
+        message: 'HEAD is invalid (no commits yet?)',
+        detail: 'This is expected for a brand-new repo with no commits.',
+      });
+    } else {
+      checks.push({
+        name: 'head-ref',
+        status: 'ok',
+        message: `HEAD is valid: ${headSha.slice(0, 8)}`,
+      });
+    }
+
+    // 4. Working tree status summary
+    const statusProc = Bun.spawn(['git', 'status', '--porcelain'], {
+      cwd: pathCheck.resolved,
+      stdout: 'pipe',
+      stderr: 'pipe',
+    });
+    const statusOutput = (await new Response(statusProc.stdout).text()).trim();
+    await statusProc.exited;
+
+    if (statusOutput.length === 0) {
+      checks.push({
+        name: 'working-tree',
+        status: 'ok',
+        message: 'Working tree is clean',
+      });
+    } else {
+      const lines = statusOutput.split('\n');
+      const staged = lines.filter((l) => l[0] !== ' ' && l[0] !== '?').length;
+      const unstaged = lines.filter((l) => l[1] === 'M' || l[1] === 'D').length;
+      const untracked = lines.filter((l) => l.startsWith('??')).length;
+      checks.push({
+        name: 'working-tree',
+        status: 'warn',
+        message: `Working tree has changes: ${staged} staged, ${unstaged} unstaged, ${untracked} untracked (${lines.length} total)`,
+        detail: statusOutput,
+      });
+    }
+
+    // 5. Check for staged vs unstaged discrepancy (common source of confusion)
+    const stagedDiffProc = Bun.spawn(['git', 'diff', '--cached', '--stat'], {
+      cwd: pathCheck.resolved,
+      stdout: 'pipe',
+      stderr: 'pipe',
+    });
+    const stagedDiff = (await new Response(stagedDiffProc.stdout).text()).trim();
+    await stagedDiffProc.exited;
+
+    const unstagedDiffProc = Bun.spawn(['git', 'diff', '--stat'], {
+      cwd: pathCheck.resolved,
+      stdout: 'pipe',
+      stderr: 'pipe',
+    });
+    const unstagedDiff = (await new Response(unstagedDiffProc.stdout).text()).trim();
+    await unstagedDiffProc.exited;
+
+    if (stagedDiff && unstagedDiff) {
+      checks.push({
+        name: 'staging-mismatch',
+        status: 'warn',
+        message: 'Both staged AND unstaged changes exist — commit may not include all changes',
+        detail: `Staged:\n${stagedDiff}\n\nUnstaged:\n${unstagedDiff}`,
+      });
+    } else if (stagedDiff) {
+      checks.push({
+        name: 'staging-mismatch',
+        status: 'ok',
+        message: 'Only staged changes present — commit will include all intended changes',
+      });
+    } else if (unstagedDiff) {
+      checks.push({
+        name: 'staging-mismatch',
+        status: 'ok',
+        message: 'Only unstaged changes present — will need `git add` before commit',
+      });
+    } else {
+      checks.push({
+        name: 'staging-mismatch',
+        status: 'ok',
+        message: 'No staged/unstaged diff discrepancy',
+      });
+    }
+
+    // 6. Check for merge conflicts
+    const conflictProc = Bun.spawn(['git', 'diff', '--name-only', '--diff-filter=U'], {
+      cwd: pathCheck.resolved,
+      stdout: 'pipe',
+      stderr: 'pipe',
+    });
+    const conflictFiles = (await new Response(conflictProc.stdout).text()).trim();
+    await conflictProc.exited;
+
+    if (conflictFiles.length > 0) {
+      checks.push({
+        name: 'merge-conflicts',
+        status: 'error',
+        message: `Merge conflicts detected in ${conflictFiles.split('\n').length} file(s)`,
+        detail: conflictFiles,
+      });
+    } else {
+      checks.push({
+        name: 'merge-conflicts',
+        status: 'ok',
+        message: 'No merge conflicts',
+      });
+    }
+
+    // 7. Check if there's a rebase or merge in progress
+    const gitDirAbs = gitDir.startsWith('/') ? gitDir : `${pathCheck.resolved}/${gitDir}`;
+    const rebaseMerge = await Bun.file(`${gitDirAbs}/rebase-merge`).exists();
+    const rebaseApply = await Bun.file(`${gitDirAbs}/rebase-apply`).exists();
+    const mergeHead = await Bun.file(`${gitDirAbs}/MERGE_HEAD`).exists();
+
+    if (rebaseMerge || rebaseApply) {
+      checks.push({
+        name: 'in-progress-op',
+        status: 'error',
+        message: 'A rebase is in progress — complete or abort it before committing',
+      });
+    } else if (mergeHead) {
+      checks.push({
+        name: 'in-progress-op',
+        status: 'warn',
+        message: 'A merge is in progress — resolve conflicts and commit the merge',
+      });
+    } else {
+      checks.push({
+        name: 'in-progress-op',
+        status: 'ok',
+        message: 'No rebase or merge in progress',
+      });
+    }
+
+    // 8. Check current branch
+    const branchProc = Bun.spawn(['git', 'rev-parse', '--abbrev-ref', 'HEAD'], {
+      cwd: pathCheck.resolved,
+      stdout: 'pipe',
+      stderr: 'pipe',
+    });
+    const currentBranch = (await new Response(branchProc.stdout).text()).trim();
+    await branchProc.exited;
+
+    if (currentBranch === 'HEAD') {
+      checks.push({
+        name: 'branch',
+        status: 'warn',
+        message: "Detached HEAD state — commits won't be on any branch",
+        detail: 'You are in detached HEAD state. Create a branch to save your work.',
+      });
+    } else {
+      checks.push({
+        name: 'branch',
+        status: 'ok',
+        message: `On branch: ${currentBranch}`,
+      });
+    }
+
+    // 9. Check for very large untracked files that could slow down staging
+    const untrackedProc = Bun.spawn(['git', 'ls-files', '--others', '--exclude-standard'], {
+      cwd: pathCheck.resolved,
+      stdout: 'pipe',
+      stderr: 'pipe',
+    });
+    const untrackedFiles = (await new Response(untrackedProc.stdout).text()).trim();
+    await untrackedProc.exited;
+
+    if (untrackedFiles) {
+      const fileList = untrackedFiles.split('\n');
+      if (fileList.length > 100) {
+        checks.push({
+          name: 'untracked-count',
+          status: 'warn',
+          message: `${fileList.length} untracked files — consider adding them to .gitignore to speed up staging`,
+          detail: `First 10:\n${fileList.slice(0, 10).join('\n')}${fileList.length > 10 ? '\n...' : ''}`,
+        });
+      } else {
+        checks.push({
+          name: 'untracked-count',
+          status: 'ok',
+          message: `${fileList.length} untracked file(s)`,
+        });
+      }
+    } else {
+      checks.push({
+        name: 'untracked-count',
+        status: 'ok',
+        message: 'No untracked files',
+      });
+    }
+
+    return c.json({ ok: true, data: { checks } });
+  } catch (err) {
+    return c.json({ ok: false, error: String(err) }, 500);
+  }
 });
 
 export { app as gitRoutes };

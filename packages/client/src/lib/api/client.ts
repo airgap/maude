@@ -737,9 +737,12 @@ export const api = {
       path: string,
       message: string,
       onProgress: (event: {
-        type: 'status' | 'output' | 'error' | 'complete';
+        type: 'status' | 'output' | 'error' | 'complete' | 'diagnostic';
         message?: string;
         sha?: string;
+        phase?: 'before-staging' | 'after-staging' | 'after-commit';
+        porcelain?: string;
+        fileCount?: number;
       }) => void,
     ): Promise<{ ok: boolean; sha?: string; error?: string }> => {
       const headers: Record<string, string> = {
@@ -799,10 +802,30 @@ export const api = {
       }
     },
     clean: (path: string) =>
-      request<{ ok: boolean; data: { cleaned: boolean } }>('/git/clean', {
+      request<{
+        ok: boolean;
+        data: {
+          cleaned: boolean;
+          beforeFileCount: number;
+          afterFileCount: number;
+          fullyClean: boolean;
+        };
+      }>('/git/clean', {
         method: 'POST',
         body: JSON.stringify({ path }),
       }),
+    diagnose: (path: string) =>
+      request<{
+        ok: boolean;
+        data: {
+          checks: Array<{
+            name: string;
+            status: 'ok' | 'warn' | 'error';
+            message: string;
+            detail?: string;
+          }>;
+        };
+      }>(`/git/diagnose?path=${encodeURIComponent(path)}`),
     push: (path: string, remote?: string, branch?: string) =>
       request<{ ok: boolean; data: { pushed: boolean; setUpstream: boolean } }>('/git/push', {
         method: 'POST',

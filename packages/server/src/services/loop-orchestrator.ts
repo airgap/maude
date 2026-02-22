@@ -1938,6 +1938,7 @@ ${criteria}
    *   3. git clean -fd  — remove untracked files and directories
    */
   private async revertUncommittedChanges(): Promise<void> {
+    const tag = `[loop:${this.loopId}]`;
     try {
       const checkProc = Bun.spawn(['git', 'rev-parse', '--is-inside-work-tree'], {
         cwd: this.workspacePath,
@@ -1947,34 +1948,82 @@ ${criteria}
       const isRepo = (await new Response(checkProc.stdout).text()).trim() === 'true';
       if (!isRepo) return;
 
-      // Unstage everything — handles new files left in the index after
+      // Log status BEFORE reverting — helpful for diagnosing what the failed story changed
+      const beforeStatusProc = Bun.spawn(['git', 'status', '--porcelain'], {
+        cwd: this.workspacePath,
+        stdout: 'pipe',
+        stderr: 'pipe',
+      });
+      const beforeStatus = await new Response(beforeStatusProc.stdout).text();
+      await beforeStatusProc.exited;
+      const beforeLines = beforeStatus.trim() ? beforeStatus.trim().split('\n') : [];
+      console.log(
+        `${tag} [revert] Status BEFORE revert (${beforeLines.length} file(s)):`,
+        beforeStatus,
+      );
+
+      // Step 1: Unstage everything — handles new files left in the index after
       // a failed `git commit` (git checkout alone won't touch staged new files)
       const resetProc = Bun.spawn(['git', 'reset', 'HEAD'], {
         cwd: this.workspacePath,
         stdout: 'pipe',
         stderr: 'pipe',
       });
-      await resetProc.exited;
+      const resetExit = await resetProc.exited;
+      if (resetExit !== 0) {
+        const resetErr = await new Response(resetProc.stderr).text();
+        console.warn(`${tag} [revert] git reset HEAD failed (exit ${resetExit}):`, resetErr.trim());
+      }
 
-      // Revert tracked file modifications
+      // Step 2: Revert tracked file modifications
       const checkoutProc = Bun.spawn(['git', 'checkout', '.'], {
         cwd: this.workspacePath,
         stdout: 'pipe',
         stderr: 'pipe',
       });
-      await checkoutProc.exited;
+      const checkoutExit = await checkoutProc.exited;
+      if (checkoutExit !== 0) {
+        const checkoutErr = await new Response(checkoutProc.stderr).text();
+        console.warn(
+          `${tag} [revert] git checkout . failed (exit ${checkoutExit}):`,
+          checkoutErr.trim(),
+        );
+      }
 
-      // Remove untracked files and directories added by the failed story
+      // Step 3: Remove untracked files and directories added by the failed story
       const cleanProc = Bun.spawn(['git', 'clean', '-fd'], {
         cwd: this.workspacePath,
         stdout: 'pipe',
         stderr: 'pipe',
       });
-      await cleanProc.exited;
+      const cleanExit = await cleanProc.exited;
+      if (cleanExit !== 0) {
+        const cleanErr = await new Response(cleanProc.stderr).text();
+        console.warn(`${tag} [revert] git clean -fd failed (exit ${cleanExit}):`, cleanErr.trim());
+      }
 
-      console.log(`[loop:${this.loopId}] Reverted uncommitted changes`);
+      // Log status AFTER reverting — should be clean
+      const afterStatusProc = Bun.spawn(['git', 'status', '--porcelain'], {
+        cwd: this.workspacePath,
+        stdout: 'pipe',
+        stderr: 'pipe',
+      });
+      const afterStatus = await new Response(afterStatusProc.stdout).text();
+      await afterStatusProc.exited;
+      const afterLines = afterStatus.trim() ? afterStatus.trim().split('\n') : [];
+
+      if (afterLines.length > 0) {
+        console.warn(
+          `${tag} [revert] WARNING: Working tree still has ${afterLines.length} change(s) after revert:`,
+          afterStatus,
+        );
+      } else {
+        console.log(
+          `${tag} [revert] Reverted ${beforeLines.length} change(s) — working tree is clean`,
+        );
+      }
     } catch (err) {
-      console.error(`[loop:${this.loopId}] Failed to revert uncommitted changes:`, err);
+      console.error(`${tag} [revert] Failed to revert uncommitted changes:`, err);
     }
   }
 
