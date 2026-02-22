@@ -25,13 +25,70 @@
   }
 
   // ── Git gutter popover state ──
+  const GIT_STATE_KEY = 'e-git-popup-state';
+
+  // Load persisted state from localStorage
+  function loadGitState() {
+    try {
+      const saved = localStorage.getItem(GIT_STATE_KEY);
+      if (saved) {
+        const state = JSON.parse(saved);
+        return {
+          commitMessage: state.commitMessage || '',
+          commitProgress: state.commitProgress || [],
+          // Don't persist errors across page reloads - they're stale if page reloaded
+          gitError: '',
+          lastMode: state.lastMode || 'actions',
+        };
+      }
+    } catch {
+      // Ignore parse errors
+    }
+    return {
+      commitMessage: '',
+      commitProgress: [],
+      gitError: '',
+      lastMode: 'actions' as const,
+    };
+  }
+
+  // Save state to localStorage
+  function saveGitState() {
+    try {
+      localStorage.setItem(
+        GIT_STATE_KEY,
+        JSON.stringify({
+          commitMessage,
+          commitProgress,
+          // Don't persist errors - they're session-specific
+          lastMode: gitMenuMode,
+        }),
+      );
+    } catch {
+      // Ignore storage errors
+    }
+  }
+
+  const savedState = loadGitState();
   let gitMenuOpen = $state(false);
-  let gitMenuMode = $state<'actions' | 'commit' | 'confirm-clean' | 'confirm-push'>('actions');
-  let commitMessage = $state('');
+  let gitMenuMode = $state<'actions' | 'commit' | 'confirm-clean' | 'confirm-push'>(
+    savedState.lastMode,
+  );
+  let commitMessage = $state(savedState.commitMessage);
   let gitBusy = $state(false);
-  let gitError = $state('');
+  let gitError = $state(savedState.gitError);
   let generating = $state(false);
-  let commitProgress = $state<string[]>([]);
+  let commitProgress = $state<string[]>(savedState.commitProgress);
+
+  // Auto-save state when it changes
+  $effect(() => {
+    // Track dependencies
+    commitMessage;
+    commitProgress;
+    gitMenuMode;
+    // Save on next tick to batch updates
+    queueMicrotask(saveGitState);
+  });
 
   async function handleGenerateMessage() {
     if (generating || gitBusy) return;
@@ -53,16 +110,22 @@
   function toggleGitMenu(e: MouseEvent) {
     e.stopPropagation();
     gitMenuOpen = !gitMenuOpen;
-    if (gitMenuOpen) {
-      gitMenuMode = 'actions';
-      commitMessage = '';
-      gitError = '';
-      commitProgress = [];
+    // Don't clear state - it persists now
+    // If we're opening and have progress/error, stay in commit mode
+    if (gitMenuOpen && (commitProgress.length > 0 || gitError)) {
+      gitMenuMode = 'commit';
     }
   }
 
   function closeGitMenu() {
     gitMenuOpen = false;
+  }
+
+  function clearCommitState() {
+    commitMessage = '';
+    commitProgress = [];
+    gitError = '';
+    gitMenuMode = 'actions';
   }
 
   async function handleCommit() {
@@ -92,11 +155,17 @@
       console.log('[StatusBar] Commit succeeded, SHA:', result.sha);
       // Refresh git status
       await gitStore.refresh(settingsStore.workspacePath);
-      gitMenuOpen = false;
-      commitProgress = [];
+      // Auto-close only on success, keep output visible briefly
+      setTimeout(() => {
+        if (!gitError) {
+          gitMenuOpen = false;
+          clearCommitState();
+        }
+      }, 1000);
     } else {
       console.log('[StatusBar] Commit failed:', result.error);
       gitError = result.error || 'Commit failed';
+      // Keep menu open on error so user can see what happened
     }
   }
 
@@ -196,6 +265,9 @@
           {gitStore.branch}
           {#if gitStore.isDirty}
             <span class="git-dirty-badge">{gitStore.dirtyCount}</span>
+          {/if}
+          {#if commitProgress.length > 0 || gitError}
+            <span class="git-output-badge" title="Commit output available">●</span>
           {/if}
         </button>
 
@@ -405,7 +477,18 @@
                 </div>
                 {#if commitProgress.length > 0}
                   <div class="git-progress">
-                    {#each commitProgress.slice(-5) as line}
+                    <div class="git-progress-header">
+                      <span class="git-progress-title">Commit Output</span>
+                      <button
+                        type="button"
+                        class="git-clear-btn"
+                        onclick={clearCommitState}
+                        title="Clear output"
+                      >
+                        ✕
+                      </button>
+                    </div>
+                    {#each commitProgress.slice(-10) as line}
                       <div class="git-progress-line">{line}</div>
                     {/each}
                   </div>
@@ -1112,6 +1195,13 @@
     padding: 0 4px;
   }
 
+  .git-output-badge {
+    font-size: var(--fs-xxs);
+    color: var(--accent-primary);
+    margin-left: 4px;
+    animation: pulse 2s infinite;
+  }
+
   /* ── Git popover (opens upward from statusbar) ── */
   .git-popover {
     position: absolute;
@@ -1317,14 +1407,44 @@
   }
 
   .git-progress {
-    max-height: 120px;
+    max-height: 150px;
     overflow-y: auto;
     background: var(--bg-primary);
     border: 1px solid var(--border-primary);
     border-radius: var(--radius-sm);
-    padding: 4px 6px;
-    margin-top: 4px;
+    margin-top: 6px;
     font-family: var(--font-family);
+  }
+  .git-progress-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 4px 6px;
+    border-bottom: 1px solid var(--border-primary);
+    position: sticky;
+    top: 0;
+    background: var(--bg-primary);
+    z-index: 1;
+  }
+  .git-progress-title {
+    font-size: var(--fs-xxs);
+    font-weight: 600;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  .git-clear-btn {
+    font-size: var(--fs-xs);
+    color: var(--text-tertiary);
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 0 4px;
+    line-height: 1;
+    transition: color var(--transition);
+  }
+  .git-clear-btn:hover {
+    color: var(--accent-error);
   }
   .git-progress-line {
     font-size: var(--fs-xxs);
@@ -1334,6 +1454,7 @@
     word-break: break-word;
     text-transform: none;
     letter-spacing: normal;
+    padding: 2px 6px;
   }
 
   .git-error {
