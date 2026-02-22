@@ -28,7 +28,8 @@ export type StreamEvent =
   | StreamArtifactCreated
   | StreamAgentNoteCreated
   | StreamCommentary
-  | StreamCrossSessionMessage;
+  | StreamCrossSessionMessage
+  | StreamApiRetry;
 
 export interface StreamMessageStart {
   type: 'message_start';
@@ -234,4 +235,13 @@ export interface StreamCommentary {
 export interface StreamCrossSessionMessage {
   type: 'cross_session_message';
   message: CrossSessionMessage;
+}
+
+/**
+ * Emitted when the server detects an API hang and automatically retries
+ * by spawning a new CLI process with --resume.
+ */
+export interface StreamApiRetry {
+  type: 'api_retry';
+  attempt: number;
 }

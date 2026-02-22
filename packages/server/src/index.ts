@@ -49,6 +49,7 @@ import { websocket } from './ws';
 import { initDatabase } from './db/database';
 import { taskScheduler } from './services/task-scheduler';
 import { crossSessionService } from './services/cross-session';
+import { claudeManager } from './services/claude-process';
 import { existsSync } from 'fs';
 import { resolve } from 'path';
 
@@ -150,6 +151,10 @@ app.route('/api/webhooks/inbound', webhookInboundApp);
 
 // Initialize database
 initDatabase();
+
+// Clear stale CLI session IDs from any previous server instance —
+// all in-memory CLI processes are gone after a restart.
+claudeManager.clearStaleSessionIds();
 
 // Ensure cross-session messaging table exists
 crossSessionService.ensureTable();

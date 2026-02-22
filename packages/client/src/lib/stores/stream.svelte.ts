@@ -406,6 +406,15 @@ function createStreamStore() {
         case 'error':
           status = 'error';
           error = event.error.message;
+          // Clear session ID on recoverable server errors so the next send
+          // creates a fresh session instead of reusing the failed one.
+          if (
+            event.error.type === 'timeout' ||
+            event.error.type === 'activity_timeout' ||
+            event.error.type === 'cli_error'
+          ) {
+            sessionId = null;
+          }
           break;
 
         case 'verification_result': {
@@ -455,6 +464,11 @@ function createStreamStore() {
         case 'cross_session_message':
           // Cross-session messages are handled by the cross-session store
           // via its own SSE connection. This case is here for completeness.
+          break;
+
+        case 'api_retry':
+          // Server is retrying after an API hang — keep streaming status
+          status = 'streaming';
           break;
       }
     },

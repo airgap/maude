@@ -597,12 +597,41 @@ class ClaudeProcessManager {
 
     session.cliProcess = cliProc;
 
-    return this.createSSEStream(session);
+    // Build a respawn function for API timeout auto-retry.
+    // Uses --resume with a continuation prompt so the CLI picks up from its last saved state.
+    const cwd = session.workspacePath || process.cwd();
+    const respawnForRetry = (): CliProcess => {
+      const { binary: retryBin, args: retryArgs } = buildCliCommand(provider, {
+        content: 'Continue where you left off.',
+        resumeSessionId: session.cliSessionId,
+        model: session.model,
+        systemPrompt,
+        effort: session.effort,
+        maxBudgetUsd: session.maxBudgetUsd,
+        maxTurns: session.maxTurns,
+        allowedTools: session.allowedTools,
+        disallowedTools: session.disallowedTools,
+        mcpConfigPath: mcpConfigPath || undefined,
+      });
+      console.log(
+        `[${provider}] Retry spawning: ${retryBin} ${retryArgs.join(' ').slice(0, 200)}...`,
+      );
+      if (hasScript) {
+        return spawnWithScript(retryBin, retryArgs, cwd, spawnEnv);
+      } else {
+        return spawnWithPipe(retryBin, retryArgs, cwd, spawnEnv);
+      }
+    };
+
+    return this.createSSEStream(session, respawnForRetry);
   }
 
-  private createSSEStream(session: ClaudeSession): ReadableStream {
+  private createSSEStream(
+    session: ClaudeSession,
+    respawnForRetry?: () => CliProcess,
+  ): ReadableStream {
     const encoder = new TextEncoder();
-    const proc = session.cliProcess!;
+    let proc = session.cliProcess!;
     let cancelled = false;
 
     // Reset event buffer for this stream
@@ -624,26 +653,39 @@ class ClaudeProcessManager {
     // In PTY mode, stderr is merged with stdout (no separate stream).
     const stderrChunks: string[] = [];
     let stderrStreamReader: ReadableStreamDefaultReader<Uint8Array> | null = null;
-    if (proc.stderr) {
-      const stderrDecoder = new TextDecoder();
-      stderrStreamReader = proc.stderr.getReader();
-      const readStderr = async () => {
+
+    /** Set up stderr reading for the current CLI process (reusable across retries). */
+    const setupStderrReader = (p: CliProcess) => {
+      stderrChunks.length = 0;
+      if (stderrStreamReader) {
         try {
-          while (true) {
-            const { done, value } = await stderrStreamReader!.read();
-            if (done) break;
-            const text = stderrDecoder.decode(value, { stream: true });
-            stderrChunks.push(text);
-            for (const line of text.split('\n')) {
-              if (line.trim()) console.error(`[claude:${session.id}:stderr] ${line}`);
-            }
-          }
+          stderrStreamReader.cancel();
         } catch {
-          /* process ended */
+          /* ignore */
         }
-      };
-      readStderr();
-    }
+        stderrStreamReader = null;
+      }
+      if (p.stderr) {
+        const stderrDecoder = new TextDecoder();
+        stderrStreamReader = p.stderr.getReader();
+        (async () => {
+          try {
+            while (true) {
+              const { done, value } = await stderrStreamReader!.read();
+              if (done) break;
+              const text = stderrDecoder.decode(value, { stream: true });
+              stderrChunks.push(text);
+              for (const line of text.split('\n')) {
+                if (line.trim()) console.error(`[claude:${session.id}:stderr] ${line}`);
+              }
+            }
+          } catch {
+            /* process ended */
+          }
+        })();
+      }
+    };
+    setupStderrReader(proc);
 
     // Hoist assistant content accumulator so the cancel handler can persist
     // any partial response that was already received before cancellation.
@@ -704,6 +746,22 @@ class ClaudeProcessManager {
 
     const scheduleCleanup = () => this.scheduleCleanup(session.id);
 
+    /** Clear stale CLI session ID from DB so the next message starts a fresh CLI session. */
+    const clearStaleCliSessionId = () => {
+      try {
+        const db = getDb();
+        db.query('UPDATE conversations SET cli_session_id = NULL WHERE id = ?').run(
+          session.conversationId,
+        );
+        session.cliSessionId = undefined;
+        console.log(
+          `[claude:${session.id}] Cleared stale CLI session ID for conversation ${session.conversationId}`,
+        );
+      } catch (e) {
+        console.error('[claude] Failed to clear stale session ID:', e);
+      }
+    };
+
     return new ReadableStream({
       start(controller) {
         // Ping to keep connection alive
@@ -724,12 +782,14 @@ class ClaudeProcessManager {
             console.error(
               `[claude:${session.id}] Content timeout — no content received within 120s`,
             );
+            clearActivityTimeout();
+            clearStaleCliSessionId();
             const errEvt = JSON.stringify({
               type: 'error',
               error: {
                 type: 'timeout',
                 message:
-                  'No response received from CLI within 120 seconds. The model may be overloaded or the CLI may have failed to start.',
+                  'No response received from CLI within 120 seconds. The model may be overloaded or the CLI may have failed to start. Please try sending your message again.',
               },
             });
             enqueueEvent(controller, `data: ${errEvt}\n\n`);
@@ -753,9 +813,78 @@ class ClaudeProcessManager {
           }
         };
 
+        // Phase-aware activity timeout: uses tighter limits when the CLI is
+        // waiting for an API response vs executing tool calls.
+        const API_WAIT_TIMEOUT_MS = 180_000; // 3 minutes — API calls shouldn't take longer
+        const TOOL_EXEC_TIMEOUT_MS = 300_000; // 5 minutes — MCP/tool calls can be slow
+        let activityTimeoutId: ReturnType<typeof setTimeout> | null = null;
+        let currentPhase: 'init' | 'tool_execution' | 'waiting_for_api' = 'init';
+        let apiRetryRequested = false;
+        let retryCount = 0;
+        const MAX_API_RETRIES = respawnForRetry ? 1 : 0;
+
+        const resetActivityTimeout = () => {
+          if (activityTimeoutId) clearTimeout(activityTimeoutId);
+          const timeoutMs =
+            currentPhase === 'waiting_for_api' ? API_WAIT_TIMEOUT_MS : TOOL_EXEC_TIMEOUT_MS;
+          activityTimeoutId = setTimeout(() => {
+            if (cancelled || session.streamComplete) return;
+
+            // In API-wait phase with retries available: trigger auto-retry
+            if (
+              currentPhase === 'waiting_for_api' &&
+              retryCount < MAX_API_RETRIES &&
+              session.cliSessionId
+            ) {
+              console.log(
+                `[claude:${session.id}] API call timeout (${timeoutMs / 1000}s) — requesting retry`,
+              );
+              apiRetryRequested = true;
+              // Kill the stuck process; the reading loop will detect exit and handle retry
+              proc.kill('SIGTERM');
+              return;
+            }
+
+            // General activity timeout — no retries left, show error
+            console.error(
+              `[claude:${session.id}] Activity timeout — no CLI output for ${timeoutMs / 1000}s (phase: ${currentPhase})`,
+            );
+            clearStaleCliSessionId();
+            if (assistantContent && assistantContent.length > 0) {
+              flushAssistantContent();
+            }
+            const errEvt = JSON.stringify({
+              type: 'error',
+              error: {
+                type: 'activity_timeout',
+                message:
+                  'No response from the assistant for 5 minutes. A tool call may be stuck. Please try sending your message again.',
+              },
+            });
+            enqueueEvent(controller, `data: ${errEvt}\n\n`);
+            enqueueEvent(controller, `data: {"type":"message_stop"}\n\n`);
+            session.streamComplete = true;
+            scheduleCleanup();
+            try {
+              controller.close();
+            } catch {
+              /* already closed */
+            }
+            session.status = 'idle';
+            proc.kill('SIGTERM');
+          }, timeoutMs);
+        };
+        const clearActivityTimeout = () => {
+          if (activityTimeoutId) {
+            clearTimeout(activityTimeoutId);
+            activityTimeoutId = null;
+          }
+        };
+
         session.emitter.once('cancel', () => {
           cancelled = true;
           clearContentTimeout();
+          clearActivityTimeout();
           clearInterval(pingInterval);
           proc.kill('SIGINT');
 
@@ -786,474 +915,572 @@ class ClaudeProcessManager {
         // response in real-time instead of buffering until the CLI exits.
         (async () => {
           try {
-            const decoder = new TextDecoder();
-            let buffer = '';
+            // Shared state across retry attempts
             let sentStop = false;
             let sentMessageStart = false;
-            let receivedAnyEvent = false;
-
-            // Read stdout (or combined pty output) using explicit reader.
-            // Race each read against process exit to avoid blocking forever.
-            console.log(`[claude:${session.id}] Starting to read from CLI output`);
-            const stdoutReader = proc.stdout.getReader();
-
-            // Sentinel that resolves when the process exits.
             let processExitCode: number | undefined;
-            const exitSentinel = proc.exited.then(async (code) => {
-              processExitCode = code;
-              console.log(`[claude:${session.id}] CLI process exited with code ${code}`);
-              await new Promise((r) => setTimeout(r, 1000));
-              return { done: true as const, value: undefined as Uint8Array | undefined };
-            });
 
-            while (true) {
-              const result = await Promise.race([stdoutReader.read(), exitSentinel]);
-              if (result.done || cancelled) {
-                // If the process exited and the reader is stalled, cancel it to clean up
-                if (processExitCode !== undefined) {
-                  try {
-                    stdoutReader.cancel();
-                  } catch {
-                    /* ignore */
-                  }
-                }
-                break;
-              }
-              const value = result.value;
-              if (!value) continue;
-              buffer += decoder.decode(value, { stream: true });
-              const lines = buffer.split('\n');
-              buffer = lines.pop() || '';
+            // eslint-disable-next-line no-labels
+            processAttempt: while (true) {
+              // Per-attempt state (reset on retry)
+              const decoder = new TextDecoder();
+              let buffer = '';
+              let receivedAnyEvent = false;
+              apiRetryRequested = false;
+              currentPhase = 'init';
+              processExitCode = undefined;
 
-              for (let line of lines) {
-                // Strip \r from PTY/script output (\r\n line endings)
-                line = line.replace(/\r/g, '');
-                if (!line.trim()) continue;
-                let cliEvent: any;
-                try {
-                  cliEvent = JSON.parse(line);
-                } catch {
-                  // Non-JSON line from CLI — log it so it's visible for debugging
-                  console.warn(`[claude:${session.id}] Non-JSON stdout: ${line.slice(0, 200)}`);
-                  continue;
-                }
+              // Set up stderr for this process attempt
+              setupStderrReader(proc);
 
-                try {
-                  // Log event receipt for debugging streaming delays
-                  if (cliEvent.type !== 'system') {
-                    console.log(`[claude:${session.id}] Received ${cliEvent.type} event`);
-                  }
+              // Read stdout (or combined pty output) using explicit reader.
+              // Race each read against process exit to avoid blocking forever.
+              console.log(
+                `[claude:${session.id}] Starting to read from CLI output (attempt ${retryCount + 1})`,
+              );
+              const stdoutReader = proc.stdout.getReader();
 
-                  // Capture CLI session ID for future resume and persist to DB
-                  if (cliEvent.type === 'system' && cliEvent.session_id) {
-                    session.cliSessionId = cliEvent.session_id;
+              // Sentinel that resolves when the process exits.
+              const exitSentinel = proc.exited.then(async (code) => {
+                processExitCode = code;
+                console.log(`[claude:${session.id}] CLI process exited with code ${code}`);
+                await new Promise((r) => setTimeout(r, 1000));
+                return { done: true as const, value: undefined as Uint8Array | undefined };
+              });
+
+              while (true) {
+                const result = await Promise.race([stdoutReader.read(), exitSentinel]);
+                if (result.done || cancelled) {
+                  // If the process exited and the reader is stalled, cancel it to clean up
+                  if (processExitCode !== undefined) {
                     try {
-                      const db = getDb();
-                      db.query('UPDATE conversations SET cli_session_id = ? WHERE id = ?').run(
-                        cliEvent.session_id,
-                        session.conversationId,
-                      );
-                    } catch (e) {
-                      console.error('[claude] Failed to persist session ID:', e);
+                      stdoutReader.cancel();
+                    } catch {
+                      /* ignore */
+                    }
+                  }
+                  break;
+                }
+                const value = result.value;
+                if (!value) continue;
+                buffer += decoder.decode(value, { stream: true });
+                const lines = buffer.split('\n');
+                buffer = lines.pop() || '';
+
+                for (let line of lines) {
+                  // Strip \r from PTY/script output (\r\n line endings)
+                  line = line.replace(/\r/g, '');
+                  if (!line.trim()) continue;
+                  let cliEvent: any;
+                  try {
+                    cliEvent = JSON.parse(line);
+                  } catch {
+                    // Non-JSON line from CLI — log it so it's visible for debugging
+                    console.warn(`[claude:${session.id}] Non-JSON stdout: ${line.slice(0, 200)}`);
+                    continue;
+                  }
+
+                  try {
+                    // Log event receipt for debugging streaming delays
+                    if (cliEvent.type !== 'system') {
+                      console.log(`[claude:${session.id}] Received ${cliEvent.type} event`);
                     }
 
-                    // Send message_start immediately so UI shows streaming indicator
-                    // This ensures users see feedback even if response generation is slow
-                    if (!sentMessageStart) {
-                      sentMessageStart = true;
-                      const messageStartEvent = JSON.stringify({
-                        type: 'message_start',
-                        message: {
-                          id: nanoid(),
-                          role: 'assistant',
-                          model: session.model || 'unknown',
+                    // Capture CLI session ID for future resume and persist to DB
+                    if (cliEvent.type === 'system' && cliEvent.session_id) {
+                      session.cliSessionId = cliEvent.session_id;
+                      try {
+                        const db = getDb();
+                        db.query('UPDATE conversations SET cli_session_id = ? WHERE id = ?').run(
+                          cliEvent.session_id,
+                          session.conversationId,
+                        );
+                      } catch (e) {
+                        console.error('[claude] Failed to persist session ID:', e);
+                      }
+
+                      // Send message_start immediately so UI shows streaming indicator
+                      // This ensures users see feedback even if response generation is slow
+                      if (!sentMessageStart) {
+                        sentMessageStart = true;
+                        const messageStartEvent = JSON.stringify({
+                          type: 'message_start',
+                          message: {
+                            id: nanoid(),
+                            role: 'assistant',
+                            model: session.model || 'unknown',
+                          },
+                        });
+                        console.log('[stream] Enqueuing message_start event');
+                        enqueueEvent(controller, `data: ${messageStartEvent}\n\n`);
+                      }
+                    }
+
+                    // Track whether we've received actual content (not just system init)
+                    if (cliEvent.type === 'assistant' || cliEvent.type === 'result') {
+                      receivedContentEvent = true;
+                      clearContentTimeout();
+                    }
+
+                    // Reset rolling activity timeout on any event once content has started.
+                    // This catches cases where the CLI hangs mid-stream (e.g. stuck MCP tool).
+                    if (receivedContentEvent) {
+                      resetActivityTimeout();
+                    }
+
+                    // Track phase transitions for API-wait timeout
+                    if (cliEvent.type === 'assistant') {
+                      currentPhase = 'tool_execution';
+                    } else if (cliEvent.type === 'user') {
+                      currentPhase = 'waiting_for_api';
+                    }
+
+                    // Accumulate all assistant content blocks across multi-turn tool execution
+                    if (cliEvent.type === 'assistant' && cliEvent.message?.content) {
+                      if (!assistantContent) assistantContent = [];
+                      assistantContent.push(...cliEvent.message.content);
+                      assistantModel = cliEvent.message.model || session.model || null;
+
+                      // Periodically flush partial content to DB so it survives browser reloads
+                      maybeFlush();
+
+                      // Track file-writing tool calls for verification + approval
+                      const fileWriteTools = [
+                        'write_file',
+                        'edit_file',
+                        'create_file',
+                        'str_replace_editor',
+                        'Write',
+                        'Edit',
+                      ];
+                      // Check permission mode and per-tool rules for approval
+                      let permMode: PermissionMode = 'safe';
+                      try {
+                        const pDb = getDb();
+                        const pRow = pDb
+                          .query("SELECT value FROM settings WHERE key = 'permissionMode'")
+                          .get() as any;
+                        if (pRow) permMode = JSON.parse(pRow.value) as PermissionMode;
+                      } catch {
+                        /* default to safe */
+                      }
+
+                      // Load per-tool permission rules and terminal policy
+                      const permRules = loadPermissionRules(
+                        session.conversationId,
+                        session.workspacePath,
+                      );
+                      const termPolicy = loadTerminalCommandPolicy();
+
+                      for (const block of cliEvent.message.content) {
+                        // Skip non-tool blocks (e.g. text blocks don't have .name)
+                        if (block.type !== 'tool_use') continue;
+
+                        // Evaluate per-tool permission rules
+                        const ruleDecision = shouldRequireApproval(
+                          block.name,
+                          (block.input || {}) as Record<string, unknown>,
+                          permRules,
+                          permMode,
+                          termPolicy,
+                        );
+                        if (ruleDecision === 'ask') {
+                          const parsed = parseMcpToolName(block.name);
+                          const filePath = extractFilePath(block.input || {});
+                          const effectiveName = parsed.renderAs || parsed.toolName;
+                          const desc =
+                            effectiveName === 'Bash' ||
+                            block.name === 'bash' ||
+                            block.name === 'execute_command'
+                              ? `Run: ${String(block.input?.command || '').slice(0, 100)}`
+                              : filePath
+                                ? `Write to ${filePath}`
+                                : `Execute ${parsed.displayName}`;
+                          const approvalEvent = JSON.stringify({
+                            type: 'tool_approval_request',
+                            toolCallId: block.id || nanoid(),
+                            toolName: block.name,
+                            input: block.input || {},
+                            description: desc,
+                          });
+                          enqueueEvent(controller, `data: ${approvalEvent}\n\n`);
+
+                          // Bridge approval request to commentators
+                          if (session.workspacePath) {
+                            eventBridge.emitRaw(session.workspacePath, approvalEvent);
+                          }
+                        }
+
+                        // Emit user_question_request for AskUserQuestion tool
+                        if (block.name === 'AskUserQuestion') {
+                          const questionEvent = JSON.stringify({
+                            type: 'user_question_request',
+                            toolCallId: block.id || nanoid(),
+                            questions: block.input?.questions || [],
+                          });
+                          enqueueEvent(controller, `data: ${questionEvent}\n\n`);
+                        }
+
+                        // Trigger file verification for file-writing tools (both built-in and MCP)
+                        const isFileWrite =
+                          fileWriteTools.includes(block.name) || isMcpFileWriteTool(block.name);
+                        if (isFileWrite) {
+                          const filePath = extractFilePath(block.input || {});
+                          if (filePath && typeof filePath === 'string') {
+                            // Run async verification after a short delay to let the file be written
+                            setTimeout(async () => {
+                              try {
+                                const result = await verifyFile(
+                                  filePath,
+                                  session.workspacePath || process.cwd(),
+                                );
+                                const verifyEvent = JSON.stringify({
+                                  type: 'verification_result',
+                                  filePath: result.filePath,
+                                  passed: result.passed,
+                                  issues: result.issues,
+                                  tool: result.tool,
+                                  duration: result.duration,
+                                });
+                                enqueueEvent(controller, `data: ${verifyEvent}\n\n`);
+
+                                // Bridge verification result to commentators
+                                if (session.workspacePath) {
+                                  eventBridge.emitRaw(session.workspacePath, verifyEvent);
+                                }
+                              } catch {
+                                /* verification failed silently */
+                              }
+                            }, 500);
+                          }
+                        }
+                      }
+                    }
+
+                    // Emit tool_result events for user-type events (tool results from CLI)
+                    if (cliEvent.type === 'user' && cliEvent.message?.content) {
+                      for (const block of cliEvent.message.content) {
+                        if (block.type === 'tool_result') {
+                          // Look up tool name + filePath from accumulated assistant content
+                          let toolName: string | undefined;
+                          let filePath: string | undefined;
+                          let editLineHint: number | undefined;
+                          if (assistantContent) {
+                            const toolBlock = assistantContent.find(
+                              (b: any) => b.type === 'tool_use' && b.id === block.tool_use_id,
+                            );
+                            if (toolBlock) {
+                              toolName = toolBlock.name;
+                              const toolInput = toolBlock.input || {};
+                              filePath = extractFilePath(toolInput) || undefined;
+                              // Derive approximate edit line for Follow Along scrolling
+                              if (filePath && toolName) {
+                                try {
+                                  const { readFileSync } = await import('fs');
+                                  const fileContent = readFileSync(filePath, 'utf-8');
+                                  editLineHint = extractEditLineHint(
+                                    toolName,
+                                    toolInput,
+                                    fileContent,
+                                  );
+                                } catch {
+                                  // File may have been deleted or unreadable — derive without content
+                                  editLineHint = extractEditLineHint(toolName, toolInput);
+                                }
+                              }
+                            }
+                          }
+                          const resultEvent = JSON.stringify({
+                            type: 'tool_result',
+                            toolCallId: block.tool_use_id || '',
+                            toolName,
+                            filePath,
+                            editLineHint,
+                            result:
+                              typeof block.content === 'string'
+                                ? block.content
+                                : JSON.stringify(block.content),
+                            isError: Boolean(block.is_error),
+                          });
+                          enqueueEvent(controller, `data: ${resultEvent}\n\n`);
+
+                          // Bridge tool_result to commentators
+                          if (session.workspacePath) {
+                            eventBridge.emitRaw(session.workspacePath, resultEvent);
+                          }
+                        }
+                      }
+                    }
+
+                    receivedAnyEvent = true;
+
+                    // Translate CLI events to API-style events and send to client.
+                    // Wrap in try/catch so a client disconnect doesn't abort the
+                    // loop — we still need to accumulate assistantContent for DB save.
+                    const apiEvents = translateCliEvent(cliEvent);
+                    for (const evt of apiEvents) {
+                      console.log('[stream] Enqueuing event:', evt.slice(0, 100));
+                      enqueueEvent(controller, `data: ${evt}\n\n`);
+                    }
+
+                    // Mirror translated events to active commentators via the event bridge.
+                    // This is fire-and-forget — never blocks the primary stream.
+                    if (session.workspacePath) {
+                      for (const evt of apiEvents) {
+                        eventBridge.emitRaw(session.workspacePath, evt);
+                      }
+                    }
+
+                    // Persist token usage on result + check context pressure for autocompaction
+                    if (cliEvent.type === 'result') {
+                      sentStop = true;
+                      const usage = cliEvent.usage;
+                      if (usage) {
+                        try {
+                          const totalTokens =
+                            (usage.input_tokens || 0) + (usage.output_tokens || 0);
+                          const db = getDb();
+                          db.query(
+                            'UPDATE conversations SET total_tokens = total_tokens + ? WHERE id = ?',
+                          ).run(totalTokens, session.conversationId);
+                        } catch (e) {
+                          console.error('[claude] Failed to persist token usage:', e);
+                        }
+
+                        // Check context pressure — warn at 85%, autocompact at the Claude Code threshold
+                        try {
+                          const inputTokens = usage.input_tokens || 0;
+                          const model = session.model || 'default';
+                          const contextLimit = getContextLimit(model);
+                          const autoCompactThreshold = getAutoCompactThreshold(model);
+                          // 85% of context window as the warning threshold
+                          const warningThreshold = Math.floor(contextLimit * 0.85);
+
+                          if (inputTokens >= warningThreshold) {
+                            // Read autoCompaction setting
+                            let autoCompactionEnabled = true;
+                            try {
+                              const db = getDb();
+                              const row = db
+                                .query("SELECT value FROM settings WHERE key = 'autoCompaction'")
+                                .get() as any;
+                              if (row) autoCompactionEnabled = JSON.parse(row.value);
+                            } catch {
+                              /* use default */
+                            }
+
+                            const shouldAutoCompact =
+                              inputTokens >= autoCompactThreshold && autoCompactionEnabled;
+
+                            if (shouldAutoCompact) {
+                              console.log(
+                                `[claude:${session.id}] Context at ${inputTokens}/${contextLimit} tokens (threshold ${autoCompactThreshold}) — applying autocompaction`,
+                              );
+
+                              // Run LLM compaction async so we can still emit the boundary event
+                              // We do it in a fire-and-forget to avoid blocking the result event.
+                              // The compaction must complete before the next user turn, which is fine
+                              // since the user has to type and send a new message.
+                              (async () => {
+                                try {
+                                  const db = getDb();
+                                  const opts = getRecommendedOptions(model);
+
+                                  // Load the full raw message history from DB
+                                  const rawRows = db
+                                    .query(
+                                      'SELECT role, content FROM messages WHERE conversation_id = ? ORDER BY timestamp ASC',
+                                    )
+                                    .all(session.conversationId) as any[];
+                                  const allMessages = rawRows.map((r: any) => {
+                                    let parsed: any[];
+                                    try {
+                                      parsed = JSON.parse(r.content);
+                                    } catch {
+                                      parsed = [];
+                                    }
+                                    // Normalize nudge blocks so they don't confuse downstream APIs
+                                    const content = Array.isArray(parsed)
+                                      ? parsed.map((block: any) =>
+                                          block.type === 'nudge'
+                                            ? { type: 'text', text: `[User nudge]: ${block.text}` }
+                                            : block,
+                                        )
+                                      : parsed;
+                                    return { role: r.role, content };
+                                  });
+
+                                  if (allMessages.length === 0) return;
+
+                                  // Determine split point: which messages to drop vs keep
+                                  // using the same smart strategy but without creating a summary
+                                  const history = loadConversationHistory(session.conversationId, {
+                                    ...opts,
+                                    createSummary: false,
+                                  });
+
+                                  if (!history.compacted) {
+                                    console.log(
+                                      `[claude:${session.id}] Compaction not needed after re-check`,
+                                    );
+                                    return;
+                                  }
+
+                                  // compactedCount is the number of messages kept.
+                                  // Everything before that split is dropped.
+                                  const splitIdx = allMessages.length - history.compactedCount;
+                                  const finalDropped = allMessages.slice(0, splitIdx);
+                                  const keptMessages = allMessages.slice(splitIdx);
+
+                                  // Generate LLM summary (falls back to rule-based on failure)
+                                  const { summaryText, summaryMessage, usedLLM } =
+                                    await summarizeWithLLM(finalDropped, keptMessages, model);
+
+                                  // Build final compacted message array: [summary, ...kept]
+                                  const compactedMessages = [summaryMessage, ...keptMessages];
+
+                                  // Write compacted history back to DB
+                                  db.query('DELETE FROM messages WHERE conversation_id = ?').run(
+                                    session.conversationId,
+                                  );
+                                  let ts = Date.now();
+                                  for (const msg of compactedMessages) {
+                                    db.query(
+                                      `INSERT INTO messages (id, conversation_id, role, content, timestamp)
+                                     VALUES (?, ?, ?, ?, ?)`,
+                                    ).run(
+                                      nanoid(),
+                                      session.conversationId,
+                                      msg.role,
+                                      JSON.stringify(msg.content),
+                                      ts++,
+                                    );
+                                  }
+
+                                  // Clear CLI session ID and store the summary text so the next
+                                  // turn can inject it into the fresh CLI session's first prompt.
+                                  session.cliSessionId = undefined;
+                                  db.query(
+                                    'UPDATE conversations SET cli_session_id = NULL, compact_summary = ? WHERE id = ?',
+                                  ).run(summaryText, session.conversationId);
+
+                                  console.log(
+                                    `[claude:${session.id}] Autocompaction complete: ${history.originalCount} → ${compactedMessages.length} messages (LLM=${usedLLM})`,
+                                  );
+                                } catch (compactErr) {
+                                  console.error('[claude] Autocompaction failed:', compactErr);
+                                }
+                              })();
+                            }
+
+                            // Emit context_warning for the warning banner
+                            const usagePct =
+                              contextLimit > 0
+                                ? Math.round((inputTokens / contextLimit) * 1000) / 10
+                                : 0;
+                            const contextWarningEvent = JSON.stringify({
+                              type: 'context_warning',
+                              inputTokens,
+                              contextLimit,
+                              usagePercent: usagePct,
+                              autocompacted: shouldAutoCompact,
+                            });
+                            enqueueEvent(controller, `data: ${contextWarningEvent}\n\n`);
+
+                            // Also emit compact_boundary if compacting (matches Claude Code's SSE protocol)
+                            if (shouldAutoCompact) {
+                              const compactBoundaryEvent = JSON.stringify({
+                                type: 'compact_boundary',
+                                trigger: 'auto',
+                                pre_tokens: inputTokens,
+                                context_limit: contextLimit,
+                              });
+                              enqueueEvent(controller, `data: ${compactBoundaryEvent}\n\n`);
+                            }
+                          }
+                        } catch (pressureErr) {
+                          console.error('[claude] Context pressure check failed:', pressureErr);
+                        }
+                      }
+                    }
+                  } catch (eventErr) {
+                    console.error(`[claude:${session.id}] Error processing event:`, eventErr);
+                  }
+                }
+              }
+
+              // --- Retry check: if the API-wait timeout killed the process, retry ---
+              if (
+                apiRetryRequested &&
+                retryCount < MAX_API_RETRIES &&
+                !cancelled &&
+                session.cliSessionId &&
+                respawnForRetry
+              ) {
+                retryCount++;
+                apiRetryRequested = false;
+
+                try {
+                  const retryProc = respawnForRetry();
+                  proc = retryProc;
+                  session.cliProcess = retryProc;
+                  console.log(
+                    `[claude:${session.id}] API retry: spawned new CLI PID ${retryProc.pid} (attempt ${retryCount + 1})`,
+                  );
+
+                  // Notify the client
+                  enqueueEvent(
+                    controller,
+                    `data: ${JSON.stringify({
+                      type: 'api_retry',
+                      attempt: retryCount,
+                      message: 'API call timed out, retrying...',
+                    })}\n\n`,
+                  );
+
+                  // Re-arm content timeout for the retry attempt
+                  receivedContentEvent = false;
+                  contentTimeoutId = setTimeout(() => {
+                    if (!receivedContentEvent && !cancelled) {
+                      console.error(`[claude:${session.id}] Content timeout on retry attempt`);
+                      clearActivityTimeout();
+                      clearStaleCliSessionId();
+                      const errEvt = JSON.stringify({
+                        type: 'error',
+                        error: {
+                          type: 'timeout',
+                          message:
+                            'Retry failed — no response from CLI. Please try sending your message again.',
                         },
                       });
-                      console.log('[stream] Enqueuing message_start event');
-                      enqueueEvent(controller, `data: ${messageStartEvent}\n\n`);
-                    }
-                  }
-
-                  // Track whether we've received actual content (not just system init)
-                  if (cliEvent.type === 'assistant' || cliEvent.type === 'result') {
-                    receivedContentEvent = true;
-                    clearContentTimeout();
-                  }
-
-                  // Accumulate all assistant content blocks across multi-turn tool execution
-                  if (cliEvent.type === 'assistant' && cliEvent.message?.content) {
-                    if (!assistantContent) assistantContent = [];
-                    assistantContent.push(...cliEvent.message.content);
-                    assistantModel = cliEvent.message.model || session.model || null;
-
-                    // Periodically flush partial content to DB so it survives browser reloads
-                    maybeFlush();
-
-                    // Track file-writing tool calls for verification + approval
-                    const fileWriteTools = [
-                      'write_file',
-                      'edit_file',
-                      'create_file',
-                      'str_replace_editor',
-                      'Write',
-                      'Edit',
-                    ];
-                    // Check permission mode and per-tool rules for approval
-                    let permMode: PermissionMode = 'safe';
-                    try {
-                      const pDb = getDb();
-                      const pRow = pDb
-                        .query("SELECT value FROM settings WHERE key = 'permissionMode'")
-                        .get() as any;
-                      if (pRow) permMode = JSON.parse(pRow.value) as PermissionMode;
-                    } catch {
-                      /* default to safe */
-                    }
-
-                    // Load per-tool permission rules and terminal policy
-                    const permRules = loadPermissionRules(
-                      session.conversationId,
-                      session.workspacePath,
-                    );
-                    const termPolicy = loadTerminalCommandPolicy();
-
-                    for (const block of cliEvent.message.content) {
-                      // Skip non-tool blocks (e.g. text blocks don't have .name)
-                      if (block.type !== 'tool_use') continue;
-
-                      // Evaluate per-tool permission rules
-                      const ruleDecision = shouldRequireApproval(
-                        block.name,
-                        (block.input || {}) as Record<string, unknown>,
-                        permRules,
-                        permMode,
-                        termPolicy,
-                      );
-                      if (ruleDecision === 'ask') {
-                        const parsed = parseMcpToolName(block.name);
-                        const filePath = extractFilePath(block.input || {});
-                        const effectiveName = parsed.renderAs || parsed.toolName;
-                        const desc =
-                          effectiveName === 'Bash' ||
-                          block.name === 'bash' ||
-                          block.name === 'execute_command'
-                            ? `Run: ${String(block.input?.command || '').slice(0, 100)}`
-                            : filePath
-                              ? `Write to ${filePath}`
-                              : `Execute ${parsed.displayName}`;
-                        const approvalEvent = JSON.stringify({
-                          type: 'tool_approval_request',
-                          toolCallId: block.id || nanoid(),
-                          toolName: block.name,
-                          input: block.input || {},
-                          description: desc,
-                        });
-                        enqueueEvent(controller, `data: ${approvalEvent}\n\n`);
-
-                        // Bridge approval request to commentators
-                        if (session.workspacePath) {
-                          eventBridge.emitRaw(session.workspacePath, approvalEvent);
-                        }
-                      }
-
-                      // Emit user_question_request for AskUserQuestion tool
-                      if (block.name === 'AskUserQuestion') {
-                        const questionEvent = JSON.stringify({
-                          type: 'user_question_request',
-                          toolCallId: block.id || nanoid(),
-                          questions: block.input?.questions || [],
-                        });
-                        enqueueEvent(controller, `data: ${questionEvent}\n\n`);
-                      }
-
-                      // Trigger file verification for file-writing tools (both built-in and MCP)
-                      const isFileWrite =
-                        fileWriteTools.includes(block.name) || isMcpFileWriteTool(block.name);
-                      if (isFileWrite) {
-                        const filePath = extractFilePath(block.input || {});
-                        if (filePath && typeof filePath === 'string') {
-                          // Run async verification after a short delay to let the file be written
-                          setTimeout(async () => {
-                            try {
-                              const result = await verifyFile(
-                                filePath,
-                                session.workspacePath || process.cwd(),
-                              );
-                              const verifyEvent = JSON.stringify({
-                                type: 'verification_result',
-                                filePath: result.filePath,
-                                passed: result.passed,
-                                issues: result.issues,
-                                tool: result.tool,
-                                duration: result.duration,
-                              });
-                              enqueueEvent(controller, `data: ${verifyEvent}\n\n`);
-
-                              // Bridge verification result to commentators
-                              if (session.workspacePath) {
-                                eventBridge.emitRaw(session.workspacePath, verifyEvent);
-                              }
-                            } catch {
-                              /* verification failed silently */
-                            }
-                          }, 500);
-                        }
-                      }
-                    }
-                  }
-
-                  // Emit tool_result events for user-type events (tool results from CLI)
-                  if (cliEvent.type === 'user' && cliEvent.message?.content) {
-                    for (const block of cliEvent.message.content) {
-                      if (block.type === 'tool_result') {
-                        // Look up tool name + filePath from accumulated assistant content
-                        let toolName: string | undefined;
-                        let filePath: string | undefined;
-                        let editLineHint: number | undefined;
-                        if (assistantContent) {
-                          const toolBlock = assistantContent.find(
-                            (b: any) => b.type === 'tool_use' && b.id === block.tool_use_id,
-                          );
-                          if (toolBlock) {
-                            toolName = toolBlock.name;
-                            const toolInput = toolBlock.input || {};
-                            filePath = extractFilePath(toolInput) || undefined;
-                            // Derive approximate edit line for Follow Along scrolling
-                            if (filePath && toolName) {
-                              try {
-                                const { readFileSync } = await import('fs');
-                                const fileContent = readFileSync(filePath, 'utf-8');
-                                editLineHint = extractEditLineHint(
-                                  toolName,
-                                  toolInput,
-                                  fileContent,
-                                );
-                              } catch {
-                                // File may have been deleted or unreadable — derive without content
-                                editLineHint = extractEditLineHint(toolName, toolInput);
-                              }
-                            }
-                          }
-                        }
-                        const resultEvent = JSON.stringify({
-                          type: 'tool_result',
-                          toolCallId: block.tool_use_id || '',
-                          toolName,
-                          filePath,
-                          editLineHint,
-                          result:
-                            typeof block.content === 'string'
-                              ? block.content
-                              : JSON.stringify(block.content),
-                          isError: Boolean(block.is_error),
-                        });
-                        enqueueEvent(controller, `data: ${resultEvent}\n\n`);
-
-                        // Bridge tool_result to commentators
-                        if (session.workspacePath) {
-                          eventBridge.emitRaw(session.workspacePath, resultEvent);
-                        }
-                      }
-                    }
-                  }
-
-                  receivedAnyEvent = true;
-
-                  // Translate CLI events to API-style events and send to client.
-                  // Wrap in try/catch so a client disconnect doesn't abort the
-                  // loop — we still need to accumulate assistantContent for DB save.
-                  const apiEvents = translateCliEvent(cliEvent);
-                  for (const evt of apiEvents) {
-                    console.log('[stream] Enqueuing event:', evt.slice(0, 100));
-                    enqueueEvent(controller, `data: ${evt}\n\n`);
-                  }
-
-                  // Mirror translated events to active commentators via the event bridge.
-                  // This is fire-and-forget — never blocks the primary stream.
-                  if (session.workspacePath) {
-                    for (const evt of apiEvents) {
-                      eventBridge.emitRaw(session.workspacePath, evt);
-                    }
-                  }
-
-                  // Persist token usage on result + check context pressure for autocompaction
-                  if (cliEvent.type === 'result') {
-                    sentStop = true;
-                    const usage = cliEvent.usage;
-                    if (usage) {
+                      enqueueEvent(controller, `data: ${errEvt}\n\n`);
+                      enqueueEvent(controller, `data: {"type":"message_stop"}\n\n`);
+                      session.streamComplete = true;
+                      scheduleCleanup();
                       try {
-                        const totalTokens = (usage.input_tokens || 0) + (usage.output_tokens || 0);
-                        const db = getDb();
-                        db.query(
-                          'UPDATE conversations SET total_tokens = total_tokens + ? WHERE id = ?',
-                        ).run(totalTokens, session.conversationId);
-                      } catch (e) {
-                        console.error('[claude] Failed to persist token usage:', e);
+                        controller.close();
+                      } catch {
+                        /* already closed */
                       }
-
-                      // Check context pressure — warn at 85%, autocompact at the Claude Code threshold
-                      try {
-                        const inputTokens = usage.input_tokens || 0;
-                        const model = session.model || 'default';
-                        const contextLimit = getContextLimit(model);
-                        const autoCompactThreshold = getAutoCompactThreshold(model);
-                        // 85% of context window as the warning threshold
-                        const warningThreshold = Math.floor(contextLimit * 0.85);
-
-                        if (inputTokens >= warningThreshold) {
-                          // Read autoCompaction setting
-                          let autoCompactionEnabled = true;
-                          try {
-                            const db = getDb();
-                            const row = db
-                              .query("SELECT value FROM settings WHERE key = 'autoCompaction'")
-                              .get() as any;
-                            if (row) autoCompactionEnabled = JSON.parse(row.value);
-                          } catch {
-                            /* use default */
-                          }
-
-                          const shouldAutoCompact =
-                            inputTokens >= autoCompactThreshold && autoCompactionEnabled;
-
-                          if (shouldAutoCompact) {
-                            console.log(
-                              `[claude:${session.id}] Context at ${inputTokens}/${contextLimit} tokens (threshold ${autoCompactThreshold}) — applying autocompaction`,
-                            );
-
-                            // Run LLM compaction async so we can still emit the boundary event
-                            // We do it in a fire-and-forget to avoid blocking the result event.
-                            // The compaction must complete before the next user turn, which is fine
-                            // since the user has to type and send a new message.
-                            (async () => {
-                              try {
-                                const db = getDb();
-                                const opts = getRecommendedOptions(model);
-
-                                // Load the full raw message history from DB
-                                const rawRows = db
-                                  .query(
-                                    'SELECT role, content FROM messages WHERE conversation_id = ? ORDER BY timestamp ASC',
-                                  )
-                                  .all(session.conversationId) as any[];
-                                const allMessages = rawRows.map((r: any) => {
-                                  let parsed: any[];
-                                  try {
-                                    parsed = JSON.parse(r.content);
-                                  } catch {
-                                    parsed = [];
-                                  }
-                                  // Normalize nudge blocks so they don't confuse downstream APIs
-                                  const content = Array.isArray(parsed)
-                                    ? parsed.map((block: any) =>
-                                        block.type === 'nudge'
-                                          ? { type: 'text', text: `[User nudge]: ${block.text}` }
-                                          : block,
-                                      )
-                                    : parsed;
-                                  return { role: r.role, content };
-                                });
-
-                                if (allMessages.length === 0) return;
-
-                                // Determine split point: which messages to drop vs keep
-                                // using the same smart strategy but without creating a summary
-                                const history = loadConversationHistory(session.conversationId, {
-                                  ...opts,
-                                  createSummary: false,
-                                });
-
-                                if (!history.compacted) {
-                                  console.log(
-                                    `[claude:${session.id}] Compaction not needed after re-check`,
-                                  );
-                                  return;
-                                }
-
-                                // compactedCount is the number of messages kept.
-                                // Everything before that split is dropped.
-                                const splitIdx = allMessages.length - history.compactedCount;
-                                const finalDropped = allMessages.slice(0, splitIdx);
-                                const keptMessages = allMessages.slice(splitIdx);
-
-                                // Generate LLM summary (falls back to rule-based on failure)
-                                const { summaryText, summaryMessage, usedLLM } =
-                                  await summarizeWithLLM(finalDropped, keptMessages, model);
-
-                                // Build final compacted message array: [summary, ...kept]
-                                const compactedMessages = [summaryMessage, ...keptMessages];
-
-                                // Write compacted history back to DB
-                                db.query('DELETE FROM messages WHERE conversation_id = ?').run(
-                                  session.conversationId,
-                                );
-                                let ts = Date.now();
-                                for (const msg of compactedMessages) {
-                                  db.query(
-                                    `INSERT INTO messages (id, conversation_id, role, content, timestamp)
-                                     VALUES (?, ?, ?, ?, ?)`,
-                                  ).run(
-                                    nanoid(),
-                                    session.conversationId,
-                                    msg.role,
-                                    JSON.stringify(msg.content),
-                                    ts++,
-                                  );
-                                }
-
-                                // Clear CLI session ID and store the summary text so the next
-                                // turn can inject it into the fresh CLI session's first prompt.
-                                session.cliSessionId = undefined;
-                                db.query(
-                                  'UPDATE conversations SET cli_session_id = NULL, compact_summary = ? WHERE id = ?',
-                                ).run(summaryText, session.conversationId);
-
-                                console.log(
-                                  `[claude:${session.id}] Autocompaction complete: ${history.originalCount} → ${compactedMessages.length} messages (LLM=${usedLLM})`,
-                                );
-                              } catch (compactErr) {
-                                console.error('[claude] Autocompaction failed:', compactErr);
-                              }
-                            })();
-                          }
-
-                          // Emit context_warning for the warning banner
-                          const usagePct =
-                            contextLimit > 0
-                              ? Math.round((inputTokens / contextLimit) * 1000) / 10
-                              : 0;
-                          const contextWarningEvent = JSON.stringify({
-                            type: 'context_warning',
-                            inputTokens,
-                            contextLimit,
-                            usagePercent: usagePct,
-                            autocompacted: shouldAutoCompact,
-                          });
-                          enqueueEvent(controller, `data: ${contextWarningEvent}\n\n`);
-
-                          // Also emit compact_boundary if compacting (matches Claude Code's SSE protocol)
-                          if (shouldAutoCompact) {
-                            const compactBoundaryEvent = JSON.stringify({
-                              type: 'compact_boundary',
-                              trigger: 'auto',
-                              pre_tokens: inputTokens,
-                              context_limit: contextLimit,
-                            });
-                            enqueueEvent(controller, `data: ${compactBoundaryEvent}\n\n`);
-                          }
-                        }
-                      } catch (pressureErr) {
-                        console.error('[claude] Context pressure check failed:', pressureErr);
-                      }
+                      session.status = 'idle';
+                      proc.kill('SIGTERM');
                     }
-                  }
-                } catch (eventErr) {
-                  console.error(`[claude:${session.id}] Error processing event:`, eventErr);
+                  }, 120_000);
+
+                  // eslint-disable-next-line no-labels
+                  continue processAttempt;
+                } catch (retryErr) {
+                  console.error(`[claude:${session.id}] Failed to spawn retry CLI:`, retryErr);
+                  // Fall through to normal cleanup
                 }
               }
-            }
+
+              // eslint-disable-next-line no-labels
+              break processAttempt;
+            } // end processAttempt while loop
 
             clearContentTimeout();
+            clearActivityTimeout();
             clearInterval(pingInterval);
 
             // Check exit code and report errors if no content events received.
@@ -1281,9 +1508,14 @@ class ClaudeProcessManager {
                 ? `CLI exited (${exitDetail}) with: ${stderr.slice(0, 500)}`
                 : `CLI exited with ${exitDetail} and produced no output`;
               console.error(`[claude:${session.id}] ${errMsg}`);
+              // CLI never produced content — session is dead, clear it
+              clearStaleCliSessionId();
               const errEvt = JSON.stringify({
                 type: 'error',
-                error: { type: 'cli_error', message: errMsg },
+                error: {
+                  type: 'cli_error',
+                  message: `${errMsg}. Please try sending your message again.`,
+                },
               });
               enqueueEvent(controller, `data: ${errEvt}\n\n`);
             }
@@ -1317,6 +1549,9 @@ class ClaudeProcessManager {
             }
 
             if (!cancelled && !sentStop) {
+              // Stream ended without a result event — CLI died or was killed mid-stream.
+              // Clear the session ID so the next message starts a fresh CLI session.
+              clearStaleCliSessionId();
               enqueueEvent(controller, `data: {"type":"message_stop"}\n\n`);
             }
             session.streamComplete = true;
@@ -1331,6 +1566,7 @@ class ClaudeProcessManager {
             session.status = 'idle';
           } catch (err) {
             clearContentTimeout();
+            clearActivityTimeout();
             clearInterval(pingInterval);
 
             // Final flush on error/disconnect — the periodic flush may have already
@@ -1339,7 +1575,9 @@ class ClaudeProcessManager {
               flushAssistantContent();
             }
 
+            // Stream errored — clear session ID so next message starts fresh
             if (!cancelled) {
+              clearStaleCliSessionId();
               const msg = String(err).replace(/"/g, '\\"');
               enqueueEvent(
                 controller,
@@ -1518,6 +1756,24 @@ class ClaudeProcessManager {
         session.emitter.emit('reconnect_close');
       },
     });
+  }
+
+  /**
+   * Clear all stale CLI session IDs from DB. Called on server startup since
+   * all in-memory CLI processes are gone after a restart.
+   */
+  clearStaleSessionIds(): void {
+    try {
+      const db = getDb();
+      const result = db
+        .query('UPDATE conversations SET cli_session_id = NULL WHERE cli_session_id IS NOT NULL')
+        .run();
+      console.log(
+        `[claude] Cleared ${result.changes} stale CLI session ID(s) from previous server instance`,
+      );
+    } catch (e) {
+      console.error('[claude] Failed to clear stale session IDs:', e);
+    }
   }
 
   /**
