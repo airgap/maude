@@ -399,7 +399,37 @@ function createGolemsStore() {
     clearInactive() {
       golems = golems.filter((g) => g.status === 'running' || g.status === 'paused');
     },
+
+    /** @internal Restore golem state from HMR data */
+    _hmrRestore(saved: GolemStatus[]) {
+      golems = saved;
+      if (saved.some((g) => g.status === 'running')) {
+        ensureElapsedTimer();
+      }
+    },
+
+    /** @internal Clean up timers for HMR disposal */
+    _hmrCleanup() {
+      stopElapsedTimer();
+    },
   };
 }
 
 export const golemsStore = createGolemsStore();
+
+// HMR state preservation — keep golems visible across hot module reloads
+if (import.meta.hot) {
+  const savedGolems = import.meta.hot.data?.golems as GolemStatus[] | undefined;
+  if (savedGolems?.length) {
+    golemsStore._hmrRestore(savedGolems);
+  }
+
+  import.meta.hot.dispose((data: Record<string, unknown>) => {
+    try {
+      data.golems = JSON.parse(JSON.stringify(golemsStore.golems));
+    } catch {
+      // Serialization failed — golems will be recovered from server
+    }
+    golemsStore._hmrCleanup();
+  });
+}

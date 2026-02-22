@@ -6,26 +6,28 @@
   import type { GolemMood, GolemPhase } from '@e/shared';
 
   // Ensure the golems store gets synced from the loop store on mount.
-  // If the loop state hasn't been loaded yet (e.g., page reload with golems tab
-  // active while WorkPanel isn't mounted), trigger the load ourselves.
+  // Always attempt to load from server — this handles initial page load,
+  // HMR recovery, and any other scenario where client state was lost.
   onMount(() => {
     if (loopStore.activeLoop) {
       loopStore.syncGolemFromLoop(loopStore.activeLoop);
-    } else if (!loopStore.activeLoopChecked) {
+    } else {
+      // Unconditionally load — the server is the source of truth
       loopStore.loadActiveLoop();
     }
   });
 
-  // Reactively sync golem state when the active loop loads after initial mount.
-  // This handles the async case where loadActiveLoop() completes after the panel
-  // has already rendered the empty state.
-  let lastSyncedLoopId = $state<string | null>(null);
+  // Reactively sync golem state when the active loop changes.
+  // This handles async loadActiveLoop() completing after initial render,
+  // HMR state restoration, and any other activeLoop changes.
   $effect(() => {
     const loop = loopStore.activeLoop;
-    // Sync if we have an active loop that hasn't been synced yet, OR if the golem doesn't exist in the store
-    const golemExists = loop && golemsStore.golems.some((g) => g.id === loop.id);
-    if (loop && loop.id !== lastSyncedLoopId && !golemExists) {
-      lastSyncedLoopId = loop.id;
+    if (!loop) return;
+    // Only auto-sync for active loops (running/paused).
+    // Completed/failed/cancelled golems stay dismissed if the user cleared them.
+    if (loop.status !== 'running' && loop.status !== 'paused') return;
+    const golemExists = golemsStore.golems.some((g) => g.id === loop.id);
+    if (!golemExists) {
       loopStore.syncGolemFromLoop(loop);
     }
   });

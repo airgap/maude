@@ -1498,6 +1498,19 @@ function createLoopStore() {
       }
     },
 
+    /** @internal Restore critical loop state from HMR data */
+    _hmrRestore(data: {
+      activeLoop: LoopState | null;
+      log: IterationLogEntry[];
+      activeLoopChecked: boolean;
+      standaloneStoryCount: number;
+    }) {
+      activeLoop = data.activeLoop;
+      log = data.log;
+      activeLoopChecked = data.activeLoopChecked;
+      standaloneStoryCount = data.standaloneStoryCount;
+    },
+
     /** Move a story from one sprint to another within the current plan */
     moveStoryInPlan(storyId: string, fromSprintIndex: number, toSprintIndex: number) {
       if (!sprintPlanResult) return;
@@ -1911,3 +1924,51 @@ function createLoopStore() {
 }
 
 export const loopStore = createLoopStore();
+
+// HMR state preservation — keep active loop state across hot module reloads
+if (import.meta.hot) {
+  const hmrData = import.meta.hot.data as
+    | {
+        activeLoop?: LoopState | null;
+        log?: IterationLogEntry[];
+        activeLoopChecked?: boolean;
+        standaloneStoryCount?: number;
+      }
+    | undefined;
+
+  if (hmrData?.activeLoop) {
+    loopStore._hmrRestore({
+      activeLoop: hmrData.activeLoop,
+      log: hmrData.log ?? [],
+      activeLoopChecked: hmrData.activeLoopChecked ?? false,
+      standaloneStoryCount: hmrData.standaloneStoryCount ?? 0,
+    });
+
+    // Reconnect SSE stream if loop is still active
+    const loop = loopStore.activeLoop;
+    if (loop && loop.status === 'running') {
+      loopStore.connectEvents(loop.id);
+    }
+    // Re-sync golem store from restored loop state
+    if (loop && (loop.status === 'running' || loop.status === 'paused')) {
+      loopStore.syncGolemFromLoop(loop);
+    }
+  }
+
+  import.meta.hot.dispose((data: Record<string, unknown>) => {
+    // Disconnect SSE before module is replaced to avoid orphaned streams
+    loopStore.disconnectEvents();
+
+    try {
+      data.activeLoop = loopStore.activeLoop
+        ? JSON.parse(JSON.stringify(loopStore.activeLoop))
+        : null;
+      data.log = JSON.parse(JSON.stringify(loopStore.log));
+      data.activeLoopChecked = loopStore.activeLoopChecked;
+      // standaloneStoryCount is accessed via getter in the store
+      data.standaloneStoryCount = loopStore.totalStories;
+    } catch {
+      // Serialization failed — will be recovered from server
+    }
+  });
+}

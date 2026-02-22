@@ -25,6 +25,7 @@
   let generating = $state(false);
   let committing = $state(false);
   let pushing = $state(false);
+  let discarding = $state(false);
   let commitProgress = $state<string[]>([]);
   let pushProgress = $state<string[]>([]);
   let gitError = $state('');
@@ -245,16 +246,18 @@
   }
 
   async function handleDiscard() {
-    if (committing) return;
+    if (committing || discarding) return;
     const confirmed = confirm(
       `Discard ${gitStore.dirtyCount} change${gitStore.dirtyCount === 1 ? '' : 's'}? This cannot be undone.`,
     );
     if (!confirmed) return;
 
+    discarding = true;
     const result = await gitStore.clean(workspacePath);
     if (!result.ok) {
       gitError = result.error || 'Failed to discard changes';
     }
+    discarding = false;
   }
 
   function clearOutput() {
@@ -417,21 +420,66 @@
               onclick={handleCommit}
               disabled={!commitMessage.trim() || committing || pushing}
             >
-              {committing ? 'Committing...' : 'Commit'}
+              {#if committing}
+                <svg
+                  class="btn-spinner"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                >
+                  <path
+                    d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"
+                  />
+                </svg>
+                Committing…
+              {:else}
+                Commit
+              {/if}
             </button>
             <button
               class="action-btn push-btn"
               onclick={handlePush}
               disabled={committing || pushing}
             >
-              {pushing ? 'Pushing...' : 'Push'}
+              {#if pushing}
+                <svg
+                  class="btn-spinner"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                >
+                  <path
+                    d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"
+                  />
+                </svg>
+                Pushing…
+              {:else}
+                Push
+              {/if}
             </button>
             <button
               class="action-btn discard-btn"
               onclick={handleDiscard}
-              disabled={committing || pushing}
+              disabled={committing || pushing || discarding}
             >
-              Discard All
+              {#if discarding}
+                <svg
+                  class="btn-spinner"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                >
+                  <path
+                    d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"
+                  />
+                </svg>
+                Discarding…
+              {:else}
+                Discard All
+              {/if}
             </button>
           </div>
 
@@ -981,6 +1029,13 @@
     animation: spin 0.8s linear infinite;
   }
 
+  .btn-spinner {
+    width: 12px;
+    height: 12px;
+    flex-shrink: 0;
+    animation: spin 0.8s linear infinite;
+  }
+
   /* ── Commit Section ── */
   .commit-section {
     border-bottom: 1px solid var(--border);
@@ -1090,6 +1145,10 @@
 
   .action-btn {
     flex: 1;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 5px;
     padding: 6px 10px;
     border: 1px solid var(--border);
     border-radius: 4px;
