@@ -734,6 +734,11 @@ export const api = {
         method: 'POST',
         body: JSON.stringify({ path }),
       }),
+    push: (path: string, remote?: string, branch?: string) =>
+      request<{ ok: boolean; data: { pushed: boolean; setUpstream: boolean } }>('/git/push', {
+        method: 'POST',
+        body: JSON.stringify({ path, remote, branch }),
+      }),
     generateCommitMessage: (path: string) =>
       request<{ ok: boolean; data: { message: string } }>('/git/generate-commit-message', {
         method: 'POST',

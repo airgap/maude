@@ -481,4 +481,70 @@ app.post('/clean', async (c) => {
   }
 });
 
+// Push to remote
+app.post('/push', async (c) => {
+  const body = await c.req.json();
+  const { path: rootPath, remote, branch } = body;
+
+  if (!rootPath) return c.json({ ok: false, error: 'path required' }, 400);
+
+  const pathCheck = validateWorkspacePath(rootPath);
+  if (!pathCheck.valid) {
+    return c.json({ ok: false, error: pathCheck.reason }, 403);
+  }
+
+  try {
+    // Get current branch if not specified
+    let targetBranch = branch;
+    if (!targetBranch) {
+      const branchProc = Bun.spawn(['git', 'rev-parse', '--abbrev-ref', 'HEAD'], {
+        cwd: pathCheck.resolved,
+        stdout: 'pipe',
+        stderr: 'pipe',
+      });
+      targetBranch = (await new Response(branchProc.stdout).text()).trim();
+      const branchExit = await branchProc.exited;
+      if (branchExit !== 0 || !targetBranch) {
+        return c.json({ ok: false, error: 'Could not determine current branch' }, 500);
+      }
+    }
+
+    // Push to remote (defaults to 'origin' if not specified)
+    const targetRemote = remote || 'origin';
+    const pushProc = Bun.spawn(['git', 'push', targetRemote, targetBranch], {
+      cwd: pathCheck.resolved,
+      stdout: 'pipe',
+      stderr: 'pipe',
+    });
+
+    const pushExit = await pushProc.exited;
+    if (pushExit !== 0) {
+      const err = await new Response(pushProc.stderr).text();
+      // Check if it's an upstream tracking error
+      if (err.includes('no upstream branch') || err.includes('has no upstream')) {
+        // Try push with --set-upstream
+        const upstreamProc = Bun.spawn(
+          ['git', 'push', '--set-upstream', targetRemote, targetBranch],
+          {
+            cwd: pathCheck.resolved,
+            stdout: 'pipe',
+            stderr: 'pipe',
+          },
+        );
+        const upstreamExit = await upstreamProc.exited;
+        if (upstreamExit !== 0) {
+          const upstreamErr = await new Response(upstreamProc.stderr).text();
+          return c.json({ ok: false, error: upstreamErr.trim() || 'git push failed' }, 500);
+        }
+        return c.json({ ok: true, data: { pushed: true, setUpstream: true } });
+      }
+      return c.json({ ok: false, error: err.trim() || 'git push failed' }, 500);
+    }
+
+    return c.json({ ok: true, data: { pushed: true, setUpstream: false } });
+  } catch (err) {
+    return c.json({ ok: false, error: String(err) }, 500);
+  }
+});
+
 export { app as gitRoutes };

@@ -26,7 +26,7 @@
 
   // ── Git gutter popover state ──
   let gitMenuOpen = $state(false);
-  let gitMenuMode = $state<'actions' | 'commit' | 'confirm-clean'>('actions');
+  let gitMenuMode = $state<'actions' | 'commit' | 'confirm-clean' | 'confirm-push'>('actions');
   let commitMessage = $state('');
   let gitBusy = $state(false);
   let gitError = $state('');
@@ -87,6 +87,25 @@
     } else {
       gitError = result.error || 'Clean failed';
     }
+  }
+
+  async function handlePush() {
+    if (gitBusy) return;
+    gitBusy = true;
+    gitError = '';
+    const result = await gitStore.push(settingsStore.workspacePath);
+    gitBusy = false;
+    if (result.ok) {
+      gitMenuOpen = false;
+    } else {
+      gitError = result.error || 'Push failed';
+    }
+  }
+
+  function handleViewChanges() {
+    // Open the Git panel in the sidebar
+    uiStore.setSidebarTab('git');
+    gitMenuOpen = false;
   }
 
   // Accumulate session-wide spend
@@ -160,7 +179,41 @@
           <div class="git-popover" role="menu" onclick={(e) => e.stopPropagation()}>
             {#if !gitStore.isDirty}
               <div class="git-popover-item disabled">Working tree clean</div>
+              <button class="git-popover-item" onclick={() => (gitMenuMode = 'confirm-push')}>
+                <svg
+                  width="14"
+                  height="14"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <polyline points="16 17 21 12 16 7" /><path d="M21 12H9" /><path
+                    d="M5 21a9 9 0 0 1 0-18"
+                  />
+                </svg>
+                Push to remote
+              </button>
             {:else if gitMenuMode === 'actions'}
+              <button class="git-popover-item" onclick={handleViewChanges}>
+                <svg
+                  width="14"
+                  height="14"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><polyline
+                    points="14 2 14 8 20 8"
+                  /><line x1="9" y1="15" x2="15" y2="15" /><line x1="9" y1="12" x2="15" y2="12" />
+                </svg>
+                View changes
+              </button>
               <button class="git-popover-item" onclick={() => (gitMenuMode = 'commit')}>
                 <svg
                   width="14"
@@ -180,6 +233,23 @@
                   />
                 </svg>
                 Commit all changes
+              </button>
+              <button class="git-popover-item" onclick={() => (gitMenuMode = 'confirm-push')}>
+                <svg
+                  width="14"
+                  height="14"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <polyline points="16 17 21 12 16 7" /><path d="M21 12H9" /><path
+                    d="M5 21a9 9 0 0 1 0-18"
+                  />
+                </svg>
+                Push to remote
               </button>
               <button
                 class="git-popover-item danger"
@@ -308,6 +378,25 @@
                   >
                   <button class="git-action-btn danger" onclick={handleClean} disabled={gitBusy}
                     >{gitBusy ? 'Cleaning...' : 'Discard'}</button
+                  >
+                </div>
+                {#if gitError}
+                  <div class="git-error">{gitError}</div>
+                {/if}
+              </div>
+            {:else if gitMenuMode === 'confirm-push'}
+              <div class="git-popover-form">
+                <div class="git-confirm-text-normal">
+                  Push {gitStore.branch} to origin?
+                </div>
+                <div class="git-popover-actions">
+                  <button
+                    class="git-action-btn cancel"
+                    onclick={() => (gitMenuMode = 'actions')}
+                    disabled={gitBusy}>Cancel</button
+                  >
+                  <button class="git-action-btn confirm" onclick={handlePush} disabled={gitBusy}
+                    >{gitBusy ? 'Pushing...' : 'Push'}</button
                   >
                 </div>
                 {#if gitError}
@@ -1154,6 +1243,15 @@
   .git-confirm-text {
     font-size: var(--fs-xs);
     color: var(--accent-error);
+    font-weight: 500;
+    padding: 2px 0;
+    text-transform: none;
+    letter-spacing: normal;
+  }
+
+  .git-confirm-text-normal {
+    font-size: var(--fs-xs);
+    color: var(--text-primary);
     font-weight: 500;
     padding: 2px 0;
     text-transform: none;

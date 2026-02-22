@@ -63,7 +63,10 @@ function createGitStore() {
       }
       return { ok: false, error: 'Commit failed' };
     } catch (err) {
-      return { ok: false, error: String(err) };
+      const errMsg = String(err);
+      // Extract the actual git error message if present
+      const match = errMsg.match(/git commit failed: (.+)/) || errMsg.match(/Error: (.+)/);
+      return { ok: false, error: match ? match[1] : errMsg };
     }
   }
 
@@ -76,7 +79,24 @@ function createGitStore() {
       }
       return { ok: false, error: 'Clean failed' };
     } catch (err) {
-      return { ok: false, error: String(err) };
+      const errMsg = String(err);
+      const match = errMsg.match(/Error: (.+)/);
+      return { ok: false, error: match ? match[1] : errMsg };
+    }
+  }
+
+  async function push(rootPath: string): Promise<{ ok: boolean; error?: string }> {
+    try {
+      const res = await api.git.push(rootPath);
+      if (res.ok) {
+        return { ok: true };
+      }
+      return { ok: false, error: 'Push failed' };
+    } catch (err) {
+      const errMsg = String(err);
+      // Extract the actual git error message if present
+      const match = errMsg.match(/git push failed: (.+)/) || errMsg.match(/Error: (.+)/);
+      return { ok: false, error: match ? match[1] : errMsg };
     }
   }
 
@@ -102,6 +122,7 @@ function createGitStore() {
     stopPolling,
     commit,
     clean,
+    push,
   };
 }
 
