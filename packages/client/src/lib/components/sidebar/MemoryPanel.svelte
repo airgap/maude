@@ -5,6 +5,7 @@
   import { settingsStore } from '$lib/stores/settings.svelte';
   import { uiStore } from '$lib/stores/ui.svelte';
   import { registerSkillCommands } from '$lib/commands/slash-commands';
+  import SkillsMarketplace from './SkillsMarketplace.svelte';
   import type { MemoryCategory } from '@e/shared';
 
   type ViewMode = 'files' | 'workspace' | 'skills' | 'rules';
@@ -160,7 +161,9 @@
     if (installingSkill) return;
     installingSkill = name;
     try {
-      await api.skillsRegistry.install(name, settingsStore.workspacePath || undefined);
+      await api.skillsRegistry.install(name, {
+        workspacePath: settingsStore.workspacePath || undefined,
+      });
       installedSkills = [...installedSkills, name];
       uiStore.toast(`Skill "${name}" installed`, 'success');
       // Refresh memory files so it appears in the Files tab
@@ -331,7 +334,6 @@
         class:active={viewMode === 'skills'}
         onclick={() => {
           viewMode = 'skills';
-          loadRegistry();
         }}
       >
         Skills
@@ -538,50 +540,7 @@
       {/if}
     </div>
   {:else if viewMode === 'skills'}
-    <div class="skills-registry-view">
-      <div class="registry-header">
-        <span class="registry-title">agentskills.io</span>
-        <button class="btn-sm" onclick={loadRegistry} disabled={registryLoading} title="Refresh">
-          {registryLoading ? '...' : 'Refresh'}
-        </button>
-      </div>
-      {#if registryError}
-        <div class="registry-error">{registryError}</div>
-      {:else if registryLoading && registrySkills.length === 0}
-        <div class="registry-loading">Loading skills...</div>
-      {:else}
-        <div class="registry-list">
-          {#each registrySkills as skill}
-            {@const isInstalled = installedSkills.includes(skill.name)}
-            <div class="registry-skill" class:installed={isInstalled}>
-              <div class="skill-meta">
-                <span class="skill-name">{skill.name}</span>
-                {#if isInstalled}
-                  <span class="installed-badge">Installed</span>
-                {/if}
-              </div>
-              <p class="skill-desc">{skill.description}</p>
-              {#if skill.compatibility}
-                <p class="skill-compat">{skill.compatibility}</p>
-              {/if}
-              {#if !isInstalled}
-                <button
-                  class="btn-sm install-btn"
-                  onclick={() => installSkill(skill.name)}
-                  disabled={installingSkill === skill.name}
-                >
-                  {installingSkill === skill.name ? 'Installing...' : 'Install'}
-                </button>
-              {/if}
-            </div>
-          {:else}
-            {#if !registryLoading}
-              <div class="empty">No skills found</div>
-            {/if}
-          {/each}
-        </div>
-      {/if}
-    </div>
+    <SkillsMarketplace />
   {:else if editingFile}
     <div class="edit-view">
       <div class="edit-header">
@@ -1071,89 +1030,5 @@
     transition: color var(--transition);
   }
 
-  /* Skills registry */
-  .skills-registry-view {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    overflow: hidden;
-  }
-  .registry-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 4px 2px 8px;
-  }
-  .registry-title {
-    font-size: var(--fs-xs);
-    font-weight: 600;
-    color: var(--text-tertiary);
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-  }
-  .registry-loading,
-  .registry-error {
-    padding: 20px;
-    text-align: center;
-    font-size: var(--fs-sm);
-    color: var(--text-tertiary);
-  }
-  .registry-error {
-    color: var(--accent-error);
-  }
-  .registry-list {
-    flex: 1;
-    overflow-y: auto;
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-  }
-  .registry-skill {
-    padding: 8px 10px;
-    background: var(--bg-elevated);
-    border: 1px solid var(--border-primary);
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-  }
-  .registry-skill.installed {
-    border-color: var(--accent-secondary);
-    opacity: 0.8;
-  }
-  .skill-meta {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-  }
-  .skill-name {
-    font-size: var(--fs-sm);
-    font-weight: 600;
-    color: var(--text-primary);
-    font-family: var(--font-mono);
-  }
-  .installed-badge {
-    font-size: var(--fs-xxs);
-    padding: 1px 5px;
-    background: var(--accent-secondary);
-    color: var(--bg-primary);
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-    font-weight: 700;
-  }
-  .skill-desc {
-    font-size: var(--fs-xs);
-    color: var(--text-secondary);
-    margin: 0;
-    line-height: 1.4;
-  }
-  .skill-compat {
-    font-size: var(--fs-xxs);
-    color: var(--text-tertiary);
-    margin: 0;
-    font-style: italic;
-  }
-  .install-btn {
-    align-self: flex-end;
-    margin-top: 2px;
-  }
+  /* Skills marketplace is now in SkillsMarketplace.svelte */
 </style>

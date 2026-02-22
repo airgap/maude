@@ -311,3 +311,22 @@ export {
   DEFAULT_CROSS_SESSION_RATE_LIMIT,
   DEFAULT_CROSS_SESSION_SETTINGS,
 } from './cross-session.js';
+
+export type {
+  SkillTier,
+  SkillCategory,
+  SkillSortBy,
+  SkillMetadata,
+  SkillConfigField,
+  MarketplaceSkill,
+  SkillSummary,
+  SkillCreateInput,
+  SkillInstallInput,
+  SkillConfigUpdateInput,
+  InstalledSkillRecord,
+  SkillBrowseRequest,
+  SkillBrowseResponse,
+  SkillSuggestion,
+} from './skills.js';
+
+export { SKILL_CATEGORIES } from './skills.js';

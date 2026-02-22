@@ -2,10 +2,19 @@
   import { profilesStore } from '$lib/stores/profiles.svelte';
   import { conversationStore } from '$lib/stores/conversation.svelte';
   import { uiStore } from '$lib/stores/ui.svelte';
+  import { skillsStore } from '$lib/stores/skills.svelte';
+  import { settingsStore } from '$lib/stores/settings.svelte';
   import { api } from '$lib/api/client';
 
   let open = $state(false);
   let dropdownEl = $state<HTMLDivElement | null>(null);
+
+  // Load installed skills on mount
+  $effect(() => {
+    if (open && skillsStore.installedSkills.length === 0) {
+      skillsStore.loadInstalled(settingsStore.workspacePath || undefined);
+    }
+  });
 
   /** SVG path data for each profile icon */
   const profileIconPaths: Record<string, string> = {
@@ -134,6 +143,59 @@
         </button>
       {/each}
 
+      {#if skillsStore.activatedSkills.length > 0}
+        <div class="dropdown-divider"></div>
+        <div class="dropdown-header">Active Skills</div>
+        {#each skillsStore.activatedSkills.slice(0, 5) as skill (skill.id)}
+          <div class="skill-option">
+            <svg
+              class="option-icon"
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" /></svg
+            >
+            <span class="skill-opt-name">{skill.name}</span>
+            <button
+              class="skill-toggle-btn"
+              onclick={() => {
+                skillsStore.activate(skill.id, false, settingsStore.workspacePath || undefined);
+              }}
+              title="Deactivate skill"
+            >
+              &times;
+            </button>
+          </div>
+        {/each}
+      {/if}
+
+      <div class="dropdown-divider"></div>
+      <button
+        class="manage-profiles-btn"
+        onclick={() => {
+          open = false;
+          uiStore.setSidebarTab('memory');
+          uiStore.setSidebarOpen(true);
+        }}
+      >
+        <svg
+          width="13"
+          height="13"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" />
+        </svg>
+        Skills Marketplace
+      </button>
       <div class="dropdown-divider"></div>
       <button
         class="manage-profiles-btn"
@@ -324,6 +386,35 @@
   .manage-profiles-btn:hover {
     background: var(--bg-hover);
     color: var(--text-primary);
+  }
+
+  .skill-option {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    padding: 5px 12px;
+    color: var(--text-secondary);
+    font-size: var(--fs-xs);
+  }
+  .skill-opt-name {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .skill-toggle-btn {
+    background: none;
+    border: none;
+    color: var(--text-tertiary);
+    cursor: pointer;
+    font-size: var(--fs-sm);
+    padding: 0 4px;
+    line-height: 1;
+  }
+  .skill-toggle-btn:hover {
+    color: var(--accent-error);
   }
 
   /* Mobile: hide profile name, show only icon */

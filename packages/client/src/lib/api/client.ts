@@ -423,39 +423,99 @@ export const api = {
       }),
   },
 
-  // --- Skills Registry (agentskills.io) ---
+  // --- Skills Marketplace ---
   skillsRegistry: {
-    browse: () =>
-      request<{
-        ok: boolean;
-        data: Array<{
-          name: string;
-          description: string;
-          compatibility?: string;
-          license?: string;
-          metadata?: Record<string, string>;
-        }>;
-      }>('/skills-registry/browse'),
-    getSkill: (name: string) =>
-      request<{
-        ok: boolean;
-        data: {
-          name: string;
-          description: string;
-          content: string;
-          compatibility?: string;
-          license?: string;
-        };
-      }>(`/skills-registry/skill/${encodeURIComponent(name)}`),
-    install: (skillName: string, workspacePath?: string) =>
-      request<{ ok: boolean; data: { path: string } }>('/skills-registry/install', {
+    browse: (params?: {
+      query?: string;
+      category?: string;
+      sortBy?: string;
+      tier?: string;
+      page?: number;
+      pageSize?: number;
+      workspacePath?: string;
+    }) => {
+      const searchParams = new URLSearchParams();
+      if (params?.query) searchParams.set('query', params.query);
+      if (params?.category) searchParams.set('category', params.category);
+      if (params?.sortBy) searchParams.set('sortBy', params.sortBy);
+      if (params?.tier) searchParams.set('tier', params.tier);
+      if (params?.page) searchParams.set('page', String(params.page));
+      if (params?.pageSize) searchParams.set('pageSize', String(params.pageSize));
+      if (params?.workspacePath) searchParams.set('workspacePath', params.workspacePath);
+      const q = searchParams.toString();
+      return request<{ ok: boolean; data: any }>(`/skills-registry/browse${q ? `?${q}` : ''}`);
+    },
+    getSkill: (id: string, workspacePath?: string) => {
+      const q = workspacePath ? `?workspacePath=${encodeURIComponent(workspacePath)}` : '';
+      return request<{ ok: boolean; data: any }>(
+        `/skills-registry/skill/${encodeURIComponent(id)}${q}`,
+      );
+    },
+    install: (
+      skillId: string,
+      opts?: { tier?: string; workspacePath?: string; pinnedVersion?: string },
+    ) =>
+      request<{ ok: boolean; data: { path: string; skillId: string } }>(
+        '/skills-registry/install',
+        {
+          method: 'POST',
+          body: JSON.stringify({ skillId, ...opts }),
+        },
+      ),
+    uninstall: (skillId: string, workspacePath?: string) =>
+      request<{ ok: boolean }>('/skills-registry/uninstall', {
         method: 'POST',
-        body: JSON.stringify({ skillName, workspacePath }),
+        body: JSON.stringify({ skillId, workspacePath }),
       }),
     installed: (workspacePath?: string) => {
       const q = workspacePath ? `?workspacePath=${encodeURIComponent(workspacePath)}` : '';
-      return request<{ ok: boolean; data: string[] }>(`/skills-registry/installed${q}`);
+      return request<{ ok: boolean; data: any[] }>(`/skills-registry/installed${q}`);
     },
+    create: (input: {
+      name: string;
+      description: string;
+      category?: string;
+      tags?: string[];
+      promptTemplate?: string;
+      rules?: string[];
+      requiredTools?: string[];
+      requiredMcpServers?: string[];
+      workspacePath?: string;
+    }) =>
+      request<{ ok: boolean; data: { skillId: string; path: string } }>('/skills-registry/create', {
+        method: 'POST',
+        body: JSON.stringify(input),
+      }),
+    updateConfig: (skillId: string, config: Record<string, any>) =>
+      request<{ ok: boolean }>('/skills-registry/config', {
+        method: 'PATCH',
+        body: JSON.stringify({ skillId, config }),
+      }),
+    activate: (skillId: string, activated: boolean, workspacePath?: string) =>
+      request<{ ok: boolean }>('/skills-registry/activate', {
+        method: 'PATCH',
+        body: JSON.stringify({ skillId, activated, workspacePath }),
+      }),
+    pinVersion: (skillId: string, pinnedVersion?: string) =>
+      request<{ ok: boolean }>('/skills-registry/pin-version', {
+        method: 'PATCH',
+        body: JSON.stringify({ skillId, pinnedVersion }),
+      }),
+    checkUpdates: () =>
+      request<{
+        ok: boolean;
+        data: {
+          updates: Array<{ skillId: string; currentVersion: string; latestVersion: string }>;
+        };
+      }>('/skills-registry/check-updates', {
+        method: 'POST',
+      }),
+    suggest: (query: string) =>
+      request<{
+        ok: boolean;
+        data: Array<{ skillId: string; skillName: string; reason: string; confidence: number }>;
+      }>(`/skills-registry/suggest?query=${encodeURIComponent(query)}`),
+    bundled: () => request<{ ok: boolean; data: any[] }>('/skills-registry/bundled'),
   },
 
   // --- Rules ---

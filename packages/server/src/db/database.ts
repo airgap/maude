@@ -469,6 +469,25 @@ export function initDatabase(): void {
   db.exec(`
     CREATE INDEX IF NOT EXISTS idx_prd_stories_workspace ON prd_stories(workspace_path);
   `);
+
+  // Skills marketplace table
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS installed_skills (
+      id TEXT PRIMARY KEY,
+      skill_id TEXT NOT NULL,
+      tier TEXT NOT NULL DEFAULT 'managed',
+      version TEXT NOT NULL DEFAULT '1.0.0',
+      pinned_version TEXT,
+      installed_path TEXT NOT NULL,
+      workspace_path TEXT,
+      config TEXT,
+      activated INTEGER NOT NULL DEFAULT 1,
+      installed_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_installed_skills_skill_id ON installed_skills(skill_id);
+    CREATE INDEX IF NOT EXISTS idx_installed_skills_workspace ON installed_skills(workspace_path);
+  `);
 }
 
 /**
