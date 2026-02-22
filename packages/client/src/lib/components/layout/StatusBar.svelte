@@ -31,6 +31,7 @@
   let gitBusy = $state(false);
   let gitError = $state('');
   let generating = $state(false);
+  let commitProgress = $state<string[]>([]);
 
   async function handleGenerateMessage() {
     if (generating || gitBusy) return;
@@ -56,6 +57,7 @@
       gitMenuMode = 'actions';
       commitMessage = '';
       gitError = '';
+      commitProgress = [];
     }
   }
 
@@ -67,13 +69,31 @@
     if (!commitMessage.trim() || gitBusy) return;
     gitBusy = true;
     gitError = '';
+    commitProgress = [];
     console.log('[StatusBar] Committing with message:', commitMessage.trim());
-    const result = await gitStore.commit(settingsStore.workspacePath, commitMessage.trim());
+
+    const result = await api.git.commitStream(
+      settingsStore.workspacePath,
+      commitMessage.trim(),
+      (event) => {
+        if (event.type === 'status') {
+          commitProgress = [...commitProgress, event.message || ''];
+        } else if (event.type === 'output') {
+          commitProgress = [...commitProgress, event.message || ''];
+        } else if (event.type === 'error') {
+          gitError = event.message || 'Commit failed';
+        }
+      },
+    );
+
     gitBusy = false;
     console.log('[StatusBar] Commit result:', result);
     if (result.ok) {
       console.log('[StatusBar] Commit succeeded, SHA:', result.sha);
+      // Refresh git status
+      await gitStore.refresh(settingsStore.workspacePath);
       gitMenuOpen = false;
+      commitProgress = [];
     } else {
       console.log('[StatusBar] Commit failed:', result.error);
       gitError = result.error || 'Commit failed';
@@ -383,6 +403,13 @@
                     >{gitBusy ? 'Committing...' : 'Commit'}</button
                   >
                 </div>
+                {#if commitProgress.length > 0}
+                  <div class="git-progress">
+                    {#each commitProgress.slice(-5) as line}
+                      <div class="git-progress-line">{line}</div>
+                    {/each}
+                  </div>
+                {/if}
                 {#if gitError}
                   <div class="git-error">{gitError}</div>
                 {/if}
@@ -1285,6 +1312,26 @@
     color: var(--text-primary);
     font-weight: 500;
     padding: 2px 0;
+    text-transform: none;
+    letter-spacing: normal;
+  }
+
+  .git-progress {
+    max-height: 120px;
+    overflow-y: auto;
+    background: var(--bg-primary);
+    border: 1px solid var(--border-primary);
+    border-radius: var(--radius-sm);
+    padding: 4px 6px;
+    margin-top: 4px;
+    font-family: var(--font-family);
+  }
+  .git-progress-line {
+    font-size: var(--fs-xxs);
+    color: var(--text-secondary);
+    line-height: 1.4;
+    white-space: pre-wrap;
+    word-break: break-word;
     text-transform: none;
     letter-spacing: normal;
   }

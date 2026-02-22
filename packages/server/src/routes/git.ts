@@ -3,6 +3,7 @@ import { nanoid } from 'nanoid';
 import { resolve } from 'path';
 import { getDb } from '../db/database';
 import { callLlm } from '../services/llm-oneshot';
+import { streamSSE } from 'hono/streaming';
 
 const app = new Hono();
 
@@ -422,6 +423,125 @@ app.post('/commit', async (c) => {
   } catch (err) {
     return c.json({ ok: false, error: String(err) }, 500);
   }
+});
+
+// Streaming commit endpoint with real-time output
+app.post('/commit/stream', async (c) => {
+  const body = await c.req.json();
+  const { path: rootPath, message } = body;
+
+  if (!rootPath) return c.json({ ok: false, error: 'path required' }, 400);
+  if (!message || typeof message !== 'string' || !message.trim()) {
+    return c.json({ ok: false, error: 'commit message required' }, 400);
+  }
+
+  const pathCheck = validateWorkspacePath(rootPath);
+  if (!pathCheck.valid) {
+    return c.json({ ok: false, error: pathCheck.reason }, 403);
+  }
+
+  return streamSSE(c, async (stream) => {
+    try {
+      await stream.writeSSE({
+        data: JSON.stringify({ type: 'status', message: 'Staging changes...' }),
+      });
+
+      // Stage all changes
+      const addProc = Bun.spawn(['git', 'add', '-A'], {
+        cwd: pathCheck.resolved,
+        stdout: 'pipe',
+        stderr: 'pipe',
+      });
+
+      // Collect add output
+      const addOut = await new Response(addProc.stdout).text();
+      const addErr = await new Response(addProc.stderr).text();
+      const addExit = await addProc.exited;
+
+      if (addOut.trim()) {
+        await stream.writeSSE({ data: JSON.stringify({ type: 'output', message: addOut }) });
+      }
+      if (addErr.trim()) {
+        await stream.writeSSE({ data: JSON.stringify({ type: 'output', message: addErr }) });
+      }
+
+      if (addExit !== 0) {
+        await stream.writeSSE({
+          data: JSON.stringify({ type: 'error', message: `git add failed: ${addErr}` }),
+        });
+        return;
+      }
+
+      await stream.writeSSE({
+        data: JSON.stringify({
+          type: 'status',
+          message: 'Running pre-commit hooks and creating commit...',
+        }),
+      });
+
+      // Commit - this is where pre-commit hooks run and can take time
+      const commitProc = Bun.spawn(['git', 'commit', '-m', message.trim()], {
+        cwd: pathCheck.resolved,
+        stdout: 'pipe',
+        stderr: 'pipe',
+      });
+
+      // For long-running commits (with hooks), we need to stream the output as it comes
+      const decoder = new TextDecoder();
+
+      // Read both stdout and stderr concurrently and stream to client
+      const outputs: Promise<string>[] = [];
+
+      const readStream = async (readable: ReadableStream): Promise<string> => {
+        const reader = readable.getReader();
+        let fullOutput = '';
+        try {
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            const chunk = decoder.decode(value, { stream: true });
+            fullOutput += chunk;
+            // Stream non-empty chunks immediately
+            if (chunk.trim()) {
+              await stream.writeSSE({ data: JSON.stringify({ type: 'output', message: chunk }) });
+            }
+          }
+        } finally {
+          reader.releaseLock();
+        }
+        return fullOutput;
+      };
+
+      // Read both streams concurrently
+      outputs.push(readStream(commitProc.stdout));
+      outputs.push(readStream(commitProc.stderr));
+
+      const [commitOut, commitErr] = await Promise.all(outputs);
+      const commitExit = await commitProc.exited;
+      if (commitExit !== 0) {
+        await stream.writeSSE({
+          data: JSON.stringify({ type: 'error', message: 'Commit failed - check output above' }),
+        });
+        return;
+      }
+
+      // Get the new HEAD sha
+      const shaProc = Bun.spawn(['git', 'rev-parse', 'HEAD'], {
+        cwd: pathCheck.resolved,
+        stdout: 'pipe',
+        stderr: 'pipe',
+      });
+      const sha = (await new Response(shaProc.stdout).text()).trim();
+
+      await stream.writeSSE({
+        data: JSON.stringify({ type: 'complete', sha, message: 'Commit successful!' }),
+      });
+    } catch (err) {
+      await stream.writeSSE({
+        data: JSON.stringify({ type: 'error', message: String(err) }),
+      });
+    }
+  });
 });
 
 // Generate a commit message from the current diff
