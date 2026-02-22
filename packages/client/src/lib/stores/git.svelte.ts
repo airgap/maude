@@ -56,13 +56,16 @@ function createGitStore() {
     message: string,
   ): Promise<{ ok: boolean; sha?: string; error?: string }> {
     try {
+      console.log('[gitStore] Calling API commit with:', { rootPath, message });
       const res = await api.git.commit(rootPath, message);
+      console.log('[gitStore] API response:', res);
       if (res.ok) {
         await refresh(rootPath);
         return { ok: true, sha: res.data.sha };
       }
       return { ok: false, error: 'Commit failed' };
     } catch (err) {
+      console.error('[gitStore] Commit error:', err);
       const errMsg = String(err);
       // Extract the actual git error message if present
       const match = errMsg.match(/git commit failed: (.+)/) || errMsg.match(/Error: (.+)/);

@@ -67,11 +67,15 @@
     if (!commitMessage.trim() || gitBusy) return;
     gitBusy = true;
     gitError = '';
+    console.log('[StatusBar] Committing with message:', commitMessage.trim());
     const result = await gitStore.commit(settingsStore.workspacePath, commitMessage.trim());
     gitBusy = false;
+    console.log('[StatusBar] Commit result:', result);
     if (result.ok) {
+      console.log('[StatusBar] Commit succeeded, SHA:', result.sha);
       gitMenuOpen = false;
     } else {
+      console.log('[StatusBar] Commit failed:', result.error);
       gitError = result.error || 'Commit failed';
     }
   }
