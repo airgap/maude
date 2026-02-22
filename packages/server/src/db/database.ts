@@ -318,6 +318,44 @@ export function initDatabase(): void {
     CREATE INDEX IF NOT EXISTS idx_scheduled_tasks_next_run ON scheduled_tasks(next_run);
     CREATE INDEX IF NOT EXISTS idx_scheduled_task_executions_task ON scheduled_task_executions(task_id, started_at DESC);
 
+    CREATE TABLE IF NOT EXISTS webhooks (
+      id TEXT PRIMARY KEY,
+      workspace_id TEXT NOT NULL,
+      name TEXT NOT NULL,
+      description TEXT NOT NULL DEFAULT '',
+      auth_method TEXT NOT NULL DEFAULT 'bearer',
+      secret TEXT NOT NULL,
+      prompt_template TEXT NOT NULL,
+      profile_id TEXT,
+      status TEXT NOT NULL DEFAULT 'enabled',
+      max_per_minute INTEGER NOT NULL DEFAULT 10,
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL,
+      FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE,
+      FOREIGN KEY (profile_id) REFERENCES agent_profiles(id) ON DELETE SET NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS webhook_executions (
+      id TEXT PRIMARY KEY,
+      webhook_id TEXT NOT NULL,
+      conversation_id TEXT,
+      status TEXT NOT NULL DEFAULT 'running',
+      http_status INTEGER NOT NULL DEFAULT 202,
+      payload_size INTEGER NOT NULL DEFAULT 0,
+      source TEXT,
+      response_time_ms INTEGER,
+      started_at INTEGER NOT NULL,
+      completed_at INTEGER,
+      error_message TEXT,
+      FOREIGN KEY (webhook_id) REFERENCES webhooks(id) ON DELETE CASCADE,
+      FOREIGN KEY (conversation_id) REFERENCES conversations(id) ON DELETE CASCADE
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_webhooks_workspace ON webhooks(workspace_id);
+    CREATE INDEX IF NOT EXISTS idx_webhooks_status ON webhooks(status);
+    CREATE INDEX IF NOT EXISTS idx_webhook_executions_webhook ON webhook_executions(webhook_id, started_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_webhook_executions_started ON webhook_executions(started_at DESC);
+
   `);
 
   // Migrate: add new conversation columns (safe ALTER TABLE — no-ops if already exist)

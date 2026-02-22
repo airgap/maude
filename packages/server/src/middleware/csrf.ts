@@ -25,7 +25,7 @@ export function getCsrfToken(): string {
 const PROTECTED_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 
 /** Paths that are exempt from CSRF checks (webhooks, auth bootstrap). */
-const CSRF_EXEMPT_PATHS = ['/api/auth/', '/health'];
+const CSRF_EXEMPT_PATHS = ['/api/auth/', '/health', '/api/webhooks/inbound/'];
 
 /** Allowed origin patterns for mutation requests. */
 const ALLOWED_ORIGIN_PATTERNS = [

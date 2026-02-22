@@ -282,3 +282,15 @@ export type {
   ScheduledTaskWithStats,
   StreamScheduledTaskEvent,
 } from './scheduled-tasks.js';
+
+export type {
+  WebhookAuthMethod,
+  WebhookStatus,
+  WebhookExecutionStatus,
+  Webhook,
+  WebhookExecution,
+  WebhookCreateInput,
+  WebhookUpdateInput,
+  WebhookWithStats,
+  StreamWebhookEvent,
+} from './webhooks.js';

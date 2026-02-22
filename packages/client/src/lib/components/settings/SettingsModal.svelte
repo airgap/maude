@@ -21,6 +21,7 @@
   import { SIDEBAR_TABS } from '$lib/config/sidebarTabs';
   import { THEMES } from '$lib/config/themes';
   import { workspaceStore } from '$lib/stores/workspace.svelte';
+  import WebhookSettings from './WebhookSettings.svelte';
 
   const cliProviders: { id: CliProvider; label: string; desc: string }[] = [
     { id: 'claude', label: 'Claude Code', desc: 'Anthropic Claude CLI' },
@@ -41,7 +42,8 @@
     | 'security'
     | 'mcp'
     | 'keybindings'
-    | 'profiles' {
+    | 'profiles'
+    | 'webhooks' {
     if (typeof localStorage !== 'undefined') {
       const tab = localStorage.getItem('e-settings-tab');
       if (tab) {
@@ -64,6 +66,7 @@
     | 'mcp'
     | 'keybindings'
     | 'profiles'
+    | 'webhooks'
   >(getInitialTab());
 
   // --- BYOK state ---
@@ -797,7 +800,7 @@
           </button>
         {/each}
         <span class="settings-section-header">Integrations</span>
-        {#each ['mcp'] as tab}
+        {#each ['mcp', 'webhooks'] as tab}
           <button
             class="settings-tab"
             class:active={activeTab === tab}
@@ -2794,6 +2797,8 @@
               </div>
             {/if}
           </div>
+        {:else if activeTab === 'webhooks'}
+          <WebhookSettings />
         {:else}
           <!-- keybindings (last branch — no explicit type check needed) -->
           <div class="keybindings-list">

@@ -9,8 +9,13 @@ import { verifyToken, isAuthEnabled } from '../services/auth';
 export const authMiddleware: MiddlewareHandler = async (c, next) => {
   const path = c.req.path;
 
-  // Always skip auth for these paths
-  if (path === '/health' || path.startsWith('/api/auth/') || path === '/api/auth') {
+  // Always skip auth for these paths (inbound webhooks use their own token auth)
+  if (
+    path === '/health' ||
+    path.startsWith('/api/auth/') ||
+    path === '/api/auth' ||
+    path.startsWith('/api/webhooks/inbound/')
+  ) {
     return next();
   }
 
