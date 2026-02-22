@@ -6,11 +6,35 @@ export interface GitFileStatus {
   staged: boolean;
 }
 
+export interface DiagnosticCheck {
+  name: string;
+  status: 'ok' | 'warn' | 'error';
+  message: string;
+  detail?: string;
+}
+
+/** A diagnostic snapshot captured during a commit phase */
+export interface CommitPhaseDiagnostic {
+  phase: 'before-staging' | 'after-staging' | 'after-commit';
+  message: string;
+  porcelain: string;
+  fileCount: number;
+  timestamp: number;
+}
+
 function createGitStore() {
   let isRepo = $state(false);
   let branch = $state('');
   let fileStatuses = $state<GitFileStatus[]>([]);
   let pollTimer = $state<ReturnType<typeof setInterval> | null>(null);
+
+  // Diagnostic state
+  let diagnosticChecks = $state<DiagnosticCheck[]>([]);
+  let diagnosing = $state(false);
+  let lastDiagnoseTime = $state<number | null>(null);
+
+  // Commit phase diagnostics (populated during streaming commit)
+  let commitDiagnostics = $state<CommitPhaseDiagnostic[]>([]);
 
   function getStatus(filePath: string): string | null {
     // Match by path suffix (relativePath may differ from absolute)
@@ -49,6 +73,41 @@ function createGitStore() {
       clearInterval(pollTimer);
       pollTimer = null;
     }
+  }
+
+  async function diagnose(
+    rootPath: string,
+  ): Promise<{ ok: boolean; checks?: DiagnosticCheck[]; error?: string }> {
+    diagnosing = true;
+    try {
+      const res = await api.git.diagnose(rootPath);
+      if (res.ok) {
+        diagnosticChecks = res.data.checks;
+        lastDiagnoseTime = Date.now();
+        return { ok: true, checks: res.data.checks };
+      }
+      return { ok: false, error: 'Diagnose failed' };
+    } catch (err) {
+      const errMsg = String(err);
+      const match = errMsg.match(/Error: (.+)/);
+      return { ok: false, error: match ? match[1] : errMsg };
+    } finally {
+      diagnosing = false;
+    }
+  }
+
+  function clearDiagnostics() {
+    diagnosticChecks = [];
+    lastDiagnoseTime = null;
+  }
+
+  function clearCommitDiagnostics() {
+    commitDiagnostics = [];
+  }
+
+  /** Record a commit phase diagnostic event from the streaming commit */
+  function addCommitDiagnostic(diagnostic: CommitPhaseDiagnostic) {
+    commitDiagnostics = [...commitDiagnostics, diagnostic];
   }
 
   async function commit(
@@ -119,6 +178,19 @@ function createGitStore() {
     get dirtyCount() {
       return fileStatuses.length;
     },
+    // Diagnostic state
+    get diagnosticChecks() {
+      return diagnosticChecks;
+    },
+    get diagnosing() {
+      return diagnosing;
+    },
+    get lastDiagnoseTime() {
+      return lastDiagnoseTime;
+    },
+    get commitDiagnostics() {
+      return commitDiagnostics;
+    },
     getStatus,
     refresh,
     startPolling,
@@ -126,6 +198,10 @@ function createGitStore() {
     commit,
     clean,
     push,
+    diagnose,
+    clearDiagnostics,
+    clearCommitDiagnostics,
+    addCommitDiagnostic,
   };
 }
 

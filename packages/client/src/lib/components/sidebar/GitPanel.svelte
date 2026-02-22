@@ -4,6 +4,7 @@
   import { gitStore, type GitFileStatus } from '$lib/stores/git.svelte';
   import { settingsStore } from '$lib/stores/settings.svelte';
   import { primaryPaneStore } from '$lib/stores/primaryPane.svelte';
+  import { gitOperationsStore } from '$lib/stores/gitOperations.svelte';
 
   // ── Derived state ────────────────────────────────────────────────────────
 

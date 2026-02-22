@@ -1204,5 +1204,601 @@ index abc..def 100644
       expect(json.ok).toBe(false);
       expect(json.error).toContain('diagnose spawn failed');
     });
+
+    test('detects index.lock file', async () => {
+      let callIndex = 0;
+      spawnSpy = spyOn(Bun, 'spawn').mockImplementation(() => {
+        callIndex++;
+        switch (callIndex) {
+          case 1:
+            return mockProc('true\n', 0) as any;
+          case 2:
+            return mockProc('.git\n', 0) as any;
+          case 3:
+            return mockProc('abc123\n', 0) as any;
+          case 4:
+            return mockProc('', 0) as any;
+          case 5:
+            return mockProc('', 0) as any;
+          case 6:
+            return mockProc('', 0) as any;
+          case 7:
+            return mockProc('', 0) as any;
+          case 8:
+            return mockProc('main\n', 0) as any;
+          case 9:
+            return mockProc('', 0) as any;
+          default:
+            return mockProc('', 0) as any;
+        }
+      });
+
+      const fileSpy = spyOn(Bun, 'file').mockImplementation((path: any) => {
+        const pathStr = String(path);
+        // Simulate index.lock existing
+        if (pathStr.includes('index.lock')) {
+          return { exists: () => Promise.resolve(true) } as any;
+        }
+        return { exists: () => Promise.resolve(false) } as any;
+      });
+
+      try {
+        const res = await app.request('/diagnose?path=/proj');
+        const json = await res.json();
+        const lockCheck = json.data.checks.find((c: any) => c.name === 'index-lock');
+        expect(lockCheck.status).toBe('error');
+        expect(lockCheck.message).toContain('index.lock');
+      } finally {
+        fileSpy.mockRestore();
+      }
+    });
+
+    test('detects detached HEAD state', async () => {
+      let callIndex = 0;
+      spawnSpy = spyOn(Bun, 'spawn').mockImplementation(() => {
+        callIndex++;
+        switch (callIndex) {
+          case 1:
+            return mockProc('true\n', 0) as any;
+          case 2:
+            return mockProc('.git\n', 0) as any;
+          case 3:
+            return mockProc('abc123\n', 0) as any;
+          case 4:
+            return mockProc('', 0) as any;
+          case 5:
+            return mockProc('', 0) as any;
+          case 6:
+            return mockProc('', 0) as any;
+          case 7:
+            return mockProc('', 0) as any;
+          case 8:
+            return mockProc('HEAD\n', 0) as any; // Detached HEAD
+          case 9:
+            return mockProc('', 0) as any;
+          default:
+            return mockProc('', 0) as any;
+        }
+      });
+
+      const fileSpy = spyOn(Bun, 'file').mockImplementation(() => {
+        return { exists: () => Promise.resolve(false) } as any;
+      });
+
+      try {
+        const res = await app.request('/diagnose?path=/proj');
+        const json = await res.json();
+        const branchCheck = json.data.checks.find((c: any) => c.name === 'branch');
+        expect(branchCheck.status).toBe('warn');
+        expect(branchCheck.message).toContain('Detached HEAD');
+      } finally {
+        fileSpy.mockRestore();
+      }
+    });
+
+    test('detects both staged and unstaged changes (staging mismatch)', async () => {
+      let callIndex = 0;
+      spawnSpy = spyOn(Bun, 'spawn').mockImplementation(() => {
+        callIndex++;
+        switch (callIndex) {
+          case 1:
+            return mockProc('true\n', 0) as any;
+          case 2:
+            return mockProc('.git\n', 0) as any;
+          case 3:
+            return mockProc('abc123\n', 0) as any;
+          case 4:
+            return mockProc('MM both.ts\n', 0) as any;
+          case 5:
+            return mockProc(' both.ts | 3 +++\n 1 file changed\n', 0) as any; // staged diff
+          case 6:
+            return mockProc(' both.ts | 2 ++\n 1 file changed\n', 0) as any; // unstaged diff
+          case 7:
+            return mockProc('', 0) as any;
+          case 8:
+            return mockProc('main\n', 0) as any;
+          case 9:
+            return mockProc('', 0) as any;
+          default:
+            return mockProc('', 0) as any;
+        }
+      });
+
+      const fileSpy = spyOn(Bun, 'file').mockImplementation(() => {
+        return { exists: () => Promise.resolve(false) } as any;
+      });
+
+      try {
+        const res = await app.request('/diagnose?path=/proj');
+        const json = await res.json();
+        const stagingCheck = json.data.checks.find((c: any) => c.name === 'staging-mismatch');
+        expect(stagingCheck.status).toBe('warn');
+        expect(stagingCheck.message).toContain('Both staged AND unstaged');
+      } finally {
+        fileSpy.mockRestore();
+      }
+    });
+
+    test('detects rebase in progress', async () => {
+      let callIndex = 0;
+      spawnSpy = spyOn(Bun, 'spawn').mockImplementation(() => {
+        callIndex++;
+        switch (callIndex) {
+          case 1:
+            return mockProc('true\n', 0) as any;
+          case 2:
+            return mockProc('.git\n', 0) as any;
+          case 3:
+            return mockProc('abc123\n', 0) as any;
+          case 4:
+            return mockProc('', 0) as any;
+          case 5:
+            return mockProc('', 0) as any;
+          case 6:
+            return mockProc('', 0) as any;
+          case 7:
+            return mockProc('', 0) as any;
+          case 8:
+            return mockProc('main\n', 0) as any;
+          case 9:
+            return mockProc('', 0) as any;
+          default:
+            return mockProc('', 0) as any;
+        }
+      });
+
+      const fileSpy = spyOn(Bun, 'file').mockImplementation((path: any) => {
+        const pathStr = String(path);
+        // Simulate rebase-merge directory existing
+        if (pathStr.includes('rebase-merge')) {
+          return { exists: () => Promise.resolve(true) } as any;
+        }
+        return { exists: () => Promise.resolve(false) } as any;
+      });
+
+      try {
+        const res = await app.request('/diagnose?path=/proj');
+        const json = await res.json();
+        const opCheck = json.data.checks.find((c: any) => c.name === 'in-progress-op');
+        expect(opCheck.status).toBe('error');
+        expect(opCheck.message).toContain('rebase');
+      } finally {
+        fileSpy.mockRestore();
+      }
+    });
+
+    test('detects merge in progress', async () => {
+      let callIndex = 0;
+      spawnSpy = spyOn(Bun, 'spawn').mockImplementation(() => {
+        callIndex++;
+        switch (callIndex) {
+          case 1:
+            return mockProc('true\n', 0) as any;
+          case 2:
+            return mockProc('.git\n', 0) as any;
+          case 3:
+            return mockProc('abc123\n', 0) as any;
+          case 4:
+            return mockProc('', 0) as any;
+          case 5:
+            return mockProc('', 0) as any;
+          case 6:
+            return mockProc('', 0) as any;
+          case 7:
+            return mockProc('', 0) as any;
+          case 8:
+            return mockProc('main\n', 0) as any;
+          case 9:
+            return mockProc('', 0) as any;
+          default:
+            return mockProc('', 0) as any;
+        }
+      });
+
+      const fileSpy = spyOn(Bun, 'file').mockImplementation((path: any) => {
+        const pathStr = String(path);
+        if (pathStr.includes('MERGE_HEAD')) {
+          return { exists: () => Promise.resolve(true) } as any;
+        }
+        return { exists: () => Promise.resolve(false) } as any;
+      });
+
+      try {
+        const res = await app.request('/diagnose?path=/proj');
+        const json = await res.json();
+        const opCheck = json.data.checks.find((c: any) => c.name === 'in-progress-op');
+        expect(opCheck.status).toBe('warn');
+        expect(opCheck.message).toContain('merge');
+      } finally {
+        fileSpy.mockRestore();
+      }
+    });
+
+    test('warns about invalid HEAD (no commits)', async () => {
+      let callIndex = 0;
+      spawnSpy = spyOn(Bun, 'spawn').mockImplementation(() => {
+        callIndex++;
+        switch (callIndex) {
+          case 1:
+            return mockProc('true\n', 0) as any;
+          case 2:
+            return mockProc('.git\n', 0) as any;
+          case 3:
+            return mockProc('', 128, 'fatal: bad default revision HEAD') as any; // HEAD invalid
+          case 4:
+            return mockProc('', 0) as any;
+          case 5:
+            return mockProc('', 0) as any;
+          case 6:
+            return mockProc('', 0) as any;
+          case 7:
+            return mockProc('', 0) as any;
+          case 8:
+            return mockProc('main\n', 0) as any;
+          case 9:
+            return mockProc('', 0) as any;
+          default:
+            return mockProc('', 0) as any;
+        }
+      });
+
+      const fileSpy = spyOn(Bun, 'file').mockImplementation(() => {
+        return { exists: () => Promise.resolve(false) } as any;
+      });
+
+      try {
+        const res = await app.request('/diagnose?path=/proj');
+        const json = await res.json();
+        const headCheck = json.data.checks.find((c: any) => c.name === 'head-ref');
+        expect(headCheck.status).toBe('warn');
+        expect(headCheck.message).toContain('invalid');
+      } finally {
+        fileSpy.mockRestore();
+      }
+    });
+
+    test('warns about large number of untracked files', async () => {
+      // Generate 150 untracked files
+      const untrackedList = Array.from({ length: 150 }, (_, i) => `untracked_${i}.ts`).join('\n');
+
+      let callIndex = 0;
+      spawnSpy = spyOn(Bun, 'spawn').mockImplementation(() => {
+        callIndex++;
+        switch (callIndex) {
+          case 1:
+            return mockProc('true\n', 0) as any;
+          case 2:
+            return mockProc('.git\n', 0) as any;
+          case 3:
+            return mockProc('abc123\n', 0) as any;
+          case 4:
+            return mockProc('', 0) as any;
+          case 5:
+            return mockProc('', 0) as any;
+          case 6:
+            return mockProc('', 0) as any;
+          case 7:
+            return mockProc('', 0) as any;
+          case 8:
+            return mockProc('main\n', 0) as any;
+          case 9:
+            return mockProc(untrackedList + '\n', 0) as any;
+          default:
+            return mockProc('', 0) as any;
+        }
+      });
+
+      const fileSpy = spyOn(Bun, 'file').mockImplementation(() => {
+        return { exists: () => Promise.resolve(false) } as any;
+      });
+
+      try {
+        const res = await app.request('/diagnose?path=/proj');
+        const json = await res.json();
+        const untrackedCheck = json.data.checks.find((c: any) => c.name === 'untracked-count');
+        expect(untrackedCheck.status).toBe('warn');
+        expect(untrackedCheck.message).toContain('150');
+        expect(untrackedCheck.message).toContain('.gitignore');
+        // Should include detail with first 10 files
+        expect(untrackedCheck.detail).toContain('untracked_0.ts');
+        expect(untrackedCheck.detail).toContain('...');
+      } finally {
+        fileSpy.mockRestore();
+      }
+    });
+
+    test('working tree status shows correct counts for staged, unstaged, and untracked', async () => {
+      let callIndex = 0;
+      spawnSpy = spyOn(Bun, 'spawn').mockImplementation(() => {
+        callIndex++;
+        switch (callIndex) {
+          case 1:
+            return mockProc('true\n', 0) as any;
+          case 2:
+            return mockProc('.git\n', 0) as any;
+          case 3:
+            return mockProc('abc123\n', 0) as any;
+          case 4:
+            return mockProc('M  staged.ts\n M unstaged.ts\n?? untracked.ts\n', 0) as any;
+          case 5:
+            return mockProc('', 0) as any;
+          case 6:
+            return mockProc('', 0) as any;
+          case 7:
+            return mockProc('', 0) as any;
+          case 8:
+            return mockProc('main\n', 0) as any;
+          case 9:
+            return mockProc('', 0) as any;
+          default:
+            return mockProc('', 0) as any;
+        }
+      });
+
+      const fileSpy = spyOn(Bun, 'file').mockImplementation(() => {
+        return { exists: () => Promise.resolve(false) } as any;
+      });
+
+      try {
+        const res = await app.request('/diagnose?path=/proj');
+        const json = await res.json();
+        const workingTree = json.data.checks.find((c: any) => c.name === 'working-tree');
+        expect(workingTree.status).toBe('warn');
+        expect(workingTree.message).toContain('1 staged');
+        expect(workingTree.message).toContain('1 unstaged');
+        expect(workingTree.message).toContain('1 untracked');
+        expect(workingTree.message).toContain('3 total');
+      } finally {
+        fileSpy.mockRestore();
+      }
+    });
+  });
+
+  // ---------------------------------------------------------------
+  // POST /commit — commit flow diagnostic logging verification
+  // ---------------------------------------------------------------
+  describe('POST /commit — diagnostic logging', () => {
+    test('calls git status three times (before add, after add, after commit)', async () => {
+      let callIndex = 0;
+      const spawnCalls: string[][] = [];
+      spawnSpy = spyOn(Bun, 'spawn').mockImplementation((...args: any[]) => {
+        callIndex++;
+        const cmd = args[0] as string[];
+        spawnCalls.push(cmd);
+        switch (callIndex) {
+          case 1:
+            return mockProc(' M file.ts\n', 0) as any; // status before
+          case 2:
+            return mockProc('', 0) as any; // git add
+          case 3:
+            return mockProc('M  file.ts\n', 0) as any; // status after add
+          case 4:
+            return mockProc('[main abc1234] test\n', 0) as any; // commit
+          case 5:
+            return mockProc('', 0) as any; // status after commit
+          case 6:
+            return mockProc('abc1234567890\n', 0) as any; // rev-parse HEAD
+          default:
+            return mockProc('', 0) as any;
+        }
+      });
+
+      const res = await app.request('/commit', {
+        method: 'POST',
+        body: JSON.stringify({ path: '/proj', message: 'test' }),
+        headers: { 'Content-Type': 'application/json' },
+      });
+
+      const json = await res.json();
+      expect(json.ok).toBe(true);
+
+      // Verify all three status checks were made
+      const statusCalls = spawnCalls.filter(
+        (cmd) => cmd.includes('git') && cmd.includes('status') && cmd.includes('--porcelain'),
+      );
+      expect(statusCalls).toHaveLength(3);
+
+      // Verify git add was called
+      const addCalls = spawnCalls.filter((cmd) => cmd.includes('git') && cmd.includes('add'));
+      expect(addCalls).toHaveLength(1);
+    });
+
+    test('trims commit message whitespace', async () => {
+      let callIndex = 0;
+      let commitMsg = '';
+      spawnSpy = spyOn(Bun, 'spawn').mockImplementation((...args: any[]) => {
+        callIndex++;
+        const cmd = args[0] as string[];
+        if (cmd.includes('commit') && cmd.includes('-m')) {
+          commitMsg = cmd[cmd.indexOf('-m') + 1];
+        }
+        switch (callIndex) {
+          case 1:
+            return mockProc(' M file.ts\n', 0) as any;
+          case 2:
+            return mockProc('', 0) as any;
+          case 3:
+            return mockProc('M  file.ts\n', 0) as any;
+          case 4:
+            return mockProc('[main abc] test\n', 0) as any;
+          case 5:
+            return mockProc('', 0) as any;
+          case 6:
+            return mockProc('abc123\n', 0) as any;
+          default:
+            return mockProc('', 0) as any;
+        }
+      });
+
+      const res = await app.request('/commit', {
+        method: 'POST',
+        body: JSON.stringify({ path: '/proj', message: '  trimmed message  ' }),
+        headers: { 'Content-Type': 'application/json' },
+      });
+
+      expect((await res.json()).ok).toBe(true);
+      expect(commitMsg).toBe('trimmed message');
+    });
+  });
+
+  // ---------------------------------------------------------------
+  // POST /clean — diagnostic edge cases
+  // ---------------------------------------------------------------
+  describe('POST /clean — diagnostic edge cases', () => {
+    test('continues cleaning when reset fails (non-fatal)', async () => {
+      let callIndex = 0;
+      spawnSpy = spyOn(Bun, 'spawn').mockImplementation(() => {
+        callIndex++;
+        switch (callIndex) {
+          case 1:
+            return mockProc(' M file.ts\n', 0) as any; // before
+          case 2:
+            return mockProc('', 1, 'reset failed') as any; // reset HEAD fails
+          case 3:
+            return mockProc('', 0) as any; // checkout
+          case 4:
+            return mockProc('', 0) as any; // clean
+          case 5:
+            return mockProc('', 0) as any; // after
+          default:
+            return mockProc('', 0) as any;
+        }
+      });
+
+      const res = await app.request('/clean', {
+        method: 'POST',
+        body: JSON.stringify({ path: '/proj' }),
+        headers: { 'Content-Type': 'application/json' },
+      });
+
+      const json = await res.json();
+      expect(json.ok).toBe(true);
+      expect(json.data.fullyClean).toBe(true);
+    });
+
+    test('continues cleaning when checkout fails (non-fatal)', async () => {
+      let callIndex = 0;
+      spawnSpy = spyOn(Bun, 'spawn').mockImplementation(() => {
+        callIndex++;
+        switch (callIndex) {
+          case 1:
+            return mockProc(' M file.ts\n', 0) as any;
+          case 2:
+            return mockProc('', 0) as any; // reset OK
+          case 3:
+            return mockProc('', 1, 'checkout failed') as any; // checkout fails
+          case 4:
+            return mockProc('', 0) as any; // clean
+          case 5:
+            return mockProc('', 0) as any; // after — clean despite checkout fail
+          default:
+            return mockProc('', 0) as any;
+        }
+      });
+
+      const res = await app.request('/clean', {
+        method: 'POST',
+        body: JSON.stringify({ path: '/proj' }),
+        headers: { 'Content-Type': 'application/json' },
+      });
+
+      const json = await res.json();
+      expect(json.ok).toBe(true);
+      expect(json.data.fullyClean).toBe(true);
+    });
+
+    test('continues cleaning when git clean -fd fails (non-fatal)', async () => {
+      let callIndex = 0;
+      spawnSpy = spyOn(Bun, 'spawn').mockImplementation(() => {
+        callIndex++;
+        switch (callIndex) {
+          case 1:
+            return mockProc('?? new.ts\n', 0) as any;
+          case 2:
+            return mockProc('', 0) as any;
+          case 3:
+            return mockProc('', 0) as any;
+          case 4:
+            return mockProc('', 1, 'clean failed') as any; // clean -fd fails
+          case 5:
+            return mockProc('?? new.ts\n', 0) as any; // still dirty
+          default:
+            return mockProc('', 0) as any;
+        }
+      });
+
+      const res = await app.request('/clean', {
+        method: 'POST',
+        body: JSON.stringify({ path: '/proj' }),
+        headers: { 'Content-Type': 'application/json' },
+      });
+
+      const json = await res.json();
+      expect(json.ok).toBe(true);
+      expect(json.data.fullyClean).toBe(false);
+      expect(json.data.afterFileCount).toBe(1);
+    });
+  });
+
+  // ---------------------------------------------------------------
+  // Path validation
+  // ---------------------------------------------------------------
+  describe('Path validation', () => {
+    test('blocks /sys path for status', async () => {
+      const res = await app.request('/status?path=/sys/something');
+      expect(res.status).toBe(403);
+    });
+
+    test('blocks /dev path for branch', async () => {
+      const res = await app.request('/branch?path=/dev/null');
+      expect(res.status).toBe(403);
+    });
+
+    test('blocks /boot path for commit', async () => {
+      const res = await app.request('/commit', {
+        method: 'POST',
+        body: JSON.stringify({ path: '/boot/kernel', message: 'test' }),
+        headers: { 'Content-Type': 'application/json' },
+      });
+      expect(res.status).toBe(403);
+    });
+
+    test('blocks /sbin path for clean', async () => {
+      const res = await app.request('/clean', {
+        method: 'POST',
+        body: JSON.stringify({ path: '/sbin/init' }),
+        headers: { 'Content-Type': 'application/json' },
+      });
+      expect(res.status).toBe(403);
+    });
+
+    test('blocks /proc path for push', async () => {
+      const res = await app.request('/push', {
+        method: 'POST',
+        body: JSON.stringify({ path: '/proc/self' }),
+        headers: { 'Content-Type': 'application/json' },
+      });
+      expect(res.status).toBe(403);
+    });
   });
 });
