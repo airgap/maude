@@ -6,6 +6,7 @@ export type {
   ThinkingContent,
   ImageContent,
   NudgeContent,
+  CrossSessionContent,
   MessageContent,
   Message,
   ToolApprovalState,
@@ -33,6 +34,7 @@ export type {
   StreamArtifactCreated,
   StreamAgentNoteCreated,
   StreamCommentary,
+  StreamCrossSessionMessage,
 } from './streaming.js';
 
 export type {
@@ -294,3 +296,18 @@ export type {
   WebhookWithStats,
   StreamWebhookEvent,
 } from './webhooks.js';
+
+export type {
+  CrossSessionPermission,
+  CrossSessionMessage,
+  CrossSessionSenderContext,
+  CrossSessionInfo,
+  CrossSessionSendInput,
+  CrossSessionRateLimit,
+  CrossSessionSettings,
+} from './cross-session.js';
+
+export {
+  DEFAULT_CROSS_SESSION_RATE_LIMIT,
+  DEFAULT_CROSS_SESSION_SETTINGS,
+} from './cross-session.js';

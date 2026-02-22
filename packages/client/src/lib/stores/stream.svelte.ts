@@ -451,6 +451,11 @@ function createStreamStore() {
             agentNotesStore.addFromStream(event.note);
           }
           break;
+
+        case 'cross_session_message':
+          // Cross-session messages are handled by the cross-session store
+          // via its own SSE connection. This case is here for completeness.
+          break;
       }
     },
 

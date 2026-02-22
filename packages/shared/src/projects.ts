@@ -81,6 +81,10 @@ export interface WorkspaceSettings {
   commentaryTtsGoogleApiKey?: string;
   /** Experimental: spatial audio positioning for multi-workspace TTS (disabled by default) */
   commentarySpatialAudioEnabled?: boolean;
+  /** Cross-session messaging permission: 'open' | 'send_only' | 'receive_only' | 'disabled' */
+  crossSessionPermission?: 'open' | 'send_only' | 'receive_only' | 'disabled';
+  /** Max cross-session messages per minute for this workspace */
+  crossSessionMaxPerMinute?: number;
 }
 
 export interface WorkspaceSummary {

@@ -356,6 +356,25 @@ export function initDatabase(): void {
     CREATE INDEX IF NOT EXISTS idx_webhook_executions_webhook ON webhook_executions(webhook_id, started_at DESC);
     CREATE INDEX IF NOT EXISTS idx_webhook_executions_started ON webhook_executions(started_at DESC);
 
+    CREATE TABLE IF NOT EXISTS cross_session_messages (
+      id TEXT PRIMARY KEY,
+      from_conversation_id TEXT NOT NULL,
+      to_conversation_id TEXT NOT NULL,
+      content TEXT NOT NULL,
+      sender_workspace_id TEXT NOT NULL,
+      sender_workspace_name TEXT NOT NULL DEFAULT '',
+      sender_conversation_title TEXT NOT NULL DEFAULT '',
+      sender_agent_profile TEXT,
+      timestamp INTEGER NOT NULL,
+      delivered INTEGER NOT NULL DEFAULT 0,
+      delivered_at INTEGER,
+      created_at INTEGER NOT NULL
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_cross_session_to_conv ON cross_session_messages(to_conversation_id, timestamp);
+    CREATE INDEX IF NOT EXISTS idx_cross_session_from_conv ON cross_session_messages(from_conversation_id, timestamp);
+    CREATE INDEX IF NOT EXISTS idx_cross_session_timestamp ON cross_session_messages(timestamp DESC);
+
   `);
 
   // Migrate: add new conversation columns (safe ALTER TABLE — no-ops if already exist)

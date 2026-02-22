@@ -50,6 +50,16 @@
   /** The nudge text content */
   let nudgeText = $derived(isNudge ? (((message.content as any[])[0]?.text as string) ?? '') : '');
 
+  /** True when this is a cross-session message from another agent */
+  let isCrossSession = $derived(
+    message.role === 'user' &&
+      (message.content as any[]).length > 0 &&
+      (message.content as any[])[0]?.type === 'cross_session',
+  );
+
+  /** The cross-session message data */
+  let crossSessionData = $derived(isCrossSession ? (message.content as any[])[0] : null);
+
   function startEdit() {
     editText = getTextContent();
     editing = true;
@@ -496,7 +506,39 @@
   </div>
 {/snippet}
 
-{#if isNudge}
+{#if isCrossSession && crossSessionData}
+  <!-- Cross-session message from another agent — displayed distinctly -->
+  <div class="cross-session-bubble">
+    <div class="cross-session-header">
+      <span class="cross-session-icon">
+        <svg
+          width="12"
+          height="12"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+        >
+          <path d="M4 12h16M4 12l4-4M4 12l4 4M20 12l-4-4M20 12l-4 4"></path>
+        </svg>
+      </span>
+      <span class="cross-session-label">Cross-Session</span>
+      <span class="cross-session-from" title={crossSessionData.fromConversationId}>
+        {crossSessionData.fromWorkspaceName}: {crossSessionData.fromConversationTitle}
+        {#if crossSessionData.fromAgentProfile}
+          <span class="cross-session-profile">({crossSessionData.fromAgentProfile})</span>
+        {/if}
+      </span>
+      <span class="cross-session-time">
+        {new Date(message.timestamp).toLocaleTimeString([], {
+          hour: '2-digit',
+          minute: '2-digit',
+        })}
+      </span>
+    </div>
+    <div class="cross-session-content">{crossSessionData.text}</div>
+  </div>
+{:else if isNudge}
   <!-- Nudge messages rendered distinctly inline -->
   <div class="nudge-bubble">
     <span class="nudge-icon">
@@ -938,6 +980,73 @@
     flex-direction: column;
     gap: 6px;
     margin-top: 4px;
+  }
+
+  /* ── Cross-session message bubble ── */
+  .cross-session-bubble {
+    margin: 6px 28px;
+    padding: 8px 12px;
+    background: color-mix(in srgb, var(--accent-warning, #f59e0b) 8%, transparent);
+    border: 1px solid color-mix(in srgb, var(--accent-warning, #f59e0b) 30%, transparent);
+    border-left: 3px solid var(--accent-warning, #f59e0b);
+    border-radius: var(--radius-sm);
+    font-size: var(--fs-sm);
+    animation: fadeIn 0.15s linear;
+  }
+
+  .cross-session-header {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 4px;
+    flex-wrap: wrap;
+  }
+
+  .cross-session-icon {
+    color: var(--accent-warning, #f59e0b);
+    opacity: 0.9;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+  }
+
+  .cross-session-label {
+    font-size: var(--fs-xxs);
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--accent-warning, #f59e0b);
+    opacity: 0.85;
+    flex-shrink: 0;
+  }
+
+  .cross-session-from {
+    font-size: var(--fs-xs);
+    color: var(--text-secondary);
+    font-weight: 500;
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .cross-session-profile {
+    font-weight: 400;
+    color: var(--text-tertiary);
+    font-style: italic;
+  }
+
+  .cross-session-time {
+    font-size: var(--fs-xxs);
+    color: var(--text-tertiary);
+    flex-shrink: 0;
+  }
+
+  .cross-session-content {
+    color: var(--text-primary);
+    white-space: pre-wrap;
+    word-break: break-word;
+    line-height: 1.45;
   }
 
   /* ── Nudge message bubble ── */

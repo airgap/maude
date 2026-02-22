@@ -5,6 +5,7 @@
   import { primaryPaneStore } from '$lib/stores/primaryPane.svelte';
   import { uiStore } from '$lib/stores/ui.svelte';
   import { managerCommentaryStore } from '$lib/stores/manager-commentary.svelte';
+  import { crossSessionStore } from '$lib/stores/cross-session.svelte';
   import { onMount, onDestroy } from 'svelte';
   import type { WorkspaceSettings, ScheduledTaskWithStats } from '@e/shared';
 
@@ -368,15 +369,17 @@
 
   // Close dropdowns when clicking outside
   $effect(() => {
-    if (openPersonalityDropdown || openVerbosityDropdown) {
+    if (openPersonalityDropdown || openVerbosityDropdown || openCrossSessionDropdown) {
       const handler = (e: MouseEvent) => {
         const target = e.target as HTMLElement;
         if (
           !target.closest('.ws-personality-dropdown') &&
-          !target.closest('.ws-verbosity-dropdown')
+          !target.closest('.ws-verbosity-dropdown') &&
+          !target.closest('.ws-cross-session-dropdown')
         ) {
           openPersonalityDropdown = null;
           openVerbosityDropdown = null;
+          openCrossSessionDropdown = null;
         }
       };
       document.addEventListener('click', handler);
@@ -424,15 +427,74 @@
     return p.pan < 0 ? 'CL' : 'CR';
   }
 
+  // ---- Cross-Session Flow ----
+  let crossSessionFlow = $derived(crossSessionStore.recentFlow);
+  let openCrossSessionDropdown = $state<string | null>(null);
+
+  type CrossSessionPerm = 'open' | 'send_only' | 'receive_only' | 'disabled';
+
+  const crossSessionPermOptions: { value: CrossSessionPerm; label: string; icon: string }[] = [
+    { value: 'open', label: 'Open (send & receive)', icon: '&#x2194;' },
+    { value: 'send_only', label: 'Send only', icon: '&#x2192;' },
+    { value: 'receive_only', label: 'Receive only', icon: '&#x2190;' },
+    { value: 'disabled', label: 'Disabled', icon: '&#x2715;' },
+  ];
+
+  function toggleCrossSessionDropdown(wsId: string) {
+    openCrossSessionDropdown = openCrossSessionDropdown === wsId ? null : wsId;
+  }
+
+  async function setCrossSessionPermission(ws: WorkspaceStatus, permission: CrossSessionPerm) {
+    openCrossSessionDropdown = null;
+    try {
+      await api.workspaces.update(ws.id, {
+        settings: { crossSessionPermission: permission },
+      });
+      if (data) {
+        const idx = data.workspaces.findIndex((w) => w.id === ws.id);
+        if (idx >= 0) {
+          data.workspaces[idx].settings = {
+            ...data.workspaces[idx].settings,
+            crossSessionPermission: permission,
+          };
+        }
+      }
+      uiStore.toast(
+        `Cross-session: ${crossSessionPermOptions.find((o) => o.value === permission)?.label ?? permission}`,
+        'info',
+      );
+    } catch (err) {
+      console.error('Failed to set cross-session permission:', err);
+      uiStore.toast('Failed to update cross-session permission', 'error');
+    }
+  }
+
+  /** Count of cross-session messages involving a workspace */
+  function crossSessionCountForWorkspace(wsId: string): number {
+    return crossSessionFlow.filter(
+      (m) =>
+        m.senderContext.workspaceId === wsId ||
+        // Check if the target is in this workspace (approximate via recent flow)
+        crossSessionFlow.some((m2) => m2.senderContext.workspaceId === wsId),
+    ).length;
+  }
+
+  /** Get recent cross-session messages involving a workspace */
+  function crossSessionMessagesForWorkspace(wsId: string): typeof crossSessionFlow {
+    return crossSessionFlow.filter((m) => m.senderContext.workspaceId === wsId).slice(0, 5);
+  }
+
   // ---- Lifecycle ----
   onMount(() => {
     load();
     connectSSE();
+    crossSessionStore.subscribeFlow();
     refreshInterval = setInterval(load, 30_000);
   });
 
   onDestroy(() => {
     evtSource?.close();
+    crossSessionStore.unsubscribeFlow();
     if (refreshInterval) clearInterval(refreshInterval);
     managerCommentaryStore.stopAll();
   });
@@ -727,6 +789,7 @@
           {@const isMuted = ws.settings?.commentaryMuted ?? false}
           {@const isExpanded = expandedWsId === ws.id}
           {@const currentVerbosity = ws.settings?.commentaryVerbosity ?? 'strategic'}
+          {@const wsXsMessages = crossSessionMessagesForWorkspace(ws.id)}
           <div class="workspace-card" class:muted={isMuted} class:expanded={isExpanded}>
             <!-- Workspace Header Row -->
             <div class="workspace-card-header">
@@ -755,10 +818,28 @@
                   {#if ws.activeSessions.length > 0}
                     · {ws.activeSessions.length} session{ws.activeSessions.length !== 1 ? 's' : ''}
                   {/if}
+                  {#if ws.settings?.crossSessionPermission && ws.settings.crossSessionPermission !== 'open'}
+                    · xsm: {ws.settings.crossSessionPermission}
+                  {/if}
                 </span>
               </div>
               {#if ws.pendingApprovals.length > 0}
                 <span class="badge warn sm">{ws.pendingApprovals.length}</span>
+              {/if}
+              {#if wsXsMessages.length > 0}
+                <span class="badge cross-session-badge sm" title="Cross-session messages">
+                  <svg
+                    width="10"
+                    height="10"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2.5"
+                  >
+                    <path d="M4 12h16M4 12l4-4M4 12l4 4M20 12l-4-4M20 12l-4 4"></path>
+                  </svg>
+                  {wsXsMessages.length}
+                </span>
               {/if}
               <div class="ws-commentary-controls">
                 <!-- Personality Selector -->
@@ -987,6 +1068,50 @@
                     </svg>
                   {/if}
                 </button>
+
+                <!-- Cross-Session Permission (AC 5) -->
+                <div class="ws-cross-session-dropdown">
+                  <button
+                    class="ws-control-btn"
+                    class:active={ws.settings?.crossSessionPermission !== 'disabled'}
+                    onclick={(e) => {
+                      e.stopPropagation();
+                      toggleCrossSessionDropdown(ws.id);
+                    }}
+                    title="Cross-session messaging: {ws.settings?.crossSessionPermission || 'open'}"
+                  >
+                    <svg
+                      width="12"
+                      height="12"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <path d="M4 12h16M4 12l4-4M4 12l4 4M20 12l-4-4M20 12l-4 4"></path>
+                    </svg>
+                  </button>
+                  {#if openCrossSessionDropdown === ws.id}
+                    <div class="ws-dropdown-menu">
+                      {#each crossSessionPermOptions as opt (opt.value)}
+                        <button
+                          class="ws-dropdown-item"
+                          class:selected={(ws.settings?.crossSessionPermission || 'open') ===
+                            opt.value}
+                          onclick={(e) => {
+                            e.stopPropagation();
+                            setCrossSessionPermission(ws, opt.value);
+                          }}
+                        >
+                          <span class="ws-dropdown-icon">{@html opt.icon}</span>
+                          <span>{opt.label}</span>
+                        </button>
+                      {/each}
+                    </div>
+                  {/if}
+                </div>
               </div>
             </div>
 
@@ -1067,6 +1192,63 @@
         {/each}
       </div>
     </div>
+
+    <!-- Cross-Session Messages (AC 4) -->
+    {#if crossSessionFlow.length > 0}
+      <div class="section">
+        <div class="section-header">
+          <span class="section-title">
+            Agent Messages
+            <span class="badge cross-session-flow-badge">{crossSessionFlow.length}</span>
+          </span>
+        </div>
+        <div class="item-list cross-session-flow-list">
+          {#each crossSessionFlow.slice(0, 10) as msg (msg.id)}
+            <div class="cross-session-flow-item">
+              <span class="cross-session-flow-icon">
+                <svg
+                  width="11"
+                  height="11"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                >
+                  <path d="M5 12h14M12 5l7 7-7 7"></path>
+                </svg>
+              </span>
+              <div class="cross-session-flow-info">
+                <span class="cross-session-flow-route">
+                  {msg.senderContext.conversationTitle || msg.senderContext.workspaceName}
+                  <span class="cross-session-flow-arrow">&rarr;</span>
+                  <span class="cross-session-flow-target"
+                    >{msg.toConversationId.slice(0, 8)}...</span
+                  >
+                </span>
+                <span class="cross-session-flow-preview"
+                  >{msg.content.slice(0, 80)}{msg.content.length > 80 ? '...' : ''}</span
+                >
+                <span class="cross-session-flow-time">{formatTime(msg.timestamp)}</span>
+              </div>
+              {#if msg.delivered}
+                <span class="cross-session-flow-delivered" title="Delivered">
+                  <svg
+                    width="10"
+                    height="10"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="var(--accent-success, #10b981)"
+                    stroke-width="2.5"
+                  >
+                    <path d="M20 6L9 17l-5-5" />
+                  </svg>
+                </span>
+              {/if}
+            </div>
+          {/each}
+        </div>
+      </div>
+    {/if}
 
     <!-- Completed Work (last 24h) -->
     {#if data.completedStories.length > 0}
@@ -1309,6 +1491,75 @@
   .badge.sm {
     font-size: var(--fs-xxs);
     padding: 1px 4px;
+  }
+  .badge.cross-session-badge {
+    background: color-mix(in srgb, var(--accent-primary) 15%, transparent);
+    color: var(--accent-primary);
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+  }
+  .badge.cross-session-flow-badge {
+    background: color-mix(in srgb, var(--accent-primary) 15%, transparent);
+    color: var(--accent-primary);
+  }
+  .cross-session-flow-list {
+    max-height: 200px;
+    overflow-y: auto;
+  }
+  .cross-session-flow-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 6px;
+    padding: 5px 8px;
+    background: var(--bg-secondary);
+    border-radius: var(--radius-sm);
+    font-size: var(--fs-xs);
+  }
+  .cross-session-flow-icon {
+    color: var(--accent-primary);
+    flex-shrink: 0;
+    margin-top: 1px;
+    display: flex;
+    align-items: center;
+  }
+  .cross-session-flow-info {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+  }
+  .cross-session-flow-route {
+    font-weight: 500;
+    color: var(--text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .cross-session-flow-arrow {
+    color: var(--text-tertiary);
+    margin: 0 2px;
+  }
+  .cross-session-flow-target {
+    color: var(--text-secondary);
+  }
+  .cross-session-flow-preview {
+    color: var(--text-tertiary);
+    font-size: var(--fs-xxs);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .cross-session-flow-time {
+    color: var(--text-tertiary);
+    font-size: var(--fs-xxs);
+  }
+  .cross-session-flow-delivered {
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    margin-top: 2px;
   }
   .item-list {
     display: flex;
@@ -1625,6 +1876,55 @@
     font-size: var(--fs-xxs);
     color: var(--text-tertiary);
     flex: 1;
+  }
+  .ws-cross-session-dropdown {
+    position: relative;
+  }
+  .ws-dropdown-menu {
+    position: absolute;
+    top: calc(100% + 4px);
+    right: 0;
+    min-width: 170px;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-primary);
+    border-radius: var(--radius-md);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    z-index: 100;
+    overflow: hidden;
+  }
+  .ws-dropdown-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    padding: 8px 10px;
+    background: transparent;
+    border: none;
+    border-bottom: 1px solid var(--border-secondary);
+    cursor: pointer;
+    transition: background var(--transition);
+    text-align: left;
+    font-size: var(--fs-xs);
+    color: var(--text-primary);
+  }
+  .ws-dropdown-item:last-child {
+    border-bottom: none;
+  }
+  .ws-dropdown-item:hover {
+    background: var(--bg-hover);
+  }
+  .ws-dropdown-item.selected {
+    background: color-mix(in srgb, var(--accent-primary) 8%, transparent);
+    color: var(--accent-primary);
+  }
+  .ws-dropdown-icon {
+    flex-shrink: 0;
+    width: 16px;
+    text-align: center;
+    color: var(--text-tertiary);
+  }
+  .ws-dropdown-item.selected .ws-dropdown-icon {
+    color: var(--accent-primary);
   }
   .ws-commentary-feed {
     border-top: 1px solid var(--border-secondary);

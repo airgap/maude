@@ -42,11 +42,13 @@ import { taskRunnerRoutes } from './routes/task-runner';
 import { commentaryRoutes } from './routes/commentary';
 import scheduledTasksRoutes from './routes/scheduled-tasks';
 import webhookRoutes, { webhookInboundApp } from './routes/webhooks';
+import { crossSessionRoutes } from './routes/cross-session';
 import { authMiddleware } from './middleware/auth';
 import { csrfMiddleware, isOriginAllowed } from './middleware/csrf';
 import { websocket } from './ws';
 import { initDatabase } from './db/database';
 import { taskScheduler } from './services/task-scheduler';
+import { crossSessionService } from './services/cross-session';
 import { existsSync } from 'fs';
 import { resolve } from 'path';
 
@@ -141,12 +143,16 @@ app.route('/api/task-runner', taskRunnerRoutes);
 app.route('/api/commentary', commentaryRoutes);
 app.route('/api/scheduled-tasks', scheduledTasksRoutes);
 app.route('/api/webhooks', webhookRoutes);
+app.route('/api/cross-session', crossSessionRoutes);
 
 // Inbound webhook endpoint — bypasses auth/CSRF (uses its own token-based auth)
 app.route('/api/webhooks/inbound', webhookInboundApp);
 
 // Initialize database
 initDatabase();
+
+// Ensure cross-session messaging table exists
+crossSessionService.ensureTable();
 
 // Ensure task scheduler is initialized (singleton auto-starts)
 void taskScheduler;

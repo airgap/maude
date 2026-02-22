@@ -2,6 +2,7 @@ import type { Task } from './tasks.js';
 import type { UserStory, StreamLoopEvent } from './prd.js';
 import type { Artifact } from './artifacts.js';
 import type { AgentNote } from './agent-notes.js';
+import type { CrossSessionMessage } from './cross-session.js';
 
 // SSE event types matching Claude's stream-json format
 export type StreamEvent =
@@ -26,7 +27,8 @@ export type StreamEvent =
   | StreamCompactBoundary
   | StreamArtifactCreated
   | StreamAgentNoteCreated
-  | StreamCommentary;
+  | StreamCommentary
+  | StreamCrossSessionMessage;
 
 export interface StreamMessageStart {
   type: 'message_start';
@@ -223,4 +225,13 @@ export interface StreamCommentary {
   timestamp: number;
   personality: string;
   workspaceId: string;
+}
+
+/**
+ * Emitted when a cross-session message is received from another agent/conversation.
+ * Displayed as a distinct message type in the receiving conversation.
+ */
+export interface StreamCrossSessionMessage {
+  type: 'cross_session_message';
+  message: CrossSessionMessage;
 }

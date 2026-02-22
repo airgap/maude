@@ -1936,4 +1936,127 @@ export const api = {
         body: JSON.stringify(settings),
       }),
   },
+
+  // ── Cross-Session Messaging ──────────────────────────────────────────────────
+  crossSession: {
+    /** List active sessions available for cross-session messaging */
+    listSessions: (excludeId?: string) => {
+      const params = new URLSearchParams();
+      if (excludeId) params.set('exclude', excludeId);
+      const q = params.toString();
+      return request<{
+        ok: boolean;
+        data: Array<{
+          conversationId: string;
+          title: string;
+          workspaceName: string;
+          workspaceId: string;
+          status: 'idle' | 'running' | 'waiting';
+          canReceive: boolean;
+        }>;
+      }>(`/cross-session/sessions${q ? '?' + q : ''}`);
+    },
+
+    /** Send a cross-session message */
+    send: (fromConversationId: string, toConversationId: string, content: string) =>
+      request<{
+        ok: boolean;
+        data: {
+          id: string;
+          fromConversationId: string;
+          toConversationId: string;
+          content: string;
+          senderContext: {
+            workspaceId: string;
+            workspaceName: string;
+            conversationTitle: string;
+            agentProfile?: string;
+          };
+          timestamp: number;
+          delivered: boolean;
+        };
+      }>('/cross-session/send', {
+        method: 'POST',
+        body: JSON.stringify({ fromConversationId, toConversationId, content }),
+      }),
+
+    /** Get undelivered messages for a conversation */
+    getUndelivered: (conversationId: string) =>
+      request<{
+        ok: boolean;
+        data: Array<{
+          id: string;
+          fromConversationId: string;
+          toConversationId: string;
+          content: string;
+          senderContext: {
+            workspaceId: string;
+            workspaceName: string;
+            conversationTitle: string;
+            agentProfile?: string;
+          };
+          timestamp: number;
+          delivered: boolean;
+        }>;
+      }>(`/cross-session/messages/${encodeURIComponent(conversationId)}`),
+
+    /** Mark a message as delivered */
+    markDelivered: (messageId: string) =>
+      request<{ ok: boolean }>(
+        `/cross-session/messages/${encodeURIComponent(messageId)}/delivered`,
+        { method: 'POST' },
+      ),
+
+    /** Get message history for a conversation */
+    getHistory: (
+      conversationId: string,
+      options?: { direction?: 'sent' | 'received' | 'both'; limit?: number },
+    ) => {
+      const params = new URLSearchParams();
+      if (options?.direction) params.set('direction', options.direction);
+      if (options?.limit) params.set('limit', String(options.limit));
+      const q = params.toString();
+      return request<{
+        ok: boolean;
+        data: Array<{
+          id: string;
+          fromConversationId: string;
+          toConversationId: string;
+          content: string;
+          senderContext: {
+            workspaceId: string;
+            workspaceName: string;
+            conversationTitle: string;
+            agentProfile?: string;
+          };
+          timestamp: number;
+          delivered: boolean;
+        }>;
+      }>(`/cross-session/history/${encodeURIComponent(conversationId)}${q ? '?' + q : ''}`);
+    },
+
+    /** Get recent cross-session message flow (for Manager View) */
+    getFlow: (since?: number) => {
+      const params = new URLSearchParams();
+      if (since) params.set('since', String(since));
+      const q = params.toString();
+      return request<{
+        ok: boolean;
+        data: Array<{
+          id: string;
+          fromConversationId: string;
+          toConversationId: string;
+          content: string;
+          senderContext: {
+            workspaceId: string;
+            workspaceName: string;
+            conversationTitle: string;
+            agentProfile?: string;
+          };
+          timestamp: number;
+          delivered: boolean;
+        }>;
+      }>(`/cross-session/flow${q ? '?' + q : ''}`);
+    },
+  },
 };

@@ -43,13 +43,25 @@ export interface NudgeContent {
   text: string;
 }
 
+/** A message received from another agent in a different conversation/session */
+export interface CrossSessionContent {
+  type: 'cross_session';
+  text: string;
+  fromConversationId: string;
+  fromConversationTitle: string;
+  fromWorkspaceName: string;
+  fromAgentProfile?: string;
+  messageId: string;
+}
+
 export type MessageContent =
   | TextContent
   | ToolUseContent
   | ToolResultContent
   | ThinkingContent
   | ImageContent
-  | NudgeContent;
+  | NudgeContent
+  | CrossSessionContent;
 
 export interface Message {
   id: string;
