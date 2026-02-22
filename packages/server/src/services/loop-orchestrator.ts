@@ -2034,6 +2034,18 @@ ${criteria}
   }
 
   private async gitCommit(story: UserStory): Promise<string | null> {
+    const tag = `[loop:${this.loopId}]`;
+
+    // Check status BEFORE staging
+    const beforeStatusProc = Bun.spawn(['git', 'status', '--porcelain'], {
+      cwd: this.workspacePath,
+      stdout: 'pipe',
+      stderr: 'pipe',
+    });
+    const beforeStatus = await new Response(beforeStatusProc.stdout).text();
+    await beforeStatusProc.exited;
+    console.log(`${tag} [gitCommit] Status BEFORE git add:`, beforeStatus);
+
     // Stage all changes
     const addProc = Bun.spawn(['git', 'add', '-A'], {
       cwd: this.workspacePath,
@@ -2046,6 +2058,16 @@ ${criteria}
       throw new Error(`git add failed (exit ${addExit}): ${stderr.slice(0, 500)}`);
     }
 
+    // Check status AFTER staging, BEFORE commit
+    const afterAddProc = Bun.spawn(['git', 'status', '--porcelain'], {
+      cwd: this.workspacePath,
+      stdout: 'pipe',
+      stderr: 'pipe',
+    });
+    const afterAddStatus = await new Response(afterAddProc.stdout).text();
+    await afterAddProc.exited;
+    console.log(`${tag} [gitCommit] Status AFTER git add:`, afterAddStatus);
+
     // Check if there are staged changes
     const diffProc = Bun.spawn(['git', 'diff', '--cached', '--quiet'], {
       cwd: this.workspacePath,
@@ -2053,7 +2075,10 @@ ${criteria}
       stderr: 'pipe',
     });
     const diffExit = await diffProc.exited;
-    if (diffExit === 0) return null; // No changes to commit
+    if (diffExit === 0) {
+      console.log(`${tag} [gitCommit] No staged changes to commit`);
+      return null;
+    }
 
     // Commit
     const msg = this.prdId
@@ -2070,6 +2095,16 @@ ${criteria}
       throw new Error(`git commit failed (exit ${commitExit}): ${stderr.slice(0, 500)}`);
     }
 
+    // Check status AFTER commit
+    const afterCommitProc = Bun.spawn(['git', 'status', '--porcelain'], {
+      cwd: this.workspacePath,
+      stdout: 'pipe',
+      stderr: 'pipe',
+    });
+    const afterCommitStatus = await new Response(afterCommitProc.stdout).text();
+    await afterCommitProc.exited;
+    console.log(`${tag} [gitCommit] Status AFTER commit:`, afterCommitStatus);
+
     // Get commit SHA
     const shaProc = Bun.spawn(['git', 'rev-parse', 'HEAD'], {
       cwd: this.workspacePath,
@@ -2082,6 +2117,7 @@ ${criteria}
       throw new Error(`Failed to get commit SHA after successful commit (exit ${shaExit})`);
     }
 
+    console.log(`${tag} [gitCommit] Commit successful: ${sha}`);
     return sha;
   }
 

@@ -442,6 +442,16 @@ app.post('/commit/stream', async (c) => {
 
   return streamSSE(c, async (stream) => {
     try {
+      // Check status BEFORE staging
+      const beforeStatusProc = Bun.spawn(['git', 'status', '--porcelain'], {
+        cwd: pathCheck.resolved,
+        stdout: 'pipe',
+        stderr: 'pipe',
+      });
+      const beforeStatus = await new Response(beforeStatusProc.stdout).text();
+      await beforeStatusProc.exited;
+      console.log('[git/commit/stream] Status BEFORE git add:', beforeStatus);
+
       await stream.writeSSE({
         data: JSON.stringify({ type: 'status', message: 'Staging changes...' }),
       });
@@ -471,6 +481,16 @@ app.post('/commit/stream', async (c) => {
         });
         return;
       }
+
+      // Check status AFTER staging, BEFORE commit
+      const afterAddProc = Bun.spawn(['git', 'status', '--porcelain'], {
+        cwd: pathCheck.resolved,
+        stdout: 'pipe',
+        stderr: 'pipe',
+      });
+      const afterAddStatus = await new Response(afterAddProc.stdout).text();
+      await afterAddProc.exited;
+      console.log('[git/commit/stream] Status AFTER git add:', afterAddStatus);
 
       await stream.writeSSE({
         data: JSON.stringify({
@@ -524,6 +544,16 @@ app.post('/commit/stream', async (c) => {
         });
         return;
       }
+
+      // Check status AFTER commit
+      const afterCommitProc = Bun.spawn(['git', 'status', '--porcelain'], {
+        cwd: pathCheck.resolved,
+        stdout: 'pipe',
+        stderr: 'pipe',
+      });
+      const afterCommitStatus = await new Response(afterCommitProc.stdout).text();
+      await afterCommitProc.exited;
+      console.log('[git/commit/stream] Status AFTER commit:', afterCommitStatus);
 
       // Get the new HEAD sha
       const shaProc = Bun.spawn(['git', 'rev-parse', 'HEAD'], {
