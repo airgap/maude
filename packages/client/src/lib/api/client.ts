@@ -2340,6 +2340,27 @@ export const api = {
       }>('/ai/actions'),
   },
 
+  // ── Proactive Review ──
+
+  review: {
+    /** Request proactive AI review of code content */
+    proactive: (content: string, filePath?: string, language?: string) =>
+      request<{
+        ok: boolean;
+        data: {
+          warnings: Array<{
+            line: number;
+            message: string;
+            severity: 'info' | 'warning' | 'error';
+            category: string;
+          }>;
+        };
+      }>('/review/proactive', {
+        method: 'POST',
+        body: JSON.stringify({ content, filePath, language }),
+      }),
+  },
+
   // ── Format ──
 
   format: {

@@ -421,6 +421,60 @@ export const eEditorTheme = EditorView.theme(
       pointerEvents: 'auto',
       cursor: 'default',
     },
+    // Proactive AI warnings
+    '.cm-proactive-underline-error': {
+      textDecoration: 'underline wavy var(--accent-error)',
+      textDecorationThickness: '1px',
+      textUnderlineOffset: '3px',
+    },
+    '.cm-proactive-underline-warning': {
+      textDecoration: 'underline dashed var(--accent-warning, #eab308)',
+      textDecorationThickness: '1px',
+      textUnderlineOffset: '3px',
+    },
+    '.cm-proactive-underline-info': {
+      textDecoration: 'underline dotted var(--accent-primary)',
+      textDecorationThickness: '1px',
+      textUnderlineOffset: '3px',
+    },
+    '.cm-proactive-warning-widget': {
+      fontFamily: 'var(--font-family-sans)',
+      fontSize: '11px',
+      paddingLeft: '2em',
+      opacity: '0.65',
+      whiteSpace: 'nowrap',
+      display: 'inline-flex',
+      alignItems: 'center',
+      gap: '3px',
+    },
+    '.cm-proactive-warning-icon': {
+      fontSize: '11px',
+    },
+    '.cm-proactive-error': {
+      color: 'var(--accent-error)',
+    },
+    '.cm-proactive-warning': {
+      color: 'var(--accent-warning, #eab308)',
+    },
+    '.cm-proactive-info': {
+      color: 'var(--accent-primary)',
+    },
+    '.cm-proactive-warning-msg': {
+      color: 'var(--text-tertiary)',
+      fontStyle: 'italic',
+    },
+    '.cm-proactive-dismiss': {
+      marginLeft: '6px',
+      cursor: 'pointer',
+      color: 'var(--text-tertiary)',
+      opacity: '0.5',
+      fontSize: '10px',
+      transition: 'opacity 0.12s',
+    },
+    '.cm-proactive-dismiss:hover': {
+      opacity: '1',
+      color: 'var(--accent-error)',
+    },
     // Search panel inputs
     '.cm-panel input': {
       backgroundColor: 'var(--bg-input)',

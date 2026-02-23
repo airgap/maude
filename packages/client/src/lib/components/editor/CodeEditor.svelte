@@ -66,6 +66,7 @@
   import { lspInlayHintsExtension } from './extensions/lsp-inlay-hints';
   import { gitBlameExtension } from './extensions/git-blame';
   import { lspCodeLensExtension } from './extensions/lsp-code-lens';
+  import { proactiveWarningsExtension } from './extensions/proactive-warnings';
   import EditorContextMenu from './EditorContextMenu.svelte';
   import QuickFixMenu from './QuickFixMenu.svelte';
   import AiActionResult from './AiActionResult.svelte';
@@ -301,6 +302,10 @@
       // Git blame inline annotations (when enabled)
       ...(settingsStore.showInlineBlame && tab.filePath
         ? gitBlameExtension(tab.filePath, settingsStore.workspacePath || '')
+        : []),
+      // Proactive AI warnings (LLM-powered code review, when enabled)
+      ...(settingsStore.proactiveWarningsEnabled && tab.filePath
+        ? proactiveWarningsExtension(tab.filePath, tab.language)
         : []),
     ];
 

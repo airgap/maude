@@ -36,6 +36,8 @@ interface SettingsState {
   showInlineBlame: boolean;
   /** Show LSP code lens (reference counts, etc.) above functions */
   showCodeLens: boolean;
+  /** Enable proactive AI warnings (LLM-powered code review on edit) */
+  proactiveWarningsEnabled: boolean;
   fontSize: number;
   uiFontSize: number | null; // null = follow code font size
   fontFamily: string;
@@ -148,6 +150,7 @@ const defaults: SettingsState = {
   showInlayHints: false,
   showInlineBlame: false,
   showCodeLens: true,
+  proactiveWarningsEnabled: false,
   fontSize: 14,
   uiFontSize: null,
   fontFamily: 'share-tech-mono',
@@ -371,6 +374,9 @@ function createSettingsStore() {
     },
     get showCodeLens() {
       return state.showCodeLens;
+    },
+    get proactiveWarningsEnabled() {
+      return state.proactiveWarningsEnabled;
     },
     get defaultFormatter() {
       return state.defaultFormatter;
