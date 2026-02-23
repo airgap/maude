@@ -32,6 +32,8 @@ interface SettingsState {
   defaultFormatter: 'auto' | 'lsp' | 'external';
   /** Show LSP inlay type hints inline in the editor */
   showInlayHints: boolean;
+  /** Show inline git blame annotations at end of each line */
+  showInlineBlame: boolean;
   fontSize: number;
   uiFontSize: number | null; // null = follow code font size
   fontFamily: string;
@@ -142,6 +144,7 @@ const defaults: SettingsState = {
   organizeImportsOnSave: false,
   defaultFormatter: 'auto' as const,
   showInlayHints: false,
+  showInlineBlame: false,
   fontSize: 14,
   uiFontSize: null,
   fontFamily: 'share-tech-mono',
@@ -359,6 +362,9 @@ function createSettingsStore() {
     },
     get showInlayHints() {
       return state.showInlayHints;
+    },
+    get showInlineBlame() {
+      return state.showInlineBlame;
     },
     get defaultFormatter() {
       return state.defaultFormatter;

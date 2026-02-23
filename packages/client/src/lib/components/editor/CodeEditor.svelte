@@ -64,6 +64,7 @@
   } from './extensions/merge-conflict';
   import { mergeConflictsStore } from '$lib/stores/merge-conflicts.svelte';
   import { lspInlayHintsExtension } from './extensions/lsp-inlay-hints';
+  import { gitBlameExtension } from './extensions/git-blame';
   import EditorContextMenu from './EditorContextMenu.svelte';
   import QuickFixMenu from './QuickFixMenu.svelte';
   import AiActionResult from './AiActionResult.svelte';
@@ -291,6 +292,10 @@
       // Merge conflict inline resolution (only when content has conflict markers)
       ...(hasConflictMarkers(tab.content)
         ? mergeConflictExtension({ onResolve: handleConflictResolve })
+        : []),
+      // Git blame inline annotations (when enabled)
+      ...(settingsStore.showInlineBlame && tab.filePath
+        ? gitBlameExtension(tab.filePath, settingsStore.workspacePath || '')
         : []),
     ];
 

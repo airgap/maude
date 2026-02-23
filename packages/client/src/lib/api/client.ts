@@ -838,6 +838,19 @@ export const api = {
       request<{ ok: boolean; data: { diff: string } }>(
         `/git/diff?path=${encodeURIComponent(path)}&file=${encodeURIComponent(file)}&staged=${staged}`,
       ),
+    blame: (path: string, file: string) =>
+      request<{
+        ok: boolean;
+        data: {
+          blame: Array<{
+            line: number;
+            sha: string;
+            author: string;
+            timestamp: number;
+            summary: string;
+          }>;
+        };
+      }>(`/git/blame?path=${encodeURIComponent(path)}&file=${encodeURIComponent(file)}`),
     commit: (path: string, message: string) =>
       request<{ ok: boolean; data: { sha: string } }>('/git/commit', {
         method: 'POST',

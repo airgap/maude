@@ -378,6 +378,95 @@ app.get('/diff', async (c) => {
   }
 });
 
+// Git blame for a specific file
+app.get('/blame', async (c) => {
+  const rootPath = c.req.query('path') || process.cwd();
+  const filePath = c.req.query('file');
+
+  if (!filePath) {
+    return c.json({ ok: false, error: 'file parameter required' }, 400);
+  }
+
+  const blamePathCheck = validateWorkspacePath(rootPath);
+  if (!blamePathCheck.valid) {
+    return c.json({ ok: false, error: blamePathCheck.reason }, 403);
+  }
+
+  try {
+    // Use porcelain format for easy parsing
+    const { stdout, stderr, exitCode } = await run(
+      ['git', 'blame', '--porcelain', '--', filePath],
+      { cwd: blamePathCheck.resolved },
+    );
+
+    if (exitCode !== 0) {
+      return c.json({ ok: false, error: stderr.trim() || 'git blame failed' }, 500);
+    }
+
+    // Parse porcelain blame output
+    interface BlameInfo {
+      sha: string;
+      author: string;
+      authorTime: number;
+      summary: string;
+    }
+
+    const commitMap = new Map<string, BlameInfo>();
+    const lines: Array<{ line: number; sha: string }> = [];
+
+    const outputLines = stdout.split('\n');
+    let i = 0;
+    while (i < outputLines.length) {
+      const headerMatch = outputLines[i].match(/^([0-9a-f]{40})\s+(\d+)\s+(\d+)/);
+      if (headerMatch) {
+        const sha = headerMatch[1];
+        const resultLine = parseInt(headerMatch[2]);
+
+        // Read commit metadata if we haven't seen this SHA
+        if (!commitMap.has(sha)) {
+          const info: Partial<BlameInfo> = { sha };
+          i++;
+          while (i < outputLines.length && !outputLines[i].startsWith('\t')) {
+            const line = outputLines[i];
+            if (line.startsWith('author ')) info.author = line.slice(7);
+            else if (line.startsWith('author-time ')) info.authorTime = parseInt(line.slice(12));
+            else if (line.startsWith('summary ')) info.summary = line.slice(8);
+            i++;
+          }
+          commitMap.set(sha, info as BlameInfo);
+        } else {
+          // Skip to the content line
+          i++;
+          while (i < outputLines.length && !outputLines[i].startsWith('\t')) {
+            i++;
+          }
+        }
+
+        lines.push({ line: resultLine, sha });
+        i++; // skip the content line (starts with \t)
+      } else {
+        i++;
+      }
+    }
+
+    // Build result: per-line blame info
+    const blameData = lines.map((l) => {
+      const commit = commitMap.get(l.sha);
+      return {
+        line: l.line,
+        sha: l.sha.slice(0, 8),
+        author: commit?.author || 'Unknown',
+        timestamp: commit?.authorTime || 0,
+        summary: commit?.summary || '',
+      };
+    });
+
+    return c.json({ ok: true, data: { blame: blameData } });
+  } catch (err) {
+    return c.json({ ok: false, error: String(err) }, 500);
+  }
+});
+
 // List snapshots for a project
 app.get('/snapshots', (c) => {
   const rootPath = c.req.query('path');

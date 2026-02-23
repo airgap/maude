@@ -383,6 +383,18 @@ export const eEditorTheme = EditorView.theme(
     '.cm-inlay-hint-parameter': {
       color: 'var(--syn-variable, var(--text-tertiary))',
     },
+    // Git blame annotations
+    '.cm-blame-annotation': {
+      fontFamily: 'var(--font-family)',
+      fontSize: '11px',
+      color: 'var(--text-tertiary)',
+      opacity: '0.45',
+      fontStyle: 'italic',
+      paddingLeft: '2em',
+      whiteSpace: 'nowrap',
+      pointerEvents: 'auto',
+      cursor: 'default',
+    },
     // Search panel inputs
     '.cm-panel input': {
       backgroundColor: 'var(--bg-input)',
