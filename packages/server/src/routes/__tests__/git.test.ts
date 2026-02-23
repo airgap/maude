@@ -681,7 +681,7 @@ index abc..def 100644
         )
         .run('restore-2', '/proj', 'headabc', 'stash123', 'pre-agent', 1, Date.now());
 
-      spawnSpy = spyOn(Bun, 'spawn').mockReturnValue(mockProc('', 0) as any);
+      spawnSpy = spyOn(Bun, 'spawn').mockImplementation(() => mockProc('', 0) as any);
 
       const res = await app.request('/snapshot/restore-2/restore', { method: 'POST' });
       const json = await res.json();
@@ -771,17 +771,13 @@ index abc..def 100644
       spawnSpy = spyOn(Bun, 'spawn').mockImplementation(() => {
         callIndex++;
         switch (callIndex) {
-          case 1: // git status --porcelain (before)
-            return mockProc(' M src/app.ts\n', 0) as any;
-          case 2: // git add -A
+          case 1: // runExitCode: git diff --cached --quiet → 0 = nothing staged
             return mockProc('', 0) as any;
-          case 3: // git status --porcelain (after add)
-            return mockProc('M  src/app.ts\n', 0) as any;
-          case 4: // git commit -m
+          case 2: // run: git add -A (auto-stage)
+            return mockProc('', 0) as any;
+          case 3: // run: git commit -m
             return mockProc('[main abc1234] test commit\n 1 file changed\n', 0) as any;
-          case 5: // git status --porcelain (after commit)
-            return mockProc('', 0) as any;
-          case 6: // git rev-parse HEAD
+          case 4: // run: git rev-parse HEAD
             return mockProc('abc1234567890\n', 0) as any;
           default:
             return mockProc('', 0) as any;
@@ -804,9 +800,9 @@ index abc..def 100644
       spawnSpy = spyOn(Bun, 'spawn').mockImplementation(() => {
         callIndex++;
         switch (callIndex) {
-          case 1: // git status --porcelain (before)
-            return mockProc(' M file.ts\n', 0) as any;
-          case 2: // git add -A — fails
+          case 1: // runExitCode: git diff --cached --quiet → 0 = nothing staged
+            return mockProc('', 0) as any;
+          case 2: // run: git add -A — fails
             return mockProc('', 128, 'fatal: Unable to create index.lock') as any;
           default:
             return mockProc('', 0) as any;
@@ -831,13 +827,11 @@ index abc..def 100644
       spawnSpy = spyOn(Bun, 'spawn').mockImplementation(() => {
         callIndex++;
         switch (callIndex) {
-          case 1: // git status --porcelain (before)
-            return mockProc(' M file.ts\n', 0) as any;
-          case 2: // git add -A
+          case 1: // runExitCode: git diff --cached --quiet → 0 = nothing staged
             return mockProc('', 0) as any;
-          case 3: // git status --porcelain (after add)
-            return mockProc('M  file.ts\n', 0) as any;
-          case 4: // git commit -m — fails
+          case 2: // run: git add -A
+            return mockProc('', 0) as any;
+          case 3: // run: git commit -m — fails
             return mockProc('', 1, 'pre-commit hook failed') as any;
           default:
             return mockProc('', 0) as any;
@@ -1577,8 +1571,8 @@ index abc..def 100644
   // ---------------------------------------------------------------
   // POST /commit — commit flow diagnostic logging verification
   // ---------------------------------------------------------------
-  describe('POST /commit — diagnostic logging', () => {
-    test('calls git status three times (before add, after add, after commit)', async () => {
+  describe('POST /commit — command verification', () => {
+    test('calls correct git commands in order: diff-check, add, commit, rev-parse', async () => {
       let callIndex = 0;
       const spawnCalls: string[][] = [];
       spawnSpy = spyOn(Bun, 'spawn').mockImplementation((...args: any[]) => {
@@ -1586,18 +1580,14 @@ index abc..def 100644
         const cmd = args[0] as string[];
         spawnCalls.push(cmd);
         switch (callIndex) {
-          case 1:
-            return mockProc(' M file.ts\n', 0) as any; // status before
-          case 2:
-            return mockProc('', 0) as any; // git add
-          case 3:
-            return mockProc('M  file.ts\n', 0) as any; // status after add
-          case 4:
-            return mockProc('[main abc1234] test\n', 0) as any; // commit
-          case 5:
-            return mockProc('', 0) as any; // status after commit
-          case 6:
-            return mockProc('abc1234567890\n', 0) as any; // rev-parse HEAD
+          case 1: // runExitCode: git diff --cached --quiet → 0 = nothing staged
+            return mockProc('', 0) as any;
+          case 2: // run: git add -A
+            return mockProc('', 0) as any;
+          case 3: // run: git commit -m
+            return mockProc('[main abc1234] test\n', 0) as any;
+          case 4: // run: git rev-parse HEAD
+            return mockProc('abc1234567890\n', 0) as any;
           default:
             return mockProc('', 0) as any;
         }
@@ -1612,15 +1602,25 @@ index abc..def 100644
       const json = await res.json();
       expect(json.ok).toBe(true);
 
-      // Verify all three status checks were made
-      const statusCalls = spawnCalls.filter(
-        (cmd) => cmd.includes('git') && cmd.includes('status') && cmd.includes('--porcelain'),
-      );
-      expect(statusCalls).toHaveLength(3);
+      // Verify exactly 4 spawn calls
+      expect(spawnCalls).toHaveLength(4);
+
+      // Verify the staging check
+      expect(spawnCalls[0]).toEqual(expect.arrayContaining(['git', 'diff', '--cached', '--quiet']));
 
       // Verify git add was called
       const addCalls = spawnCalls.filter((cmd) => cmd.includes('git') && cmd.includes('add'));
       expect(addCalls).toHaveLength(1);
+
+      // Verify git commit was called
+      const commitCalls = spawnCalls.filter((cmd) => cmd.includes('commit') && cmd.includes('-m'));
+      expect(commitCalls).toHaveLength(1);
+
+      // Verify rev-parse HEAD was called
+      const revParseCalls = spawnCalls.filter(
+        (cmd) => cmd.includes('rev-parse') && cmd.includes('HEAD'),
+      );
+      expect(revParseCalls).toHaveLength(1);
     });
 
     test('trims commit message whitespace', async () => {
@@ -1633,17 +1633,13 @@ index abc..def 100644
           commitMsg = cmd[cmd.indexOf('-m') + 1];
         }
         switch (callIndex) {
-          case 1:
-            return mockProc(' M file.ts\n', 0) as any;
-          case 2:
+          case 1: // runExitCode: git diff --cached --quiet → 0 = nothing staged
             return mockProc('', 0) as any;
-          case 3:
-            return mockProc('M  file.ts\n', 0) as any;
-          case 4:
+          case 2: // run: git add -A
+            return mockProc('', 0) as any;
+          case 3: // run: git commit -m
             return mockProc('[main abc] test\n', 0) as any;
-          case 5:
-            return mockProc('', 0) as any;
-          case 6:
+          case 4: // run: git rev-parse HEAD
             return mockProc('abc123\n', 0) as any;
           default:
             return mockProc('', 0) as any;

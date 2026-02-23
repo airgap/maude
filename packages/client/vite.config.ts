@@ -10,17 +10,39 @@ export default defineConfig({
     host: true,
     port: 3333,
     proxy: {
+      // SSE streaming endpoints — disable proxy timeout and buffering
+      // so the connection stays open for the full duration of the response.
       '/api/stream': {
         target: 'http://localhost:3002',
         changeOrigin: true,
-        // SSE streams are long-lived — disable proxy timeout and buffering
-        // so the connection stays open for the full duration of the response.
         timeout: 0,
         proxyTimeout: 0,
         configure: (proxy) => {
-          // Disable response buffering so SSE events flow through immediately
           proxy.on('proxyRes', (_proxyRes, _req, res) => {
-            // Flush headers immediately for streaming
+            (res as any).flushHeaders?.();
+          });
+        },
+      },
+      // Git commit/push streams can be long-lived (pre-commit hooks may run
+      // typecheck, tests, etc.) — same SSE-friendly config as /api/stream.
+      '/api/git/commit/stream': {
+        target: 'http://localhost:3002',
+        changeOrigin: true,
+        timeout: 0,
+        proxyTimeout: 0,
+        configure: (proxy) => {
+          proxy.on('proxyRes', (_proxyRes, _req, res) => {
+            (res as any).flushHeaders?.();
+          });
+        },
+      },
+      '/api/git/push/stream': {
+        target: 'http://localhost:3002',
+        changeOrigin: true,
+        timeout: 0,
+        proxyTimeout: 0,
+        configure: (proxy) => {
+          proxy.on('proxyRes', (_proxyRes, _req, res) => {
             (res as any).flushHeaders?.();
           });
         },

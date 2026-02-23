@@ -103,8 +103,9 @@
       } else {
         gitError = 'Could not generate message';
       }
-    } catch {
-      gitError = 'Failed to generate message';
+    } catch (err: any) {
+      const msg = err?.message || String(err);
+      gitError = msg.includes('No changes') ? msg : `Failed to generate message: ${msg}`;
     }
     generating = false;
   }
@@ -133,7 +134,14 @@
   }
 
   async function handleCommit() {
-    if (!commitMessage.trim() || gitBusy) return;
+    if (!commitMessage.trim() || gitBusy) {
+      console.warn(
+        '[StatusBar] handleCommit BLOCKED: message=%s gitBusy=%s',
+        commitMessage.trim() ? `"${commitMessage.trim().slice(0, 30)}"` : '(empty)',
+        gitBusy,
+      );
+      return;
+    }
     gitBusy = true;
     gitError = '';
     commitProgress = [];
@@ -142,43 +150,52 @@
     // Update shared store
     gitOperationsStore.startCommit();
 
-    const result = await api.git.commitStream(
-      settingsStore.workspacePath,
-      commitMessage.trim(),
-      (event) => {
-        if (event.type === 'status') {
-          commitProgress = [...commitProgress, event.message || ''];
-          gitOperationsStore.addCommitProgress(event.message || '');
-        } else if (event.type === 'output') {
-          commitProgress = [...commitProgress, event.message || ''];
-          gitOperationsStore.addCommitProgress(event.message || '');
-        } else if (event.type === 'error') {
-          gitError = event.message || 'Commit failed';
-          gitOperationsStore.setCommitError(event.message || 'Commit failed');
-        }
-      },
-    );
+    try {
+      const result = await api.git.commitStream(
+        settingsStore.workspacePath,
+        commitMessage.trim(),
+        (event) => {
+          if (event.type === 'status') {
+            commitProgress = [...commitProgress, event.message || ''];
+            gitOperationsStore.addCommitProgress(event.message || '');
+          } else if (event.type === 'output') {
+            commitProgress = [...commitProgress, event.message || ''];
+            gitOperationsStore.addCommitProgress(event.message || '');
+          } else if (event.type === 'error') {
+            gitError = event.message || 'Commit failed';
+            gitOperationsStore.setCommitError(event.message || 'Commit failed');
+          }
+        },
+      );
 
-    gitBusy = false;
-    console.log('[StatusBar] Commit result:', result);
-    if (result.ok) {
-      console.log('[StatusBar] Commit succeeded, SHA:', result.sha);
-      gitOperationsStore.endCommit(true);
-      // Refresh git status
+      console.log('[StatusBar] Commit result:', result);
+      // Always refresh so the file list reflects actual git state
       await gitStore.refresh(settingsStore.workspacePath);
-      // Auto-close only on success, keep output visible briefly
-      setTimeout(() => {
-        if (!gitError) {
-          gitMenuOpen = false;
-          clearCommitState();
-        }
-      }, 1000);
-    } else {
-      console.log('[StatusBar] Commit failed:', result.error);
-      gitError = result.error || 'Commit failed';
-      gitOperationsStore.setCommitError(result.error || 'Commit failed');
+      if (result.ok) {
+        console.log('[StatusBar] Commit succeeded, SHA:', result.sha);
+        gitOperationsStore.endCommit(true);
+        // Auto-close only on success, keep output visible briefly
+        setTimeout(() => {
+          if (!gitError) {
+            gitMenuOpen = false;
+            clearCommitState();
+          }
+        }, 1000);
+      } else {
+        console.log('[StatusBar] Commit failed:', result.error);
+        gitError = result.error || 'Commit failed';
+        gitOperationsStore.setCommitError(result.error || 'Commit failed');
+        gitOperationsStore.endCommit(false);
+        // Keep menu open on error so user can see what happened
+      }
+    } catch (err) {
+      console.error('[StatusBar] handleCommit unexpected error:', err);
+      gitError = `Unexpected error: ${err}`;
+      gitOperationsStore.setCommitError(String(err));
       gitOperationsStore.endCommit(false);
-      // Keep menu open on error so user can see what happened
+    } finally {
+      // ALWAYS reset busy flag — prevents the button from getting stuck disabled
+      gitBusy = false;
     }
   }
 

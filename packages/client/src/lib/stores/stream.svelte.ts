@@ -557,3 +557,23 @@ function createStreamStore() {
 }
 
 export const streamStore = createStreamStore();
+
+// ── HMR state preservation ────────────────────────────────────────────────
+// When Vite hot-reloads this module, the singleton is recreated with default
+// state.  Preserve critical fields (sessionId, status, contentBlocks, etc.)
+// so the UI doesn't lose an in-flight stream.
+if (import.meta.hot) {
+  const hmrData = (import.meta.hot.data ?? {}) as { snapshot?: StreamSnapshot };
+  if (hmrData?.snapshot) {
+    console.log('[stream:hmr] Restoring stream state from previous module');
+    streamStore.restoreState(hmrData.snapshot);
+  }
+
+  import.meta.hot.dispose((data: Record<string, unknown>) => {
+    // Only snapshot if there's an active session worth preserving
+    if (streamStore.sessionId) {
+      console.log('[stream:hmr] Saving stream snapshot before dispose');
+      data.snapshot = streamStore.captureState();
+    }
+  });
+}

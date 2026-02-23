@@ -66,9 +66,16 @@ export async function initCsrfToken(): Promise<void> {
       if (res.ok) {
         const body = await res.json();
         _csrfToken = body?.data?.token || null;
+        if (!_csrfToken) {
+          console.warn('[CSRF] Token response OK but token is null/empty:', body);
+        } else {
+          console.log('[CSRF] Token acquired');
+        }
+      } else {
+        console.warn('[CSRF] Token fetch failed: HTTP %d %s', res.status, res.statusText);
       }
-    } catch {
-      // Server not ready yet — will retry on first request failure
+    } catch (err) {
+      console.warn('[CSRF] Token fetch threw (server not ready?):', err);
     } finally {
       _csrfFetching = null;
     }
@@ -216,17 +223,39 @@ export const api = {
         method: 'POST',
         headers: { 'X-Session-Id': sessionId },
       }),
-    sessions: () =>
-      request<{
-        ok: boolean;
-        data: Array<{
-          id: string;
-          conversationId: string;
-          status: string;
-          streamComplete: boolean;
-          bufferedEvents: number;
-        }>;
-      }>('/stream/sessions'),
+    sessions: async (): Promise<{
+      ok: boolean;
+      data: Array<{
+        id: string;
+        conversationId: string;
+        status: string;
+        streamComplete: boolean;
+        bufferedEvents: number;
+      }>;
+    }> => {
+      // Use raw fetch() instead of the request() helper. During SvelteKit page
+      // initialization, the enhanced fetch() is intercepted by the client-side
+      // router, returning non-JSON responses. Raw fetch goes directly through
+      // the Vite dev proxy to the backend.
+      const headers: Record<string, string> = {};
+      const token = getAuthToken();
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+      if (_csrfToken) headers['X-CSRF-Token'] = _csrfToken;
+      const res = await fetch(`${getBaseUrl()}/stream/sessions`, {
+        headers,
+        cache: 'no-store',
+      });
+      if (!res.ok) {
+        throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+      }
+      const contentType = res.headers.get('content-type') || '';
+      if (!contentType.includes('application/json')) {
+        throw new Error(
+          `Server returned non-JSON response (${contentType || 'no content-type'} from /stream/sessions). Is the backend running?`,
+        );
+      }
+      return res.json();
+    },
     reconnect: (sessionId: string, signal?: AbortSignal) => {
       const headers: Record<string, string> = {};
       const token = getAuthToken();
@@ -738,6 +767,16 @@ export const api = {
       request<{ ok: boolean; data: { branch: string } }>(
         `/git/branch?path=${encodeURIComponent(path)}`,
       ),
+    stage: (path: string, files?: string[]) =>
+      request<{ ok: boolean }>('/git/stage', {
+        method: 'POST',
+        body: JSON.stringify({ path, files }),
+      }),
+    unstage: (path: string, files?: string[]) =>
+      request<{ ok: boolean }>('/git/unstage', {
+        method: 'POST',
+        body: JSON.stringify({ path, files }),
+      }),
     snapshot: (path: string, conversationId?: string, reason?: string, messageId?: string) =>
       request<{
         ok: boolean;
@@ -799,6 +838,7 @@ export const api = {
       onProgress: (event: {
         type: 'status' | 'output' | 'error' | 'complete' | 'diagnostic';
         message?: string;
+        detail?: string;
         sha?: string;
         phase?: 'before-staging' | 'after-staging' | 'after-commit';
         porcelain?: string;
@@ -812,14 +852,34 @@ export const api = {
       if (token) headers['Authorization'] = `Bearer ${token}`;
       if (_csrfToken) headers['X-CSRF-Token'] = _csrfToken;
 
-      const response = await fetch(`${getBaseUrl()}/git/commit/stream`, {
-        method: 'POST',
-        headers,
-        body: JSON.stringify({ path, message }),
+      console.log('[commitStream] Sending POST to /git/commit/stream', {
+        path,
+        message: message.slice(0, 50),
       });
 
+      let response: Response;
+      try {
+        response = await fetch(`${getBaseUrl()}/git/commit/stream`, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({ path, message }),
+        });
+      } catch (err) {
+        console.error('[commitStream] Fetch failed:', err);
+        return { ok: false, error: String(err) };
+      }
+
+      console.log(
+        '[commitStream] Response status:',
+        response.status,
+        'ok:',
+        response.ok,
+        'hasBody:',
+        !!response.body,
+      );
       if (!response.ok || !response.body) {
         const body = await response.json().catch(() => ({ error: response.statusText }));
+        console.error('[commitStream] Non-OK response:', body);
         return { ok: false, error: body.error || `HTTP ${response.status}` };
       }
 
@@ -827,6 +887,8 @@ export const api = {
       const decoder = new TextDecoder();
       let buffer = '';
       let sha = '';
+      let gotComplete = false;
+      let lastError = '';
 
       try {
         while (true) {
@@ -843,21 +905,78 @@ export const api = {
               try {
                 const event = JSON.parse(data);
                 onProgress(event);
-                if (event.type === 'complete' && event.sha) {
-                  sha = event.sha;
+                if (event.type === 'complete') {
+                  gotComplete = true;
+                  if (event.sha) sha = event.sha;
                 }
                 if (event.type === 'error') {
-                  return { ok: false, error: event.message };
+                  lastError = event.message || 'Commit failed';
+                  // Don't return early — let the stream finish so we don't
+                  // leave a dangling connection that hides follow-up events.
                 }
-              } catch {
-                // Ignore malformed JSON
+              } catch (parseErr) {
+                console.warn(
+                  '[commitStream] Malformed SSE JSON (skipped):',
+                  data.slice(0, 200),
+                  parseErr,
+                );
               }
             }
           }
         }
 
+        // Process any remaining data left in the buffer after stream closes
+        if (buffer.trim() && buffer.startsWith('data: ')) {
+          try {
+            const event = JSON.parse(buffer.slice(6));
+            onProgress(event);
+            if (event.type === 'complete') {
+              gotComplete = true;
+              if (event.sha) sha = event.sha;
+            }
+            if (event.type === 'error') {
+              lastError = event.message || 'Commit failed';
+            }
+          } catch (parseErr) {
+            console.warn(
+              '[commitStream] Malformed buffer remnant (skipped):',
+              buffer.slice(0, 200),
+              parseErr,
+            );
+          }
+        }
+
+        console.log(
+          '[commitStream] Stream ended. gotComplete=%s lastError=%s sha=%s buffer=%s',
+          gotComplete,
+          lastError || '(none)',
+          sha || '(none)',
+          buffer ? buffer.slice(0, 100) : '(empty)',
+        );
+
+        // If we got an explicit error event, report it
+        if (lastError) {
+          console.error('[commitStream] Returning error:', lastError);
+          return { ok: false, error: lastError };
+        }
+
+        // If the stream ended without a 'complete' event, something went
+        // wrong (proxy timeout, connection drop, server crash, etc.)
+        if (!gotComplete) {
+          console.error(
+            '[commitStream] Stream ended WITHOUT complete event — possible proxy timeout or connection drop',
+          );
+          return {
+            ok: false,
+            error:
+              'Commit stream ended unexpectedly — the connection may have been interrupted. Check the terminal or git log to verify.',
+          };
+        }
+
+        console.log('[commitStream] Success! sha=%s', sha);
         return { ok: true, sha };
       } catch (err) {
+        console.error('[commitStream] Stream reader threw:', err);
         return { ok: false, error: String(err) };
       }
     },
@@ -927,6 +1046,8 @@ export const api = {
       const decoder = new TextDecoder();
       let buffer = '';
       let setUpstream = false;
+      let gotComplete = false;
+      let lastError = '';
 
       try {
         while (true) {
@@ -943,17 +1064,29 @@ export const api = {
               try {
                 const event = JSON.parse(data);
                 onProgress(event);
-                if (event.type === 'complete' && event.setUpstream) {
-                  setUpstream = true;
+                if (event.type === 'complete') {
+                  gotComplete = true;
+                  if (event.setUpstream) setUpstream = true;
                 }
                 if (event.type === 'error') {
-                  return { ok: false, error: event.message };
+                  lastError = event.message || 'Push failed';
                 }
               } catch {
-                // Ignore malformed JSON
+                // Ignore malformed SSE lines
               }
             }
           }
+        }
+
+        if (lastError) {
+          return { ok: false, error: lastError };
+        }
+
+        if (!gotComplete) {
+          return {
+            ok: false,
+            error: 'Push stream ended unexpectedly — the connection may have been interrupted.',
+          };
         }
 
         return { ok: true, setUpstream };

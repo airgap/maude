@@ -572,8 +572,9 @@ app.post('/:conversationId/nudge', async (c) => {
   return c.json({ ok: true, queued, messageId: nudgeMsgId });
 });
 
-// List active sessions
+// List active sessions (never cache — must reflect real-time state)
 app.get('/sessions', (c) => {
+  c.header('Cache-Control', 'no-store, no-cache, must-revalidate');
   return c.json({ ok: true, data: claudeManager.listSessions() });
 });
 

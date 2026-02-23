@@ -659,7 +659,7 @@ class ClaudeProcessManager {
       stderrChunks.length = 0;
       if (stderrStreamReader) {
         try {
-          stderrStreamReader.cancel();
+          stderrStreamReader.releaseLock();
         } catch {
           /* ignore */
         }
@@ -685,7 +685,6 @@ class ClaudeProcessManager {
         })();
       }
     };
-    setupStderrReader(proc);
 
     // Hoist assistant content accumulator so the cancel handler can persist
     // any partial response that was already received before cancellation.
@@ -1599,6 +1598,10 @@ class ClaudeProcessManager {
         // Client disconnected (e.g. page refresh). The CLI process continues
         // running and events keep being buffered in session.eventBuffer so the
         // client can reconnect and resume the stream.
+        console.log(
+          `[claude:${session.id.slice(0, 8)}] Client disconnected — session stays alive ` +
+            `(status=${session.status}, buffered=${session.eventBuffer.length} events)`,
+        );
       },
     });
   }
@@ -1660,13 +1663,21 @@ class ClaudeProcessManager {
     streamComplete: boolean;
     bufferedEvents: number;
   }> {
-    return Array.from(this.sessions.values()).map((s) => ({
+    const list = Array.from(this.sessions.values()).map((s) => ({
       id: s.id,
       conversationId: s.conversationId,
       status: s.status,
       streamComplete: s.streamComplete,
       bufferedEvents: s.eventBuffer.length,
     }));
+    console.log(
+      `[sessions] listSessions called — ${list.length} session(s):`,
+      list.map(
+        (s) =>
+          `${s.id.slice(0, 8)}… status=${s.status} complete=${s.streamComplete} events=${s.bufferedEvents}`,
+      ),
+    );
+    return list;
   }
 
   /**
@@ -1677,11 +1688,23 @@ class ClaudeProcessManager {
    */
   reconnectStream(sessionId: string): ReadableStream | null {
     const session = this.sessions.get(sessionId);
-    if (!session) return null;
+    if (!session) {
+      console.log(`[reconnect] Session ${sessionId.slice(0, 8)}… not found`);
+      return null;
+    }
     // Allow reconnection to running sessions even with empty buffers —
     // the stream may have just started and events haven't arrived yet.
     // For completed sessions, require at least one buffered event.
-    if (session.eventBuffer.length === 0 && session.streamComplete) return null;
+    if (session.eventBuffer.length === 0 && session.streamComplete) {
+      console.log(
+        `[reconnect] Session ${sessionId.slice(0, 8)}… completed with 0 events — skipping`,
+      );
+      return null;
+    }
+    console.log(
+      `[reconnect] Replaying session ${sessionId.slice(0, 8)}… ` +
+        `(status=${session.status}, complete=${session.streamComplete}, buffered=${session.eventBuffer.length} events)`,
+    );
 
     const encoder = new TextEncoder();
     const buffer = session.eventBuffer;
@@ -1861,6 +1884,10 @@ class ClaudeProcessManager {
         // reading from the provider and buffering events so the client can
         // reconnect and resume the stream. The start() loop's finally block
         // handles cleanup when the provider stream actually finishes.
+        console.log(
+          `[provider:${sessionId.slice(0, 8)}] Client disconnected — session stays alive ` +
+            `(buffered=${session.eventBuffer.length} events)`,
+        );
       },
     });
   }

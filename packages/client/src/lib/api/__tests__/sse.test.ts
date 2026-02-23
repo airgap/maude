@@ -404,7 +404,7 @@ describe('sendAndStream (additional paths)', () => {
       status: 400,
       body: null,
       headers: new Headers(),
-      json: () => Promise.resolve({ error: 'Invalid request body' }),
+      text: () => Promise.resolve(JSON.stringify({ error: 'Invalid request body' })),
     };
     mockSend.mockResolvedValue(errorResponse);
 
@@ -1063,7 +1063,6 @@ describe('reconnectActiveStream', () => {
   test('clears streaming state when all session retries fail', async () => {
     mockSessions.mockRejectedValue(new Error('Network error'));
     mockStreamStore.status = 'streaming';
-    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
 
     const result = await reconnectActiveStream();
 
@@ -1073,7 +1072,6 @@ describe('reconnectActiveStream', () => {
       expect.objectContaining({ type: 'message_stop' }),
     );
     expect(mockStreamStore.setReconnecting).toHaveBeenCalledWith(false);
-    consoleError.mockRestore();
   });
 
   test('retries sessions request up to 3 times on failure', async () => {
@@ -1085,7 +1083,9 @@ describe('reconnectActiveStream', () => {
 
     const result = await reconnectActiveStream();
 
-    expect(mockSessions).toHaveBeenCalledTimes(3);
+    // 3 calls in first _reconnectActiveStreamImpl (2 fail + 1 success with empty data),
+    // then outer retry after 1.5s calls _reconnectActiveStreamImpl again (1 call, returns undefined → null)
+    expect(mockSessions).toHaveBeenCalledTimes(4);
     expect(result).toBeNull(); // no sessions found
   });
 
@@ -1362,7 +1362,6 @@ describe('reconnectActiveStream', () => {
   });
 
   test('handles reconnection error gracefully', async () => {
-    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
     mockSessions.mockRejectedValue(new Error('Network error'));
     mockStreamStore.status = 'connecting';
 
@@ -1370,11 +1369,9 @@ describe('reconnectActiveStream', () => {
 
     expect(result).toBeNull();
     expect(mockStreamStore.setReconnecting).toHaveBeenCalledWith(false);
-    consoleError.mockRestore();
   });
 
   test('emits message_stop on error when status is streaming', async () => {
-    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
     mockSessions.mockRejectedValue(new Error('Fail'));
     mockStreamStore.status = 'streaming';
 
@@ -1383,11 +1380,9 @@ describe('reconnectActiveStream', () => {
     expect(mockStreamStore.handleEvent).toHaveBeenCalledWith(
       expect.objectContaining({ type: 'message_stop' }),
     );
-    consoleError.mockRestore();
   });
 
   test('does not emit message_stop on error when status is idle', async () => {
-    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
     mockSessions.mockRejectedValue(new Error('Fail'));
     mockStreamStore.status = 'idle';
 
@@ -1397,7 +1392,6 @@ describe('reconnectActiveStream', () => {
       (call: any) => call[0]?.type === 'message_stop',
     );
     expect(stopCalls.length).toBe(0);
-    consoleError.mockRestore();
   });
 
   test('syncs final content blocks during reconnection', async () => {
@@ -2123,7 +2117,7 @@ describe('network interruption scenarios', () => {
       status: 429,
       body: null,
       headers: new Headers(),
-      json: () => Promise.resolve({ error: 'Rate limit exceeded' }),
+      text: () => Promise.resolve(JSON.stringify({ error: 'Rate limit exceeded' })),
     };
     mockSend.mockResolvedValue(errorResponse);
 
@@ -2326,32 +2320,31 @@ describe('page reload simulation', () => {
   });
 
   test('full page reload → server not ready → retries and eventually fails', async () => {
-    // All 3 retries fail
-    reloadMockSessions
-      .mockRejectedValueOnce(new Error('ECONNREFUSED'))
-      .mockRejectedValueOnce(new Error('ECONNREFUSED'))
-      .mockRejectedValueOnce(new Error('ECONNREFUSED'));
+    // All retries fail — _reconnectActiveStreamImpl retries 3 times internally,
+    // then the outer reconnectActiveStream retries once more after a delay.
+    reloadMockSessions.mockRejectedValue(new Error('ECONNREFUSED'));
 
-    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
     mockStreamStore.status = 'connecting';
 
     const result = await reconnectActiveStream();
 
     expect(result).toBeNull();
-    expect(reloadMockSessions).toHaveBeenCalledTimes(3);
+    // 3 retries in first _impl call + 3 retries in second _impl call (after outer retry)
+    expect(reloadMockSessions).toHaveBeenCalledTimes(6);
     expect(mockStreamStore.setReconnecting).toHaveBeenCalledWith(false);
-    consoleError.mockRestore();
   });
 
   test('full page reload → server returns HTML instead of JSON → retries', async () => {
-    // First attempt throws (non-JSON response), second succeeds
+    // First attempt throws (non-JSON response), second succeeds with empty data
     reloadMockSessions
       .mockRejectedValueOnce(new SyntaxError('Unexpected token <'))
       .mockResolvedValueOnce({ ok: true, data: [] });
 
     const result = await reconnectActiveStream();
 
-    expect(reloadMockSessions).toHaveBeenCalledTimes(2);
+    // 2 calls in first _impl (1 fail + 1 success with empty data),
+    // then outer retry calls _impl again (returns undefined → null)
+    expect(reloadMockSessions).toHaveBeenCalledTimes(3);
     expect(result).toBeNull();
   });
 

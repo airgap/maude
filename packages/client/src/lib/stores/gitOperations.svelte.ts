@@ -1,4 +1,9 @@
-/** Shared store for tracking ongoing git operations across all UI components */
+/** Shared store for tracking ongoing git operations across all UI components.
+ *
+ * Errors are persisted to sessionStorage so they survive HMR reloads —
+ * a common scenario when pre-commit hooks run builds/tests that touch
+ * source files and trigger Vite's hot-module-replacement.
+ */
 
 export interface GitOperation {
   type: 'commit' | 'push';
@@ -8,21 +13,89 @@ export interface GitOperation {
   timestamp: number;
 }
 
+const STORAGE_KEY = 'e:git-op-errors';
+
+interface PersistedErrors {
+  commit: { error: string; progress: string[]; timestamp: number } | null;
+  push: { error: string; progress: string[]; timestamp: number } | null;
+}
+
+function loadPersistedErrors(): PersistedErrors {
+  try {
+    const raw = sessionStorage.getItem(STORAGE_KEY);
+    if (!raw) return { commit: null, push: null };
+    const parsed = JSON.parse(raw) as PersistedErrors;
+    // Expire errors older than 5 minutes
+    const cutoff = Date.now() - 5 * 60 * 1000;
+    if (parsed.commit && parsed.commit.timestamp < cutoff) parsed.commit = null;
+    if (parsed.push && parsed.push.timestamp < cutoff) parsed.push = null;
+    if (parsed.commit || parsed.push) {
+      console.log('[gitOps] Restored persisted errors:', {
+        commit: parsed.commit?.error,
+        push: parsed.push?.error,
+      });
+    }
+    return parsed;
+  } catch (err) {
+    console.warn('[gitOps] Failed to load persisted errors from sessionStorage:', err);
+    return { commit: null, push: null };
+  }
+}
+
+function persistErrors(commit: GitOperation, push: GitOperation) {
+  try {
+    const data: PersistedErrors = {
+      commit: commit.error
+        ? {
+            error: commit.error,
+            progress: commit.progress.slice(-20),
+            timestamp: commit.timestamp || Date.now(),
+          }
+        : null,
+      push: push.error
+        ? {
+            error: push.error,
+            progress: push.progress.slice(-20),
+            timestamp: push.timestamp || Date.now(),
+          }
+        : null,
+    };
+    if (data.commit || data.push) {
+      sessionStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+    } else {
+      sessionStorage.removeItem(STORAGE_KEY);
+    }
+  } catch {
+    // sessionStorage unavailable — ignore
+  }
+}
+
+function clearPersistedErrors() {
+  try {
+    sessionStorage.removeItem(STORAGE_KEY);
+  } catch {
+    // ignore
+  }
+}
+
 function createGitOperationsStore() {
+  // Restore any errors that survived a page reload
+  const restored = loadPersistedErrors();
+
   let commitOperation = $state<GitOperation>({
     type: 'commit',
-    progress: [],
-    error: null,
+    progress: restored.commit?.progress ?? [],
+    error: restored.commit?.error ?? null,
     inProgress: false,
-    timestamp: 0,
+    timestamp: restored.commit?.timestamp ?? 0,
   });
 
   let pushOperation = $state<GitOperation>({
     type: 'push',
-    progress: [],
-    error: null,
+    progress: restored.push?.progress ?? [],
+    error: restored.push?.error ?? null,
     inProgress: false,
-    timestamp: 0,
+    timestamp: restored.push?.timestamp ?? 0,
   });
 
   return {
@@ -35,8 +108,13 @@ function createGitOperationsStore() {
     get hasActiveOperation() {
       return commitOperation.inProgress || pushOperation.inProgress;
     },
+    /** True when there's an error from a recent commit or push */
+    get hasError() {
+      return !!(commitOperation.error || pushOperation.error);
+    },
 
     startCommit() {
+      console.log('[gitOps] startCommit');
       commitOperation = {
         type: 'commit',
         progress: [],
@@ -44,19 +122,25 @@ function createGitOperationsStore() {
         inProgress: true,
         timestamp: Date.now(),
       };
+      persistErrors(commitOperation, pushOperation);
     },
 
     addCommitProgress(message: string) {
-      if (commitOperation.inProgress) {
-        commitOperation.progress = [...commitOperation.progress, message];
+      if (!commitOperation.inProgress) {
+        console.warn('[gitOps] addCommitProgress DROPPED (not in progress):', message);
+        return;
       }
+      commitOperation.progress = [...commitOperation.progress, message];
     },
 
     setCommitError(error: string) {
+      console.error('[gitOps] setCommitError:', error);
       commitOperation.error = error;
+      persistErrors(commitOperation, pushOperation);
     },
 
     endCommit(success: boolean) {
+      console.log('[gitOps] endCommit success=%s error=%s', success, commitOperation.error);
       commitOperation.inProgress = false;
       if (success && !commitOperation.error) {
         // Auto-clear successful commits after 2 seconds
@@ -69,8 +153,11 @@ function createGitOperationsStore() {
               inProgress: false,
               timestamp: 0,
             };
+            persistErrors(commitOperation, pushOperation);
           }
         }, 2000);
+      } else {
+        persistErrors(commitOperation, pushOperation);
       }
     },
 
@@ -82,6 +169,7 @@ function createGitOperationsStore() {
         inProgress: true,
         timestamp: Date.now(),
       };
+      persistErrors(commitOperation, pushOperation);
     },
 
     addPushProgress(message: string) {
@@ -92,6 +180,7 @@ function createGitOperationsStore() {
 
     setPushError(error: string) {
       pushOperation.error = error;
+      persistErrors(commitOperation, pushOperation);
     },
 
     endPush(success: boolean) {
@@ -107,8 +196,11 @@ function createGitOperationsStore() {
               inProgress: false,
               timestamp: 0,
             };
+            persistErrors(commitOperation, pushOperation);
           }
         }, 2000);
+      } else {
+        persistErrors(commitOperation, pushOperation);
       }
     },
 
@@ -120,6 +212,7 @@ function createGitOperationsStore() {
         inProgress: false,
         timestamp: 0,
       };
+      persistErrors(commitOperation, pushOperation);
     },
 
     clearPush() {
@@ -130,11 +223,13 @@ function createGitOperationsStore() {
         inProgress: false,
         timestamp: 0,
       };
+      persistErrors(commitOperation, pushOperation);
     },
 
     clearAll() {
       this.clearCommit();
       this.clearPush();
+      clearPersistedErrors();
     },
   };
 }

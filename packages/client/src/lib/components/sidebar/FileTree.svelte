@@ -69,7 +69,8 @@
     if (path !== currentPath) {
       currentPath = path;
       loadTree(path);
-      gitStore.startPolling(path);
+      // NOTE: Git polling is managed centrally by workspace.svelte.ts.
+      // Do NOT call gitStore.startPolling() here — it creates duplicate polls.
     }
   });
 

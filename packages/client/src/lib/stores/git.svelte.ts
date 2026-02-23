@@ -28,6 +28,16 @@ function createGitStore() {
   let fileStatuses = $state<GitFileStatus[]>([]);
   let pollTimer = $state<ReturnType<typeof setInterval> | null>(null);
 
+  // Monotonic counter — prevents stale in-flight poll responses from
+  // overwriting fresher data (e.g. a commit's refresh beating a poll).
+  let refreshSeq = 0;
+
+  // Throttle: minimum interval between refresh calls (ms).
+  // Calls within this window are coalesced — only the last one fires.
+  const REFRESH_THROTTLE_MS = 2000;
+  let lastRefreshStart = 0;
+  let pendingRefreshTimer: ReturnType<typeof setTimeout> | null = null;
+
   // Diagnostic state
   let diagnosticChecks = $state<DiagnosticCheck[]>([]);
   let diagnosing = $state(false);
@@ -46,16 +56,72 @@ function createGitStore() {
     return null;
   }
 
-  async function refresh(rootPath: string) {
+  async function refresh(rootPath: string, { force = false } = {}) {
+    // Throttle: if a refresh started recently, defer this call.
+    const now = Date.now();
+    const elapsed = now - lastRefreshStart;
+    if (!force && elapsed < REFRESH_THROTTLE_MS) {
+      // Coalesce: cancel any pending deferred refresh and schedule a new one
+      if (pendingRefreshTimer) clearTimeout(pendingRefreshTimer);
+      pendingRefreshTimer = setTimeout(() => {
+        pendingRefreshTimer = null;
+        refresh(rootPath, { force: true });
+      }, REFRESH_THROTTLE_MS - elapsed);
+      return;
+    }
+    lastRefreshStart = now;
+    if (pendingRefreshTimer) {
+      clearTimeout(pendingRefreshTimer);
+      pendingRefreshTimer = null;
+    }
+
+    const seq = ++refreshSeq;
+    console.log('[gitStore.refresh] seq=%d path=%s', seq, rootPath);
     try {
       const [statusRes, branchRes] = await Promise.all([
         api.git.status(rootPath),
         api.git.branch(rootPath),
       ]);
+      // A newer refresh was started while we were awaiting — discard this stale result.
+      if (seq !== refreshSeq) {
+        console.log('[gitStore.refresh] seq=%d stale (current=%d), discarding', seq, refreshSeq);
+        return;
+      }
+      const prevIsRepo = isRepo;
+      const prevFileCount = fileStatuses.length;
       isRepo = statusRes.data.isRepo;
       fileStatuses = statusRes.data.files;
       branch = branchRes.data.branch;
-    } catch {
+      // Log state transitions that affect commit UI visibility
+      if (prevIsRepo && !isRepo) {
+        console.warn('[gitStore.refresh] isRepo changed TRUE→FALSE — commit UI will be hidden');
+      }
+      if (prevFileCount > 0 && fileStatuses.length === 0) {
+        console.warn(
+          '[gitStore.refresh] isDirty changed TRUE→FALSE (files: %d→0) — commit UI will be hidden',
+          prevFileCount,
+        );
+      }
+      console.log(
+        '[gitStore.refresh] seq=%d done: isRepo=%s branch=%s files=%d',
+        seq,
+        isRepo,
+        branch,
+        fileStatuses.length,
+      );
+    } catch (err) {
+      if (seq !== refreshSeq) {
+        console.log(
+          '[gitStore.refresh] seq=%d stale after error (current=%d), discarding',
+          seq,
+          refreshSeq,
+        );
+        return;
+      }
+      console.error(
+        '[gitStore.refresh] FAILED — setting isRepo=false, fileStatuses=[] (commit UI will be hidden). Error:',
+        err,
+      );
       isRepo = false;
       fileStatuses = [];
       branch = '';

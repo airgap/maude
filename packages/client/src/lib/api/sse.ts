@@ -42,6 +42,9 @@ export async function sendAndStream(
   content: string,
   attachments?: Attachment[],
 ): Promise<void> {
+  // Stop any active polling fallback — we're starting a fresh stream
+  stopConversationPolling();
+
   // Abort any existing stream to prevent duplicate readers
   abortActiveStream();
 
@@ -114,15 +117,15 @@ export async function sendAndStream(
     if (!response.ok) {
       let errMsg = `HTTP ${response.status}`;
       try {
-        const body = await response.json();
-        errMsg = body.error || errMsg;
-      } catch {
+        const text = await response.text();
         try {
-          const text = await response.text();
-          errMsg = text.slice(0, 300) || errMsg;
+          const body = JSON.parse(text);
+          errMsg = body.error || errMsg;
         } catch {
-          /* use status */
+          errMsg = text.slice(0, 300) || errMsg;
         }
+      } catch {
+        /* use status */
       }
       streamStore.handleEvent({ type: 'error', error: { type: 'http_error', message: errMsg } });
       return;
@@ -310,10 +313,51 @@ export function getReconnectionPromise(): Promise<string | null> {
  * Check for active streaming sessions and reconnect if found.
  * Called on page load to resume displaying in-progress streams.
  * Returns the conversation ID of the reconnected session, or null.
+ *
+ * If the first attempt finds no sessions, retries once after a short delay.
+ * This handles the case where the server session hasn't fully initialized yet
+ * (e.g. the provider stream just started and no events have been buffered).
  */
 export async function reconnectActiveStream(): Promise<string | null> {
   const doReconnect = async (): Promise<string | null> => {
-    return _reconnectActiveStreamImpl();
+    const result = await _reconnectActiveStreamImpl();
+    if (result) {
+      stopConversationPolling();
+      return result;
+    }
+
+    // Retry once after a longer delay — the server session may not have been
+    // ready (e.g. Vite HMR restart during lint-staged can take 3-5s).
+    const gen = streamGeneration;
+    await new Promise((r) => setTimeout(r, 1500));
+    if (gen !== streamGeneration) return null; // superseded
+    console.log('[sse:reconnect] Retrying reconnection after delay…');
+    const retryResult = await _reconnectActiveStreamImpl();
+    if (retryResult) {
+      stopConversationPolling();
+      return retryResult;
+    }
+
+    // SSE reconnection failed both attempts — fall back to conversation
+    // polling.  The server may have already finished and persisted the
+    // response to the DB, or it may still be running. Polling will
+    // detect either case and update the UI.
+    const savedConvId = workspaceStore.activeWorkspace?.snapshot.activeConversationId;
+    if (savedConvId) {
+      console.log('[sse:reconnect] SSE reconnection failed, falling back to conversation polling');
+      // Load the conversation immediately so the user sees their history
+      try {
+        const convRes = await api.conversations.get(savedConvId);
+        if (convRes.ok && convRes.data) {
+          conversationStore.setActive(convRes.data);
+        }
+      } catch {
+        // Non-critical
+      }
+      startConversationPolling(savedConvId);
+    }
+
+    return null;
   };
   reconnectionDone = doReconnect();
   return reconnectionDone;
@@ -330,21 +374,34 @@ async function _reconnectActiveStreamImpl(): Promise<string | null> {
   streamStore.setReconnecting(true);
 
   try {
-    // Retry the sessions check a few times — on page load the backend or
-    // dev-proxy may not be fully ready yet, returning non-JSON (e.g. HTML).
+    // Retry the sessions check — on page load or after HMR (e.g. lint-staged
+    // reformatting source files during a commit) the backend may not be ready,
+    // returning non-JSON (HTML / no content-type).  Use exponential backoff
+    // with enough attempts to survive a full Vite server restart (~3-5s).
+    const SESSION_RETRY_COUNT = 3;
+    const SESSION_RETRY_BASE_MS = 400;
     let sessionsRes: Awaited<ReturnType<typeof api.stream.sessions>> | null = null;
-    for (let attempt = 0; attempt < 3; attempt++) {
+    for (let attempt = 0; attempt < SESSION_RETRY_COUNT; attempt++) {
       try {
         sessionsRes = await api.stream.sessions();
         break; // success
-      } catch {
-        if (attempt < 2) await new Promise((r) => setTimeout(r, 500 * (attempt + 1)));
+      } catch (err) {
+        // Only log a warning on the last attempt to reduce noise
+        if (attempt === SESSION_RETRY_COUNT - 1) {
+          console.warn(
+            `[sse:reconnect] Sessions request failed after ${SESSION_RETRY_COUNT} attempts:`,
+            err,
+          );
+        }
+        if (attempt < SESSION_RETRY_COUNT - 1) {
+          await new Promise((r) => setTimeout(r, SESSION_RETRY_BASE_MS * Math.pow(2, attempt)));
+        }
       }
     }
     if (!sessionsRes || !sessionsRes.ok || !sessionsRes.data.length) {
       console.log(
-        '[sse] No active sessions found for reconnection',
-        sessionsRes ? `(${sessionsRes.data?.length ?? 0} sessions)` : '(request failed)',
+        '[sse:reconnect] No active sessions found',
+        sessionsRes ? `(${sessionsRes.data?.length ?? 0} sessions)` : '(all requests failed)',
       );
       // If all session retries failed and we were streaming, clear streaming
       // state so the UI doesn't get stuck in a "streaming" indicator.
@@ -358,34 +415,35 @@ async function _reconnectActiveStreamImpl(): Promise<string | null> {
       return null;
     }
 
+    console.log(
+      '[sse:reconnect] Server reports sessions:',
+      sessionsRes.data.map(
+        (s) =>
+          `${s.id.slice(0, 8)}… conv=${s.conversationId.slice(0, 8)}… status=${s.status} complete=${s.streamComplete} events=${s.bufferedEvents}`,
+      ),
+    );
+
     // Find a session that's still running or just completed with buffered events
     const active = sessionsRes.data.find(
       (s) => s.status === 'running' || (s.bufferedEvents > 0 && !s.streamComplete),
     );
 
     // For completed sessions, prefer one that matches the user's last conversation.
-    // If savedConversationId is unavailable (e.g. workspace not yet loaded), fall
-    // back to the most recent completed session to avoid silently dropping the response.
+    // Fall back to the most recent completed session with events — don't silently
+    // discard valid sessions just because the savedConversationId doesn't match.
     const savedConversationId = workspaceStore.activeWorkspace?.snapshot.activeConversationId;
     const completedCandidates = sessionsRes.data.filter(
       (s) => s.streamComplete && s.bufferedEvents > 0,
     );
     const justCompleted =
       completedCandidates.find((s) => s.conversationId === savedConversationId) ||
-      (savedConversationId ? null : completedCandidates[0]) ||
+      completedCandidates[0] ||
       null;
 
     const target = active || justCompleted;
     if (!target) {
       console.log(
-        '[sse] Sessions exist but none matched reconnection criteria:',
-        sessionsRes.data.map((s) => ({
-          id: s.id,
-          status: s.status,
-          complete: s.streamComplete,
-          events: s.bufferedEvents,
-          conv: s.conversationId,
-        })),
+        '[sse:reconnect] Sessions exist but none matched reconnection criteria',
         'savedConvId:',
         savedConversationId,
       );
@@ -395,15 +453,14 @@ async function _reconnectActiveStreamImpl(): Promise<string | null> {
 
     // Check if superseded before continuing
     if (myGeneration !== streamGeneration) {
+      console.log('[sse:reconnect] Superseded before reconnect fetch');
       streamStore.setReconnecting(false);
       return null;
     }
 
     console.log(
-      '[sse] Reconnecting to session:',
-      target.id,
-      'for conversation:',
-      target.conversationId,
+      `[sse:reconnect] Connecting to session ${target.id.slice(0, 8)}… ` +
+        `(conv=${target.conversationId.slice(0, 8)}… status=${target.status} events=${target.bufferedEvents})`,
     );
 
     streamStore.startStream(target.conversationId);
@@ -412,6 +469,7 @@ async function _reconnectActiveStreamImpl(): Promise<string | null> {
     // Load the conversation so the UI can display it
     const convRes = await api.conversations.get(target.conversationId);
     if (!convRes.ok || !convRes.data) {
+      console.warn('[sse:reconnect] Failed to load conversation:', target.conversationId);
       streamStore.handleEvent({ type: 'message_stop' } as any);
       streamStore.setReconnecting(false);
       return null;
@@ -423,10 +481,17 @@ async function _reconnectActiveStreamImpl(): Promise<string | null> {
     streamStore.setAbortController(abortController);
     const response = await api.stream.reconnect(target.id, abortController.signal);
     if (!response.ok || !response.body) {
+      console.warn(
+        '[sse:reconnect] Reconnect endpoint returned',
+        response.status,
+        response.statusText,
+      );
       streamStore.handleEvent({ type: 'message_stop' } as any);
       streamStore.setReconnecting(false);
       return null;
     }
+
+    console.log('[sse:reconnect] SSE stream opened, replaying events…');
 
     // Track as in-flight so navigating back finds the partial response
     conversationStore.setInflight(target.conversationId, targetConversation);
@@ -449,11 +514,12 @@ async function _reconnectActiveStreamImpl(): Promise<string | null> {
     const decoder = new TextDecoder();
     let buffer = '';
     const seenEvents = new Set<string>();
+    let eventCount = 0;
 
     while (true) {
       // Check if a newer stream has superseded this reconnection
       if (myGeneration !== streamGeneration) {
-        console.log('[sse] Reconnect superseded by newer generation, stopping');
+        console.log('[sse:reconnect] Superseded by newer generation, stopping reader');
         reader.cancel().catch(() => {});
         streamStore.setReconnecting(false);
         return target.conversationId;
@@ -487,11 +553,14 @@ async function _reconnectActiveStreamImpl(): Promise<string | null> {
           conversationStore.updateLastAssistantMessageIn(targetConversation, [
             ...streamStore.contentBlocks,
           ]);
+          eventCount++;
         } catch {
           // Non-JSON line
         }
       }
     }
+
+    console.log(`[sse:reconnect] Stream ended after ${eventCount} events`);
 
     // If superseded, bail
     if (myGeneration !== streamGeneration) {
@@ -524,7 +593,7 @@ async function _reconnectActiveStreamImpl(): Promise<string | null> {
 
     return target.conversationId;
   } catch (err) {
-    console.error('[sse] Reconnection failed:', err);
+    console.error('[sse:reconnect] Reconnection failed:', err);
     const errStatus = streamStore.status;
     if (errStatus === 'streaming' || errStatus === 'connecting') {
       streamStore.handleEvent({ type: 'message_stop' } as any);
@@ -558,8 +627,16 @@ async function _reconnectToConversationImpl(targetConversationId: string): Promi
   }
 
   try {
-    // Check if the server has any active sessions
-    const sessionsRes = await api.stream.sessions();
+    // Check if the server has any active sessions (with retry for HMR restarts)
+    let sessionsRes: Awaited<ReturnType<typeof api.stream.sessions>> | null = null;
+    for (let attempt = 0; attempt < 3; attempt++) {
+      try {
+        sessionsRes = await api.stream.sessions();
+        break;
+      } catch {
+        if (attempt < 2) await new Promise((r) => setTimeout(r, 1000 * (attempt + 1)));
+      }
+    }
     if (!sessionsRes?.ok || !sessionsRes.data.length) {
       return null;
     }
@@ -706,7 +783,135 @@ async function _reconnectToConversationImpl(targetConversationId: string): Promi
   }
 }
 
+// ── Conversation Polling Fallback ──────────────────────────────────────────
+// When SSE reconnection fails (server session gone, proxy issue, etc.),
+// fall back to periodically polling the conversation from the DB.
+// The server persists messages when the stream completes, so this picks
+// them up even if the real-time SSE channel can't be re-established.
+
+let pollingInterval: ReturnType<typeof setInterval> | null = null;
+let pollingConversationId: string | null = null;
+
+/**
+ * Start polling a conversation for updates. Used as a fallback when SSE
+ * reconnection fails — checks the DB periodically for new messages until
+ * the stream completes.
+ */
+export function startConversationPolling(conversationId: string): void {
+  // Don't start duplicate polling
+  if (pollingInterval && pollingConversationId === conversationId) return;
+  stopConversationPolling();
+
+  pollingConversationId = conversationId;
+  let lastMessageCount = conversationStore.active?.messages?.length ?? 0;
+  let lastAssistantContentLength = 0;
+  let pollCount = 0;
+  let streamConfirmedRunning = false;
+  const MAX_POLLS = 120; // 120 × 3s = 6 minutes max
+  const POLL_INTERVAL_MS = 3000;
+
+  console.log(`[sse:poll] Starting conversation polling for ${conversationId.slice(0, 8)}…`);
+
+  // Don't set streaming state yet — the first poll will determine whether
+  // the server stream is actually still running.  Setting it prematurely
+  // causes a false "Streaming" indicator for already-complete conversations.
+
+  const poll = async () => {
+    pollCount++;
+    if (pollCount > MAX_POLLS) {
+      console.log('[sse:poll] Max polls reached, stopping');
+      if (streamStore.isStreaming) {
+        streamStore.handleEvent({ type: 'message_stop' } as any);
+      }
+      stopConversationPolling();
+      return;
+    }
+
+    try {
+      // Check if the server has an active session for this conversation
+      let serverStreamRunning = false;
+      try {
+        const sessionsRes = await api.stream.sessions();
+        serverStreamRunning = sessionsRes?.ok
+          ? sessionsRes.data.some(
+              (s) => s.conversationId === conversationId && s.status === 'running',
+            )
+          : false;
+      } catch {
+        // Can't check sessions — assume not running
+      }
+
+      // Fetch the latest conversation state from DB
+      const res = await api.conversations.get(conversationId);
+      if (!res.ok || !res.data) return;
+
+      const conv = res.data as Conversation;
+      const newMsgCount = conv.messages?.length ?? 0;
+
+      // If the server stream is running and we haven't shown streaming yet, show it now
+      if (serverStreamRunning && !streamConfirmedRunning) {
+        streamConfirmedRunning = true;
+        if (!streamStore.isStreaming) {
+          streamStore.startStream(conversationId);
+        }
+      }
+
+      // Check if new messages appeared
+      if (newMsgCount > lastMessageCount) {
+        console.log(`[sse:poll] New messages detected: ${lastMessageCount} → ${newMsgCount}`);
+        lastMessageCount = newMsgCount;
+        conversationStore.setActive(conv);
+      }
+
+      // Check the last assistant message for content growth (partial flushes)
+      const lastMsg = conv.messages?.[conv.messages.length - 1];
+      if (lastMsg?.role === 'assistant') {
+        const contentLen = Array.isArray(lastMsg.content)
+          ? lastMsg.content.reduce(
+              (acc: number, b: any) => acc + (b.text?.length ?? b.thinking?.length ?? 0),
+              0,
+            )
+          : 0;
+
+        if (contentLen > lastAssistantContentLength) {
+          lastAssistantContentLength = contentLen;
+          conversationStore.setActive(conv);
+        }
+      }
+
+      // If the server stream is NOT running, the conversation in DB is
+      // authoritative.  Load it and stop polling.
+      if (!serverStreamRunning) {
+        console.log('[sse:poll] No active server session — loading final conversation state');
+        conversationStore.setActive(conv);
+        if (streamStore.isStreaming) {
+          streamStore.handleEvent({ type: 'message_stop' } as any);
+        }
+        stopConversationPolling();
+        return;
+      }
+    } catch (err) {
+      console.warn('[sse:poll] Poll failed:', err);
+    }
+  };
+
+  // First poll immediately
+  poll();
+  pollingInterval = setInterval(poll, POLL_INTERVAL_MS);
+}
+
+/** Stop conversation polling if active. */
+export function stopConversationPolling(): void {
+  if (pollingInterval) {
+    clearInterval(pollingInterval);
+    pollingInterval = null;
+    pollingConversationId = null;
+    console.log('[sse:poll] Polling stopped');
+  }
+}
+
 export async function cancelStream(conversationId: string): Promise<void> {
+  stopConversationPolling();
   streamStore.cancel();
   if (streamStore.sessionId) {
     try {
@@ -759,13 +964,21 @@ function deduplicationKey(rawData: string): string | null {
 }
 
 /**
- * HMR cleanup: When Vite performs Hot Module Replacement, abort any active
- * stream reader to prevent orphaned loops from processing events into stale state.
- * The new module will re-establish the connection via reconnectActiveStream().
+ * HMR cleanup & reconnection: When Vite performs Hot Module Replacement, abort
+ * any active stream reader to prevent orphaned loops from processing events into
+ * stale state, then reconnect to the server's buffered event stream.
  */
 if (import.meta.hot) {
   import.meta.hot.dispose(() => {
     console.log('[sse:hmr] Module disposing — aborting active stream');
     abortActiveStream();
   });
+
+  // After HMR, if an active session exists (sessionId preserved in stream store),
+  // reconnect to the server's event buffer so the stream resumes seamlessly.
+  if (streamStore.sessionId) {
+    console.log('[sse:hmr] Active session detected after HMR, reconnecting...');
+    // Short delay lets the dispose/abort settle before we reconnect
+    setTimeout(() => reconnectActiveStream().catch(() => {}), 200);
+  }
 }

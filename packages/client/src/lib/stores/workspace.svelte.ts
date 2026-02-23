@@ -474,3 +474,11 @@ export const workspaceStore = createWorkspaceStore();
 conversationStore.onActiveChange(() => {
   workspaceStore.updateActiveSnapshot();
 });
+
+// Persist on page unload so the snapshot is always fresh (e.g. mid-stream
+// reload captures the correct activeConversationId for reconnection).
+if (typeof window !== 'undefined') {
+  window.addEventListener('beforeunload', () => {
+    workspaceStore.updateActiveSnapshot();
+  });
+}

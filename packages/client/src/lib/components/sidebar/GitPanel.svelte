@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount, onDestroy } from 'svelte';
+  import { onMount } from 'svelte';
   import { api } from '$lib/api/client';
   import { gitStore, type GitFileStatus } from '$lib/stores/git.svelte';
   import { settingsStore } from '$lib/stores/settings.svelte';
@@ -17,7 +17,6 @@
 
   let loadingKey = $state<string | null>(null);
   let refreshing = $state(false);
-  let pollTimer: ReturnType<typeof setInterval> | null = null;
 
   // ── Commit state ─────────────────────────────────────────────────────────
 
@@ -26,10 +25,13 @@
   let committing = $state(false);
   let pushing = $state(false);
   let discarding = $state(false);
+  let staging = $state<string | null>(null); // path of file being staged/unstaged, or 'all'
   let commitProgress = $state<string[]>([]);
   let pushProgress = $state<string[]>([]);
   let gitError = $state('');
-  let showCommitSection = $state(false);
+  let gitErrorDetail = $state('');
+  // Auto-open commit section if there's a persisted error from a previous attempt
+  let showCommitSection = $state(gitOperationsStore.hasError);
 
   // ── Diagnostics state ────────────────────────────────────────────────────
 
@@ -37,16 +39,17 @@
   let showCommitDiagnostics = $state(true);
 
   // ── Lifecycle ────────────────────────────────────────────────────────────
+  // NOTE: Git polling is managed centrally by workspace.svelte.ts via
+  // gitStore.startPolling(). Do NOT create an additional setInterval here —
+  // that causes duplicate refresh storms (2× the API calls, log spam).
 
   onMount(() => {
-    if (workspacePath) {
-      gitStore.refresh(workspacePath);
-      pollTimer = setInterval(() => gitStore.refresh(workspacePath), 5000);
+    // Restore error from sessionStorage (survives HMR reloads)
+    if (gitOperationsStore.commitOperation.error) {
+      gitError = gitOperationsStore.commitOperation.error;
+      commitProgress = [...gitOperationsStore.commitOperation.progress];
+      showCommitSection = true;
     }
-  });
-
-  onDestroy(() => {
-    if (pollTimer) clearInterval(pollTimer);
   });
 
   // ── Helpers ──────────────────────────────────────────────────────────────
@@ -135,6 +138,64 @@
     refreshing = false;
   }
 
+  // ── Stage / Unstage actions ─────────────────────────────────────────────
+
+  async function stageFile(filePath: string) {
+    if (staging) return;
+    staging = filePath;
+    gitError = '';
+    try {
+      await api.git.stage(workspacePath, [filePath]);
+      await gitStore.refresh(workspacePath);
+    } catch {
+      gitError = `Failed to stage ${filePath}`;
+    } finally {
+      staging = null;
+    }
+  }
+
+  async function unstageFile(filePath: string) {
+    if (staging) return;
+    staging = filePath;
+    gitError = '';
+    try {
+      await api.git.unstage(workspacePath, [filePath]);
+      await gitStore.refresh(workspacePath);
+    } catch {
+      gitError = `Failed to unstage ${filePath}`;
+    } finally {
+      staging = null;
+    }
+  }
+
+  async function stageAll() {
+    if (staging) return;
+    staging = 'all';
+    gitError = '';
+    try {
+      await api.git.stage(workspacePath);
+      await gitStore.refresh(workspacePath);
+    } catch {
+      gitError = 'Failed to stage all files';
+    } finally {
+      staging = null;
+    }
+  }
+
+  async function unstageAll() {
+    if (staging) return;
+    staging = 'all';
+    gitError = '';
+    try {
+      await api.git.unstage(workspacePath);
+      await gitStore.refresh(workspacePath);
+    } catch {
+      gitError = 'Failed to unstage all files';
+    } finally {
+      staging = null;
+    }
+  }
+
   // ── Commit actions ───────────────────────────────────────────────────────
 
   async function handleGenerateMessage() {
@@ -148,16 +209,25 @@
       } else {
         gitError = 'Could not generate message';
       }
-    } catch {
-      gitError = 'Failed to generate message';
+    } catch (err: any) {
+      const msg = err?.message || String(err);
+      gitError = msg.includes('No changes') ? msg : `Failed to generate message: ${msg}`;
     }
     generating = false;
   }
 
   async function handleCommit() {
-    if (!commitMessage.trim() || committing) return;
+    if (!commitMessage.trim() || committing) {
+      console.warn(
+        '[GitPanel] handleCommit BLOCKED: message=%s committing=%s',
+        commitMessage.trim() ? `"${commitMessage.trim().slice(0, 30)}"` : '(empty)',
+        committing,
+      );
+      return;
+    }
     committing = true;
     gitError = '';
+    gitErrorDetail = '';
     commitProgress = [];
     gitStore.clearCommitDiagnostics();
     showCommitSection = true;
@@ -166,43 +236,65 @@
     // Update shared store
     gitOperationsStore.startCommit();
 
-    const result = await api.git.commitStream(workspacePath, commitMessage.trim(), (event) => {
-      if (event.type === 'status') {
-        commitProgress = [...commitProgress, event.message || ''];
-        gitOperationsStore.addCommitProgress(event.message || '');
-      } else if (event.type === 'output') {
-        commitProgress = [...commitProgress, event.message || ''];
-        gitOperationsStore.addCommitProgress(event.message || '');
-      } else if (event.type === 'diagnostic') {
-        // Capture diagnostic phase events for debugging display
-        gitStore.addCommitDiagnostic({
-          phase: event.phase!,
-          message: event.message || '',
-          porcelain: event.porcelain || '',
-          fileCount: event.fileCount || 0,
-          timestamp: Date.now(),
-        });
-      } else if (event.type === 'error') {
-        gitError = event.message || 'Commit failed';
-        gitOperationsStore.setCommitError(event.message || 'Commit failed');
-      }
-    });
+    console.log(
+      '[GitPanel] handleCommit starting, workspace:',
+      workspacePath,
+      'message:',
+      commitMessage.trim(),
+    );
 
-    committing = false;
-    if (result.ok) {
-      gitOperationsStore.endCommit(true);
-      await gitStore.refresh(workspacePath);
-      // Auto-clear on success
-      setTimeout(() => {
-        if (!gitError) {
-          commitMessage = '';
-          commitProgress = [];
+    try {
+      const result = await api.git.commitStream(workspacePath, commitMessage.trim(), (event) => {
+        console.log('[GitPanel] commit stream event:', event.type, event.message?.slice(0, 100));
+        if (event.type === 'status') {
+          commitProgress = [...commitProgress, event.message || ''];
+          gitOperationsStore.addCommitProgress(event.message || '');
+        } else if (event.type === 'output') {
+          commitProgress = [...commitProgress, event.message || ''];
+          gitOperationsStore.addCommitProgress(event.message || '');
+        } else if (event.type === 'diagnostic') {
+          // Capture diagnostic phase events for debugging display
+          gitStore.addCommitDiagnostic({
+            phase: event.phase!,
+            message: event.message || '',
+            porcelain: event.porcelain || '',
+            fileCount: event.fileCount || 0,
+            timestamp: Date.now(),
+          });
+        } else if (event.type === 'error') {
+          gitError = event.message || 'Commit failed';
+          gitErrorDetail = (event as any).detail || '';
+          gitOperationsStore.setCommitError(event.message || 'Commit failed');
         }
-      }, 2000);
-    } else {
-      gitError = result.error || 'Commit failed';
-      gitOperationsStore.setCommitError(result.error || 'Commit failed');
+      });
+
+      console.log('[GitPanel] commitStream result:', result);
+
+      // Always refresh so the file list reflects actual git state.
+      await gitStore.refresh(workspacePath);
+      if (result.ok) {
+        gitOperationsStore.endCommit(true);
+        // Auto-clear on success
+        setTimeout(() => {
+          if (!gitError) {
+            commitMessage = '';
+            commitProgress = [];
+          }
+        }, 2000);
+      } else {
+        gitError = result.error || 'Commit failed';
+        console.error('[GitPanel] Commit failed:', result.error);
+        gitOperationsStore.setCommitError(result.error || 'Commit failed');
+        gitOperationsStore.endCommit(false);
+      }
+    } catch (err) {
+      console.error('[GitPanel] handleCommit unexpected error:', err);
+      gitError = `Unexpected error: ${err}`;
+      gitOperationsStore.setCommitError(String(err));
       gitOperationsStore.endCommit(false);
+    } finally {
+      // ALWAYS reset committing flag — prevents the button from getting stuck disabled
+      committing = false;
     }
   }
 
@@ -216,32 +308,40 @@
     // Update shared store
     gitOperationsStore.startPush();
 
-    const result = await api.git.pushStream(workspacePath, (event) => {
-      if (event.type === 'status') {
-        pushProgress = [...pushProgress, event.message || ''];
-        gitOperationsStore.addPushProgress(event.message || '');
-      } else if (event.type === 'output') {
-        pushProgress = [...pushProgress, event.message || ''];
-        gitOperationsStore.addPushProgress(event.message || '');
-      } else if (event.type === 'error') {
-        gitError = event.message || 'Push failed';
-        gitOperationsStore.setPushError(event.message || 'Push failed');
-      }
-    });
-
-    pushing = false;
-    if (result.ok) {
-      gitOperationsStore.endPush(true);
-      // Auto-clear on success
-      setTimeout(() => {
-        if (!gitError) {
-          pushProgress = [];
+    try {
+      const result = await api.git.pushStream(workspacePath, (event) => {
+        if (event.type === 'status') {
+          pushProgress = [...pushProgress, event.message || ''];
+          gitOperationsStore.addPushProgress(event.message || '');
+        } else if (event.type === 'output') {
+          pushProgress = [...pushProgress, event.message || ''];
+          gitOperationsStore.addPushProgress(event.message || '');
+        } else if (event.type === 'error') {
+          gitError = event.message || 'Push failed';
+          gitOperationsStore.setPushError(event.message || 'Push failed');
         }
-      }, 2000);
-    } else {
-      gitError = result.error || 'Push failed';
-      gitOperationsStore.setPushError(result.error || 'Push failed');
+      });
+
+      if (result.ok) {
+        gitOperationsStore.endPush(true);
+        // Auto-clear on success
+        setTimeout(() => {
+          if (!gitError) {
+            pushProgress = [];
+          }
+        }, 2000);
+      } else {
+        gitError = result.error || 'Push failed';
+        gitOperationsStore.setPushError(result.error || 'Push failed');
+        gitOperationsStore.endPush(false);
+      }
+    } catch (err) {
+      console.error('[GitPanel] handlePush unexpected error:', err);
+      gitError = `Unexpected error: ${err}`;
+      gitOperationsStore.setPushError(String(err));
       gitOperationsStore.endPush(false);
+    } finally {
+      pushing = false;
     }
   }
 
@@ -265,7 +365,9 @@
     commitProgress = [];
     pushProgress = [];
     gitError = '';
+    gitErrorDetail = '';
     gitStore.clearCommitDiagnostics();
+    gitOperationsStore.clearCommit();
   }
 
   async function handleDiagnose() {
@@ -340,6 +442,44 @@
       </svg>
     </button>
   </div>
+
+  <!-- ── Persistent error banner (survives HMR, shown outside collapsible section) ── -->
+  {#if gitError && !showCommitSection}
+    <!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
+    <div
+      class="error-banner"
+      onclick={() => {
+        showCommitSection = true;
+      }}
+    >
+      <svg
+        class="error-banner-icon"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+      >
+        <circle cx="12" cy="12" r="10" />
+        <line x1="12" y1="8" x2="12" y2="12" />
+        <line x1="12" y1="16" x2="12.01" y2="16" />
+      </svg>
+      <span class="error-banner-text">{gitError}</span>
+      <button
+        class="error-banner-dismiss"
+        onclick={(e: MouseEvent) => {
+          e.stopPropagation();
+          gitError = '';
+          gitErrorDetail = '';
+          gitOperationsStore.clearCommit();
+        }}
+        title="Dismiss"
+      >
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+          ><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg
+        >
+      </button>
+    </div>
+  {/if}
 
   <!-- ── Commit Section ─────────────────────────────────────────────────── -->
   {#if gitStore.isRepo && gitStore.isDirty}
@@ -639,7 +779,43 @@
 
           <!-- Error display -->
           {#if gitError}
-            <div class="error-message">{gitError}</div>
+            <div class="error-block">
+              <div class="error-block-header">
+                <svg
+                  class="error-block-icon"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                >
+                  <circle cx="12" cy="12" r="10" />
+                  <line x1="12" y1="8" x2="12" y2="12" />
+                  <line x1="12" y1="16" x2="12.01" y2="16" />
+                </svg>
+                <span class="error-block-text">{gitError}</span>
+                <button
+                  class="error-block-dismiss"
+                  onclick={() => {
+                    gitError = '';
+                    gitErrorDetail = '';
+                    gitOperationsStore.clearCommit();
+                  }}
+                  title="Dismiss"
+                >
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                    ><line x1="18" y1="6" x2="6" y2="18" /><line
+                      x1="6"
+                      y1="6"
+                      x2="18"
+                      y2="18"
+                    /></svg
+                  >
+                </button>
+              </div>
+              {#if gitErrorDetail}
+                <pre class="error-block-detail">{gitErrorDetail}</pre>
+              {/if}
+            </div>
           {/if}
         </div>
       {/if}
@@ -670,50 +846,68 @@
       {#if stagedFiles.length > 0}
         <div class="section-header">
           <span>Staged</span>
-          <span class="section-count">{stagedFiles.length}</span>
+          <div class="section-actions">
+            <button
+              class="section-action-btn"
+              onclick={unstageAll}
+              disabled={!!staging}
+              title="Unstage all"
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <line x1="5" y1="12" x2="19" y2="12" />
+              </svg>
+            </button>
+            <span class="section-count">{stagedFiles.length}</span>
+          </div>
         </div>
         {#each stagedFiles as file (file.path)}
           {@const key = fileKey(file, true)}
           {@const isLoading = loadingKey === key}
-          <button
-            class="file-row"
-            onclick={() => openDiff(file, true)}
-            disabled={isLoading}
-            title={file.path}
-          >
-            <span class="status-badge {statusClass(file.status)}" title={statusTitle(file.status)}>
-              {statusLabel(file.status)}
-            </span>
-            <span class="file-name">{basename(file.path)}</span>
-            {#if dirname(file.path)}
-              <span class="file-dir">{dirname(file.path)}</span>
-            {/if}
-            {#if isLoading}
-              <svg
-                class="spinner"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="2"
+          <div class="file-row-wrap">
+            <button
+              class="file-row"
+              onclick={() => openDiff(file, true)}
+              disabled={isLoading}
+              title={file.path}
+            >
+              <span
+                class="status-badge {statusClass(file.status)}"
+                title={statusTitle(file.status)}
               >
-                <path
-                  d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"
-                />
+                {statusLabel(file.status)}
+              </span>
+              <span class="file-name">{basename(file.path)}</span>
+              {#if dirname(file.path)}
+                <span class="file-dir">{dirname(file.path)}</span>
+              {/if}
+              {#if isLoading}
+                <svg
+                  class="spinner"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                >
+                  <path
+                    d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"
+                  />
+                </svg>
+              {/if}
+            </button>
+            <button
+              class="stage-btn unstage"
+              onclick={(e: MouseEvent) => {
+                e.stopPropagation();
+                unstageFile(file.path);
+              }}
+              disabled={!!staging}
+              title="Unstage"
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                <line x1="5" y1="12" x2="19" y2="12" />
               </svg>
-            {:else}
-              <svg
-                class="open-icon"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="1.5"
-              >
-                <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
-                <polyline points="15 3 21 3 21 9" />
-                <line x1="10" y1="14" x2="21" y2="3" />
-              </svg>
-            {/if}
-          </button>
+            </button>
+          </div>
         {/each}
       {/if}
 
@@ -721,52 +915,72 @@
       {#if unstagedFiles.length > 0}
         <div class="section-header">
           <span>Unstaged</span>
-          <span class="section-count">{unstagedFiles.length}</span>
+          <div class="section-actions">
+            <button
+              class="section-action-btn"
+              onclick={stageAll}
+              disabled={!!staging}
+              title="Stage all"
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <line x1="12" y1="5" x2="12" y2="19" />
+                <line x1="5" y1="12" x2="19" y2="12" />
+              </svg>
+            </button>
+            <span class="section-count">{unstagedFiles.length}</span>
+          </div>
         </div>
         {#each unstagedFiles as file (file.path)}
           {@const key = fileKey(file, false)}
           {@const isLoading = loadingKey === key}
           {@const isUntracked = file.status === 'U'}
-          <button
-            class="file-row"
-            class:no-diff={isUntracked}
-            onclick={() => openDiff(file, false)}
-            disabled={isLoading || isUntracked}
-            title={isUntracked ? 'Untracked — no diff available' : file.path}
-          >
-            <span class="status-badge {statusClass(file.status)}" title={statusTitle(file.status)}>
-              {statusLabel(file.status)}
-            </span>
-            <span class="file-name">{basename(file.path)}</span>
-            {#if dirname(file.path)}
-              <span class="file-dir">{dirname(file.path)}</span>
-            {/if}
-            {#if isLoading}
-              <svg
-                class="spinner"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="2"
+          <div class="file-row-wrap">
+            <button
+              class="file-row"
+              class:no-diff={isUntracked}
+              onclick={() => openDiff(file, false)}
+              disabled={isLoading || isUntracked}
+              title={isUntracked ? 'Untracked — no diff available' : file.path}
+            >
+              <span
+                class="status-badge {statusClass(file.status)}"
+                title={statusTitle(file.status)}
               >
-                <path
-                  d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"
-                />
+                {statusLabel(file.status)}
+              </span>
+              <span class="file-name">{basename(file.path)}</span>
+              {#if dirname(file.path)}
+                <span class="file-dir">{dirname(file.path)}</span>
+              {/if}
+              {#if isLoading}
+                <svg
+                  class="spinner"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                >
+                  <path
+                    d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"
+                  />
+                </svg>
+              {/if}
+            </button>
+            <button
+              class="stage-btn stage"
+              onclick={(e: MouseEvent) => {
+                e.stopPropagation();
+                stageFile(file.path);
+              }}
+              disabled={!!staging}
+              title="Stage"
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                <line x1="12" y1="5" x2="12" y2="19" />
+                <line x1="5" y1="12" x2="19" y2="12" />
               </svg>
-            {:else if !isUntracked}
-              <svg
-                class="open-icon"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="1.5"
-              >
-                <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
-                <polyline points="15 3 21 3 21 9" />
-                <line x1="10" y1="14" x2="21" y2="3" />
-              </svg>
-            {/if}
-          </button>
+            </button>
+          </div>
         {/each}
       {/if}
     </div>
@@ -925,6 +1139,107 @@
     padding: 1px 6px;
     font-size: var(--fs-xxs);
     font-weight: 600;
+  }
+
+  .section-actions {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+
+  .section-action-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 18px;
+    height: 18px;
+    border: none;
+    background: transparent;
+    color: var(--text-muted);
+    cursor: pointer;
+    border-radius: 3px;
+    padding: 0;
+    transition:
+      color 0.15s,
+      background 0.15s;
+  }
+
+  .section-action-btn svg {
+    width: 12px;
+    height: 12px;
+  }
+
+  .section-action-btn:hover:not(:disabled) {
+    color: var(--text);
+    background: var(--bg-hover);
+  }
+
+  .section-action-btn:disabled {
+    opacity: 0.4;
+    cursor: default;
+  }
+
+  /* ── File row wrap + stage buttons ── */
+
+  .file-row-wrap {
+    display: flex;
+    align-items: center;
+  }
+
+  .file-row-wrap .file-row {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .stage-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 22px;
+    height: 22px;
+    border: none;
+    background: transparent;
+    cursor: pointer;
+    border-radius: 3px;
+    padding: 0;
+    flex-shrink: 0;
+    margin-right: 6px;
+    opacity: 0;
+    transition:
+      opacity 0.1s,
+      color 0.15s,
+      background 0.15s;
+  }
+
+  .file-row-wrap:hover .stage-btn {
+    opacity: 1;
+  }
+
+  .stage-btn svg {
+    width: 12px;
+    height: 12px;
+  }
+
+  .stage-btn.stage {
+    color: var(--accent, #22c55e);
+  }
+
+  .stage-btn.stage:hover:not(:disabled) {
+    background: rgba(34, 197, 94, 0.15);
+  }
+
+  .stage-btn.unstage {
+    color: var(--text-muted);
+  }
+
+  .stage-btn.unstage:hover:not(:disabled) {
+    color: var(--text-danger, #ef4444);
+    background: rgba(239, 68, 68, 0.1);
+  }
+
+  .stage-btn:disabled {
+    opacity: 0.3;
+    cursor: default;
   }
 
   /* ── File row ── */
@@ -1252,13 +1567,143 @@
     font-family: var(--font-mono, monospace);
   }
 
-  .error-message {
-    padding: 6px 8px;
-    background: rgba(239, 68, 68, 0.1);
-    border: 1px solid var(--text-danger, #ef4444);
-    border-radius: 4px;
+  /* ── Error banner (top-level, outside collapsible section) ── */
+  .error-banner {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    padding: 8px 10px;
+    background: rgba(239, 68, 68, 0.12);
+    border: none;
+    border-bottom: 1px solid rgba(239, 68, 68, 0.3);
+    cursor: pointer;
     color: var(--text-danger, #ef4444);
     font-size: var(--fs-sm);
+    text-align: left;
+    transition: background 0.15s;
+  }
+
+  .error-banner:hover {
+    background: rgba(239, 68, 68, 0.2);
+  }
+
+  .error-banner-icon {
+    width: 16px;
+    height: 16px;
+    flex-shrink: 0;
+  }
+
+  .error-banner-text {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-weight: 600;
+  }
+
+  .error-banner-dismiss {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 18px;
+    height: 18px;
+    border: none;
+    background: transparent;
+    color: var(--text-danger, #ef4444);
+    cursor: pointer;
+    border-radius: 3px;
+    padding: 0;
+    flex-shrink: 0;
+    opacity: 0.6;
+    transition:
+      opacity 0.15s,
+      background 0.15s;
+  }
+
+  .error-banner-dismiss svg {
+    width: 12px;
+    height: 12px;
+  }
+
+  .error-banner-dismiss:hover {
+    opacity: 1;
+    background: rgba(239, 68, 68, 0.15);
+  }
+
+  /* ── Error block (inside commit section, with detail) ── */
+  .error-block {
+    background: rgba(239, 68, 68, 0.1);
+    border: 1px solid rgba(239, 68, 68, 0.3);
+    border-radius: 4px;
+    overflow: hidden;
+  }
+
+  .error-block-header {
+    display: flex;
+    align-items: flex-start;
+    gap: 6px;
+    padding: 8px 8px;
+    color: var(--text-danger, #ef4444);
+  }
+
+  .error-block-icon {
+    width: 14px;
+    height: 14px;
+    flex-shrink: 0;
+    margin-top: 1px;
+  }
+
+  .error-block-text {
+    flex: 1;
+    font-size: var(--fs-sm);
+    font-weight: 600;
+    line-height: 1.4;
+  }
+
+  .error-block-dismiss {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 18px;
+    height: 18px;
+    border: none;
+    background: transparent;
+    color: var(--text-danger, #ef4444);
+    cursor: pointer;
+    border-radius: 3px;
+    padding: 0;
+    flex-shrink: 0;
+    opacity: 0.6;
+    transition:
+      opacity 0.15s,
+      background 0.15s;
+  }
+
+  .error-block-dismiss svg {
+    width: 12px;
+    height: 12px;
+  }
+
+  .error-block-dismiss:hover {
+    opacity: 1;
+    background: rgba(239, 68, 68, 0.15);
+  }
+
+  .error-block-detail {
+    margin: 0;
+    padding: 6px 8px;
+    border-top: 1px solid rgba(239, 68, 68, 0.15);
+    background: rgba(0, 0, 0, 0.15);
+    font-size: var(--fs-xxs);
+    color: var(--text-muted);
+    line-height: 1.3;
+    white-space: pre-wrap;
+    word-break: break-word;
+    font-family: var(--font-mono, monospace);
+    max-height: 120px;
+    overflow-y: auto;
   }
 
   /* ── Diagnose button ── */

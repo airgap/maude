@@ -7,6 +7,48 @@ import { streamSSE } from 'hono/streaming';
 
 const app = new Hono();
 
+// ---------------------------------------------------------------------------
+// Helpers for safe Bun.spawn — always consume piped streams to prevent deadlocks
+// ---------------------------------------------------------------------------
+
+/**
+ * Run a command and return { stdout, stderr, exitCode }.
+ * Reads both stdout and stderr concurrently so the process never blocks
+ * waiting on a full pipe buffer (classic deadlock with Bun.spawn 'pipe' mode).
+ */
+async function run(
+  args: string[],
+  opts: { cwd: string },
+): Promise<{ stdout: string; stderr: string; exitCode: number }> {
+  const proc = Bun.spawn(args, {
+    cwd: opts.cwd,
+    stdout: 'pipe',
+    stderr: 'pipe',
+  });
+  // Read both streams concurrently to avoid deadlock
+  const [stdout, stderr] = await Promise.all([
+    new Response(proc.stdout).text(),
+    new Response(proc.stderr).text(),
+  ]);
+  const exitCode = await proc.exited;
+  return { stdout, stderr, exitCode };
+}
+
+/**
+ * Run a command and return only the exit code.
+ * Discards stdout/stderr safely (inherits to parent process).
+ */
+async function runExitCode(args: string[], opts: { cwd: string }): Promise<number> {
+  const proc = Bun.spawn(args, {
+    cwd: opts.cwd,
+    stdout: 'pipe',
+    stderr: 'pipe',
+  });
+  // Consume both to prevent deadlock, even though we discard the content
+  await Promise.all([new Response(proc.stdout).text(), new Response(proc.stderr).text()]);
+  return proc.exited;
+}
+
 /**
  * Validate that a path is a plausible workspace directory.
  * Prevents path traversal attacks via the cwd parameter.
@@ -29,6 +71,73 @@ function validateWorkspacePath(rawPath: string): {
   return { valid: true, resolved };
 }
 
+/**
+ * Parse raw git commit failure output into a concise, human-readable summary.
+ * Pre-commit hooks (lint-staged, typecheck, tests) produce large output — we
+ * extract the key failure reason so the user doesn't have to scroll through it.
+ */
+function parseCommitFailure(stderr: string, stdout: string): string {
+  const combined = `${stderr}\n${stdout}`;
+
+  // Pre-commit hook failure
+  if (combined.includes('pre-commit hook') || combined.includes('husky')) {
+    // Look for test failures
+    const testFailMatch = combined.match(/(\d+)\s+fail/i);
+    const testPassMatch = combined.match(/(\d+)\s+pass/i);
+    if (testFailMatch) {
+      const failCount = testFailMatch[1];
+      const passCount = testPassMatch?.[1] ?? '?';
+      return `Pre-commit hook failed: ${failCount} test(s) failed (${passCount} passed). Fix failing tests or commit with --no-verify.`;
+    }
+
+    // Look for typecheck errors
+    if (combined.includes('found') && combined.includes('error')) {
+      const errorMatch = combined.match(/found\s+(\d+)\s+error/i);
+      if (errorMatch) {
+        return `Pre-commit hook failed: ${errorMatch[1]} type error(s). Fix type errors or commit with --no-verify.`;
+      }
+    }
+
+    // Look for lint-staged / prettier errors
+    if (combined.includes('lint-staged') && combined.includes('failed')) {
+      return 'Pre-commit hook failed: lint-staged reported formatting errors. Run your formatter and try again.';
+    }
+
+    // Generic hook failure
+    return 'Pre-commit hook failed. Check the output above for details, or commit with --no-verify to skip hooks.';
+  }
+
+  // Exit code from a script
+  if (combined.includes('exited with code') || combined.includes('Exited with code')) {
+    const exitMatch = combined.match(/[Ee]xited? with code\s+(\d+)/);
+    const scriptMatch = combined.match(/script\s+"([^"]+)"\s+exited/);
+    if (scriptMatch && exitMatch) {
+      return `Commit aborted: "${scriptMatch[1]}" failed (exit ${exitMatch[1]}). Fix the issue or commit with --no-verify.`;
+    }
+  }
+
+  // Nothing to commit
+  if (combined.includes('nothing to commit')) {
+    return 'Nothing to commit — working tree clean.';
+  }
+
+  // Empty commit message
+  if (
+    combined.includes('empty commit message') ||
+    combined.includes('Aborting commit due to empty')
+  ) {
+    return 'Commit aborted: empty commit message.';
+  }
+
+  // Truncate raw message to something readable
+  const firstLine =
+    (stderr || stdout)
+      .split('\n')
+      .filter((l) => l.trim())
+      .pop() || 'Unknown error';
+  return `git commit failed: ${firstLine.length > 200 ? firstLine.slice(0, 200) + '…' : firstLine}`;
+}
+
 // Git status
 app.get('/status', async (c) => {
   const rootPath = c.req.query('path') || process.cwd();
@@ -39,52 +148,107 @@ app.get('/status', async (c) => {
   }
 
   try {
-    const proc = Bun.spawn(['git', 'status', '--porcelain', '-uall'], {
+    const { stdout: output, exitCode } = await run(['git', 'status', '--porcelain', '-uall'], {
       cwd: pathCheck.resolved,
-      stdout: 'pipe',
-      stderr: 'pipe',
     });
-
-    const output = await new Response(proc.stdout).text();
-    const exitCode = await proc.exited;
 
     if (exitCode !== 0) {
       return c.json({ ok: true, data: { isRepo: false, files: [] } });
     }
 
-    const files = output
-      .split('\n')
-      .filter((line) => line.length > 0)
-      .map((line) => {
-        const xy = line.slice(0, 2);
-        const filePath = line.slice(3).trim();
-        // Parse two-letter status code
-        let status: string;
-        const x = xy[0];
-        const y = xy[1];
+    const files: Array<{ path: string; status: string; staged: boolean }> = [];
+    for (const line of output.split('\n')) {
+      if (line.length === 0) continue;
+      const xy = line.slice(0, 2);
+      const filePath = line.slice(3).trim();
+      const x = xy[0]; // index (staged) column
+      const y = xy[1]; // working-tree (unstaged) column
 
-        if (x === '?' && y === '?')
-          status = 'U'; // untracked
-        else if (x === 'A' || y === 'A')
-          status = 'A'; // added
-        else if (x === 'D' || y === 'D')
-          status = 'D'; // deleted
-        else if (x === 'M' || y === 'M')
-          status = 'M'; // modified
-        else if (x === 'R')
-          status = 'R'; // renamed
-        else status = xy.trim() || 'M';
+      if (x === '?' && y === '?') {
+        // Untracked file — single entry, not staged
+        files.push({ path: filePath, status: 'U', staged: false });
+        continue;
+      }
 
-        return {
-          path: filePath,
-          status,
-          staged: x !== ' ' && x !== '?',
-        };
-      });
+      // Emit a staged entry if X indicates a staged change
+      if (x !== ' ' && x !== '?') {
+        const status = x === 'A' ? 'A' : x === 'D' ? 'D' : x === 'R' ? 'R' : x === 'M' ? 'M' : x;
+        files.push({ path: filePath, status, staged: true });
+      }
+
+      // Emit an unstaged entry if Y indicates a working-tree change
+      if (y !== ' ' && y !== '?') {
+        const status = y === 'D' ? 'D' : y === 'M' ? 'M' : y === 'A' ? 'A' : y;
+        files.push({ path: filePath, status, staged: false });
+      }
+    }
 
     return c.json({ ok: true, data: { isRepo: true, files } });
   } catch {
     return c.json({ ok: true, data: { isRepo: false, files: [] } });
+  }
+});
+
+// Stage files
+app.post('/stage', async (c) => {
+  const body = await c.req.json();
+  const { path: rootPath, files } = body;
+
+  if (!rootPath) return c.json({ ok: false, error: 'path required' }, 400);
+
+  const pathCheck = validateWorkspacePath(rootPath);
+  if (!pathCheck.valid) {
+    return c.json({ ok: false, error: pathCheck.reason }, 403);
+  }
+
+  try {
+    // If no files specified, stage all
+    const args =
+      files && Array.isArray(files) && files.length > 0
+        ? ['git', 'add', '--', ...files]
+        : ['git', 'add', '-A'];
+
+    const { stderr, exitCode } = await run(args, { cwd: pathCheck.resolved });
+
+    if (exitCode !== 0) {
+      return c.json({ ok: false, error: `git add failed: ${stderr.trim()}` }, 500);
+    }
+
+    return c.json({ ok: true });
+  } catch (err) {
+    return c.json({ ok: false, error: String(err) }, 500);
+  }
+});
+
+// Unstage files
+app.post('/unstage', async (c) => {
+  const body = await c.req.json();
+  const { path: rootPath, files } = body;
+
+  if (!rootPath) return c.json({ ok: false, error: 'path required' }, 400);
+
+  const pathCheck = validateWorkspacePath(rootPath);
+  if (!pathCheck.valid) {
+    return c.json({ ok: false, error: pathCheck.reason }, 403);
+  }
+
+  try {
+    // If no files specified, unstage all
+    const args =
+      files && Array.isArray(files) && files.length > 0
+        ? ['git', 'reset', 'HEAD', '--', ...files]
+        : ['git', 'reset', 'HEAD'];
+
+    const { stderr, exitCode } = await run(args, { cwd: pathCheck.resolved });
+
+    // git reset exits 0 even when there's nothing to unstage
+    if (exitCode !== 0) {
+      return c.json({ ok: false, error: `git reset failed: ${stderr.trim()}` }, 500);
+    }
+
+    return c.json({ ok: true });
+  } catch (err) {
+    return c.json({ ok: false, error: String(err) }, 500);
   }
 });
 
@@ -98,14 +262,9 @@ app.get('/branch', async (c) => {
   }
 
   try {
-    const proc = Bun.spawn(['git', 'rev-parse', '--abbrev-ref', 'HEAD'], {
+    const { stdout: output, exitCode } = await run(['git', 'rev-parse', '--abbrev-ref', 'HEAD'], {
       cwd: pathCheck.resolved,
-      stdout: 'pipe',
-      stderr: 'pipe',
     });
-
-    const output = await new Response(proc.stdout).text();
-    const exitCode = await proc.exited;
 
     if (exitCode !== 0) {
       return c.json({ ok: true, data: { branch: '' } });
@@ -131,44 +290,29 @@ app.post('/snapshot', async (c) => {
 
   try {
     // Check if this is a git repo (not an error — workspace may not be git-initialized)
-    const checkProc = Bun.spawn(['git', 'rev-parse', '--is-inside-work-tree'], {
+    const checkResult = await run(['git', 'rev-parse', '--is-inside-work-tree'], {
       cwd: snapshotPathCheck.resolved,
-      stdout: 'pipe',
-      stderr: 'pipe',
     });
-    const isRepo = (await new Response(checkProc.stdout).text()).trim() === 'true';
+    const isRepo = checkResult.stdout.trim() === 'true';
     if (!isRepo) return c.json({ ok: false, skipped: true, reason: 'not-a-git-repo' });
 
     // Get current HEAD
-    const headProc = Bun.spawn(['git', 'rev-parse', 'HEAD'], {
-      cwd: rootPath,
-      stdout: 'pipe',
-      stderr: 'pipe',
-    });
-    const headSha = (await new Response(headProc.stdout).text()).trim();
-    const headExited = await headProc.exited;
-    if (headExited !== 0) {
+    const headResult = await run(['git', 'rev-parse', 'HEAD'], { cwd: rootPath });
+    const headSha = headResult.stdout.trim();
+    if (headResult.exitCode !== 0) {
       return c.json({ ok: false, skipped: true, reason: 'no-commits' });
     }
 
     // Check if there are changes to snapshot
-    const statusProc = Bun.spawn(['git', 'status', '--porcelain'], {
-      cwd: rootPath,
-      stdout: 'pipe',
-      stderr: 'pipe',
-    });
-    const statusOutput = (await new Response(statusProc.stdout).text()).trim();
+    const statusResult = await run(['git', 'status', '--porcelain'], { cwd: rootPath });
+    const statusOutput = statusResult.stdout.trim();
     const hasChanges = statusOutput.length > 0;
 
     // Create a snapshot tag using git stash create (creates a commit object without modifying working tree)
     let stashSha: string | null = null;
     if (hasChanges) {
-      const stashProc = Bun.spawn(['git', 'stash', 'create'], {
-        cwd: rootPath,
-        stdout: 'pipe',
-        stderr: 'pipe',
-      });
-      stashSha = (await new Response(stashProc.stdout).text()).trim() || null;
+      const stashResult = await run(['git', 'stash', 'create'], { cwd: rootPath });
+      stashSha = stashResult.stdout.trim() || null;
     }
 
     // Record snapshot in DB
@@ -218,17 +362,13 @@ app.get('/diff', async (c) => {
       ? ['git', 'diff', '--cached', '--', filePath]
       : ['git', 'diff', '--', filePath];
 
-    const proc = Bun.spawn(args, {
-      cwd: diffPathCheck.resolved,
-      stdout: 'pipe',
-      stderr: 'pipe',
-    });
-
-    const output = await new Response(proc.stdout).text();
-    const exitCode = await proc.exited;
+    const {
+      stdout: output,
+      stderr: err,
+      exitCode,
+    } = await run(args, { cwd: diffPathCheck.resolved });
 
     if (exitCode !== 0) {
-      const err = await new Response(proc.stderr).text();
       return c.json({ ok: false, error: err.trim() || 'git diff failed' }, 500);
     }
 
@@ -299,25 +439,18 @@ app.post('/snapshot/:id/restore', async (c) => {
 
   try {
     // Reset to the HEAD sha from the snapshot
-    const resetProc = Bun.spawn(['git', 'reset', '--hard', snapshot.head_sha], {
+    const resetResult = await run(['git', 'reset', '--hard', snapshot.head_sha], {
       cwd: snapshot.workspace_path,
-      stdout: 'pipe',
-      stderr: 'pipe',
     });
-    const resetExit = await resetProc.exited;
-    if (resetExit !== 0) {
-      const err = await new Response(resetProc.stderr).text();
-      return c.json({ ok: false, error: `Reset failed: ${err}` }, 500);
+    if (resetResult.exitCode !== 0) {
+      return c.json({ ok: false, error: `Reset failed: ${resetResult.stderr}` }, 500);
     }
 
     // If there was a stash, apply it
     if (snapshot.stash_sha) {
-      const applyProc = Bun.spawn(['git', 'stash', 'apply', snapshot.stash_sha], {
+      await runExitCode(['git', 'stash', 'apply', snapshot.stash_sha], {
         cwd: snapshot.workspace_path,
-        stdout: 'pipe',
-        stderr: 'pipe',
       });
-      await applyProc.exited;
       // Stash apply can fail if there are conflicts — that's okay, user can resolve
     }
 
@@ -327,7 +460,7 @@ app.post('/snapshot/:id/restore', async (c) => {
   }
 });
 
-// Stage all + commit
+// Commit staged changes (auto-stages all if nothing is staged — like VS Code)
 app.post('/commit', async (c) => {
   const body = await c.req.json();
   const { path: rootPath, message } = body;
@@ -343,81 +476,38 @@ app.post('/commit', async (c) => {
   }
 
   try {
-    // Check status BEFORE staging
-    const beforeStatusProc = Bun.spawn(['git', 'status', '--porcelain'], {
+    // If nothing is staged, auto-stage all changes (VS Code behavior)
+    const stagedExit = await runExitCode(['git', 'diff', '--cached', '--quiet'], {
       cwd: pathCheck.resolved,
-      stdout: 'pipe',
-      stderr: 'pipe',
     });
-    const beforeStatus = await new Response(beforeStatusProc.stdout).text();
-    await beforeStatusProc.exited;
-    console.log('[git/commit] Status BEFORE git add:', beforeStatus);
-
-    // Stage all changes
-    console.log('[git/commit] Running git add -A in:', pathCheck.resolved);
-    const addProc = Bun.spawn(['git', 'add', '-A'], {
-      cwd: pathCheck.resolved,
-      stdout: 'pipe',
-      stderr: 'pipe',
-    });
-    const addOut = await new Response(addProc.stdout).text();
-    const addErr = await new Response(addProc.stderr).text();
-    const addExit = await addProc.exited;
-    console.log('[git/commit] git add result:', {
-      exitCode: addExit,
-      stdout: addOut,
-      stderr: addErr,
-    });
-    if (addExit !== 0) {
-      return c.json({ ok: false, error: `git add failed: ${addErr}` }, 500);
+    // exit 0 = no staged changes, exit 1 = has staged changes
+    if (stagedExit === 0) {
+      console.log('[git/commit] Nothing staged — auto-staging all changes');
+      const addResult = await run(['git', 'add', '-A'], { cwd: pathCheck.resolved });
+      if (addResult.exitCode !== 0) {
+        return c.json({ ok: false, error: `git add failed: ${addResult.stderr.trim()}` }, 500);
+      }
     }
 
-    // Check status AFTER staging, BEFORE commit
-    const afterAddProc = Bun.spawn(['git', 'status', '--porcelain'], {
-      cwd: pathCheck.resolved,
-      stdout: 'pipe',
-      stderr: 'pipe',
-    });
-    const afterAddStatus = await new Response(afterAddProc.stdout).text();
-    await afterAddProc.exited;
-    console.log('[git/commit] Status AFTER git add:', afterAddStatus);
-
-    // Commit
     console.log('[git/commit] Running git commit -m:', message.trim());
-    const commitProc = Bun.spawn(['git', 'commit', '-m', message.trim()], {
+    const commitResult = await run(['git', 'commit', '-m', message.trim()], {
       cwd: pathCheck.resolved,
-      stdout: 'pipe',
-      stderr: 'pipe',
     });
-    const commitOut = await new Response(commitProc.stdout).text();
-    const commitErr = await new Response(commitProc.stderr).text();
-    const commitExit = await commitProc.exited;
     console.log('[git/commit] git commit result:', {
-      exitCode: commitExit,
-      stdout: commitOut,
-      stderr: commitErr,
+      exitCode: commitResult.exitCode,
+      stdout: commitResult.stdout,
+      stderr: commitResult.stderr,
     });
-    if (commitExit !== 0) {
-      return c.json({ ok: false, error: `git commit failed: ${commitErr}` }, 500);
+    if (commitResult.exitCode !== 0) {
+      return c.json(
+        { ok: false, error: `git commit failed: ${commitResult.stderr || commitResult.stdout}` },
+        500,
+      );
     }
-
-    // Check status AFTER commit
-    const afterCommitProc = Bun.spawn(['git', 'status', '--porcelain'], {
-      cwd: pathCheck.resolved,
-      stdout: 'pipe',
-      stderr: 'pipe',
-    });
-    const afterCommitStatus = await new Response(afterCommitProc.stdout).text();
-    await afterCommitProc.exited;
-    console.log('[git/commit] Status AFTER commit:', afterCommitStatus);
 
     // Get the new HEAD sha
-    const shaProc = Bun.spawn(['git', 'rev-parse', 'HEAD'], {
-      cwd: pathCheck.resolved,
-      stdout: 'pipe',
-      stderr: 'pipe',
-    });
-    const sha = (await new Response(shaProc.stdout).text()).trim();
+    const shaResult = await run(['git', 'rev-parse', 'HEAD'], { cwd: pathCheck.resolved });
+    const sha = shaResult.stdout.trim();
 
     return c.json({ ok: true, data: { sha } });
   } catch (err) {
@@ -442,75 +532,64 @@ app.post('/commit/stream', async (c) => {
 
   return streamSSE(c, async (stream) => {
     try {
-      // Check status BEFORE staging — stream it to client for debugging
-      const beforeStatusProc = Bun.spawn(['git', 'status', '--porcelain'], {
+      console.log(
+        '[git/commit/stream] Starting commit flow for:',
+        pathCheck.resolved,
+        'msg:',
+        message.trim(),
+      );
+
+      // Check what's staged before committing
+      const beforeStatusResult = await run(['git', 'status', '--porcelain'], {
         cwd: pathCheck.resolved,
-        stdout: 'pipe',
-        stderr: 'pipe',
       });
-      const beforeStatus = await new Response(beforeStatusProc.stdout).text();
-      await beforeStatusProc.exited;
-      console.log('[git/commit/stream] Status BEFORE git add:', beforeStatus);
+      console.log('[git/commit/stream] Status before commit:', beforeStatusResult.stdout);
 
       await stream.writeSSE({
         data: JSON.stringify({
           type: 'diagnostic',
           phase: 'before-staging',
-          message: 'Working tree status before staging',
-          porcelain: beforeStatus.trim(),
-          fileCount: beforeStatus.trim() ? beforeStatus.trim().split('\n').length : 0,
+          message: 'Current index and working tree status',
+          porcelain: beforeStatusResult.stdout.trim(),
+          fileCount: beforeStatusResult.stdout.trim()
+            ? beforeStatusResult.stdout.trim().split('\n').length
+            : 0,
         }),
       });
 
-      await stream.writeSSE({
-        data: JSON.stringify({ type: 'status', message: 'Staging changes...' }),
-      });
-
-      // Stage all changes
-      const addProc = Bun.spawn(['git', 'add', '-A'], {
+      // If nothing is staged, auto-stage all changes (VS Code behavior)
+      const stagedExit = await runExitCode(['git', 'diff', '--cached', '--quiet'], {
         cwd: pathCheck.resolved,
-        stdout: 'pipe',
-        stderr: 'pipe',
       });
-
-      // Collect add output
-      const addOut = await new Response(addProc.stdout).text();
-      const addErr = await new Response(addProc.stderr).text();
-      const addExit = await addProc.exited;
-
-      if (addOut.trim()) {
-        await stream.writeSSE({ data: JSON.stringify({ type: 'output', message: addOut }) });
-      }
-      if (addErr.trim()) {
-        await stream.writeSSE({ data: JSON.stringify({ type: 'output', message: addErr }) });
-      }
-
-      if (addExit !== 0) {
+      console.log(
+        '[git/commit/stream] Staged check exit code:',
+        stagedExit,
+        '(0=nothing staged, 1=has staged)',
+      );
+      // exit 0 = no staged changes, exit 1 = has staged changes
+      if (stagedExit === 0) {
+        console.log('[git/commit/stream] Nothing staged — auto-staging all changes');
         await stream.writeSSE({
-          data: JSON.stringify({ type: 'error', message: `git add failed: ${addErr}` }),
+          data: JSON.stringify({
+            type: 'status',
+            message: 'Nothing staged — auto-staging all changes...',
+          }),
         });
-        return;
+        const addResult = await run(['git', 'add', '-A'], { cwd: pathCheck.resolved });
+        console.log('[git/commit/stream] git add -A result:', {
+          exitCode: addResult.exitCode,
+          stderr: addResult.stderr,
+        });
+        if (addResult.exitCode !== 0) {
+          await stream.writeSSE({
+            data: JSON.stringify({
+              type: 'error',
+              message: `git add failed: ${addResult.stderr.trim()}`,
+            }),
+          });
+          return;
+        }
       }
-
-      // Check status AFTER staging, BEFORE commit — stream to client
-      const afterAddProc = Bun.spawn(['git', 'status', '--porcelain'], {
-        cwd: pathCheck.resolved,
-        stdout: 'pipe',
-        stderr: 'pipe',
-      });
-      const afterAddStatus = await new Response(afterAddProc.stdout).text();
-      await afterAddProc.exited;
-      console.log('[git/commit/stream] Status AFTER git add:', afterAddStatus);
-
-      await stream.writeSSE({
-        data: JSON.stringify({
-          type: 'diagnostic',
-          phase: 'after-staging',
-          message: 'Index status after staging (all files should show staged)',
-          porcelain: afterAddStatus.trim(),
-          fileCount: afterAddStatus.trim() ? afterAddStatus.trim().split('\n').length : 0,
-        }),
-      });
 
       await stream.writeSSE({
         data: JSON.stringify({
@@ -519,7 +598,7 @@ app.post('/commit/stream', async (c) => {
         }),
       });
 
-      // Commit - this is where pre-commit hooks run and can take time
+      console.log('[git/commit/stream] Running git commit -m:', message.trim());
       const commitProc = Bun.spawn(['git', 'commit', '-m', message.trim()], {
         cwd: pathCheck.resolved,
         stdout: 'pipe',
@@ -527,19 +606,16 @@ app.post('/commit/stream', async (c) => {
       });
 
       // For long-running commits (with hooks), we need to stream the output as it comes
-      const decoder = new TextDecoder();
-
-      // Read both stdout and stderr concurrently and stream to client
-      const outputs: Promise<string>[] = [];
-
-      const readStream = async (readable: ReadableStream): Promise<string> => {
+      // Use separate decoders to avoid corrupting multi-byte state across concurrent streams
+      const readStreamChunked = async (readable: ReadableStream): Promise<string> => {
+        const dec = new TextDecoder();
         const reader = readable.getReader();
         let fullOutput = '';
         try {
           while (true) {
             const { done, value } = await reader.read();
             if (done) break;
-            const chunk = decoder.decode(value, { stream: true });
+            const chunk = dec.decode(value, { stream: true });
             fullOutput += chunk;
             // Stream non-empty chunks immediately
             if (chunk.trim()) {
@@ -552,30 +628,58 @@ app.post('/commit/stream', async (c) => {
         return fullOutput;
       };
 
-      // Read both streams concurrently
-      outputs.push(readStream(commitProc.stdout));
-      outputs.push(readStream(commitProc.stderr));
+      // Guard against pre-commit hooks that hang forever (e.g. waiting for input).
+      // If the commit takes more than 5 minutes, kill it and report the timeout.
+      const COMMIT_TIMEOUT_MS = 5 * 60 * 1000;
+      const commitTimeout = setTimeout(() => {
+        console.error(
+          '[git/commit/stream] TIMEOUT after %dms — killing commit process',
+          COMMIT_TIMEOUT_MS,
+        );
+        try {
+          commitProc.kill();
+        } catch {
+          // already exited
+        }
+      }, COMMIT_TIMEOUT_MS);
 
-      const [commitOut, commitErr] = await Promise.all(outputs);
+      // Read both streams concurrently to prevent deadlock
+      const [commitOut, commitErr] = await Promise.all([
+        readStreamChunked(commitProc.stdout),
+        readStreamChunked(commitProc.stderr),
+      ]);
       const commitExit = await commitProc.exited;
+      clearTimeout(commitTimeout);
+      console.log('[git/commit/stream] git commit result:', {
+        exitCode: commitExit,
+        stdout: commitOut.slice(0, 200),
+        stderr: commitErr.slice(0, 200),
+      });
+
       if (commitExit !== 0) {
+        const rawDetail = commitErr.trim() || commitOut.trim() || 'Unknown error';
+        console.error('[git/commit/stream] Commit failed:', rawDetail);
+
+        // Parse the failure into a human-readable summary
+        const summary = parseCommitFailure(rawDetail, commitOut.trim());
+
         await stream.writeSSE({
-          data: JSON.stringify({ type: 'error', message: 'Commit failed - check output above' }),
+          data: JSON.stringify({
+            type: 'error',
+            message: summary,
+            detail: rawDetail.length > 500 ? rawDetail.slice(-500) : rawDetail,
+          }),
         });
         return;
       }
 
       // Check status AFTER commit — stream to client
-      const afterCommitProc = Bun.spawn(['git', 'status', '--porcelain'], {
+      const afterCommitResult = await run(['git', 'status', '--porcelain'], {
         cwd: pathCheck.resolved,
-        stdout: 'pipe',
-        stderr: 'pipe',
       });
-      const afterCommitStatus = await new Response(afterCommitProc.stdout).text();
-      await afterCommitProc.exited;
-      console.log('[git/commit/stream] Status AFTER commit:', afterCommitStatus);
+      console.log('[git/commit/stream] Status AFTER commit:', afterCommitResult.stdout);
 
-      const afterCommitClean = afterCommitStatus.trim().length === 0;
+      const afterCommitClean = afterCommitResult.stdout.trim().length === 0;
       await stream.writeSSE({
         data: JSON.stringify({
           type: 'diagnostic',
@@ -583,23 +687,23 @@ app.post('/commit/stream', async (c) => {
           message: afterCommitClean
             ? 'Working tree is clean after commit'
             : 'WARNING: Working tree still has changes after commit — some files may not have been included',
-          porcelain: afterCommitStatus.trim(),
-          fileCount: afterCommitStatus.trim() ? afterCommitStatus.trim().split('\n').length : 0,
+          porcelain: afterCommitResult.stdout.trim(),
+          fileCount: afterCommitResult.stdout.trim()
+            ? afterCommitResult.stdout.trim().split('\n').length
+            : 0,
         }),
       });
 
       // Get the new HEAD sha
-      const shaProc = Bun.spawn(['git', 'rev-parse', 'HEAD'], {
-        cwd: pathCheck.resolved,
-        stdout: 'pipe',
-        stderr: 'pipe',
-      });
-      const sha = (await new Response(shaProc.stdout).text()).trim();
+      const shaResult = await run(['git', 'rev-parse', 'HEAD'], { cwd: pathCheck.resolved });
+      const sha = shaResult.stdout.trim();
+      console.log('[git/commit/stream] Commit successful! SHA:', sha);
 
       await stream.writeSSE({
         data: JSON.stringify({ type: 'complete', sha, message: 'Commit successful!' }),
       });
     } catch (err) {
+      console.error('[git/commit/stream] Unexpected error:', err);
       await stream.writeSSE({
         data: JSON.stringify({ type: 'error', message: String(err) }),
       });
@@ -621,22 +725,14 @@ app.post('/generate-commit-message', async (c) => {
 
   try {
     // Get staged + unstaged diff
-    const diffProc = Bun.spawn(['git', 'diff', 'HEAD'], {
-      cwd: pathCheck.resolved,
-      stdout: 'pipe',
-      stderr: 'pipe',
-    });
-    let diffText = await new Response(diffProc.stdout).text();
-    await diffProc.exited;
+    const diffResult = await run(['git', 'diff', 'HEAD'], { cwd: pathCheck.resolved });
+    let diffText = diffResult.stdout;
 
     // Also capture untracked file names
-    const untrackedProc = Bun.spawn(['git', 'ls-files', '--others', '--exclude-standard'], {
+    const untrackedResult = await run(['git', 'ls-files', '--others', '--exclude-standard'], {
       cwd: pathCheck.resolved,
-      stdout: 'pipe',
-      stderr: 'pipe',
     });
-    const untrackedFiles = (await new Response(untrackedProc.stdout).text()).trim();
-    await untrackedProc.exited;
+    const untrackedFiles = untrackedResult.stdout.trim();
 
     if (!diffText.trim() && !untrackedFiles) {
       return c.json({ ok: false, error: 'No changes to describe' }, 400);
@@ -663,12 +759,14 @@ app.post('/generate-commit-message', async (c) => {
         'Keep it to one line, under 72 characters if possible. ' +
         'If the changes are substantial, add a blank line followed by a brief body (2-3 bullet points max).',
       user: prompt,
-      model: 'claude-haiku-4-5-20251001',
-      timeoutMs: 15_000,
+      // Let the configured CLI provider use its default model — avoids
+      // hardcoding a model ID that may not exist for all providers.
+      timeoutMs: 30_000,
     });
 
     return c.json({ ok: true, data: { message: message.trim() } });
   } catch (err) {
+    console.error('[git/generate-commit-message] LLM call failed:', err);
     return c.json({ ok: false, error: String(err) }, 500);
   }
 });
@@ -687,59 +785,35 @@ app.post('/clean', async (c) => {
 
   try {
     // Log status BEFORE clean
-    const beforeStatusProc = Bun.spawn(['git', 'status', '--porcelain'], {
+    const beforeStatusResult = await run(['git', 'status', '--porcelain'], {
       cwd: pathCheck.resolved,
-      stdout: 'pipe',
-      stderr: 'pipe',
     });
-    const beforeStatus = await new Response(beforeStatusProc.stdout).text();
-    await beforeStatusProc.exited;
+    const beforeStatus = beforeStatusResult.stdout;
     console.log('[git/clean] Status BEFORE clean:', beforeStatus);
 
     // Unstage everything first — handles files left in the index after a failed commit
-    const resetProc = Bun.spawn(['git', 'reset', 'HEAD'], {
-      cwd: pathCheck.resolved,
-      stdout: 'pipe',
-      stderr: 'pipe',
-    });
-    const resetExit = await resetProc.exited;
-    if (resetExit !== 0) {
-      const resetErr = await new Response(resetProc.stderr).text();
-      console.warn('[git/clean] git reset HEAD failed (non-fatal):', resetErr.trim());
+    const resetResult = await run(['git', 'reset', 'HEAD'], { cwd: pathCheck.resolved });
+    if (resetResult.exitCode !== 0) {
+      console.warn('[git/clean] git reset HEAD failed (non-fatal):', resetResult.stderr.trim());
     }
 
     // Restore tracked files
-    const checkoutProc = Bun.spawn(['git', 'checkout', '--', '.'], {
-      cwd: pathCheck.resolved,
-      stdout: 'pipe',
-      stderr: 'pipe',
-    });
-    const checkoutExit = await checkoutProc.exited;
-    if (checkoutExit !== 0) {
-      const checkoutErr = await new Response(checkoutProc.stderr).text();
-      console.warn('[git/clean] git checkout -- . failed:', checkoutErr.trim());
+    const checkoutResult = await run(['git', 'checkout', '--', '.'], { cwd: pathCheck.resolved });
+    if (checkoutResult.exitCode !== 0) {
+      console.warn('[git/clean] git checkout -- . failed:', checkoutResult.stderr.trim());
     }
 
     // Remove untracked files and directories
-    const cleanProc = Bun.spawn(['git', 'clean', '-fd'], {
-      cwd: pathCheck.resolved,
-      stdout: 'pipe',
-      stderr: 'pipe',
-    });
-    const cleanExit = await cleanProc.exited;
-    if (cleanExit !== 0) {
-      const cleanErr = await new Response(cleanProc.stderr).text();
-      console.warn('[git/clean] git clean -fd failed:', cleanErr.trim());
+    const cleanResult = await run(['git', 'clean', '-fd'], { cwd: pathCheck.resolved });
+    if (cleanResult.exitCode !== 0) {
+      console.warn('[git/clean] git clean -fd failed:', cleanResult.stderr.trim());
     }
 
     // Log status AFTER clean
-    const afterStatusProc = Bun.spawn(['git', 'status', '--porcelain'], {
+    const afterStatusResult = await run(['git', 'status', '--porcelain'], {
       cwd: pathCheck.resolved,
-      stdout: 'pipe',
-      stderr: 'pipe',
     });
-    const afterStatus = await new Response(afterStatusProc.stdout).text();
-    await afterStatusProc.exited;
+    const afterStatus = afterStatusResult.stdout;
     console.log('[git/clean] Status AFTER clean:', afterStatus);
 
     const stillDirty = afterStatus.trim().length > 0;
@@ -780,48 +854,41 @@ app.post('/push', async (c) => {
     // Get current branch if not specified
     let targetBranch = branch;
     if (!targetBranch) {
-      const branchProc = Bun.spawn(['git', 'rev-parse', '--abbrev-ref', 'HEAD'], {
+      const branchResult = await run(['git', 'rev-parse', '--abbrev-ref', 'HEAD'], {
         cwd: pathCheck.resolved,
-        stdout: 'pipe',
-        stderr: 'pipe',
       });
-      targetBranch = (await new Response(branchProc.stdout).text()).trim();
-      const branchExit = await branchProc.exited;
-      if (branchExit !== 0 || !targetBranch) {
+      targetBranch = branchResult.stdout.trim();
+      if (branchResult.exitCode !== 0 || !targetBranch) {
         return c.json({ ok: false, error: 'Could not determine current branch' }, 500);
       }
     }
 
     // Push to remote (defaults to 'origin' if not specified)
     const targetRemote = remote || 'origin';
-    const pushProc = Bun.spawn(['git', 'push', targetRemote, targetBranch], {
+    const pushResult = await run(['git', 'push', targetRemote, targetBranch], {
       cwd: pathCheck.resolved,
-      stdout: 'pipe',
-      stderr: 'pipe',
     });
 
-    const pushExit = await pushProc.exited;
-    if (pushExit !== 0) {
-      const err = await new Response(pushProc.stderr).text();
+    if (pushResult.exitCode !== 0) {
       // Check if it's an upstream tracking error
-      if (err.includes('no upstream branch') || err.includes('has no upstream')) {
+      if (
+        pushResult.stderr.includes('no upstream branch') ||
+        pushResult.stderr.includes('has no upstream')
+      ) {
         // Try push with --set-upstream
-        const upstreamProc = Bun.spawn(
+        const upstreamResult = await run(
           ['git', 'push', '--set-upstream', targetRemote, targetBranch],
-          {
-            cwd: pathCheck.resolved,
-            stdout: 'pipe',
-            stderr: 'pipe',
-          },
+          { cwd: pathCheck.resolved },
         );
-        const upstreamExit = await upstreamProc.exited;
-        if (upstreamExit !== 0) {
-          const upstreamErr = await new Response(upstreamProc.stderr).text();
-          return c.json({ ok: false, error: upstreamErr.trim() || 'git push failed' }, 500);
+        if (upstreamResult.exitCode !== 0) {
+          return c.json(
+            { ok: false, error: upstreamResult.stderr.trim() || 'git push failed' },
+            500,
+          );
         }
         return c.json({ ok: true, data: { pushed: true, setUpstream: true } });
       }
-      return c.json({ ok: false, error: err.trim() || 'git push failed' }, 500);
+      return c.json({ ok: false, error: pushResult.stderr.trim() || 'git push failed' }, 500);
     }
 
     return c.json({ ok: true, data: { pushed: true, setUpstream: false } });
@@ -851,14 +918,11 @@ app.post('/push/stream', async (c) => {
       // Get current branch if not specified
       let targetBranch = branch;
       if (!targetBranch) {
-        const branchProc = Bun.spawn(['git', 'rev-parse', '--abbrev-ref', 'HEAD'], {
+        const branchResult = await run(['git', 'rev-parse', '--abbrev-ref', 'HEAD'], {
           cwd: pathCheck.resolved,
-          stdout: 'pipe',
-          stderr: 'pipe',
         });
-        targetBranch = (await new Response(branchProc.stdout).text()).trim();
-        const branchExit = await branchProc.exited;
-        if (branchExit !== 0 || !targetBranch) {
+        targetBranch = branchResult.stdout.trim();
+        if (branchResult.exitCode !== 0 || !targetBranch) {
           await stream.writeSSE({
             data: JSON.stringify({ type: 'error', message: 'Could not determine current branch' }),
           });
@@ -881,17 +945,16 @@ app.post('/push/stream', async (c) => {
         stderr: 'pipe',
       });
 
-      const decoder = new TextDecoder();
-      const outputs: Promise<string>[] = [];
-
+      // Use separate decoders per stream to avoid corrupting multi-byte state
       const readStream = async (readable: ReadableStream): Promise<string> => {
+        const dec = new TextDecoder();
         const reader = readable.getReader();
         let fullOutput = '';
         try {
           while (true) {
             const { done, value } = await reader.read();
             if (done) break;
-            const chunk = decoder.decode(value, { stream: true });
+            const chunk = dec.decode(value, { stream: true });
             fullOutput += chunk;
             // Stream non-empty chunks immediately
             if (chunk.trim()) {
@@ -904,7 +967,8 @@ app.post('/push/stream', async (c) => {
         return fullOutput;
       };
 
-      // Read both streams concurrently
+      // Read both streams concurrently to prevent deadlock
+      const outputs: Promise<string>[] = [];
       outputs.push(readStream(pushProc.stdout));
       outputs.push(readStream(pushProc.stderr));
 
@@ -998,13 +1062,10 @@ app.get('/diagnose', async (c) => {
 
   try {
     // 1. Check if it's a git repo
-    const repoProc = Bun.spawn(['git', 'rev-parse', '--is-inside-work-tree'], {
+    const repoResult = await run(['git', 'rev-parse', '--is-inside-work-tree'], {
       cwd: pathCheck.resolved,
-      stdout: 'pipe',
-      stderr: 'pipe',
     });
-    const isRepo = (await new Response(repoProc.stdout).text()).trim() === 'true';
-    await repoProc.exited;
+    const isRepo = repoResult.stdout.trim() === 'true';
 
     if (!isRepo) {
       checks.push({
@@ -1018,13 +1079,10 @@ app.get('/diagnose', async (c) => {
     checks.push({ name: 'git-repo', status: 'ok', message: 'Valid git repository' });
 
     // 2. Check for index.lock (indicates interrupted git operation)
-    const lockProc = Bun.spawn(['git', 'rev-parse', '--git-dir'], {
+    const gitDirResult = await run(['git', 'rev-parse', '--git-dir'], {
       cwd: pathCheck.resolved,
-      stdout: 'pipe',
-      stderr: 'pipe',
     });
-    const gitDir = (await new Response(lockProc.stdout).text()).trim();
-    await lockProc.exited;
+    const gitDir = gitDirResult.stdout.trim();
 
     const lockPath = `${pathCheck.resolved}/${gitDir}/index.lock`;
     const lockExists = await Bun.file(lockPath).exists();
@@ -1040,14 +1098,9 @@ app.get('/diagnose', async (c) => {
     }
 
     // 3. Check HEAD validity
-    const headProc = Bun.spawn(['git', 'rev-parse', 'HEAD'], {
-      cwd: pathCheck.resolved,
-      stdout: 'pipe',
-      stderr: 'pipe',
-    });
-    const headSha = (await new Response(headProc.stdout).text()).trim();
-    const headExit = await headProc.exited;
-    if (headExit !== 0) {
+    const headResult = await run(['git', 'rev-parse', 'HEAD'], { cwd: pathCheck.resolved });
+    const headSha = headResult.stdout.trim();
+    if (headResult.exitCode !== 0) {
       checks.push({
         name: 'head-ref',
         status: 'warn',
@@ -1063,13 +1116,8 @@ app.get('/diagnose', async (c) => {
     }
 
     // 4. Working tree status summary
-    const statusProc = Bun.spawn(['git', 'status', '--porcelain'], {
-      cwd: pathCheck.resolved,
-      stdout: 'pipe',
-      stderr: 'pipe',
-    });
-    const statusOutput = (await new Response(statusProc.stdout).text()).trim();
-    await statusProc.exited;
+    const statusResult = await run(['git', 'status', '--porcelain'], { cwd: pathCheck.resolved });
+    const statusOutput = statusResult.stdout.trim();
 
     if (statusOutput.length === 0) {
       checks.push({
@@ -1091,21 +1139,13 @@ app.get('/diagnose', async (c) => {
     }
 
     // 5. Check for staged vs unstaged discrepancy (common source of confusion)
-    const stagedDiffProc = Bun.spawn(['git', 'diff', '--cached', '--stat'], {
+    const stagedDiffResult = await run(['git', 'diff', '--cached', '--stat'], {
       cwd: pathCheck.resolved,
-      stdout: 'pipe',
-      stderr: 'pipe',
     });
-    const stagedDiff = (await new Response(stagedDiffProc.stdout).text()).trim();
-    await stagedDiffProc.exited;
+    const stagedDiff = stagedDiffResult.stdout.trim();
 
-    const unstagedDiffProc = Bun.spawn(['git', 'diff', '--stat'], {
-      cwd: pathCheck.resolved,
-      stdout: 'pipe',
-      stderr: 'pipe',
-    });
-    const unstagedDiff = (await new Response(unstagedDiffProc.stdout).text()).trim();
-    await unstagedDiffProc.exited;
+    const unstagedDiffResult = await run(['git', 'diff', '--stat'], { cwd: pathCheck.resolved });
+    const unstagedDiff = unstagedDiffResult.stdout.trim();
 
     if (stagedDiff && unstagedDiff) {
       checks.push({
@@ -1135,13 +1175,10 @@ app.get('/diagnose', async (c) => {
     }
 
     // 6. Check for merge conflicts
-    const conflictProc = Bun.spawn(['git', 'diff', '--name-only', '--diff-filter=U'], {
+    const conflictResult = await run(['git', 'diff', '--name-only', '--diff-filter=U'], {
       cwd: pathCheck.resolved,
-      stdout: 'pipe',
-      stderr: 'pipe',
     });
-    const conflictFiles = (await new Response(conflictProc.stdout).text()).trim();
-    await conflictProc.exited;
+    const conflictFiles = conflictResult.stdout.trim();
 
     if (conflictFiles.length > 0) {
       checks.push({
@@ -1185,13 +1222,10 @@ app.get('/diagnose', async (c) => {
     }
 
     // 8. Check current branch
-    const branchProc = Bun.spawn(['git', 'rev-parse', '--abbrev-ref', 'HEAD'], {
+    const branchResult = await run(['git', 'rev-parse', '--abbrev-ref', 'HEAD'], {
       cwd: pathCheck.resolved,
-      stdout: 'pipe',
-      stderr: 'pipe',
     });
-    const currentBranch = (await new Response(branchProc.stdout).text()).trim();
-    await branchProc.exited;
+    const currentBranch = branchResult.stdout.trim();
 
     if (currentBranch === 'HEAD') {
       checks.push({
@@ -1209,13 +1243,10 @@ app.get('/diagnose', async (c) => {
     }
 
     // 9. Check for very large untracked files that could slow down staging
-    const untrackedProc = Bun.spawn(['git', 'ls-files', '--others', '--exclude-standard'], {
+    const untrackedResult = await run(['git', 'ls-files', '--others', '--exclude-standard'], {
       cwd: pathCheck.resolved,
-      stdout: 'pipe',
-      stderr: 'pipe',
     });
-    const untrackedFiles = (await new Response(untrackedProc.stdout).text()).trim();
-    await untrackedProc.exited;
+    const untrackedFiles = untrackedResult.stdout.trim();
 
     if (untrackedFiles) {
       const fileList = untrackedFiles.split('\n');
