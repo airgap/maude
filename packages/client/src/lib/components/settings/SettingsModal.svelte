@@ -6,6 +6,7 @@
   import { desktopNotifications } from '$lib/notifications/desktop-notifications';
   import type {
     CliProvider,
+    OneshotProvider,
     PermissionRule,
     PermissionRulePreset,
     TerminalCommandPolicy,
@@ -28,6 +29,12 @@
     { id: 'kiro', label: 'Kiro CLI', desc: 'AWS Kiro CLI' },
     { id: 'gemini-cli', label: 'Gemini CLI', desc: 'Google Gemini CLI' },
     { id: 'copilot', label: 'Copilot CLI', desc: 'GitHub Copilot CLI' },
+  ];
+
+  const oneshotProviders: { id: OneshotProvider; label: string; desc: string }[] = [
+    { id: 'auto', label: 'Auto', desc: 'Try local Ollama first, fall back to CLI' },
+    { id: 'ollama', label: 'Ollama', desc: 'Always use local Ollama' },
+    { id: 'cli', label: 'CLI', desc: 'Use the main CLI provider above' },
   ];
 
   // Check if the profiles tab was requested via localStorage flag
@@ -831,6 +838,61 @@
               {#each models as m}<option value={m.id}>{m.label}</option>{/each}
             </select>
           </div>
+          <div class="setting-group">
+            <label class="setting-label">One-shot LLM Provider</label>
+            <p class="setting-hint">
+              How to run lightweight AI tasks (commentary, code actions, commit messages)
+            </p>
+            <div class="provider-grid">
+              {#each oneshotProviders as p}
+                <button
+                  class="provider-option"
+                  class:active={settingsStore.oneshotProvider === p.id}
+                  onclick={() => settingsStore.update({ oneshotProvider: p.id })}
+                >
+                  <span class="provider-name">{p.label}</span>
+                  <span class="provider-desc">{p.desc}</span>
+                </button>
+              {/each}
+            </div>
+          </div>
+          {#if settingsStore.oneshotProvider !== 'cli'}
+            <div class="setting-group">
+              <label class="setting-label">One-shot Model</label>
+              <p class="setting-hint">
+                Local Ollama model for one-shot tasks{ollamaAvailable
+                  ? ''
+                  : ' (Ollama not detected)'}
+              </p>
+              {#if ollamaAvailable && ollamaModels.length > 0}
+                <select
+                  value={settingsStore.oneshotModel}
+                  onchange={(e) =>
+                    settingsStore.update({ oneshotModel: (e.target as HTMLSelectElement).value })}
+                >
+                  {#each ollamaModels as m}
+                    <option value={m.name}>{m.name} ({(m.size / 1e9).toFixed(1)}GB)</option>
+                  {/each}
+                </select>
+              {:else}
+                <input
+                  type="text"
+                  class="setting-text-input"
+                  value={settingsStore.oneshotModel}
+                  placeholder="e.g. qwen3:1.7b"
+                  onchange={(e) =>
+                    settingsStore.update({ oneshotModel: (e.target as HTMLInputElement).value })}
+                />
+                {#if !ollamaAvailable}
+                  <p class="setting-desc setting-warn">
+                    Ollama not running. Install from ollama.com and run <code
+                      >ollama pull qwen3:1.7b</code
+                    >
+                  </p>
+                {/if}
+              {/if}
+            </div>
+          {/if}
           <div class="setting-group">
             <label class="setting-label">Auto-scroll</label>
             <label class="toggle">
@@ -3197,6 +3259,15 @@
     font-size: var(--fs-sm);
     color: var(--text-tertiary);
     margin-bottom: 10px;
+  }
+  .setting-warn {
+    color: var(--text-warning, #d4a017);
+  }
+  .setting-warn code {
+    background: color-mix(in srgb, var(--text-warning, #d4a017) 15%, transparent);
+    padding: 1px 5px;
+    border-radius: 3px;
+    font-size: var(--fs-xs);
   }
   .snippet-import-row {
     display: flex;

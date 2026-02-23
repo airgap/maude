@@ -1,8 +1,14 @@
 /**
- * One-shot LLM utility — routes a single prompt through the configured CLI provider.
+ * One-shot LLM utility — routes a single prompt through the best available provider.
  *
- * Instead of hardcoding direct Anthropic API calls, this module reads the user's
- * configured `cliProvider` setting and dispatches accordingly:
+ * Supports a separate `oneshotProvider` setting that controls how lightweight,
+ * non-conversation LLM calls (commentary, commit messages, code actions) are routed:
+ *
+ *   - 'auto' (default): Try local Ollama first, fall back to CLI provider
+ *   - 'ollama': Always use local Ollama
+ *   - 'cli': Always use the configured cliProvider (Claude/Gemini/Copilot CLI)
+ *
+ * Direct provider routing (when cliProvider itself is the target):
  *   - CLI providers (claude, gemini-cli, copilot): spawn CLI with `-p`, parse stream-json
  *   - Ollama: non-streaming POST to local API
  *   - Bedrock: AWS SDK InvokeModelCommand (non-streaming)
@@ -11,7 +17,8 @@
 
 import { getDb } from '../db/database';
 import { buildCliCommand } from './cli-provider';
-import type { CliProvider } from '@e/shared';
+import { checkOllamaHealth } from './ollama-provider';
+import type { CliProvider, OneshotProvider } from '@e/shared';
 
 export interface CallLlmOptions {
   /** System prompt for the LLM. */
@@ -40,13 +47,105 @@ function getConfiguredProvider(): CliProvider {
 }
 
 /**
- * One-shot LLM call that routes through the user's configured provider.
+ * Read the configured one-shot provider from the settings DB.
+ * Falls back to 'auto' if not set.
+ */
+function getOneshotProvider(): OneshotProvider {
+  try {
+    const db = getDb();
+    const row = db.query("SELECT value FROM settings WHERE key = 'oneshotProvider'").get() as any;
+    if (row) return JSON.parse(row.value) as OneshotProvider;
+  } catch {
+    /* use default */
+  }
+  return 'auto';
+}
+
+/**
+ * Read the configured one-shot model from the settings DB.
+ * Falls back to 'qwen3:1.7b' if not set.
+ */
+function getOneshotModel(): string {
+  try {
+    const db = getDb();
+    const row = db.query("SELECT value FROM settings WHERE key = 'oneshotModel'").get() as any;
+    if (row) return JSON.parse(row.value) as string;
+  } catch {
+    /* use default */
+  }
+  return 'qwen3:1.7b';
+}
+
+// ---------------------------------------------------------------------------
+// Cached Ollama availability check
+// ---------------------------------------------------------------------------
+
+let ollamaAvailable: boolean | null = null;
+let ollamaLastCheck = 0;
+const OLLAMA_CACHE_TTL_MS = 60_000; // Re-check every 60 seconds
+
+async function isOllamaAvailable(): Promise<boolean> {
+  const now = Date.now();
+  if (ollamaAvailable !== null && now - ollamaLastCheck < OLLAMA_CACHE_TTL_MS) {
+    return ollamaAvailable;
+  }
+
+  ollamaAvailable = await checkOllamaHealth();
+  ollamaLastCheck = now;
+
+  if (ollamaAvailable) {
+    console.log('[callLlm] Ollama is available — will use for one-shot calls');
+  }
+
+  return ollamaAvailable;
+}
+
+/** Reset the cached Ollama health state (useful after settings change). */
+export function resetOllamaCache(): void {
+  ollamaAvailable = null;
+  ollamaLastCheck = 0;
+}
+
+/**
+ * One-shot LLM call that routes through the best available provider.
+ *
+ * Routing logic:
+ *   1. Check oneshotProvider setting ('auto' | 'ollama' | 'cli')
+ *   2. If 'auto': try Ollama first (cached health check), fall back to CLI
+ *   3. If 'ollama': use Ollama directly (throws if unavailable)
+ *   4. If 'cli': use the configured cliProvider as before
+ *
  * Returns the plain text response from the LLM.
  * Throws on failure — callers should catch and return appropriate HTTP errors.
  */
 export async function callLlm(opts: CallLlmOptions): Promise<string> {
-  const provider = getConfiguredProvider();
+  const oneshotProv = getOneshotProvider();
   const timeout = opts.timeoutMs ?? 120_000;
+
+  // --- Ollama fast path ---
+  if (oneshotProv === 'ollama') {
+    return callViaOllama(opts, timeout);
+  }
+
+  if (oneshotProv === 'auto') {
+    const available = await isOllamaAvailable();
+    if (available) {
+      try {
+        // Use the configured oneshot model for Ollama
+        const oneshotModel = getOneshotModel();
+        const ollamaOpts = { ...opts, model: opts.model || oneshotModel };
+        return await callViaOllama(ollamaOpts, timeout);
+      } catch (err) {
+        // Ollama failed — invalidate cache and fall through to CLI
+        console.warn('[callLlm] Ollama failed, falling back to CLI:', (err as Error).message);
+        ollamaAvailable = null;
+        ollamaLastCheck = 0;
+      }
+    }
+  }
+
+  // --- CLI / direct provider path ---
+  const provider = getConfiguredProvider();
 
   switch (provider) {
     case 'claude':
@@ -188,7 +287,7 @@ async function callViaOllama(opts: CallLlmOptions, timeoutMs: number): Promise<s
   }
   // Strip 'ollama:' prefix if present
   if (model?.startsWith('ollama:')) model = model.slice(7);
-  if (!model) model = 'llama3.1';
+  if (!model) model = getOneshotModel();
 
   const messages: Array<{ role: string; content: string }> = [];
   if (opts.system) messages.push({ role: 'system', content: opts.system });

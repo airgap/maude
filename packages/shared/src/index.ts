@@ -80,7 +80,14 @@ export {
 } from './mcp-tools.js';
 export type { ParsedToolName } from './mcp-tools.js';
 
-export type { ThemeId, CliProvider, Settings, Keybinding, ServerOnlySettings } from './settings.js';
+export type {
+  ThemeId,
+  CliProvider,
+  OneshotProvider,
+  Settings,
+  Keybinding,
+  ServerOnlySettings,
+} from './settings.js';
 
 export { DEFAULT_SETTINGS } from './settings.js';
 

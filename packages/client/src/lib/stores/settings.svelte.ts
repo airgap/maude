@@ -1,5 +1,6 @@
 import type {
   CliProvider,
+  OneshotProvider,
   Keybinding,
   PermissionMode,
   TerminalCommandPolicy,
@@ -117,6 +118,9 @@ interface SettingsState {
   googleTtsApiKey?: string;
   // Experimental: spatial audio for multi-workspace TTS
   spatialAudioEnabled: boolean;
+  // One-shot LLM (commentary, commit messages, code actions)
+  oneshotProvider: OneshotProvider;
+  oneshotModel: string;
   // Mobile bottom nav bar tabs (up to 10, "more" is always appended)
   mobileNavTabs: string[];
   // Snappy cursor effect (FTL prediction)
@@ -206,6 +210,8 @@ const defaults: SettingsState = {
   elevenLabsApiKey: undefined,
   googleTtsApiKey: undefined,
   spatialAudioEnabled: false,
+  oneshotProvider: 'auto',
+  oneshotModel: 'qwen3:1.7b',
   mobileNavTabs: ['chat', 'files', 'terminal', 'work'],
   snappyCursor: false,
 };
@@ -341,6 +347,12 @@ function createSettingsStore() {
     },
     get model() {
       return state.model;
+    },
+    get oneshotProvider() {
+      return state.oneshotProvider ?? 'auto';
+    },
+    get oneshotModel() {
+      return state.oneshotModel ?? 'qwen3:1.7b';
     },
     get permissionMode() {
       return state.permissionMode;

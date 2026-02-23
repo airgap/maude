@@ -32,6 +32,16 @@ export type ThemeId =
 
 export type CliProvider = 'claude' | 'kiro' | 'gemini-cli' | 'copilot' | 'ollama' | 'bedrock';
 
+/**
+ * Provider for one-shot (non-conversation) LLM calls like commentary, commit
+ * messages, code actions, etc.
+ *
+ * - 'auto': Try local Ollama first, fall back to the CLI provider
+ * - 'ollama': Always use local Ollama
+ * - 'cli': Always use the configured cliProvider (Claude/Gemini/Copilot CLI)
+ */
+export type OneshotProvider = 'auto' | 'ollama' | 'cli';
+
 export interface Settings {
   theme: ThemeId;
   cliProvider: CliProvider;
@@ -54,6 +64,9 @@ export interface Settings {
   streamingEnabled: boolean;
   compactMessages: boolean;
   autoCompaction: boolean;
+  // One-shot LLM (commentary, commit messages, code actions, etc.)
+  oneshotProvider: OneshotProvider;
+  oneshotModel: string;
   // Audio & notifications
   soundEnabled: boolean;
   soundVolume: number;
@@ -121,6 +134,8 @@ export const DEFAULT_SETTINGS: Settings = {
   streamingEnabled: true,
   compactMessages: false,
   autoCompaction: true,
+  oneshotProvider: 'auto',
+  oneshotModel: 'qwen3:1.7b',
   soundEnabled: true,
   soundVolume: 80,
   soundStyle: 'melodic',

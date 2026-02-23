@@ -2,6 +2,7 @@ import { Hono } from 'hono';
 import { nanoid } from 'nanoid';
 import { getDb } from '../db/database';
 import { listOllamaModels, checkOllamaHealth } from '../services/ollama-provider';
+import { resetOllamaCache } from '../services/llm-oneshot';
 import { listOpenAIModels } from '../services/openai-provider-v2';
 import { listGeminiModels } from '../services/gemini-provider-v2';
 import {
@@ -52,6 +53,11 @@ app.patch('/', async (c) => {
 
   for (const [key, value] of Object.entries(body.settings || body)) {
     upsert.run(key, JSON.stringify(value));
+  }
+
+  // Reset cached Ollama availability when oneshot settings change
+  if ('oneshotProvider' in (body.settings || body) || 'oneshotModel' in (body.settings || body)) {
+    resetOllamaCache();
   }
 
   return c.json({ ok: true });
