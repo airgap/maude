@@ -296,19 +296,49 @@ function createTimelineStore() {
     snapshotsAvailable: snapshots.length,
   });
 
+  const FILE_EDIT_TOOLS = new Set([
+    'Write',
+    'Edit',
+    'write_file',
+    'edit_file',
+    'create_file',
+    'str_replace_editor',
+  ]);
+
   function attachSnapshots() {
     if (snapshots.length === 0) return;
-    // Match snapshots to steps by messageId
+
+    // Match snapshots to steps by messageId (exact match)
     const byMsg = new Map<string, TimelineSnapshot>();
     for (const snap of snapshots) {
       if (snap.messageId) byMsg.set(snap.messageId, snap);
     }
 
+    // Sort snapshots by creation time for nearest-prior matching
+    const sortedSnaps = [...snapshots].sort((a, b) => a.createdAt - b.createdAt);
+
     steps = steps.map((step) => {
-      const snap = byMsg.get(step.messageId);
-      if (snap) {
-        return { ...step, hasSnapshot: true, snapshotId: snap.id };
+      // Exact match by messageId
+      const exact = byMsg.get(step.messageId);
+      if (exact) {
+        return { ...step, hasSnapshot: true, snapshotId: exact.id };
       }
+
+      // For file-editing tool calls, find the nearest snapshot created before this step
+      if (step.kind === 'tool_call' && FILE_EDIT_TOOLS.has(step.toolName ?? '')) {
+        let nearest: TimelineSnapshot | null = null;
+        for (const snap of sortedSnaps) {
+          if (snap.createdAt <= step.timestamp) {
+            nearest = snap;
+          } else {
+            break;
+          }
+        }
+        if (nearest) {
+          return { ...step, hasSnapshot: true, snapshotId: nearest.id };
+        }
+      }
+
       return step;
     });
   }
