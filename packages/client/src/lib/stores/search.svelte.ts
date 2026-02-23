@@ -8,6 +8,7 @@ export interface SearchMatch {
   content: string;
   matchStart: number;
   matchEnd: number;
+  context?: Array<{ line: number; content: string }>;
 }
 
 function createSearchStore() {

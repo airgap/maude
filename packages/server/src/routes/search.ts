@@ -10,6 +10,8 @@ interface SearchMatch {
   content: string;
   matchStart: number;
   matchEnd: number;
+  /** Context lines around the match (line number → content) */
+  context?: Array<{ line: number; content: string }>;
 }
 
 const SKIP_DIRS = new Set([
@@ -63,6 +65,7 @@ app.get('/', async (c) => {
   const rootPath = c.req.query('path') || process.cwd();
   const isRegex = c.req.query('regex') === 'true';
   const limit = Math.min(parseInt(c.req.query('limit') || '500'), 2000);
+  const contextLines = Math.min(parseInt(c.req.query('context') || '2'), 5);
 
   if (!query) return c.json({ ok: false, error: 'q parameter required' }, 400);
 
@@ -133,6 +136,21 @@ app.get('/', async (c) => {
             }
             totalMatches++;
             if (results.length < limit) {
+              // Gather context lines
+              const ctx: Array<{ line: number; content: string }> = [];
+              if (contextLines > 0) {
+                for (
+                  let c = Math.max(0, i - contextLines);
+                  c <= Math.min(lines.length - 1, i + contextLines);
+                  c++
+                ) {
+                  if (c === i) continue; // skip the match line itself
+                  ctx.push({
+                    line: c + 1,
+                    content: lines[c].length > 500 ? lines[c].slice(0, 500) : lines[c],
+                  });
+                }
+              }
               results.push({
                 file: fullPath,
                 relativePath: relative(rootPath, fullPath),
@@ -141,6 +159,7 @@ app.get('/', async (c) => {
                 content: line.length > 500 ? line.slice(0, 500) : line,
                 matchStart: match.index,
                 matchEnd: match.index + match[0].length,
+                ...(ctx.length > 0 ? { context: ctx } : {}),
               });
             } else {
               truncated = true;
@@ -157,6 +176,63 @@ app.get('/', async (c) => {
   return c.json({
     ok: true,
     data: { results, totalMatches, fileCount, truncated },
+  });
+});
+
+// ---------------------------------------------------------------------------
+// POST /replace — Replace text across files
+// ---------------------------------------------------------------------------
+
+app.post('/replace', async (c) => {
+  const body = await c.req.json();
+  const { searchText, replaceText, files, rootPath, isRegex } = body as {
+    searchText: string;
+    replaceText: string;
+    files?: string[]; // if empty, replace in all files that match
+    rootPath: string;
+    isRegex?: boolean;
+  };
+
+  if (!searchText || replaceText === undefined || !rootPath) {
+    return c.json({ ok: false, error: 'searchText, replaceText, and rootPath required' }, 400);
+  }
+
+  let pattern: RegExp;
+  try {
+    pattern = isRegex
+      ? new RegExp(searchText, 'g')
+      : new RegExp(searchText.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g');
+  } catch (err) {
+    return c.json({ ok: false, error: `Invalid regex: ${err}` }, 400);
+  }
+
+  const targetFiles = files || [];
+  let replacedCount = 0;
+  let filesModified = 0;
+
+  for (const filePath of targetFiles) {
+    try {
+      const content = await readFile(filePath, 'utf-8');
+      const newContent = content.replace(pattern, replaceText);
+      if (newContent !== content) {
+        const { writeFile } = await import('fs/promises');
+        await writeFile(filePath, newContent, 'utf-8');
+        filesModified++;
+        // Count replacements
+        pattern.lastIndex = 0;
+        let match;
+        while ((match = pattern.exec(content)) !== null) {
+          replacedCount++;
+        }
+      }
+    } catch {
+      // Skip unwritable files
+    }
+  }
+
+  return c.json({
+    ok: true,
+    data: { replacedCount, filesModified },
   });
 });
 

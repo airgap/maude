@@ -720,6 +720,7 @@ export const api = {
             content: string;
             matchStart: number;
             matchEnd: number;
+            context?: Array<{ line: number; content: string }>;
           }>;
           totalMatches: number;
           fileCount: number;
@@ -727,6 +728,20 @@ export const api = {
         };
       }>(`/search?${params}`);
     },
+    replace: (
+      searchText: string,
+      replaceText: string,
+      files: string[],
+      rootPath: string,
+      isRegex = false,
+    ) =>
+      request<{
+        ok: boolean;
+        data: { replacedCount: number; filesModified: number };
+      }>('/search/replace', {
+        method: 'POST',
+        body: JSON.stringify({ searchText, replaceText, files, rootPath, isRegex }),
+      }),
   },
 
   // --- LSP ---
