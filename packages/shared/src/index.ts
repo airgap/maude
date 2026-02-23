@@ -51,6 +51,8 @@ export { PERMISSION_PRESETS } from './tools.js';
 
 export type { TaskStatus, Task, TaskCreateInput, TaskUpdateInput } from './tasks.js';
 
+export type { TestStatus, TestResult, TestRunResult } from './test-results.js';
+
 export type { AgentType, AgentStatus, Agent, AgentSpawnInput } from './agents.js';
 
 export type { AgentProfile, AgentProfileCreateInput, AgentProfileUpdateInput } from './profiles.js';

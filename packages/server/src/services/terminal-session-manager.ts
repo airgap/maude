@@ -7,6 +7,7 @@ import type {
   ShellInfo,
 } from '@e/shared';
 import { TERMINAL_PROTOCOL } from '@e/shared';
+import { parseTestOutput } from './test-output-parser.js';
 import { existsSync, mkdirSync, appendFileSync, writeFileSync, realpathSync } from 'fs';
 import { basename, resolve, dirname, join } from 'path';
 import { homedir } from 'os';
@@ -943,6 +944,9 @@ class TerminalSessionManager {
     // --- Markdown detection (command-text-aware: cat *.md, bat *.md, etc.) ---
     if (commandText && this.detectAndSendMarkdown(session, blockId, text, commandText)) return;
 
+    // --- Test results detection (before JSON, since test JSON would be caught by generic JSON) ---
+    if (this.detectAndSendTestResults(session, blockId, text, commandText)) return;
+
     // --- JSON detection ---
     if (this.detectAndSendJson(session, blockId, text)) return;
 
@@ -1016,6 +1020,27 @@ class TerminalSessionManager {
         });
       }
     }
+  }
+
+  private detectAndSendTestResults(
+    session: TerminalSession,
+    blockId: string,
+    text: string,
+    commandText: string | null,
+  ): boolean {
+    const result = parseTestOutput(text, commandText, session.cwd);
+    if (!result) return false;
+
+    result.sessionId = session.id;
+    result.blockId = blockId;
+
+    this.sendControl(session, {
+      type: 'rich_content',
+      blockId,
+      contentType: 'test_results',
+      data: JSON.stringify(result),
+    });
+    return true;
   }
 
   private detectAndSendMarkdown(

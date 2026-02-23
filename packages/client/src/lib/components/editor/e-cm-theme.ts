@@ -70,6 +70,30 @@ export const eEditorTheme = EditorView.theme(
       backgroundColor: 'var(--bg-hover)',
       color: 'var(--text-secondary)',
     },
+    // Test status gutter
+    '.cm-test-gutter': {
+      width: '18px',
+      padding: '0 2px',
+      textAlign: 'center',
+    },
+    '.cm-test-marker': {
+      fontSize: '12px',
+      lineHeight: '1.6',
+      display: 'inline-block',
+      width: '14px',
+      textAlign: 'center',
+      fontWeight: 'bold',
+    },
+    '.cm-test-pass': {
+      color: 'var(--accent-secondary)',
+    },
+    '.cm-test-fail': {
+      color: 'var(--accent-error)',
+    },
+    '.cm-test-skip': {
+      color: 'var(--text-tertiary)',
+      opacity: '0.6',
+    },
     '.cm-foldPlaceholder': {
       backgroundColor: 'var(--bg-tertiary)',
       border: '1px solid var(--border-primary)',

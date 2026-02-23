@@ -128,7 +128,8 @@ export type RichContentType =
   | 'diff'
   | 'markdown'
   | 'error'
-  | 'progress';
+  | 'progress'
+  | 'test_results';
 
 /** Rich content message sent from server when structured output is detected */
 export interface TerminalRichContent {

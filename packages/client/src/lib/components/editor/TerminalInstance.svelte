@@ -2,6 +2,7 @@
   import { onMount } from 'svelte';
   import { terminalConnectionManager } from '$lib/services/terminal-connection';
   import { terminalStore } from '$lib/stores/terminal.svelte';
+  import { testResultsStore } from '$lib/stores/test-results.svelte';
   import { settingsStore } from '$lib/stores/settings.svelte';
   import { conversationStore } from '$lib/stores/conversation.svelte';
   import { workspaceListStore } from '$lib/stores/projects.svelte';
@@ -562,6 +563,14 @@
           break;
         case 'rich_content':
           terminalStore.addRichContent(msg.blockId, msg.contentType, msg.data);
+          if (msg.contentType === 'test_results') {
+            try {
+              const testRun = JSON.parse(msg.data);
+              testResultsStore.addTestRun(testRun);
+            } catch {
+              // ignore parse errors
+            }
+          }
           break;
       }
     });

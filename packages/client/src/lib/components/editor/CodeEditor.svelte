@@ -47,6 +47,7 @@
   import { lspHoverExtension } from './extensions/lsp-hover';
   import { fileUriField } from './extensions/file-uri-field';
   import { hoverHighlightExtension } from './extensions/hover-highlight';
+  import { testStatusGutterExtension } from './extensions/test-status-gutter';
 
   let { tab } = $props<{ tab: EditorTab }>();
 
@@ -130,6 +131,7 @@
       highlightSpecialChars(),
       history(),
       foldGutter(),
+      ...testStatusGutterExtension(),
       drawSelection(),
       dropCursor(),
       EditorState.allowMultipleSelections.of(true),
