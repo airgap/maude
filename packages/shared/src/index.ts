@@ -332,3 +332,19 @@ export type {
 } from './skills.js';
 
 export { SKILL_CATEGORIES } from './skills.js';
+
+export type {
+  SoulMemoryFileKind,
+  SoulMemoryFileDef,
+  SoulMemoryFile,
+  SoulMemoryState,
+  SoulMemorySettings,
+  SoulMemoryUpdateProposal,
+} from './soul-memory.js';
+
+export {
+  DEFAULT_SOUL_MEMORY_SETTINGS,
+  SOUL_MEMORY_MAX_CHARS,
+  SOUL_MEMORY_FILES,
+  getSoulMemoryFileDef,
+} from './soul-memory.js';

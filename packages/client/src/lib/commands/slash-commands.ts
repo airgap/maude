@@ -51,8 +51,34 @@ const commands: SlashCommand[] = [
   },
   {
     name: 'memory',
-    description: 'View and edit memory files',
-    execute: () => {
+    description: 'Show active memory files and their sizes',
+    execute: async (ctx) => {
+      // Show the soul memory status as a system message
+      if (ctx.conversationId && settingsStore.workspacePath) {
+        try {
+          const res = await api.soulMemory.status(settingsStore.workspacePath);
+          if (res.ok) {
+            const lines: string[] = ['**📝 Agent Memory Files**\n'];
+            for (const f of res.data.files) {
+              const icon = !f.exists ? '⭕' : f.enabled ? '✅' : '⏸️';
+              const status = !f.exists ? 'not created' : f.enabled ? 'active' : 'disabled';
+              lines.push(`${icon} **${f.fileName}** — ${f.label}`);
+              lines.push(`   Status: ${status} | Size: ${f.sizeHuman} | \`${f.fileName}\``);
+              lines.push('');
+            }
+            lines.push('_Edit in sidebar → Memory → Soul tab, or directly in the file explorer._');
+
+            conversationStore.addMessage({
+              id: uuid(),
+              role: 'system',
+              content: [{ type: 'text', text: lines.join('\n') }],
+              timestamp: Date.now(),
+            });
+          }
+        } catch {
+          // Fallback: just open the sidebar
+        }
+      }
       uiStore.setSidebarTab('memory');
       uiStore.setSidebarOpen(true);
       return { handled: true };
