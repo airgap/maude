@@ -383,6 +383,32 @@ export const eEditorTheme = EditorView.theme(
     '.cm-inlay-hint-parameter': {
       color: 'var(--syn-variable, var(--text-tertiary))',
     },
+    // Code lens (reference counts above functions)
+    '.cm-code-lens-line': {
+      fontFamily: 'var(--font-family-sans)',
+      fontSize: '11px',
+      lineHeight: '1.8',
+      color: 'var(--text-tertiary)',
+      paddingLeft: '62px', // Align with code after gutters
+      opacity: '0.75',
+      cursor: 'default',
+      whiteSpace: 'nowrap',
+      overflow: 'hidden',
+    },
+    '.cm-code-lens-item': {
+      cursor: 'pointer',
+      transition: 'color 0.12s, opacity 0.12s',
+      color: 'var(--text-link, var(--accent-primary))',
+      opacity: '0.7',
+    },
+    '.cm-code-lens-item:hover': {
+      opacity: '1',
+      textDecoration: 'underline',
+    },
+    '.cm-code-lens-sep': {
+      color: 'var(--text-tertiary)',
+      opacity: '0.4',
+    },
     // Git blame annotations
     '.cm-blame-annotation': {
       fontFamily: 'var(--font-family)',

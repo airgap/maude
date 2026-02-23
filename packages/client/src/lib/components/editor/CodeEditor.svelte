@@ -65,6 +65,7 @@
   import { mergeConflictsStore } from '$lib/stores/merge-conflicts.svelte';
   import { lspInlayHintsExtension } from './extensions/lsp-inlay-hints';
   import { gitBlameExtension } from './extensions/git-blame';
+  import { lspCodeLensExtension } from './extensions/lsp-code-lens';
   import EditorContextMenu from './EditorContextMenu.svelte';
   import QuickFixMenu from './QuickFixMenu.svelte';
   import AiActionResult from './AiActionResult.svelte';
@@ -292,6 +293,10 @@
       // Merge conflict inline resolution (only when content has conflict markers)
       ...(hasConflictMarkers(tab.content)
         ? mergeConflictExtension({ onResolve: handleConflictResolve })
+        : []),
+      // LSP Code Lens (reference counts above functions, when connected and enabled)
+      ...(lspStore.isConnected(tab.language) && settingsStore.showCodeLens
+        ? lspCodeLensExtension(tab.language)
         : []),
       // Git blame inline annotations (when enabled)
       ...(settingsStore.showInlineBlame && tab.filePath

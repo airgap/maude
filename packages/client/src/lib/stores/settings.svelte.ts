@@ -34,6 +34,8 @@ interface SettingsState {
   showInlayHints: boolean;
   /** Show inline git blame annotations at end of each line */
   showInlineBlame: boolean;
+  /** Show LSP code lens (reference counts, etc.) above functions */
+  showCodeLens: boolean;
   fontSize: number;
   uiFontSize: number | null; // null = follow code font size
   fontFamily: string;
@@ -145,6 +147,7 @@ const defaults: SettingsState = {
   defaultFormatter: 'auto' as const,
   showInlayHints: false,
   showInlineBlame: false,
+  showCodeLens: true,
   fontSize: 14,
   uiFontSize: null,
   fontFamily: 'share-tech-mono',
@@ -365,6 +368,9 @@ function createSettingsStore() {
     },
     get showInlineBlame() {
       return state.showInlineBlame;
+    },
+    get showCodeLens() {
+      return state.showCodeLens;
     },
     get defaultFormatter() {
       return state.defaultFormatter;
