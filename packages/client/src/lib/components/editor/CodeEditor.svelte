@@ -19,6 +19,8 @@
     bracketMatching,
     foldGutter,
     foldKeymap,
+    foldAll,
+    unfoldAll,
     indentUnit,
   } from '@codemirror/language';
   import {
@@ -48,6 +50,8 @@
   import { fileUriField } from './extensions/file-uri-field';
   import { hoverHighlightExtension } from './extensions/hover-highlight';
   import { testStatusGutterExtension } from './extensions/test-status-gutter';
+  import EditorContextMenu from './EditorContextMenu.svelte';
+  import AiActionResult from './AiActionResult.svelte';
 
   let { tab } = $props<{ tab: EditorTab }>();
 
@@ -56,6 +60,23 @@
   let currentTabId = tab.id;
   // Track whether the update is coming from our own sync (to prevent loops)
   let updatingFromStore = false;
+
+  // ── Context menu state ──
+  let showContextMenu = $state(false);
+  let ctxMenuX = $state(0);
+  let ctxMenuY = $state(0);
+  let ctxSelectedText = $state('');
+
+  function handleEditorContextMenu(e: MouseEvent) {
+    if (!view) return;
+    const selection = view.state.selection.main;
+    const selectedText = selection.empty ? '' : view.state.sliceDoc(selection.from, selection.to);
+    ctxSelectedText = selectedText;
+    ctxMenuX = e.clientX;
+    ctxMenuY = e.clientY;
+    showContextMenu = true;
+    e.preventDefault();
+  }
 
   const jsSnippets = [
     snippetCompletion('if (${condition}) {\n\t${}\n}', {
@@ -153,6 +174,8 @@
         ...lintKeymap,
         indentWithTab,
         { key: 'Mod-d', run: selectNextOccurrence, preventDefault: true },
+        { key: 'Ctrl-Shift-[', run: foldAll },
+        { key: 'Ctrl-Shift-]', run: unfoldAll },
         {
           key: 'Mod-s',
           run: () => {
@@ -341,9 +364,33 @@
   });
 </script>
 
-<div class="code-editor" bind:this={container}></div>
+<!-- svelte-ignore a11y_no_static_element_interactions -->
+<div class="code-editor-wrapper">
+  <div class="code-editor" bind:this={container} oncontextmenu={handleEditorContextMenu}></div>
+  <AiActionResult />
+</div>
+
+{#if showContextMenu}
+  <EditorContextMenu
+    x={ctxMenuX}
+    y={ctxMenuY}
+    selectedText={ctxSelectedText}
+    filePath={tab.filePath}
+    language={tab.language}
+    onClose={() => {
+      showContextMenu = false;
+    }}
+  />
+{/if}
 
 <style>
+  .code-editor-wrapper {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    position: relative;
+  }
   .code-editor {
     flex: 1;
     min-height: 0;

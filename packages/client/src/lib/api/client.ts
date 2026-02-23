@@ -2252,4 +2252,31 @@ export const api = {
       }>(`/cross-session/flow${q ? '?' + q : ''}`);
     },
   },
+
+  // ── AI Code Actions ──
+
+  ai: {
+    /** Run an inline AI code action (explain, optimize, simplify, etc.) */
+    codeAction: (
+      code: string,
+      action: string,
+      options?: {
+        filePath?: string;
+        language?: string;
+        diagnosticMessage?: string;
+        customPrompt?: string;
+      },
+    ) =>
+      request<{ ok: boolean; data: { result: string; action: string } }>('/ai/code-action', {
+        method: 'POST',
+        body: JSON.stringify({ code, action, ...options }),
+      }),
+
+    /** List available AI code actions */
+    listActions: () =>
+      request<{
+        ok: boolean;
+        data: { actions: Array<{ name: string; label: string }> };
+      }>('/ai/actions'),
+  },
 };

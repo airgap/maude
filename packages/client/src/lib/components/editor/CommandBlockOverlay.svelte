@@ -5,6 +5,9 @@
   import RichBlockRenderer from './RichBlockRenderer.svelte';
   import { chirpEngine } from '$lib/audio/chirp-engine';
   import { settingsStore } from '$lib/stores/settings.svelte';
+  import { terminalErrorsStore } from '$lib/stores/terminal-errors.svelte';
+  import { editorStore } from '$lib/stores/editor.svelte';
+  import { resolvePath } from '$lib/services/terminal-links';
 
   let { sessionId, blocks, cellHeight, cellWidth, viewportTopRow, viewportRows, terminalElement } =
     $props<{
@@ -56,6 +59,20 @@
   function getOutputLineCount(block: TerminalCommandBlock): number {
     if (block.endRow < 0) return 0; // Still running
     return Math.max(0, block.endRow - block.startRow);
+  }
+
+  /** Jump to the first error location from a failed command block */
+  function jumpToError(blockId: string) {
+    const error = terminalErrorsStore.getFirstError(blockId);
+    if (!error) return;
+
+    // Resolve relative paths against the terminal's CWD
+    const sessionMeta = terminalStore.sessions.get(sessionId);
+    const cwd = sessionMeta?.cwd || '.';
+    const resolved = resolvePath(error.file, cwd);
+
+    editorStore.openFile(resolved, false, { line: error.line, col: error.col ?? 1 });
+    if (settingsStore.soundEnabled) chirpEngine.uiClick();
   }
 
   /** Blocks that are visible in the current viewport */
@@ -240,6 +257,31 @@
                   <line x1="3" y1="9" x2="21" y2="9" />
                   <line x1="9" y1="9" x2="9" y2="21" />
                 </svg>
+              </button>
+            {/if}
+
+            <!-- Jump to error button (failed commands with detected errors) -->
+            {#if block.exitCode !== null && block.exitCode !== 0 && terminalErrorsStore.hasErrors(block.id)}
+              {@const errorCount = terminalErrorsStore.getErrorCount(block.id)}
+              <button
+                class="jump-error-btn"
+                onclick={() => jumpToError(block.id)}
+                title="Jump to first error ({errorCount} error{errorCount !== 1 ? 's' : ''} found)"
+                aria-label="Jump to first error in editor"
+              >
+                <svg
+                  width="12"
+                  height="12"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2.5"
+                >
+                  <circle cx="12" cy="12" r="10" />
+                  <line x1="12" y1="8" x2="12" y2="12" />
+                  <line x1="12" y1="16" x2="12.01" y2="16" />
+                </svg>
+                <span class="error-count">{errorCount}</span>
               </button>
             {/if}
 
@@ -512,6 +554,38 @@
     50% {
       opacity: 1;
     }
+  }
+
+  /* ── Jump to error button ── */
+
+  .jump-error-btn {
+    display: flex;
+    align-items: center;
+    gap: 3px;
+    height: 16px;
+    padding: 0 5px;
+    border: none;
+    background: color-mix(in srgb, var(--accent-error, #ff3344) 15%, transparent);
+    color: var(--accent-error, #ff3344);
+    cursor: pointer;
+    border-radius: var(--radius-sm, 4px);
+    flex-shrink: 0;
+    font-family: var(--font-family-mono, monospace);
+    font-size: var(--fs-sans-xxs);
+    font-weight: 600;
+    transition:
+      background 0.15s ease,
+      color 0.15s ease;
+  }
+
+  .jump-error-btn:hover {
+    background: color-mix(in srgb, var(--accent-error, #ff3344) 25%, transparent);
+    color: var(--accent-error, #ff3344);
+  }
+
+  .error-count {
+    font-size: var(--fs-xxs);
+    line-height: 1;
   }
 
   /* ── Copy button ── */

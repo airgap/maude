@@ -76,9 +76,25 @@
     ctxTab
       ? [
           {
+            label: ctxTab.pinned ? 'Unpin Tab' : 'Pin Tab',
+            icon: ctxTab.pinned
+              ? `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg>`
+              : `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 17v5"/><path d="M9 11V6a3 3 0 0 1 6 0v5"/><path d="M5 11h14l-1 6H6z"/></svg>`,
+            action: () => {
+              if (ctxTab!.pinned) {
+                editorStore.unpinTab(ctxTab!.id);
+              } else {
+                editorStore.pinTab(ctxTab!.id);
+              }
+              ctxTab = null;
+            },
+          },
+          { kind: 'separator' },
+          {
             label: 'Close',
             shortcut: isMac ? '⌘W' : 'Ctrl+W',
             icon: `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg>`,
+            disabled: ctxTab.pinned,
             action: () => {
               closeTab(null, ctxTab!);
               ctxTab = null;
@@ -190,15 +206,34 @@
           tabindex="0"
           aria-selected={isActive}
         >
-          <!-- Language-coloured file-type dot -->
-          <span class="lang-dot" aria-hidden="true"></span>
+          <!-- Pin icon or language dot -->
+          {#if tab.pinned}
+            <svg
+              class="pin-icon"
+              width="10"
+              height="10"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2.5"
+              aria-hidden="true"
+            >
+              <path d="M12 17v5" />
+              <path d="M9 11V6a3 3 0 0 1 6 0v5" />
+              <path d="M5 11h14l-1 6H6z" />
+            </svg>
+          {:else}
+            <span class="lang-dot" aria-hidden="true"></span>
+          {/if}
 
           <span class="tab-name" class:italic={isPreview}>
             {tab.fileName}
           </span>
 
-          <!-- Dirty / close button (swap on hover like VS Code) -->
-          {#if dirty}
+          <!-- Dirty / close button (swap on hover like VS Code) — hidden for pinned tabs -->
+          {#if tab.pinned}
+            <!-- No close button for pinned tabs -->
+          {:else if dirty}
             <Tooltip content="Unsaved changes — click to close" placement="bottom" delay={900}>
               <button
                 class="tab-close dirty-close"
@@ -320,6 +355,16 @@
   }
   .editor-tab.active::after {
     right: -1px;
+  }
+
+  /* Pin icon */
+  .pin-icon {
+    flex-shrink: 0;
+    color: var(--accent-primary, #00b4ff);
+    opacity: 0.7;
+  }
+  .editor-tab.active .pin-icon {
+    opacity: 1;
   }
 
   /* Language dot */

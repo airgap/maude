@@ -37,14 +37,16 @@ import { terminalStore } from '$lib/stores/terminal.svelte';
  *    extension (e.g. `src/utils/foo.ts`).
  *
  * 3. Bare filenames with a file extension that are immediately followed by
- *    `:digit` (e.g. `foo.ts:42`). Without a `:line` suffix a standalone
- *    filename is too ambiguous (could be prose).
+ *    `:digit` or `(digit` (e.g. `foo.ts:42` or `foo.ts(42,5)`). Without
+ *    a location suffix a standalone filename is too ambiguous (could be prose).
  *
- * All three branches may be followed by `:line` or `:line:col`.
+ * All three branches may be followed by `:line:col` or `(line,col)`.
  *
  * Capture groups:
- *   [1] — line number  (if present)
- *   [2] — column number (if present)
+ *   [1] — line number from colon format (if present)
+ *   [2] — column number from colon format (if present)
+ *   [3] — line number from parenthesized format (if present)
+ *   [4] — column number from parenthesized format (if present)
  */
 const FILE_PATH_RE = new RegExp(
   '(?:' +
@@ -56,11 +58,15 @@ const FILE_PATH_RE = new RegExp(
     '(?:[a-zA-Z_@][a-zA-Z0-9_@.+-]*/)+' +
     '[a-zA-Z0-9_@.+-]+\\.[a-zA-Z0-9]{1,10}' +
     '|' +
-    // Branch 3 – bare filename (must be followed by :line)
-    '[a-zA-Z_][a-zA-Z0-9_.-]*\\.[a-zA-Z0-9]{1,10}(?=:\\d)' +
+    // Branch 3 – bare filename (must be followed by :line or (line,col))
+    '[a-zA-Z_][a-zA-Z0-9_.-]*\\.[a-zA-Z0-9]{1,10}(?=:\\d|\\(\\d)' +
     ')' +
-    // Optional :line:col suffix
-    '(?::(\\d+)(?::(\\d+))?)?',
+    // Optional location suffix — either :line:col or (line,col) (TypeScript diagnostic style)
+    '(?:' +
+    '(?::(\\d+)(?::(\\d+))?)' +
+    '|' +
+    '(?:\\((\\d+),(\\d+)\\))' +
+    ')?',
   'g',
 );
 
@@ -95,13 +101,24 @@ function findFileLinks(text: string): ParsedFileLink[] {
   let m: RegExpExecArray | null;
   while ((m = FILE_PATH_RE.exec(text)) !== null) {
     const fullMatch = m[0];
-    const lineStr = m[1] as string | undefined;
-    const colStr = m[2] as string | undefined;
+    // Capture groups: [1] colon-line, [2] colon-col, [3] paren-line, [4] paren-col
+    const colonLine = m[1] as string | undefined;
+    const colonCol = m[2] as string | undefined;
+    const parenLine = m[3] as string | undefined;
+    const parenCol = m[4] as string | undefined;
 
-    // Extract path portion (strip :line:col)
+    const lineStr = colonLine || parenLine;
+    const colStr = colonCol || parenCol;
+
+    // Extract path portion (strip :line:col or (line,col) suffix)
     let path = fullMatch;
-    if (lineStr) {
-      const suffix = colStr ? `:${lineStr}:${colStr}` : `:${lineStr}`;
+    if (colonLine) {
+      const suffix = colonCol ? `:${colonLine}:${colonCol}` : `:${colonLine}`;
+      if (path.endsWith(suffix)) {
+        path = path.slice(0, -suffix.length);
+      }
+    } else if (parenLine) {
+      const suffix = parenCol ? `(${parenLine},${parenCol})` : `(${parenLine})`;
       if (path.endsWith(suffix)) {
         path = path.slice(0, -suffix.length);
       }
@@ -155,7 +172,7 @@ function normalizePath(p: string): string {
  * - Home-relative paths (`~/…`) are returned as-is (the server expands `~`).
  * - Everything else is joined to `cwd` and normalised.
  */
-function resolvePath(filePath: string, cwd: string): string {
+export function resolvePath(filePath: string, cwd: string): string {
   if (filePath.startsWith('/')) return filePath;
   if (filePath.startsWith('~/')) return filePath;
 

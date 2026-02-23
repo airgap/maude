@@ -37,6 +37,8 @@ export interface EditorTab {
   kind?: 'file' | 'diff';
   /** Raw unified diff string, only used when kind === 'diff' */
   diffContent?: string;
+  /** Whether this tab is pinned (sorts left, cannot be closed without unpinning first) */
+  pinned?: boolean;
 }
 
 export type LayoutMode = 'chat-only' | 'editor-only' | 'split-horizontal';
@@ -321,6 +323,9 @@ function createEditorStore() {
       const idx = tabs.findIndex((t) => t.id === id);
       if (idx < 0) return;
 
+      // Prevent closing pinned tabs
+      if (tabs[idx].pinned) return;
+
       if (previewTabId === id) previewTabId = null;
 
       tabs = tabs.filter((t) => t.id !== id);
@@ -334,6 +339,25 @@ function createEditorStore() {
           activeTabId = tabs[Math.min(idx, tabs.length - 1)].id;
         }
       }
+    },
+
+    pinTab(id: string) {
+      const tab = tabs.find((t) => t.id === id);
+      if (!tab || tab.pinned) return;
+      tab.pinned = true;
+      // Sort: pinned tabs first, preserve relative order within each group
+      tabs = [...tabs.filter((t) => t.pinned), ...tabs.filter((t) => !t.pinned)];
+    },
+
+    unpinTab(id: string) {
+      const tab = tabs.find((t) => t.id === id);
+      if (!tab || !tab.pinned) return;
+      tab.pinned = false;
+      tabs = [...tabs];
+    },
+
+    isTabPinned(id: string): boolean {
+      return tabs.find((t) => t.id === id)?.pinned ?? false;
     },
 
     async saveFile(id: string) {

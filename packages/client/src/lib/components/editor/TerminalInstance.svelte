@@ -10,6 +10,8 @@
   import type { ContextMenuItem } from '$lib/components/ui/ContextMenu.svelte';
   import { shellEscapePath } from '$lib/utils/shell-escape';
   import { editorStore } from '$lib/stores/editor.svelte';
+  import { terminalErrorsStore } from '$lib/stores/terminal-errors.svelte';
+  import { parseAll } from '$lib/services/error-location-parser';
   import CommandBlockOverlay from './CommandBlockOverlay.svelte';
   import '@xterm/xterm/css/xterm.css';
 
@@ -551,6 +553,23 @@
           // End the command block with exit code
           updateViewportInfo();
           terminalStore.endCommandBlock(sid, msg.id, msg.exitCode, getAbsoluteCursorRow());
+          // Scan failed commands for error locations
+          if (msg.exitCode !== 0) {
+            const block = terminalStore.getCommandBlocks(sid).find((b) => b.id === msg.id);
+            if (block && block.endRow > block.startRow) {
+              const outputText = terminalConnectionManager.getBufferText(
+                sid,
+                block.startRow + 1,
+                block.endRow,
+              );
+              if (outputText) {
+                const errors = parseAll(outputText);
+                if (errors.length > 0) {
+                  terminalErrorsStore.setErrors(msg.id, errors);
+                }
+              }
+            }
+          }
           break;
         case 'session_exit':
           terminalStore.setExitCode(sid, msg.exitCode);
