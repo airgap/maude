@@ -22,6 +22,8 @@ interface SettingsState {
   permissionRules: PermissionRule[];
   keybindings: Keybinding[];
   autoMemoryEnabled: boolean;
+  /** Require change preview for AI file modifications */
+  requireChangePreview: boolean;
   fontSize: number;
   uiFontSize: number | null; // null = follow code font size
   fontFamily: string;
@@ -127,6 +129,7 @@ const defaults: SettingsState = {
     { keys: 'Ctrl+/', action: 'toggleSidebar', context: 'global', description: 'Toggle sidebar' },
   ],
   autoMemoryEnabled: true,
+  requireChangePreview: false,
   fontSize: 14,
   uiFontSize: null,
   fontFamily: 'share-tech-mono',
@@ -332,6 +335,9 @@ function createSettingsStore() {
     },
     get autoMemoryEnabled() {
       return state.autoMemoryEnabled;
+    },
+    get requireChangePreview() {
+      return state.requireChangePreview;
     },
     get fontSize() {
       return state.fontSize;
