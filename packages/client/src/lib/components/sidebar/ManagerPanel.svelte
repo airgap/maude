@@ -11,7 +11,6 @@
 
   // ---- Types ----
   type CommentaryPersonality =
-    | 'sports_announcer'
     | 'documentary_narrator'
     | 'technical_analyst'
     | 'comedic_observer'
@@ -77,11 +76,6 @@
 
   // ---- Personality Options ----
   const personalities: PersonalityOption[] = [
-    {
-      id: 'sports_announcer',
-      label: 'Sports',
-      icon: 'M3 8L15 1l-6.026 13.634L12 21l9-13h-7.971L21 1z',
-    },
     {
       id: 'documentary_narrator',
       label: 'Documentary',

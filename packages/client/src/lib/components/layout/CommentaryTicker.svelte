@@ -10,7 +10,6 @@
   let visible = $derived(isActive && latestText.length > 0);
 
   const personalityLabels: Record<string, string> = {
-    sports_announcer: 'Sports',
     documentary_narrator: 'Narrator',
     technical_analyst: 'Analyst',
     comedic_observer: 'Comedy',

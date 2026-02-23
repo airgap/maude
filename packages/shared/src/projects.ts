@@ -1,5 +1,4 @@
 export type CommentaryPersonality =
-  | 'sports_announcer'
   | 'documentary_narrator'
   | 'technical_analyst'
   | 'comedic_observer'

@@ -209,7 +209,6 @@ describe('summariseBatch', () => {
 
 describe('PERSONALITY_PROMPTS', () => {
   const personalities: CommentaryPersonality[] = [
-    'sports_announcer',
     'documentary_narrator',
     'technical_analyst',
     'comedic_observer',
@@ -238,10 +237,6 @@ describe('PERSONALITY_PROMPTS', () => {
 
   test('project_lead uses first person', () => {
     expect(PERSONALITY_PROMPTS.project_lead).toContain('first person');
-  });
-
-  test('sports_announcer is energetic', () => {
-    expect(PERSONALITY_PROMPTS.sports_announcer).toContain('energetic');
   });
 
   test('documentary_narrator references David Attenborough', () => {
@@ -426,18 +421,18 @@ describe('CommentatorService — lifecycle', () => {
 
   test('startCommentary makes the workspace active', () => {
     expect(service.isActive('ws-1')).toBe(false);
-    service.startCommentary('ws-1', 'sports_announcer');
+    service.startCommentary('ws-1', 'documentary_narrator');
     expect(service.isActive('ws-1')).toBe(true);
-    expect(service.getPersonality('ws-1')).toBe('sports_announcer');
+    expect(service.getPersonality('ws-1')).toBe('documentary_narrator');
   });
 
   test('startCommentary stores verbosity (defaults to strategic)', () => {
-    service.startCommentary('ws-1', 'sports_announcer');
+    service.startCommentary('ws-1', 'documentary_narrator');
     expect(service.getVerbosity('ws-1')).toBe('strategic');
   });
 
   test('startCommentary stores custom verbosity', () => {
-    service.startCommentary('ws-1', 'sports_announcer', undefined, 'frequent');
+    service.startCommentary('ws-1', 'documentary_narrator', undefined, 'frequent');
     expect(service.getVerbosity('ws-1')).toBe('frequent');
   });
 
@@ -451,29 +446,29 @@ describe('CommentatorService — lifecycle', () => {
   });
 
   test('startCommentary is idempotent for same personality', () => {
-    service.startCommentary('ws-1', 'sports_announcer');
+    service.startCommentary('ws-1', 'documentary_narrator');
     service.pushEvent('ws-1', makeMessageStart());
-    service.startCommentary('ws-1', 'sports_announcer');
-    expect(service.getPersonality('ws-1')).toBe('sports_announcer');
+    service.startCommentary('ws-1', 'documentary_narrator');
+    expect(service.getPersonality('ws-1')).toBe('documentary_narrator');
   });
 
   test('startCommentary replaces existing commentator when personality changes', () => {
-    service.startCommentary('ws-1', 'sports_announcer');
+    service.startCommentary('ws-1', 'documentary_narrator');
     service.startCommentary('ws-1', 'comedic_observer');
     expect(service.getPersonality('ws-1')).toBe('comedic_observer');
   });
 
   test('startCommentary updates verbosity without restarting when same personality', () => {
-    service.startCommentary('ws-1', 'sports_announcer', undefined, 'strategic');
+    service.startCommentary('ws-1', 'documentary_narrator', undefined, 'strategic');
     expect(service.getVerbosity('ws-1')).toBe('strategic');
 
-    service.startCommentary('ws-1', 'sports_announcer', undefined, 'frequent');
+    service.startCommentary('ws-1', 'documentary_narrator', undefined, 'frequent');
     expect(service.getVerbosity('ws-1')).toBe('frequent');
-    expect(service.getPersonality('ws-1')).toBe('sports_announcer');
+    expect(service.getPersonality('ws-1')).toBe('documentary_narrator');
   });
 
   test('setVerbosity updates verbosity for active commentator', () => {
-    service.startCommentary('ws-1', 'sports_announcer', undefined, 'strategic');
+    service.startCommentary('ws-1', 'documentary_narrator', undefined, 'strategic');
     expect(service.setVerbosity('ws-1', 'minimal')).toBe(true);
     expect(service.getVerbosity('ws-1')).toBe('minimal');
   });
@@ -491,12 +486,12 @@ describe('CommentatorService — lifecycle', () => {
   });
 
   test('pushEvent ignores ping events', () => {
-    service.startCommentary('ws-1', 'sports_announcer');
+    service.startCommentary('ws-1', 'documentary_narrator');
     service.pushEvent('ws-1', makePing());
   });
 
   test('pushEvent filters events based on verbosity', () => {
-    service.startCommentary('ws-1', 'sports_announcer', undefined, 'strategic');
+    service.startCommentary('ws-1', 'documentary_narrator', undefined, 'strategic');
     service.pushEvent('ws-1', makeTextDelta('hello'));
   });
 });
@@ -541,7 +536,7 @@ describe('CommentatorService — reference counting', () => {
   });
 
   test('stopCommentary respects ref counting — does not stop while refs remain', () => {
-    service.startCommentary('ws-1', 'sports_announcer');
+    service.startCommentary('ws-1', 'documentary_narrator');
     service.acquireRef('ws-1');
     service.acquireRef('ws-1');
 
@@ -551,7 +546,7 @@ describe('CommentatorService — reference counting', () => {
   });
 
   test('stopCommentary stops when ref count is zero', () => {
-    service.startCommentary('ws-1', 'sports_announcer');
+    service.startCommentary('ws-1', 'documentary_narrator');
 
     const stopped = service.stopCommentary('ws-1');
     expect(stopped).toBe(true);
@@ -559,7 +554,7 @@ describe('CommentatorService — reference counting', () => {
   });
 
   test('stopCommentary stops after all refs released', () => {
-    service.startCommentary('ws-1', 'sports_announcer');
+    service.startCommentary('ws-1', 'documentary_narrator');
     service.acquireRef('ws-1');
     service.acquireRef('ws-1');
 
@@ -572,7 +567,7 @@ describe('CommentatorService — reference counting', () => {
   });
 
   test('forceStopCommentary ignores ref count', () => {
-    service.startCommentary('ws-1', 'sports_announcer');
+    service.startCommentary('ws-1', 'documentary_narrator');
     service.acquireRef('ws-1');
     service.acquireRef('ws-1');
 
@@ -583,7 +578,7 @@ describe('CommentatorService — reference counting', () => {
   });
 
   test('stopAll clears all commentators and ref counts', () => {
-    service.startCommentary('ws-1', 'sports_announcer');
+    service.startCommentary('ws-1', 'documentary_narrator');
     service.startCommentary('ws-2', 'documentary_narrator');
     service.startCommentary('ws-3', 'technical_analyst');
     service.acquireRef('ws-1');
@@ -618,7 +613,7 @@ describe('CommentatorService — status and listing', () => {
   test('getActiveWorkspaces returns all active workspace IDs', () => {
     expect(service.getActiveWorkspaces()).toEqual([]);
 
-    service.startCommentary('ws-1', 'sports_announcer');
+    service.startCommentary('ws-1', 'documentary_narrator');
     service.startCommentary('ws-2', 'documentary_narrator');
 
     const active = service.getActiveWorkspaces();
@@ -629,7 +624,7 @@ describe('CommentatorService — status and listing', () => {
 
   test('activeCount tracks the number of active commentators', () => {
     expect(service.activeCount).toBe(0);
-    service.startCommentary('ws-1', 'sports_announcer');
+    service.startCommentary('ws-1', 'documentary_narrator');
     expect(service.activeCount).toBe(1);
     service.startCommentary('ws-2', 'documentary_narrator');
     expect(service.activeCount).toBe(2);
@@ -638,7 +633,7 @@ describe('CommentatorService — status and listing', () => {
   });
 
   test('getStatus returns detailed info for all commentators including verbosity', () => {
-    service.startCommentary('ws-1', 'sports_announcer', undefined, 'frequent');
+    service.startCommentary('ws-1', 'documentary_narrator', undefined, 'frequent');
     service.startCommentary('ws-2', 'documentary_narrator', undefined, 'minimal');
     service.acquireRef('ws-1');
     service.acquireRef('ws-1');
@@ -649,7 +644,7 @@ describe('CommentatorService — status and listing', () => {
 
     const ws1Status = statuses.find((s) => s.workspaceId === 'ws-1');
     expect(ws1Status).toBeDefined();
-    expect(ws1Status!.personality).toBe('sports_announcer');
+    expect(ws1Status!.personality).toBe('documentary_narrator');
     expect(ws1Status!.verbosity).toBe('frequent');
     expect(ws1Status!.refCount).toBe(2);
     expect(ws1Status!.generating).toBe(false);
@@ -681,7 +676,7 @@ describe('CommentatorService — event batching', () => {
   });
 
   test('batches events and calls LLM after MIN_BATCH_MS', async () => {
-    service.startCommentary('ws-1', 'sports_announcer', undefined, 'frequent');
+    service.startCommentary('ws-1', 'documentary_narrator', undefined, 'frequent');
 
     service.pushEvent('ws-1', makeMessageStart());
     service.pushEvent('ws-1', makeToolUseStart('Read'));
@@ -694,7 +689,7 @@ describe('CommentatorService — event batching', () => {
     expect(mockCallLlm).toHaveBeenCalledTimes(1);
 
     const callArgs = mockCallLlm.mock.calls[0][0] as any;
-    expect(callArgs.system).toContain('sports announcer');
+    expect(callArgs.system).toContain('David Attenborough');
     // Verbosity modifier is appended to system prompt
     expect(callArgs.system).toContain('FREQUENT');
     expect(callArgs.user).toContain('Agent started');
@@ -797,7 +792,7 @@ describe('CommentatorService — event batching', () => {
       received.push(evt);
     });
 
-    service.startCommentary('ws-1', 'sports_announcer', undefined, 'frequent');
+    service.startCommentary('ws-1', 'documentary_narrator', undefined, 'frequent');
     service.pushEvent('ws-1', makeMessageStart());
 
     await new Promise((resolve) => setTimeout(resolve, MIN_BATCH_MS + 500));
@@ -812,7 +807,7 @@ describe('CommentatorService — event batching', () => {
   }, 10_000);
 
   test('LLM prompt includes verbosity modifier', async () => {
-    service.startCommentary('ws-1', 'sports_announcer', undefined, 'minimal');
+    service.startCommentary('ws-1', 'documentary_narrator', undefined, 'minimal');
 
     service.pushEvent('ws-1', makeStoryUpdate());
 
@@ -873,7 +868,7 @@ describe('CommentatorService — multiple workspaces', () => {
       received.push(evt);
     });
 
-    service.startCommentary('ws-1', 'sports_announcer', undefined, 'frequent');
+    service.startCommentary('ws-1', 'documentary_narrator', undefined, 'frequent');
     service.startCommentary('ws-2', 'documentary_narrator', undefined, 'frequent');
 
     service.pushEvent('ws-1', makeMessageStart());
@@ -886,7 +881,7 @@ describe('CommentatorService — multiple workspaces', () => {
 
     const ws1Commentary = received.find((c) => c.workspaceId === 'ws-1');
     const ws2Commentary = received.find((c) => c.workspaceId === 'ws-2');
-    expect(ws1Commentary?.personality).toBe('sports_announcer');
+    expect(ws1Commentary?.personality).toBe('documentary_narrator');
     expect(ws2Commentary?.personality).toBe('documentary_narrator');
   }, 10_000);
 
@@ -896,7 +891,7 @@ describe('CommentatorService — multiple workspaces', () => {
       received.push(evt);
     });
 
-    service.startCommentary('ws-1', 'sports_announcer', undefined, 'frequent');
+    service.startCommentary('ws-1', 'documentary_narrator', undefined, 'frequent');
     service.startCommentary('ws-2', 'documentary_narrator', undefined, 'frequent');
 
     service.pushEvent('ws-1', makeMessageStart());
@@ -906,7 +901,7 @@ describe('CommentatorService — multiple workspaces', () => {
 
     expect(received.length).toBe(1);
     expect(received[0].workspaceId).toBe('ws-1');
-    expect(received[0].personality).toBe('sports_announcer');
+    expect(received[0].personality).toBe('documentary_narrator');
   }, 10_000);
 
   test('three simultaneous workspaces with different personalities', async () => {
@@ -915,8 +910,8 @@ describe('CommentatorService — multiple workspaces', () => {
       received.push(evt);
     });
 
-    service.startCommentary('ws-1', 'sports_announcer', undefined, 'frequent');
-    service.startCommentary('ws-2', 'documentary_narrator', undefined, 'frequent');
+    service.startCommentary('ws-1', 'documentary_narrator', undefined, 'frequent');
+    service.startCommentary('ws-2', 'technical_analyst', undefined, 'frequent');
     service.startCommentary('ws-3', 'comedic_observer', undefined, 'frequent');
 
     service.pushEvent('ws-1', makeMessageStart());
@@ -929,11 +924,15 @@ describe('CommentatorService — multiple workspaces', () => {
     expect(received.length).toBe(3);
 
     const personalities = received.map((c) => c.personality).sort();
-    expect(personalities).toEqual(['comedic_observer', 'documentary_narrator', 'sports_announcer']);
+    expect(personalities).toEqual([
+      'comedic_observer',
+      'documentary_narrator',
+      'technical_analyst',
+    ]);
   }, 10_000);
 
   test('stopping one workspace does not affect others', () => {
-    service.startCommentary('ws-1', 'sports_announcer');
+    service.startCommentary('ws-1', 'documentary_narrator');
     service.startCommentary('ws-2', 'documentary_narrator');
     service.startCommentary('ws-3', 'technical_analyst');
 
@@ -946,7 +945,7 @@ describe('CommentatorService — multiple workspaces', () => {
   });
 
   test('ref counting works independently per workspace', () => {
-    service.startCommentary('ws-1', 'sports_announcer');
+    service.startCommentary('ws-1', 'documentary_narrator');
     service.startCommentary('ws-2', 'documentary_narrator');
 
     service.acquireRef('ws-1');
@@ -962,7 +961,7 @@ describe('CommentatorService — multiple workspaces', () => {
   });
 
   test('different workspaces can have different verbosity levels', () => {
-    service.startCommentary('ws-1', 'sports_announcer', undefined, 'frequent');
+    service.startCommentary('ws-1', 'documentary_narrator', undefined, 'frequent');
     service.startCommentary('ws-2', 'documentary_narrator', undefined, 'minimal');
 
     expect(service.getVerbosity('ws-1')).toBe('frequent');

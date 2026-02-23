@@ -137,7 +137,7 @@ function createCommentaryStore() {
      * workspace and personality. If a connection is already active it will
      * be torn down first.
      */
-    startCommentary(workspaceId: string, personality: string = 'sports_announcer') {
+    startCommentary(workspaceId: string, personality: string = 'documentary_narrator') {
       // Tear down any existing connection
       this.stopCommentary();
 

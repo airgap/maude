@@ -25,7 +25,7 @@
       const personality =
         commentaryStore.personality ||
         findTheme(settingsStore.theme)?.suggestedPersonality ||
-        'sports_announcer';
+        'documentary_narrator';
       commentaryStore.startCommentary(activeWorkspaceId, personality);
     }
   }

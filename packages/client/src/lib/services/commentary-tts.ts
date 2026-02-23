@@ -19,7 +19,6 @@ import { spatialTts } from '$lib/audio/spatial-tts';
 
 export type TtsProvider = 'browser' | 'elevenlabs' | 'google';
 export type CommentaryPersonality =
-  | 'sports_announcer'
   | 'documentary_narrator'
   | 'technical_analyst'
   | 'comedic_observer'
@@ -32,7 +31,6 @@ export type CommentaryPersonality =
 
 /** Map personalities to preferred Web Speech API voice names */
 const BROWSER_VOICE_MAP: Record<CommentaryPersonality, string[]> = {
-  sports_announcer: ['Google US English Male', 'Microsoft David', 'Alex', 'Daniel'],
   documentary_narrator: [
     'Google UK English Male',
     'Microsoft George',
@@ -47,7 +45,6 @@ const BROWSER_VOICE_MAP: Record<CommentaryPersonality, string[]> = {
 
 /** ElevenLabs voice IDs for each personality */
 const ELEVENLABS_VOICE_MAP: Record<CommentaryPersonality, string> = {
-  sports_announcer: 'ErXwobaYiN019PkySvjV', // Antoni
   documentary_narrator: '2EiwWnXFnvU5JabPnv8n', // Clyde
   technical_analyst: 'EXAVITQu4vr4xnSDxMaL', // Sarah
   comedic_observer: 'ThT5KcBeYPX3keUQqHPh', // Dorothy
@@ -57,7 +54,6 @@ const ELEVENLABS_VOICE_MAP: Record<CommentaryPersonality, string> = {
 
 /** Google TTS voice names for each personality */
 const GOOGLE_VOICE_MAP: Record<CommentaryPersonality, string> = {
-  sports_announcer: 'en-US-Neural2-D',
   documentary_narrator: 'en-GB-Neural2-B',
   technical_analyst: 'en-US-Neural2-F',
   comedic_observer: 'en-GB-Neural2-A',
@@ -451,8 +447,6 @@ export class CommentaryTtsService {
    */
   private getRate(personality: CommentaryPersonality): number {
     switch (personality) {
-      case 'sports_announcer':
-        return 1.15; // Fast, energetic
       case 'documentary_narrator':
         return 0.9; // Slow, thoughtful
       case 'technical_analyst':
@@ -473,8 +467,6 @@ export class CommentaryTtsService {
    */
   private getPitch(personality: CommentaryPersonality): number {
     switch (personality) {
-      case 'sports_announcer':
-        return 1.1; // Higher pitch for excitement
       case 'documentary_narrator':
         return 0.9; // Lower pitch for gravitas
       case 'technical_analyst':

@@ -30,12 +30,6 @@
 
   const personalities: PersonalityOption[] = [
     {
-      id: 'sports_announcer',
-      label: 'Sports Announcer',
-      icon: 'M3 8L15 1l-6.026 13.634L12 21l9-13h-7.971L21 1z',
-      description: 'Fast-paced, energetic play-by-play',
-    },
-    {
       id: 'documentary_narrator',
       label: 'Documentary Narrator',
       icon: 'M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0M12 9a3 3 0 1 0 0 6 3 3 0 0 0 0-6z',
@@ -76,7 +70,7 @@
   let workspaceId = $derived(workspaceStore.activeWorkspace?.workspaceId);
   let isActive = $derived(commentaryStore.isActive);
   let currentPersonality = $derived(
-    (commentaryStore.personality as CommentaryPersonality) || 'sports_announcer',
+    (commentaryStore.personality as CommentaryPersonality) || 'documentary_narrator',
   );
   let currentPersonalityOption = $derived(
     personalities.find((p) => p.id === currentPersonality) || personalities[0],
@@ -170,13 +164,13 @@
           const themeSuggested = findTheme(settingsStore.theme)?.suggestedPersonality as
             | CommentaryPersonality
             | undefined;
-          const personality = savedPersonality || themeSuggested || 'sports_announcer';
+          const personality = savedPersonality || themeSuggested || 'documentary_narrator';
           commentaryStore.startCommentary(workspaceId, personality);
         } catch (err) {
           console.error('[commentary] Failed to load workspace settings:', err);
           // Fall back to theme-suggested personality or default
           const fallback =
-            findTheme(settingsStore.theme)?.suggestedPersonality || 'sports_announcer';
+            findTheme(settingsStore.theme)?.suggestedPersonality || 'documentary_narrator';
           commentaryStore.startCommentary(workspaceId, fallback);
         }
       })();

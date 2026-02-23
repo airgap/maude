@@ -133,11 +133,6 @@
     description: string;
   }[] = [
     {
-      id: 'sports_announcer',
-      label: 'Sports Announcer',
-      description: 'Fast-paced, energetic play-by-play of your coding session',
-    },
-    {
       id: 'documentary_narrator',
       label: 'Documentary Narrator',
       description: 'Calm, thoughtful observations on developer behavior',
@@ -238,8 +233,6 @@
     commentaryPreviewText = '';
     const personality = commentaryPersonalities.find((p) => p.id === commentaryPersonality);
     const sampleTexts: Record<CommentaryPersonality, string> = {
-      sports_announcer:
-        "AND WE'RE OFF! The developer has just opened a new file — looks like we're heading into some serious refactoring territory, folks! The cursor is moving with PURPOSE today!",
       documentary_narrator:
         'Here we observe the developer in their natural habitat, methodically restructuring the codebase. Notice the careful, deliberate keystrokes — each one a small step in the eternal dance of software evolution.',
       technical_analyst:
