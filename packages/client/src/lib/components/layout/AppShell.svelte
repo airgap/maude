@@ -53,7 +53,9 @@
     deviceStore.init();
 
     waitForServer().then(async () => {
-      workspaceStore.init();
+      // Await workspace init to ensure activeConversationId is loaded
+      // before attempting stream reconnection
+      await workspaceStore.init();
       sidebarLayoutStore.init();
       primaryPaneStore.init();
       profilesStore.load();

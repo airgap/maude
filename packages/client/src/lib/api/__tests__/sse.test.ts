@@ -2269,8 +2269,10 @@ describe('page reload simulation', () => {
       'content_block_stop',
       'message_stop',
     ]);
-    // Should reload from DB at the end
-    expect(mockConversationStore.reloadById).toHaveBeenCalledWith('conv-reload-1');
+    // Should NOT reload from DB when events were replayed — the in-memory version
+    // built from SSE events is already complete and authoritative. Reloading could
+    // overwrite it with an incomplete version due to race conditions with DB persistence.
+    expect(mockConversationStore.reloadById).not.toHaveBeenCalled();
   });
 
   test('full page reload → stream already completed → replay and close', async () => {

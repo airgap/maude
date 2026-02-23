@@ -35,12 +35,14 @@
     "prepare": "husky"
   },
   "devDependencies": {
+    "@playwright/test": "^1.58.2",
     "@testing-library/jest-dom": "^6.9.1",
     "@vitest/coverage-v8": "^4.0.18",
     "happy-dom": "^20.6.1",
     "husky": "^9.1.7",
     "lint-staged": "^16.2.7",
     "nx": "^22.5.2",
+    "playwright": "^1.58.2",
     "prettier": "^3.8.1",
     "prettier-plugin-svelte": "^3.4.1",
     "vitest": "^4.0.18"

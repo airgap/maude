@@ -255,7 +255,7 @@ function createWorkspaceStore() {
       return hasWorkspaces;
     },
 
-    init() {
+    async init() {
       const saved = loadFromStorage();
       if (saved && saved.workspaces.length > 0) {
         workspaces = saved.workspaces.map((pw) => ({
@@ -280,7 +280,7 @@ function createWorkspaceStore() {
         // No localStorage state — try to recover from the server.
         // Auto-open the most recently used workspace so features like
         // Commentary don't show "open a workspace" on fresh sessions.
-        this._recoverFromServer();
+        await this._recoverFromServer();
       }
     },
 

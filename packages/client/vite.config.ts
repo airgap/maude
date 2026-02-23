@@ -10,6 +10,23 @@ export default defineConfig({
     host: true,
     port: 3333,
     proxy: {
+      // Non-streaming /api/stream endpoints (e.g., /api/stream/sessions)
+      // must be proxied with normal JSON handling
+      '/api/stream/sessions': {
+        target: 'http://localhost:3002',
+        changeOrigin: true,
+      },
+      '/api/stream/reconnect': {
+        target: 'http://localhost:3002',
+        changeOrigin: true,
+        timeout: 0,
+        proxyTimeout: 0,
+        configure: (proxy) => {
+          proxy.on('proxyRes', (_proxyRes, _req, res) => {
+            (res as any).flushHeaders?.();
+          });
+        },
+      },
       // SSE streaming endpoints — disable proxy timeout and buffering
       // so the connection stays open for the full duration of the response.
       '/api/stream': {

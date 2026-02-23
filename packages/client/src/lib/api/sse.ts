@@ -235,10 +235,15 @@ export async function sendAndStream(
     // The server has persisted the full message now, so the DB version is authoritative.
     conversationStore.clearInflight(conversationId);
 
-    // Reload conversation from DB to pick up server-persisted messages.
-    // This handles cases where the stream produced no content_block events
-    // (e.g. /compact, /init) but the server still saved an assistant message.
-    await conversationStore.reloadById(conversationId);
+    // Reload conversation from DB only if the stream produced no content blocks.
+    // This handles cases where the stream produced no content_block events (e.g.
+    // /compact, /init) but the server still saved an assistant message. If content
+    // blocks were produced, the in-memory version is already complete — reloading
+    // from DB could overwrite it with an incomplete version if there's a race
+    // between stream completion and DB persistence.
+    if (streamStore.contentBlocks.length === 0) {
+      await conversationStore.reloadById(conversationId);
+    }
 
     // Auto-extract workspace memories from this conversation
     const convWorkspacePath = targetConversation.workspacePath;
@@ -585,10 +590,15 @@ async function _reconnectActiveStreamImpl(): Promise<string | null> {
     // Stream complete — clear in-flight before reloading the authoritative DB version.
     conversationStore.clearInflight(target.conversationId);
 
-    // Reload conversation from DB for the authoritative server-saved version.
-    // By this point the stream has completed and the server has persisted the
-    // assistant message, so the DB version will include it.
-    await conversationStore.reloadById(target.conversationId);
+    // Reload conversation from DB only if no events were replayed.
+    // If events were replayed, the in-memory version built from SSE events is
+    // already complete and authoritative — reloading from DB could overwrite it
+    // with an incomplete version if there's a race between stream completion and
+    // DB persistence. If no events were replayed, reload to pick up any assistant
+    // message that was saved but produced no streaming events (e.g. /compact).
+    if (eventCount === 0) {
+      await conversationStore.reloadById(target.conversationId);
+    }
     streamStore.setReconnecting(false);
 
     return target.conversationId;
@@ -768,7 +778,13 @@ async function _reconnectToConversationImpl(targetConversationId: string): Promi
     }
 
     conversationStore.clearInflight(targetConversationId);
-    await conversationStore.reloadById(targetConversationId);
+    // Only reload from DB if no content blocks were produced during reconnection.
+    // If content was streamed, the in-memory version is already complete and
+    // reloading could overwrite it with an incomplete DB version due to race
+    // conditions between stream completion and DB persistence.
+    if (streamStore.contentBlocks.length === 0) {
+      await conversationStore.reloadById(targetConversationId);
+    }
     streamStore.setReconnecting(false);
 
     return target.id;
