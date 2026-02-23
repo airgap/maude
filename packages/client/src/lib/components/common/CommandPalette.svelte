@@ -164,6 +164,19 @@
       },
     },
     {
+      id: 'replay-timeline',
+      label: 'Replay Timeline — Step Through AI Actions',
+      category: 'Chat',
+      action: () => {
+        const convId = conversationStore.activeId;
+        if (convId) {
+          const title = conversationStore.active?.title ?? 'Timeline';
+          primaryPaneStore.openTimelineTab(convId, `Timeline: ${title}`);
+          close();
+        }
+      },
+    },
+    {
       id: 'import-external',
       label: 'Import from Jira/Linear/Asana',
       category: 'Work',

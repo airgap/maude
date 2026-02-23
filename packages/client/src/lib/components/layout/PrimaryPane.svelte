@@ -13,6 +13,7 @@
   import CodeEditor from '../editor/CodeEditor.svelte';
   import LooperView from '../loop/LooperView.svelte';
   import ChangePreviewPanel from '../editor/ChangePreviewPanel.svelte';
+  import TimelinePanel from '../timeline/TimelinePanel.svelte';
 
   let { children }: { children: Snippet } = $props();
 
@@ -39,7 +40,8 @@
       tab.kind === 'diff' ||
       tab.kind === 'file' ||
       tab.kind === 'looper' ||
-      tab.kind === 'change-preview'
+      tab.kind === 'change-preview' ||
+      tab.kind === 'timeline'
     )
       return;
 
@@ -200,6 +202,10 @@
         {#if activeTab?.kind === 'change-preview'}
           <div class="pane-content">
             <ChangePreviewPanel planId={activeTab.changePreviewPlanId ?? ''} />
+          </div>
+        {:else if activeTab?.kind === 'timeline'}
+          <div class="pane-content">
+            <TimelinePanel conversationId={activeTab.timelineConversationId ?? ''} />
           </div>
         {:else if activeTab?.kind === 'looper'}
           <div class="pane-content">

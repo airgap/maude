@@ -1,7 +1,7 @@
 import { uuid } from '$lib/utils/uuid';
 import { api } from '$lib/api/client';
 
-export type PrimaryTabKind = 'chat' | 'diff' | 'file' | 'looper' | 'change-preview';
+export type PrimaryTabKind = 'chat' | 'diff' | 'file' | 'looper' | 'change-preview' | 'timeline';
 
 export interface PrimaryTab {
   id: string;
@@ -22,6 +22,8 @@ export interface PrimaryTab {
   loopId?: string;
   /** For kind='change-preview': the preview plan ID */
   changePreviewPlanId?: string;
+  /** For kind='timeline': the conversation ID to replay */
+  timelineConversationId?: string;
 }
 
 export interface PrimaryPane {
@@ -309,6 +311,37 @@ function createPrimaryPaneStore() {
         title,
         kind: 'change-preview',
         changePreviewPlanId: planId,
+      };
+      pane.tabs.push(tab);
+      pane.activeTabId = tab.id;
+      activePaneId = pane.id;
+      persist();
+    },
+
+    /**
+     * Open (or focus) a timeline replay tab for the given conversation ID.
+     */
+    openTimelineTab(targetConversationId: string, title = 'Timeline') {
+      const pane = panes.find((p) => p.id === activePaneId) ?? panes[0];
+      if (!pane) return;
+
+      // Reuse existing timeline tab for same conversation
+      const existing = pane.tabs.find(
+        (t) => t.kind === 'timeline' && t.timelineConversationId === targetConversationId,
+      );
+      if (existing) {
+        pane.activeTabId = existing.id;
+        activePaneId = pane.id;
+        persist();
+        return;
+      }
+
+      const tab: PrimaryTab = {
+        id: uuid(),
+        conversationId: null,
+        title,
+        kind: 'timeline',
+        timelineConversationId: targetConversationId,
       };
       pane.tabs.push(tab);
       pane.activeTabId = tab.id;
