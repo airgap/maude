@@ -135,6 +135,21 @@ function createLspStore() {
                 hover: { contentFormat: ['markdown', 'plaintext'] },
                 publishDiagnostics: { relatedInformation: true },
                 definition: {},
+                codeAction: {
+                  codeActionLiteralSupport: {
+                    codeActionKind: {
+                      valueSet: [
+                        'quickfix',
+                        'refactor',
+                        'refactor.extract',
+                        'refactor.inline',
+                        'refactor.rewrite',
+                        'source',
+                        'source.organizeImports',
+                      ],
+                    },
+                  },
+                },
                 synchronization: {
                   didSave: true,
                   willSave: false,

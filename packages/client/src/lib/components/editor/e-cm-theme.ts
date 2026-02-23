@@ -281,6 +281,26 @@ export const eEditorTheme = EditorView.theme(
         color: 'var(--text-primary)',
       },
     },
+    // Code action lightbulb gutter
+    '.cm-lightbulb-gutter': {
+      width: '20px',
+      padding: '0 2px',
+      textAlign: 'center',
+    },
+    '.cm-lightbulb-marker': {
+      fontSize: '13px',
+      lineHeight: '1.6',
+      display: 'inline-block',
+      width: '16px',
+      textAlign: 'center',
+      cursor: 'pointer',
+      opacity: '0.7',
+      transition: 'opacity 0.15s ease, transform 0.15s ease',
+    },
+    '.cm-lightbulb-marker:hover': {
+      opacity: '1',
+      transform: 'scale(1.15)',
+    },
     // Search panel inputs
     '.cm-panel input': {
       backgroundColor: 'var(--bg-input)',

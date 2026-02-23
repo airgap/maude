@@ -50,7 +50,13 @@
   import { fileUriField } from './extensions/file-uri-field';
   import { hoverHighlightExtension } from './extensions/hover-highlight';
   import { testStatusGutterExtension } from './extensions/test-status-gutter';
+  import {
+    codeActionGutterExtension,
+    triggerQuickFix,
+    type QuickFixRequest,
+  } from './extensions/code-action-gutter';
   import EditorContextMenu from './EditorContextMenu.svelte';
+  import QuickFixMenu from './QuickFixMenu.svelte';
   import AiActionResult from './AiActionResult.svelte';
 
   let { tab } = $props<{ tab: EditorTab }>();
@@ -66,6 +72,20 @@
   let ctxMenuX = $state(0);
   let ctxMenuY = $state(0);
   let ctxSelectedText = $state('');
+
+  // ── Quick fix menu state ──
+  let showQuickFix = $state(false);
+  let quickFixRequest = $state<QuickFixRequest | null>(null);
+
+  function handleQuickFixRequest(request: QuickFixRequest) {
+    quickFixRequest = request;
+    showQuickFix = true;
+  }
+
+  function handleApplyEdit(newText: string, from: number, to: number) {
+    if (!view) return;
+    view.dispatch({ changes: { from, to, insert: newText } });
+  }
 
   function handleEditorContextMenu(e: MouseEvent) {
     if (!view) return;
@@ -176,6 +196,7 @@
         { key: 'Mod-d', run: selectNextOccurrence, preventDefault: true },
         { key: 'Ctrl-Shift-[', run: foldAll },
         { key: 'Ctrl-Shift-]', run: unfoldAll },
+        { key: 'Mod-.', run: triggerQuickFix, preventDefault: true },
         {
           key: 'Mod-s',
           run: () => {
@@ -216,6 +237,8 @@
       hoverHighlightExtension(),
       // LSP diagnostics (only when connected)
       ...(lspStore.isConnected(tab.language) ? [lspDiagnosticsExtension(tab.language)] : []),
+      // Code action lightbulb gutter (shows on lines with diagnostics)
+      ...codeActionGutterExtension(handleQuickFixRequest),
     ];
 
     if (languageSupport) {
@@ -380,6 +403,21 @@
     onClose={() => {
       showContextMenu = false;
     }}
+  />
+{/if}
+
+{#if showQuickFix && quickFixRequest}
+  <QuickFixMenu
+    request={quickFixRequest}
+    filePath={tab.filePath}
+    language={tab.language}
+    fileUri={fileUri()}
+    documentContent={tab.content}
+    onClose={() => {
+      showQuickFix = false;
+      quickFixRequest = null;
+    }}
+    onApplyEdit={handleApplyEdit}
   />
 {/if}
 
