@@ -21,6 +21,7 @@
   import ManagerPanel from './ManagerPanel.svelte';
   import CommentaryPanel from './CommentaryPanel.svelte';
   import GolemsPanel from './GolemsPanel.svelte';
+  import CommandHistoryPanel from './CommandHistoryPanel.svelte';
 
   let { tabId }: { tabId: SidebarTab } = $props();
 </script>
@@ -67,4 +68,6 @@
   <CommentaryPanel />
 {:else if tabId === 'golems'}
   <GolemsPanel />
+{:else if tabId === 'command-history'}
+  <CommandHistoryPanel />
 {/if}
