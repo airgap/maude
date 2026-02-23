@@ -55,6 +55,14 @@
     triggerQuickFix,
     type QuickFixRequest,
   } from './extensions/code-action-gutter';
+  import {
+    mergeConflictExtension,
+    hasConflictMarkers,
+    resolveConflictText,
+    type ConflictRegion,
+    type ConflictResolution,
+  } from './extensions/merge-conflict';
+  import { mergeConflictsStore } from '$lib/stores/merge-conflicts.svelte';
   import EditorContextMenu from './EditorContextMenu.svelte';
   import QuickFixMenu from './QuickFixMenu.svelte';
   import AiActionResult from './AiActionResult.svelte';
@@ -85,6 +93,42 @@
   function handleApplyEdit(newText: string, from: number, to: number) {
     if (!view) return;
     view.dispatch({ changes: { from, to, insert: newText } });
+  }
+
+  // ── Merge conflict resolution ──
+  function handleConflictResolve(region: ConflictRegion, resolution: ConflictResolution) {
+    if (!view) return;
+    const doc = view.state.doc;
+
+    if (resolution === 'ai-merge') {
+      // Kick off AI merge asynchronously
+      const content = doc.toString();
+      const workspacePath = settingsStore.workspacePath || '';
+      mergeConflictsStore
+        .requestAiMerge(workspacePath, tab.filePath, region, content)
+        .then((result) => {
+          if (result.ok && result.mergedText != null && view) {
+            const currentDoc = view.state.doc;
+            const startLine = currentDoc.line(region.startLine);
+            const endLine = currentDoc.line(region.endLine);
+            view.dispatch({
+              changes: { from: startLine.from, to: endLine.to, insert: result.mergedText },
+            });
+          } else if (result.error) {
+            console.error('[merge-conflict] AI merge failed:', result.error);
+          }
+        });
+      return;
+    }
+
+    // Local resolution: current / incoming / both
+    const content = doc.toString();
+    const resolved = resolveConflictText(content, region, resolution);
+    const startLine = doc.line(region.startLine);
+    const endLine = doc.line(region.endLine);
+    view.dispatch({
+      changes: { from: startLine.from, to: endLine.to, insert: resolved },
+    });
   }
 
   function handleEditorContextMenu(e: MouseEvent) {
@@ -239,6 +283,10 @@
       ...(lspStore.isConnected(tab.language) ? [lspDiagnosticsExtension(tab.language)] : []),
       // Code action lightbulb gutter (shows on lines with diagnostics)
       ...codeActionGutterExtension(handleQuickFixRequest),
+      // Merge conflict inline resolution (only when content has conflict markers)
+      ...(hasConflictMarkers(tab.content)
+        ? mergeConflictExtension({ onResolve: handleConflictResolve })
+        : []),
     ];
 
     if (languageSupport) {

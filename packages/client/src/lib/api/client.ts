@@ -1099,6 +1099,22 @@ export const api = {
         method: 'POST',
         body: JSON.stringify({ path }),
       }),
+    aiMerge: (
+      workspacePath: string,
+      filePath: string,
+      fileContent: string,
+      region: {
+        startLine: number;
+        sepLine: number;
+        endLine: number;
+        currentLabel: string;
+        incomingLabel: string;
+      },
+    ) =>
+      request<{ ok: boolean; data: { mergedText: string }; error?: string }>('/git/ai-merge', {
+        method: 'POST',
+        body: JSON.stringify({ workspacePath, filePath, fileContent, region }),
+      }),
   },
 
   // --- Workspace Memory ---

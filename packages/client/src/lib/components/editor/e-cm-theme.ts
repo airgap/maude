@@ -301,6 +301,68 @@ export const eEditorTheme = EditorView.theme(
       opacity: '1',
       transform: 'scale(1.15)',
     },
+    // Merge conflict resolution
+    '.cm-merge-conflict-header': {
+      display: 'flex',
+      alignItems: 'center',
+      gap: '6px',
+      padding: '3px 8px',
+      backgroundColor: 'var(--bg-tertiary)',
+      borderBottom: '1px solid var(--border-primary)',
+      fontSize: '11px',
+      fontFamily: 'var(--font-family-sans)',
+    },
+    '.cm-merge-conflict-label': {
+      fontWeight: '700',
+      color: 'var(--accent-warning, #eab308)',
+      letterSpacing: '0.02em',
+      marginRight: '4px',
+    },
+    '.cm-conflict-btn': {
+      padding: '1px 8px',
+      border: '1px solid var(--border-primary)',
+      borderRadius: '3px',
+      fontSize: '10.5px',
+      fontWeight: '600',
+      fontFamily: 'var(--font-family-sans)',
+      cursor: 'pointer',
+      transition: 'all 0.12s',
+      lineHeight: '1.6',
+    },
+    '.cm-conflict-btn:hover': {
+      filter: 'brightness(1.15)',
+    },
+    '.cm-conflict-btn-current': {
+      backgroundColor: 'rgba(34, 197, 94, 0.15)',
+      color: '#22c55e',
+      borderColor: 'rgba(34, 197, 94, 0.3)',
+    },
+    '.cm-conflict-btn-incoming': {
+      backgroundColor: 'rgba(59, 130, 246, 0.15)',
+      color: '#3b82f6',
+      borderColor: 'rgba(59, 130, 246, 0.3)',
+    },
+    '.cm-conflict-btn-both': {
+      backgroundColor: 'rgba(168, 85, 247, 0.15)',
+      color: '#a855f7',
+      borderColor: 'rgba(168, 85, 247, 0.3)',
+    },
+    '.cm-conflict-btn-ai': {
+      backgroundColor: 'rgba(234, 179, 8, 0.15)',
+      color: '#eab308',
+      borderColor: 'rgba(234, 179, 8, 0.3)',
+    },
+    '.cm-conflict-marker-line': {
+      backgroundColor: 'rgba(148, 163, 184, 0.08)',
+      color: 'var(--text-tertiary)',
+      fontStyle: 'italic',
+    },
+    '.cm-conflict-current': {
+      backgroundColor: 'rgba(34, 197, 94, 0.08)',
+    },
+    '.cm-conflict-incoming': {
+      backgroundColor: 'rgba(59, 130, 246, 0.08)',
+    },
     // Search panel inputs
     '.cm-panel input': {
       backgroundColor: 'var(--bg-input)',

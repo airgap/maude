@@ -5,6 +5,7 @@
   import { settingsStore } from '$lib/stores/settings.svelte';
   import { primaryPaneStore } from '$lib/stores/primaryPane.svelte';
   import { gitOperationsStore } from '$lib/stores/gitOperations.svelte';
+  import { editorStore } from '$lib/stores/editor.svelte';
 
   // ── Derived state ────────────────────────────────────────────────────────
 
@@ -12,6 +13,18 @@
 
   let stagedFiles = $derived(gitStore.fileStatuses.filter((f) => f.staged && f.status !== 'U'));
   let unstagedFiles = $derived(gitStore.fileStatuses.filter((f) => !f.staged || f.status === 'U'));
+  let conflictFiles = $derived(
+    gitStore.fileStatuses.filter(
+      (f) =>
+        f.status === 'UU' ||
+        f.status === 'AA' ||
+        f.status === 'DD' ||
+        f.status === 'AU' ||
+        f.status === 'UA' ||
+        f.status === 'DU' ||
+        f.status === 'UD',
+    ),
+  );
 
   // ── Local state ──────────────────────────────────────────────────────────
 
@@ -478,6 +491,49 @@
           ><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg
         >
       </button>
+    </div>
+  {/if}
+
+  <!-- ── Merge Conflicts Section ─────────────────────────────────────── -->
+  {#if conflictFiles.length > 0}
+    <div class="conflict-section">
+      <div class="section-header conflict-header-bar">
+        <span class="conflict-header-label">
+          <svg
+            class="conflict-icon"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+          >
+            <path
+              d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"
+            />
+            <line x1="12" y1="9" x2="12" y2="13" />
+            <line x1="12" y1="17" x2="12.01" y2="17" />
+          </svg>
+          Merge Conflicts
+        </span>
+        <span class="section-count conflict-count">{conflictFiles.length}</span>
+      </div>
+      {#each conflictFiles as file (file.path)}
+        <div class="file-row-wrap">
+          <button
+            class="file-row"
+            onclick={() => {
+              const fullPath = workspacePath + '/' + file.path;
+              editorStore.openFile(fullPath);
+            }}
+            title="Open {file.path} to resolve conflicts"
+          >
+            <span class="status-badge badge-conflict" title="Conflict">C</span>
+            <span class="file-name">{basename(file.path)}</span>
+            {#if dirname(file.path)}
+              <span class="file-dir">{dirname(file.path)}</span>
+            {/if}
+          </button>
+        </div>
+      {/each}
     </div>
   {/if}
 
@@ -1301,6 +1357,10 @@
     background: rgba(148, 163, 184, 0.15);
     color: #94a3b8;
   }
+  .badge-conflict {
+    background: rgba(234, 179, 8, 0.15);
+    color: #eab308;
+  }
 
   /* ── File name / dir ── */
   .file-name {
@@ -1349,6 +1409,36 @@
     height: 12px;
     flex-shrink: 0;
     animation: spin 0.8s linear infinite;
+  }
+
+  /* ── Conflict Section ── */
+  .conflict-section {
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+
+  .conflict-header-bar {
+    background: rgba(234, 179, 8, 0.08);
+    border-bottom: 1px solid rgba(234, 179, 8, 0.2);
+  }
+
+  .conflict-header-label {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    color: #eab308;
+    font-weight: 700;
+  }
+
+  .conflict-icon {
+    width: 12px;
+    height: 12px;
+    flex-shrink: 0;
+  }
+
+  .conflict-count {
+    background: rgba(234, 179, 8, 0.15);
+    color: #eab308;
   }
 
   /* ── Commit Section ── */
