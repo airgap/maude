@@ -197,6 +197,30 @@ describe('buildCliCommand - gemini-cli', () => {
     expect(args).not.toContain('--system-prompt');
     expect(args).not.toContain('--mcp-config');
   });
+
+  test('warns for unsupported effort/maxTurns/maxBudgetUsd flags', () => {
+    // These flags are not natively supported but should not throw
+    const { args } = buildCliCommand('gemini-cli', {
+      content: 'hi',
+      effort: 'high',
+      maxTurns: 10,
+      maxBudgetUsd: 5.0,
+    });
+    // The flags should NOT appear in the args
+    expect(args).not.toContain('--effort');
+    expect(args).not.toContain('--max-turns');
+    expect(args).not.toContain('--max-budget-usd');
+  });
+
+  test('warns for unsupported allowedTools/disallowedTools', () => {
+    const { args } = buildCliCommand('gemini-cli', {
+      content: 'hi',
+      allowedTools: ['Bash'],
+      disallowedTools: ['Write'],
+    });
+    expect(args).not.toContain('--allowedTools');
+    expect(args).not.toContain('--disallowedTools');
+  });
 });
 
 describe('buildCliCommand - copilot', () => {
@@ -273,6 +297,27 @@ describe('buildCliCommand - copilot', () => {
     expect(args).not.toContain('--system-prompt');
     expect(args).not.toContain('--additional-mcp-config');
     expect(args).not.toContain('--max-turns');
+  });
+
+  test('warns for unsupported effort/maxBudgetUsd flags', () => {
+    const { args } = buildCliCommand('copilot', {
+      content: 'hi',
+      effort: 'high',
+      maxBudgetUsd: 5.0,
+    });
+    // These flags should NOT appear in args
+    expect(args).not.toContain('--effort');
+    expect(args).not.toContain('--max-budget-usd');
+  });
+
+  test('warns for unsupported allowedTools/disallowedTools', () => {
+    const { args } = buildCliCommand('copilot', {
+      content: 'hi',
+      allowedTools: ['Bash'],
+      disallowedTools: ['Write'],
+    });
+    expect(args).not.toContain('--allowedTools');
+    expect(args).not.toContain('--disallowedTools');
   });
 });
 

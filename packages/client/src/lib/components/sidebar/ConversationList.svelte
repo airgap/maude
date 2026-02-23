@@ -78,7 +78,14 @@
   });
 
   async function selectConversation(id: string) {
-    if (conversationStore.activeId === id) return;
+    // On mobile, even if the conversation is already active, switch to chat view
+    // so the user can see it (they might be in the conversations panel)
+    if (conversationStore.activeId === id) {
+      if (typeof document !== 'undefined' && document.documentElement.hasAttribute('data-mobile')) {
+        uiStore.setMobileView('chat');
+      }
+      return;
+    }
     conversationStore.clearDraft();
     conversationStore.setLoading(true);
     try {
@@ -120,6 +127,10 @@
       if (!streamStore.isStreaming) {
         streamStore.reset();
       }
+      // On mobile, switch to chat view so the user can see the conversation
+      if (typeof document !== 'undefined' && document.documentElement.hasAttribute('data-mobile')) {
+        uiStore.setMobileView('chat');
+      }
     } finally {
       conversationStore.setLoading(false);
     }
@@ -133,6 +144,10 @@
     // Only reset if no active stream is running for another conversation
     if (!streamStore.isStreaming) {
       streamStore.reset();
+    }
+    // On mobile, switch to chat view so the user can see the new conversation
+    if (typeof document !== 'undefined' && document.documentElement.hasAttribute('data-mobile')) {
+      uiStore.setMobileView('chat');
     }
     uiStore.focusChatInput();
   }

@@ -681,28 +681,13 @@
     }
   }
 
-  /* Ambient overlay — varies per hypertheme */
+  /* Ambient overlay — themes provide their own backgrounds */
   .app-shell::before {
     content: '';
     position: absolute;
     inset: 0;
     pointer-events: none;
     z-index: 0;
-    /* Tech default: faint grid */
-    background:
-      linear-gradient(var(--border-secondary) 1px, transparent 1px),
-      linear-gradient(90deg, var(--border-secondary) 1px, transparent 1px);
-    background-size: 40px 40px;
-  }
-
-  /* ── Hypertheme overlay variants ── */
-
-  /* Canvas-based hyperthemes: hide CSS overlay, canvas handles it */
-  :global([data-hypertheme='arcane']) .app-shell::before,
-  :global([data-hypertheme='ethereal']) .app-shell::before,
-  :global([data-hypertheme='study']) .app-shell::before,
-  :global([data-hypertheme='astral']) .app-shell::before,
-  :global([data-hypertheme='astral-midnight']) .app-shell::before {
     display: none;
   }
 

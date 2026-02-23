@@ -4,6 +4,7 @@ import {
   isMcpToolDangerous,
   isMcpFileWriteTool,
   extractFilePath,
+  extractEditLineHint,
 } from '../mcp-tools';
 
 // ── parseMcpToolName ──
@@ -467,5 +468,94 @@ describe('extractFilePath', () => {
         output: '/dev/null',
       }),
     ).toBe('/the/file.txt');
+  });
+});
+
+// ── extractEditLineHint ──
+
+describe('extractEditLineHint', () => {
+  test('returns 1 for write_file tool', () => {
+    expect(extractEditLineHint('write_file', { content: 'hello' })).toBe(1);
+  });
+
+  test('returns 1 for Write tool', () => {
+    expect(extractEditLineHint('Write', { content: 'hello' })).toBe(1);
+  });
+
+  test('returns 1 for create_file tool', () => {
+    expect(extractEditLineHint('create_file', { content: 'hello' })).toBe(1);
+  });
+
+  test('finds old_string position in file content for Edit tool', () => {
+    const fileContent = 'line one\nline two\nline three\nline four\n';
+    const result = extractEditLineHint(
+      'Edit',
+      { old_string: 'line three', new_string: 'line THREE' },
+      fileContent,
+    );
+    expect(result).toBe(3); // "line three" starts on line 3
+  });
+
+  test('finds old_string at first line', () => {
+    const fileContent = 'first line\nsecond line\n';
+    const result = extractEditLineHint('edit_file', { old_string: 'first line' }, fileContent);
+    expect(result).toBe(1);
+  });
+
+  test('finds oldText for str_replace_editor', () => {
+    const fileContent = 'a\nb\nc\n';
+    const result = extractEditLineHint('str_replace_editor', { oldText: 'c' }, fileContent);
+    expect(result).toBe(3);
+  });
+
+  test('finds search field for edit_block tool', () => {
+    const fileContent = 'line1\nline2\ntarget\n';
+    const result = extractEditLineHint('edit_block', { search: 'target' }, fileContent);
+    expect(result).toBe(3);
+  });
+
+  test('falls back to line number param when old_string not found', () => {
+    const result = extractEditLineHint(
+      'Edit',
+      { old_string: 'nonexistent', line: 42 },
+      'some content',
+    );
+    expect(result).toBe(42);
+  });
+
+  test('falls back to line_number param', () => {
+    const result = extractEditLineHint('edit_file', { line_number: 10 });
+    expect(result).toBe(10);
+  });
+
+  test('falls back to lineNumber param', () => {
+    const result = extractEditLineHint('edit_file', { lineNumber: 7 });
+    expect(result).toBe(7);
+  });
+
+  test('falls back to start_line param', () => {
+    const result = extractEditLineHint('edit_file', { start_line: 15 });
+    expect(result).toBe(15);
+  });
+
+  test('parses string line number', () => {
+    const result = extractEditLineHint('edit_file', { line: '25' });
+    expect(result).toBe(25);
+  });
+
+  test('returns undefined for unknown tool', () => {
+    expect(extractEditLineHint('Bash', { command: 'ls' })).toBeUndefined();
+  });
+
+  test('returns undefined for edit tool with no useful info', () => {
+    expect(extractEditLineHint('Edit', {})).toBeUndefined();
+  });
+
+  test('returns undefined when old_string not in file and no line params', () => {
+    expect(extractEditLineHint('Edit', { old_string: 'missing' }, 'no match here')).toBeUndefined();
+  });
+
+  test('returns undefined when fileContent not provided and no line params', () => {
+    expect(extractEditLineHint('Edit', { old_string: 'something' })).toBeUndefined();
   });
 });

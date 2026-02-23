@@ -434,6 +434,21 @@ describe('PRD Routes', () => {
       });
       expect(res.status).toBe(400);
     });
+
+    test('updates qualityChecks', async () => {
+      insertPrd({ id: 'prd-1' });
+
+      const qualityChecks = { hasAcceptanceCriteria: true, hasDependencies: false };
+      const res = await app.request('/prd-1', {
+        method: 'PATCH',
+        body: JSON.stringify({ qualityChecks }),
+        headers: { 'Content-Type': 'application/json' },
+      });
+      expect(res.status).toBe(200);
+
+      const row = testDb.query('SELECT quality_checks FROM prds WHERE id = ?').get('prd-1') as any;
+      expect(JSON.parse(row.quality_checks)).toEqual(qualityChecks);
+    });
   });
 
   // ---------------------------------------------------------------
@@ -538,6 +553,34 @@ describe('PRD Routes', () => {
       const row = testDb.query('SELECT updated_at FROM prds WHERE id = ?').get('prd-1') as any;
       expect(row.updated_at).toBeGreaterThan(1000);
     });
+
+    test('reorders stories by dependencies when dependsOn is provided', async () => {
+      insertPrd({ id: 'prd-1' });
+      insertStory({ id: 'dep-target', prd_id: 'prd-1', title: 'Foundation', sort_order: 0 });
+
+      const res = await app.request('/prd-1/stories', {
+        method: 'POST',
+        body: JSON.stringify({
+          title: 'Dependent Story',
+          dependsOn: ['dep-target'],
+          acceptanceCriteria: ['AC'],
+        }),
+        headers: { 'Content-Type': 'application/json' },
+      });
+
+      expect(res.status).toBe(201);
+      const json = await res.json();
+      expect(json.data.id).toBeDefined();
+
+      // The dependent story should be after the target in sort order
+      const targetRow = testDb
+        .query('SELECT sort_order FROM prd_stories WHERE id = ?')
+        .get('dep-target') as any;
+      const newRow = testDb
+        .query('SELECT sort_order FROM prd_stories WHERE id = ?')
+        .get(json.data.id) as any;
+      expect(newRow.sort_order).toBeGreaterThan(targetRow.sort_order);
+    });
   });
 
   // ---------------------------------------------------------------
@@ -610,6 +653,93 @@ describe('PRD Routes', () => {
         headers: { 'Content-Type': 'application/json' },
       });
       expect(res.status).toBe(400);
+    });
+
+    test('updates acceptanceCriteria', async () => {
+      insertPrd({ id: 'prd-1' });
+      insertStory({ id: 'story-1', prd_id: 'prd-1' });
+
+      const res = await app.request('/prd-1/stories/story-1', {
+        method: 'PATCH',
+        body: JSON.stringify({ acceptanceCriteria: ['AC 1', 'AC 2'] }),
+        headers: { 'Content-Type': 'application/json' },
+      });
+      expect(res.status).toBe(200);
+      const json = await res.json();
+      expect(json.data.acceptanceCriteria).toHaveLength(2);
+    });
+
+    test('updates learnings array', async () => {
+      insertPrd({ id: 'prd-1' });
+      insertStory({ id: 'story-1', prd_id: 'prd-1' });
+
+      const res = await app.request('/prd-1/stories/story-1', {
+        method: 'PATCH',
+        body: JSON.stringify({ learnings: ['Learning A', 'Learning B'] }),
+        headers: { 'Content-Type': 'application/json' },
+      });
+      expect(res.status).toBe(200);
+      const json = await res.json();
+      expect(json.data.learnings).toEqual(['Learning A', 'Learning B']);
+    });
+
+    test('updates estimate', async () => {
+      insertPrd({ id: 'prd-1' });
+      insertStory({ id: 'story-1', prd_id: 'prd-1' });
+
+      const estimate = {
+        size: 'medium',
+        storyPoints: 5,
+        confidence: 'high',
+        confidenceScore: 85,
+        reasoning: 'Medium complexity task',
+        isManualOverride: true,
+      };
+      const res = await app.request('/prd-1/stories/story-1', {
+        method: 'PATCH',
+        body: JSON.stringify({ estimate }),
+        headers: { 'Content-Type': 'application/json' },
+      });
+      expect(res.status).toBe(200);
+      const json = await res.json();
+      expect(json.data.estimate).toBeDefined();
+      expect(json.data.estimate.size).toBe('medium');
+      expect(json.data.estimate.storyPoints).toBe(5);
+    });
+
+    test('clears estimate when set to null', async () => {
+      insertPrd({ id: 'prd-1' });
+      insertStory({
+        id: 'story-1',
+        prd_id: 'prd-1',
+        estimate: JSON.stringify({ size: 'small', storyPoints: 2 }),
+      });
+
+      const res = await app.request('/prd-1/stories/story-1', {
+        method: 'PATCH',
+        body: JSON.stringify({ estimate: null }),
+        headers: { 'Content-Type': 'application/json' },
+      });
+      expect(res.status).toBe(200);
+      // Verify in DB that estimate was set to null
+      const row = testDb
+        .query('SELECT estimate FROM prd_stories WHERE id = ?')
+        .get('story-1') as any;
+      expect(row.estimate).toBeNull();
+    });
+
+    test('updates researchOnly flag', async () => {
+      insertPrd({ id: 'prd-1' });
+      insertStory({ id: 'story-1', prd_id: 'prd-1' });
+
+      const res = await app.request('/prd-1/stories/story-1', {
+        method: 'PATCH',
+        body: JSON.stringify({ researchOnly: true }),
+        headers: { 'Content-Type': 'application/json' },
+      });
+      expect(res.status).toBe(200);
+      const json = await res.json();
+      expect(json.data.researchOnly).toBe(true);
     });
   });
 
@@ -705,6 +835,72 @@ describe('PRD Routes', () => {
         headers: { 'Content-Type': 'application/json' },
       });
       expect(res.status).toBe(400);
+    });
+
+    test('maps numeric priority 3 to medium and 4+ to low', async () => {
+      const ralphPrd = {
+        project: 'Priority Test',
+        description: 'Testing priorities',
+        userStories: [
+          {
+            id: 'US-003',
+            title: 'Medium Priority',
+            description: 'Priority 3 story',
+            acceptanceCriteria: ['AC1'],
+            priority: 3,
+          },
+          {
+            id: 'US-004',
+            title: 'Low Priority',
+            description: 'Priority 4 story',
+            acceptanceCriteria: ['AC1'],
+            priority: 4,
+          },
+        ],
+      };
+
+      const res = await app.request('/import', {
+        method: 'POST',
+        body: JSON.stringify({ workspacePath: '/test', prdJson: ralphPrd }),
+        headers: { 'Content-Type': 'application/json' },
+      });
+      expect(res.status).toBe(201);
+      const json = await res.json();
+
+      const stories = testDb
+        .query('SELECT * FROM prd_stories WHERE prd_id = ? ORDER BY sort_order')
+        .all(json.data.id) as any[];
+      expect(stories[0].priority).toBe('medium');
+      expect(stories[1].priority).toBe('low');
+    });
+
+    test('handles string priority in import', async () => {
+      const ralphPrd = {
+        project: 'String Priority',
+        description: 'Test string priority',
+        userStories: [
+          {
+            id: 'US-005',
+            title: 'Critical Story',
+            description: 'Has string priority',
+            acceptanceCriteria: ['AC1'],
+            priority: 'critical',
+          },
+        ],
+      };
+
+      const res = await app.request('/import', {
+        method: 'POST',
+        body: JSON.stringify({ workspacePath: '/test', prdJson: ralphPrd }),
+        headers: { 'Content-Type': 'application/json' },
+      });
+      expect(res.status).toBe(201);
+      const json = await res.json();
+
+      const stories = testDb
+        .query('SELECT * FROM prd_stories WHERE prd_id = ?')
+        .all(json.data.id) as any[];
+      expect(stories[0].priority).toBe('critical');
     });
   });
 
@@ -1119,6 +1315,23 @@ describe('PRD Routes', () => {
       const json = await res.json();
       expect(json.ok).toBe(false);
       expect(json.error).toContain('Failed to parse');
+    });
+
+    test('returns 502 when AI returns empty stories array', async () => {
+      insertPrd({ id: 'prd-1', description: 'Test PRD' });
+
+      mockCallLlmResponse = JSON.stringify([]);
+
+      const res = await app.request('/prd-1/generate', {
+        method: 'POST',
+        body: JSON.stringify({ description: 'Build a thing' }),
+        headers: { 'Content-Type': 'application/json' },
+      });
+
+      expect(res.status).toBe(502);
+      const json = await res.json();
+      expect(json.ok).toBe(false);
+      expect(json.error).toContain('empty or invalid');
     });
 
     test('includes existing stories in prompt context to avoid duplicates', async () => {
@@ -3195,6 +3408,106 @@ describe('PRD Routes', () => {
       const json = await res.json();
       expect(json.data.name).toBe('Custom Template');
     });
+
+    test('updates description', async () => {
+      insertTemplate({ id: 'tmpl-desc' });
+      const res = await app.request('/templates/tmpl-desc', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ description: 'Updated description' }),
+      });
+      expect(res.status).toBe(200);
+      const json = await res.json();
+      expect(json.data.description).toBe('Updated description');
+    });
+
+    test('updates category', async () => {
+      insertTemplate({ id: 'tmpl-cat' });
+      const res = await app.request('/templates/tmpl-cat', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ category: 'bug_fix' }),
+      });
+      expect(res.status).toBe(200);
+      const json = await res.json();
+      expect(json.data.category).toBe('bug_fix');
+    });
+
+    test('updates titleTemplate', async () => {
+      insertTemplate({ id: 'tmpl-title' });
+      const res = await app.request('/templates/tmpl-title', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ titleTemplate: 'New title template: {{action}}' }),
+      });
+      expect(res.status).toBe(200);
+      const json = await res.json();
+      expect(json.data.titleTemplate).toBe('New title template: {{action}}');
+    });
+
+    test('updates descriptionTemplate', async () => {
+      insertTemplate({ id: 'tmpl-desc-tmpl' });
+      const res = await app.request('/templates/tmpl-desc-tmpl', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ descriptionTemplate: '## New\n{{description}}' }),
+      });
+      expect(res.status).toBe(200);
+      const json = await res.json();
+      expect(json.data.descriptionTemplate).toBe('## New\n{{description}}');
+    });
+
+    test('updates acceptanceCriteriaTemplates', async () => {
+      insertTemplate({ id: 'tmpl-ac' });
+      const res = await app.request('/templates/tmpl-ac', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ acceptanceCriteriaTemplates: ['Criterion 1', 'Criterion 2'] }),
+      });
+      expect(res.status).toBe(200);
+      const json = await res.json();
+      expect(json.data.acceptanceCriteriaTemplates).toEqual(['Criterion 1', 'Criterion 2']);
+    });
+
+    test('updates tags', async () => {
+      insertTemplate({ id: 'tmpl-tags' });
+      const res = await app.request('/templates/tmpl-tags', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tags: ['frontend', 'ux'] }),
+      });
+      expect(res.status).toBe(200);
+      const json = await res.json();
+      expect(json.data.tags).toEqual(['frontend', 'ux']);
+    });
+
+    test('updates multiple fields at once', async () => {
+      insertTemplate({ id: 'tmpl-multi' });
+      const res = await app.request('/templates/tmpl-multi', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: 'Multi-updated',
+          description: 'All fields changed',
+          category: 'tech_debt',
+          titleTemplate: 'Title: {{action}}',
+          descriptionTemplate: 'Desc: {{action}}',
+          acceptanceCriteriaTemplates: ['AC1'],
+          priority: 'critical',
+          tags: ['backend'],
+        }),
+      });
+      expect(res.status).toBe(200);
+      const json = await res.json();
+      expect(json.data.name).toBe('Multi-updated');
+      expect(json.data.description).toBe('All fields changed');
+      expect(json.data.category).toBe('tech_debt');
+      expect(json.data.titleTemplate).toBe('Title: {{action}}');
+      expect(json.data.descriptionTemplate).toBe('Desc: {{action}}');
+      expect(json.data.acceptanceCriteriaTemplates).toEqual(['AC1']);
+      expect(json.data.priority).toBe('critical');
+      expect(json.data.tags).toEqual(['backend']);
+    });
   });
 
   describe('DELETE /templates/:templateId — delete template', () => {
@@ -3569,6 +3882,84 @@ describe('PRD Routes', () => {
           // The prompt should include dependency info — story-blocker blocks story-blocked
           expect(mockCallLlmCapture.user).toContain('BLOCKS');
           expect(mockCallLlmCapture.user).toContain('User CRUD');
+        }),
+      );
+
+      test(
+        'includes blocked-by dependency context in prompt',
+        withApiKey(async () => {
+          insertPrd({ id: 'prd-pri-6' });
+          insertStory({
+            id: 'pri6-blocker',
+            prd_id: 'prd-pri-6',
+            title: 'Database Setup',
+            priority: 'high',
+            sort_order: 0,
+          });
+          insertStory({
+            id: 'pri6-blocked',
+            prd_id: 'prd-pri-6',
+            title: 'API Endpoints',
+            priority: 'medium',
+            depends_on: JSON.stringify(['pri6-blocker']),
+            sort_order: 1,
+          });
+
+          mockCallLlmResponse = JSON.stringify({
+            suggestedPriority: 'medium',
+            confidence: 75,
+            factors: [
+              {
+                factor: 'Blocked by setup',
+                category: 'dependency',
+                impact: 'decreases',
+                weight: 'moderate',
+              },
+            ],
+            explanation: 'Story depends on database setup.',
+          });
+
+          await app.request('/prd-pri-6/stories/pri6-blocked/priority', {
+            method: 'POST',
+            body: JSON.stringify({}),
+            headers: { 'Content-Type': 'application/json' },
+          });
+
+          // The prompt should include "BLOCKED BY" context
+          expect(mockCallLlmCapture.user).toContain('BLOCKED BY');
+          expect(mockCallLlmCapture.user).toContain('Database Setup');
+        }),
+      );
+
+      test(
+        'includes project memory context in priority prompt',
+        withApiKey(async () => {
+          insertPrd({ id: 'prd-pri-7' });
+          insertStory({ id: 'pri7-s1', prd_id: 'prd-pri-7', title: 'Feature', priority: 'medium' });
+          insertMemory({
+            id: 'mem-pri7',
+            workspace_path: '/test/project',
+            category: 'decision',
+            key: 'arch-choice',
+            content: 'Use microservices architecture',
+          });
+
+          mockCallLlmResponse = JSON.stringify({
+            suggestedPriority: 'high',
+            confidence: 80,
+            factors: [],
+            explanation: 'Based on architecture context.',
+          });
+
+          await app.request('/prd-pri-7/stories/pri7-s1/priority', {
+            method: 'POST',
+            body: JSON.stringify({}),
+            headers: { 'Content-Type': 'application/json' },
+          });
+
+          // Verify project memory context is included in the LLM prompt
+          expect(mockCallLlmCapture.system).toContain('Project Memory');
+          expect(mockCallLlmCapture.system).toContain('microservices');
         }),
       );
     });
@@ -4523,6 +4914,31 @@ describe('PRD Routes', () => {
         .get('standalone-1') as any;
       expect(row.updated_at).toBeGreaterThan(1000);
     });
+
+    test('updates researchOnly flag for standalone story', async () => {
+      insertStory({
+        id: 'standalone-1',
+        prd_id: null,
+        workspace_path: '/test/project',
+        research_only: 0,
+      });
+
+      const res = await app.request('/stories/standalone-1', {
+        method: 'PATCH',
+        body: JSON.stringify({ researchOnly: true }),
+        headers: { 'Content-Type': 'application/json' },
+      });
+
+      expect(res.status).toBe(200);
+      const json = await res.json();
+      expect(json.data.researchOnly).toBe(true);
+
+      // Verify in DB
+      const row = testDb
+        .query('SELECT research_only FROM prd_stories WHERE id = ?')
+        .get('standalone-1') as any;
+      expect(row.research_only).toBe(1);
+    });
   });
 
   // ---------------------------------------------------------------
@@ -4781,6 +5197,1832 @@ describe('PRD Routes', () => {
       const json = await res.json();
       expect(json.ok).toBe(false);
       expect(json.error).toContain('Estimation failed');
+    });
+  });
+
+  // ---------------------------------------------------------------
+  // POST /stories/reorder — Reorder standalone stories
+  // ---------------------------------------------------------------
+  describe('POST /stories/reorder — reorder standalone stories', () => {
+    test('reorders stories by updating sort_order', async () => {
+      insertStory({
+        id: 'sa-1',
+        prd_id: null,
+        workspace_path: '/test/project',
+        title: 'Story A',
+        sort_order: 0,
+      });
+      insertStory({
+        id: 'sa-2',
+        prd_id: null,
+        workspace_path: '/test/project',
+        title: 'Story B',
+        sort_order: 1,
+      });
+      insertStory({
+        id: 'sa-3',
+        prd_id: null,
+        workspace_path: '/test/project',
+        title: 'Story C',
+        sort_order: 2,
+      });
+
+      const res = await app.request('/stories/reorder', {
+        method: 'POST',
+        body: JSON.stringify({ storyIds: ['sa-3', 'sa-1', 'sa-2'] }),
+        headers: { 'Content-Type': 'application/json' },
+      });
+
+      expect(res.status).toBe(200);
+      const json = await res.json();
+      expect(json.ok).toBe(true);
+
+      // Verify sort_order in DB
+      const s3 = testDb.query('SELECT sort_order FROM prd_stories WHERE id = ?').get('sa-3') as any;
+      const s1 = testDb.query('SELECT sort_order FROM prd_stories WHERE id = ?').get('sa-1') as any;
+      const s2 = testDb.query('SELECT sort_order FROM prd_stories WHERE id = ?').get('sa-2') as any;
+      expect(s3.sort_order).toBe(0);
+      expect(s1.sort_order).toBe(1);
+      expect(s2.sort_order).toBe(2);
+    });
+
+    test('returns 400 when storyIds is missing or empty', async () => {
+      const res = await app.request('/stories/reorder', {
+        method: 'POST',
+        body: JSON.stringify({}),
+        headers: { 'Content-Type': 'application/json' },
+      });
+      expect(res.status).toBe(400);
+      const json = await res.json();
+      expect(json.ok).toBe(false);
+      expect(json.error).toContain('storyIds');
+    });
+
+    test('returns 400 when reorder violates dependency constraints', async () => {
+      insertStory({
+        id: 'dep-a',
+        prd_id: null,
+        workspace_path: '/test/project',
+        title: 'A',
+        sort_order: 0,
+      });
+      insertStory({
+        id: 'dep-b',
+        prd_id: null,
+        workspace_path: '/test/project',
+        title: 'B',
+        sort_order: 1,
+        depends_on: JSON.stringify(['dep-a']),
+      });
+
+      // Try to put B before A — violates dependency
+      const res = await app.request('/stories/reorder', {
+        method: 'POST',
+        body: JSON.stringify({ storyIds: ['dep-b', 'dep-a'] }),
+        headers: { 'Content-Type': 'application/json' },
+      });
+      expect(res.status).toBe(400);
+      const json = await res.json();
+      expect(json.ok).toBe(false);
+      expect(json.error).toContain('dependency constraints');
+    });
+  });
+
+  // ---------------------------------------------------------------
+  // POST /stories/archive-completed — Archive completed standalone stories
+  // ---------------------------------------------------------------
+  describe('POST /stories/archive-completed — archive completed standalone stories', () => {
+    test('archives completed standalone stories', async () => {
+      insertStory({
+        id: 'arch-1',
+        prd_id: null,
+        workspace_path: '/test/project',
+        status: 'completed',
+      });
+      insertStory({
+        id: 'arch-2',
+        prd_id: null,
+        workspace_path: '/test/project',
+        status: 'pending',
+      });
+      insertStory({
+        id: 'arch-3',
+        prd_id: null,
+        workspace_path: '/test/project',
+        status: 'completed',
+      });
+
+      const res = await app.request('/stories/archive-completed', {
+        method: 'POST',
+        body: JSON.stringify({ workspacePath: '/test/project' }),
+        headers: { 'Content-Type': 'application/json' },
+      });
+
+      expect(res.status).toBe(200);
+      const json = await res.json();
+      expect(json.ok).toBe(true);
+      expect(json.data.archived).toBe(2);
+
+      // Verify status changes in DB
+      const s1 = testDb.query('SELECT status FROM prd_stories WHERE id = ?').get('arch-1') as any;
+      const s2 = testDb.query('SELECT status FROM prd_stories WHERE id = ?').get('arch-2') as any;
+      expect(s1.status).toBe('archived');
+      expect(s2.status).toBe('pending');
+    });
+
+    test('returns 400 when workspacePath is missing', async () => {
+      const res = await app.request('/stories/archive-completed', {
+        method: 'POST',
+        body: JSON.stringify({}),
+        headers: { 'Content-Type': 'application/json' },
+      });
+      expect(res.status).toBe(400);
+      const json = await res.json();
+      expect(json.ok).toBe(false);
+      expect(json.error).toContain('workspacePath');
+    });
+
+    test('returns zero when no completed stories exist', async () => {
+      insertStory({
+        id: 'narch-1',
+        prd_id: null,
+        workspace_path: '/test/project',
+        status: 'pending',
+      });
+
+      const res = await app.request('/stories/archive-completed', {
+        method: 'POST',
+        body: JSON.stringify({ workspacePath: '/test/project' }),
+        headers: { 'Content-Type': 'application/json' },
+      });
+
+      const json = await res.json();
+      expect(json.ok).toBe(true);
+      expect(json.data.archived).toBe(0);
+    });
+  });
+
+  // ---------------------------------------------------------------
+  // POST /:prdId/stories/archive-completed — Archive completed PRD stories
+  // ---------------------------------------------------------------
+  describe('POST /:prdId/stories/archive-completed — archive completed PRD stories', () => {
+    test('archives completed stories in a PRD', async () => {
+      insertPrd({ id: 'prd-arch' });
+      insertStory({ id: 'prd-arch-1', prd_id: 'prd-arch', status: 'completed' });
+      insertStory({ id: 'prd-arch-2', prd_id: 'prd-arch', status: 'pending' });
+      insertStory({ id: 'prd-arch-3', prd_id: 'prd-arch', status: 'completed' });
+
+      const res = await app.request('/prd-arch/stories/archive-completed', {
+        method: 'POST',
+        body: JSON.stringify({}),
+        headers: { 'Content-Type': 'application/json' },
+      });
+
+      expect(res.status).toBe(200);
+      const json = await res.json();
+      expect(json.ok).toBe(true);
+      expect(json.data.archived).toBe(2);
+
+      const s1 = testDb
+        .query('SELECT status FROM prd_stories WHERE id = ?')
+        .get('prd-arch-1') as any;
+      expect(s1.status).toBe('archived');
+    });
+
+    test('touches PRD updated_at', async () => {
+      insertPrd({ id: 'prd-arch-t', updated_at: 1000 });
+      insertStory({ id: 'prd-arch-t1', prd_id: 'prd-arch-t', status: 'completed' });
+
+      await app.request('/prd-arch-t/stories/archive-completed', {
+        method: 'POST',
+        body: JSON.stringify({}),
+        headers: { 'Content-Type': 'application/json' },
+      });
+
+      const row = testDb.query('SELECT updated_at FROM prds WHERE id = ?').get('prd-arch-t') as any;
+      expect(row.updated_at).toBeGreaterThan(1000);
+    });
+  });
+
+  // ---------------------------------------------------------------
+  // GET /:id/dependencies — Get dependency graph
+  // ---------------------------------------------------------------
+  describe('GET /:id/dependencies — get dependency graph', () => {
+    test('returns dependency graph for PRD', async () => {
+      insertPrd({ id: 'prd-dep' });
+      insertStory({
+        id: 'dep-s1',
+        prd_id: 'prd-dep',
+        title: 'Foundation',
+        sort_order: 0,
+      });
+      insertStory({
+        id: 'dep-s2',
+        prd_id: 'prd-dep',
+        title: 'Feature',
+        depends_on: JSON.stringify(['dep-s1']),
+        sort_order: 1,
+      });
+
+      const res = await app.request('/prd-dep/dependencies');
+      expect(res.status).toBe(200);
+      const json = await res.json();
+      expect(json.ok).toBe(true);
+      expect(json.data.nodes).toHaveLength(2);
+      expect(json.data.edges).toHaveLength(1);
+      expect(json.data.edges[0].from).toBe('dep-s1');
+      expect(json.data.edges[0].to).toBe('dep-s2');
+    });
+
+    test('returns 404 for non-existent PRD', async () => {
+      const res = await app.request('/nonexistent/dependencies');
+      expect(res.status).toBe(404);
+    });
+
+    test('returns empty graph for PRD with no dependencies', async () => {
+      insertPrd({ id: 'prd-nodep' });
+      insertStory({ id: 'nodep-1', prd_id: 'prd-nodep', title: 'A', sort_order: 0 });
+      insertStory({ id: 'nodep-2', prd_id: 'prd-nodep', title: 'B', sort_order: 1 });
+
+      const res = await app.request('/prd-nodep/dependencies');
+      const json = await res.json();
+      expect(json.ok).toBe(true);
+      expect(json.data.nodes).toHaveLength(2);
+      expect(json.data.edges).toHaveLength(0);
+    });
+
+    test('detects circular dependency warning in graph', async () => {
+      insertPrd({ id: 'prd-circg' });
+      insertStory({
+        id: 'circg-s1',
+        prd_id: 'prd-circg',
+        title: 'Alpha',
+        depends_on: JSON.stringify(['circg-s2']),
+        sort_order: 0,
+      });
+      insertStory({
+        id: 'circg-s2',
+        prd_id: 'prd-circg',
+        title: 'Beta',
+        depends_on: JSON.stringify(['circg-s1']),
+        sort_order: 1,
+      });
+
+      const res = await app.request('/prd-circg/dependencies');
+      const json = await res.json();
+      expect(json.ok).toBe(true);
+      expect(json.data.warnings.length).toBeGreaterThanOrEqual(1);
+      const circularWarning = json.data.warnings.find((w: any) => w.type === 'circular');
+      expect(circularWarning).toBeDefined();
+      expect(circularWarning.storyIds.length).toBeGreaterThanOrEqual(2);
+    });
+
+    test('detects orphan dependency warning in graph', async () => {
+      insertPrd({ id: 'prd-orphg' });
+      insertStory({
+        id: 'orphg-s1',
+        prd_id: 'prd-orphg',
+        title: 'Orphan Dep',
+        depends_on: JSON.stringify(['nonexistent-id']),
+        sort_order: 0,
+      });
+
+      const res = await app.request('/prd-orphg/dependencies');
+      const json = await res.json();
+      expect(json.ok).toBe(true);
+      const orphanWarning = json.data.warnings.find((w: any) => w.type === 'orphan_dependency');
+      expect(orphanWarning).toBeDefined();
+      expect(orphanWarning.message).toContain('non-existent');
+    });
+
+    test('detects unresolved blocker warning for in-progress story', async () => {
+      insertPrd({ id: 'prd-ublk' });
+      insertStory({
+        id: 'ublk-s1',
+        prd_id: 'prd-ublk',
+        title: 'Blocker',
+        status: 'pending',
+        sort_order: 0,
+      });
+      insertStory({
+        id: 'ublk-s2',
+        prd_id: 'prd-ublk',
+        title: 'Blocked Work',
+        status: 'in_progress',
+        depends_on: JSON.stringify(['ublk-s1']),
+        sort_order: 1,
+      });
+
+      const res = await app.request('/prd-ublk/dependencies');
+      const json = await res.json();
+      expect(json.ok).toBe(true);
+      const blockerWarning = json.data.warnings.find((w: any) => w.type === 'unresolved_blocker');
+      expect(blockerWarning).toBeDefined();
+      expect(blockerWarning.message).toContain('Blocked Work');
+      expect(blockerWarning.storyIds).toContain('ublk-s2');
+      expect(blockerWarning.storyIds).toContain('ublk-s1');
+    });
+
+    test('includes depth and blocking info in nodes', async () => {
+      insertPrd({ id: 'prd-depth' });
+      insertStory({
+        id: 'depth-s1',
+        prd_id: 'prd-depth',
+        title: 'Root',
+        status: 'completed',
+        sort_order: 0,
+      });
+      insertStory({
+        id: 'depth-s2',
+        prd_id: 'prd-depth',
+        title: 'Level 1',
+        depends_on: JSON.stringify(['depth-s1']),
+        sort_order: 1,
+      });
+      insertStory({
+        id: 'depth-s3',
+        prd_id: 'prd-depth',
+        title: 'Level 2',
+        depends_on: JSON.stringify(['depth-s2']),
+        sort_order: 2,
+      });
+
+      const res = await app.request('/prd-depth/dependencies');
+      const json = await res.json();
+      expect(json.ok).toBe(true);
+
+      const rootNode = json.data.nodes.find((n: any) => n.storyId === 'depth-s1');
+      expect(rootNode.depth).toBe(0);
+      expect(rootNode.blocksCount).toBe(1);
+
+      const level1 = json.data.nodes.find((n: any) => n.storyId === 'depth-s2');
+      expect(level1.depth).toBe(1);
+      expect(level1.blockedByCount).toBe(1);
+      expect(level1.isReady).toBe(true); // depth-s1 is completed
+
+      const level2 = json.data.nodes.find((n: any) => n.storyId === 'depth-s3');
+      expect(level2.depth).toBe(2);
+      expect(level2.isReady).toBe(false); // depth-s2 is not completed
+    });
+  });
+
+  // ---------------------------------------------------------------
+  // POST /:id/dependencies — Add dependency
+  // ---------------------------------------------------------------
+  describe('POST /:id/dependencies — add dependency', () => {
+    test('adds a dependency between two stories', async () => {
+      insertPrd({ id: 'prd-adep' });
+      insertStory({ id: 'adep-s1', prd_id: 'prd-adep', title: 'First', sort_order: 0 });
+      insertStory({ id: 'adep-s2', prd_id: 'prd-adep', title: 'Second', sort_order: 1 });
+
+      const res = await app.request('/prd-adep/dependencies', {
+        method: 'POST',
+        body: JSON.stringify({
+          fromStoryId: 'adep-s2',
+          toStoryId: 'adep-s1',
+          reason: 'Needs foundation first',
+        }),
+        headers: { 'Content-Type': 'application/json' },
+      });
+
+      expect(res.status).toBe(200);
+      const json = await res.json();
+      expect(json.ok).toBe(true);
+      expect(json.data.edges).toHaveLength(1);
+
+      // Verify in DB
+      const row = testDb
+        .query('SELECT depends_on, dependency_reasons FROM prd_stories WHERE id = ?')
+        .get('adep-s2') as any;
+      expect(JSON.parse(row.depends_on)).toContain('adep-s1');
+      expect(JSON.parse(row.dependency_reasons)['adep-s1']).toBe('Needs foundation first');
+    });
+
+    test('returns 404 for non-existent PRD', async () => {
+      const res = await app.request('/nonexistent/dependencies', {
+        method: 'POST',
+        body: JSON.stringify({ fromStoryId: 'a', toStoryId: 'b' }),
+        headers: { 'Content-Type': 'application/json' },
+      });
+      expect(res.status).toBe(404);
+    });
+
+    test('returns 400 when fromStoryId or toStoryId is missing', async () => {
+      insertPrd({ id: 'prd-adep2' });
+      const res = await app.request('/prd-adep2/dependencies', {
+        method: 'POST',
+        body: JSON.stringify({ fromStoryId: 'a' }),
+        headers: { 'Content-Type': 'application/json' },
+      });
+      expect(res.status).toBe(400);
+    });
+
+    test('returns 400 for self-dependency', async () => {
+      insertPrd({ id: 'prd-self' });
+      insertStory({ id: 'self-s1', prd_id: 'prd-self', title: 'Self' });
+
+      const res = await app.request('/prd-self/dependencies', {
+        method: 'POST',
+        body: JSON.stringify({ fromStoryId: 'self-s1', toStoryId: 'self-s1' }),
+        headers: { 'Content-Type': 'application/json' },
+      });
+      expect(res.status).toBe(400);
+      const json = await res.json();
+      expect(json.error).toContain('itself');
+    });
+
+    test('returns 404 when story does not belong to PRD', async () => {
+      insertPrd({ id: 'prd-wrong' });
+      insertStory({ id: 'wrong-s1', prd_id: 'prd-wrong', title: 'Right' });
+
+      const res = await app.request('/prd-wrong/dependencies', {
+        method: 'POST',
+        body: JSON.stringify({ fromStoryId: 'wrong-s1', toStoryId: 'nonexistent-story' }),
+        headers: { 'Content-Type': 'application/json' },
+      });
+      expect(res.status).toBe(404);
+    });
+  });
+
+  // ---------------------------------------------------------------
+  // DELETE /:id/dependencies — Remove dependency
+  // ---------------------------------------------------------------
+  describe('DELETE /:id/dependencies — remove dependency', () => {
+    test('removes a dependency between two stories', async () => {
+      insertPrd({ id: 'prd-rdep' });
+      insertStory({ id: 'rdep-s1', prd_id: 'prd-rdep', title: 'First', sort_order: 0 });
+      insertStory({
+        id: 'rdep-s2',
+        prd_id: 'prd-rdep',
+        title: 'Second',
+        depends_on: JSON.stringify(['rdep-s1']),
+        dependency_reasons: JSON.stringify({ 'rdep-s1': 'Foundation needed' }),
+        sort_order: 1,
+      });
+
+      const res = await app.request('/prd-rdep/dependencies', {
+        method: 'DELETE',
+        body: JSON.stringify({ fromStoryId: 'rdep-s2', toStoryId: 'rdep-s1' }),
+        headers: { 'Content-Type': 'application/json' },
+      });
+
+      expect(res.status).toBe(200);
+      const json = await res.json();
+      expect(json.ok).toBe(true);
+      expect(json.data.edges).toHaveLength(0);
+
+      // Verify in DB
+      const row = testDb
+        .query('SELECT depends_on, dependency_reasons FROM prd_stories WHERE id = ?')
+        .get('rdep-s2') as any;
+      expect(JSON.parse(row.depends_on)).toEqual([]);
+      expect(JSON.parse(row.dependency_reasons)).toEqual({});
+    });
+
+    test('returns 404 for non-existent PRD', async () => {
+      const res = await app.request('/nonexistent/dependencies', {
+        method: 'DELETE',
+        body: JSON.stringify({ fromStoryId: 'a', toStoryId: 'b' }),
+        headers: { 'Content-Type': 'application/json' },
+      });
+      expect(res.status).toBe(404);
+    });
+
+    test('returns 400 when required fields are missing', async () => {
+      insertPrd({ id: 'prd-rdep2' });
+      const res = await app.request('/prd-rdep2/dependencies', {
+        method: 'DELETE',
+        body: JSON.stringify({ fromStoryId: 'a' }),
+        headers: { 'Content-Type': 'application/json' },
+      });
+      expect(res.status).toBe(400);
+    });
+  });
+
+  // ---------------------------------------------------------------
+  // PATCH /:id/dependencies — Edit dependency reason
+  // ---------------------------------------------------------------
+  describe('PATCH /:id/dependencies — edit dependency reason', () => {
+    test('updates dependency reason', async () => {
+      insertPrd({ id: 'prd-edep' });
+      insertStory({ id: 'edep-s1', prd_id: 'prd-edep', title: 'First', sort_order: 0 });
+      insertStory({
+        id: 'edep-s2',
+        prd_id: 'prd-edep',
+        title: 'Second',
+        depends_on: JSON.stringify(['edep-s1']),
+        dependency_reasons: JSON.stringify({ 'edep-s1': 'Old reason' }),
+        sort_order: 1,
+      });
+
+      const res = await app.request('/prd-edep/dependencies', {
+        method: 'PATCH',
+        body: JSON.stringify({
+          fromStoryId: 'edep-s2',
+          toStoryId: 'edep-s1',
+          reason: 'Updated reason',
+        }),
+        headers: { 'Content-Type': 'application/json' },
+      });
+
+      expect(res.status).toBe(200);
+      const json = await res.json();
+      expect(json.ok).toBe(true);
+
+      // Verify in DB
+      const row = testDb
+        .query('SELECT dependency_reasons FROM prd_stories WHERE id = ?')
+        .get('edep-s2') as any;
+      expect(JSON.parse(row.dependency_reasons)['edep-s1']).toBe('Updated reason');
+    });
+
+    test('removes reason when set to empty string', async () => {
+      insertPrd({ id: 'prd-edep2' });
+      insertStory({ id: 'edep2-s1', prd_id: 'prd-edep2', title: 'First', sort_order: 0 });
+      insertStory({
+        id: 'edep2-s2',
+        prd_id: 'prd-edep2',
+        title: 'Second',
+        depends_on: JSON.stringify(['edep2-s1']),
+        dependency_reasons: JSON.stringify({ 'edep2-s1': 'Some reason' }),
+        sort_order: 1,
+      });
+
+      await app.request('/prd-edep2/dependencies', {
+        method: 'PATCH',
+        body: JSON.stringify({
+          fromStoryId: 'edep2-s2',
+          toStoryId: 'edep2-s1',
+          reason: '',
+        }),
+        headers: { 'Content-Type': 'application/json' },
+      });
+
+      const row = testDb
+        .query('SELECT dependency_reasons FROM prd_stories WHERE id = ?')
+        .get('edep2-s2') as any;
+      const reasons = JSON.parse(row.dependency_reasons);
+      expect(reasons['edep2-s1']).toBeUndefined();
+    });
+
+    test('returns 404 for non-existent PRD', async () => {
+      const res = await app.request('/nonexistent/dependencies', {
+        method: 'PATCH',
+        body: JSON.stringify({ fromStoryId: 'a', toStoryId: 'b', reason: 'test' }),
+        headers: { 'Content-Type': 'application/json' },
+      });
+      expect(res.status).toBe(404);
+    });
+
+    test('returns 404 when dependency does not exist', async () => {
+      insertPrd({ id: 'prd-edep3' });
+      insertStory({ id: 'edep3-s1', prd_id: 'prd-edep3', title: 'First', sort_order: 0 });
+      insertStory({
+        id: 'edep3-s2',
+        prd_id: 'prd-edep3',
+        title: 'Second',
+        depends_on: '[]',
+        sort_order: 1,
+      });
+
+      const res = await app.request('/prd-edep3/dependencies', {
+        method: 'PATCH',
+        body: JSON.stringify({
+          fromStoryId: 'edep3-s2',
+          toStoryId: 'edep3-s1',
+          reason: 'No dep exists',
+        }),
+        headers: { 'Content-Type': 'application/json' },
+      });
+      expect(res.status).toBe(404);
+      const json = await res.json();
+      expect(json.error).toContain('does not exist');
+    });
+  });
+
+  // ---------------------------------------------------------------
+  // POST /:id/dependencies/analyze — AI dependency analysis
+  // ---------------------------------------------------------------
+  describe('POST /:id/dependencies/analyze — AI dependency analysis', () => {
+    test('returns 404 for non-existent PRD', async () => {
+      const res = await app.request('/nonexistent/dependencies/analyze', {
+        method: 'POST',
+        body: JSON.stringify({}),
+        headers: { 'Content-Type': 'application/json' },
+      });
+      expect(res.status).toBe(404);
+    });
+
+    test('returns 400 when PRD has fewer than 2 stories', async () => {
+      insertPrd({ id: 'prd-dep-a1' });
+      insertStory({ id: 'dep-a1-s1', prd_id: 'prd-dep-a1', title: 'Only story' });
+
+      const res = await app.request('/prd-dep-a1/dependencies/analyze', {
+        method: 'POST',
+        body: JSON.stringify({}),
+        headers: { 'Content-Type': 'application/json' },
+      });
+      expect(res.status).toBe(400);
+      const json = await res.json();
+      expect(json.error).toContain('at least 2');
+    });
+
+    test('analyzes dependencies using AI and returns graph', async () => {
+      insertPrd({ id: 'prd-dep-a2' });
+      insertStory({ id: 'dep-a2-s1', prd_id: 'prd-dep-a2', title: 'Setup DB', sort_order: 0 });
+      insertStory({ id: 'dep-a2-s2', prd_id: 'prd-dep-a2', title: 'User CRUD', sort_order: 1 });
+
+      mockCallLlmResponse = JSON.stringify([
+        {
+          fromStoryId: 'dep-a2-s2',
+          toStoryId: 'dep-a2-s1',
+          reason: 'User CRUD needs database schema from Setup DB',
+        },
+      ]);
+
+      const res = await app.request('/prd-dep-a2/dependencies/analyze', {
+        method: 'POST',
+        body: JSON.stringify({}),
+        headers: { 'Content-Type': 'application/json' },
+      });
+
+      expect(res.status).toBe(200);
+      const json = await res.json();
+      expect(json.ok).toBe(true);
+      expect(json.data.graph.edges).toHaveLength(1);
+      expect(json.data.graph.edges[0].from).toBe('dep-a2-s1');
+      expect(json.data.dependencies).toHaveLength(1);
+
+      // Verify dependency was persisted
+      const row = testDb
+        .query('SELECT depends_on FROM prd_stories WHERE id = ?')
+        .get('dep-a2-s2') as any;
+      expect(JSON.parse(row.depends_on)).toContain('dep-a2-s1');
+    });
+
+    test('handles AI error gracefully', async () => {
+      insertPrd({ id: 'prd-dep-a3' });
+      insertStory({ id: 'dep-a3-s1', prd_id: 'prd-dep-a3', title: 'Story A', sort_order: 0 });
+      insertStory({ id: 'dep-a3-s2', prd_id: 'prd-dep-a3', title: 'Story B', sort_order: 1 });
+
+      mockCallLlmResponse = new Error('LLM call failed (500)');
+
+      const res = await app.request('/prd-dep-a3/dependencies/analyze', {
+        method: 'POST',
+        body: JSON.stringify({}),
+        headers: { 'Content-Type': 'application/json' },
+      });
+
+      expect(res.status).toBe(500);
+      const json = await res.json();
+      expect(json.ok).toBe(false);
+    });
+  });
+
+  // ---------------------------------------------------------------
+  // GET /:id/dependencies/validate — Validate dependencies
+  // ---------------------------------------------------------------
+  describe('GET /:id/dependencies/validate — validate dependencies', () => {
+    test('returns validation result for PRD with valid dependencies', async () => {
+      insertPrd({ id: 'prd-val' });
+      insertStory({ id: 'val-s1', prd_id: 'prd-val', title: 'First', sort_order: 0 });
+      insertStory({
+        id: 'val-s2',
+        prd_id: 'prd-val',
+        title: 'Second',
+        depends_on: JSON.stringify(['val-s1']),
+        sort_order: 1,
+      });
+
+      const res = await app.request('/prd-val/dependencies/validate');
+      expect(res.status).toBe(200);
+      const json = await res.json();
+      expect(json.ok).toBe(true);
+      expect(json.data).toBeDefined();
+      expect(json.data.valid).toBe(true);
+      expect(json.data.warnings).toHaveLength(0);
+    });
+
+    test('returns 404 for non-existent PRD', async () => {
+      const res = await app.request('/nonexistent/dependencies/validate');
+      expect(res.status).toBe(404);
+    });
+
+    test('detects circular dependencies', async () => {
+      insertPrd({ id: 'prd-circ' });
+      insertStory({
+        id: 'circ-s1',
+        prd_id: 'prd-circ',
+        title: 'Story A',
+        depends_on: JSON.stringify(['circ-s2']),
+        sort_order: 0,
+      });
+      insertStory({
+        id: 'circ-s2',
+        prd_id: 'prd-circ',
+        title: 'Story B',
+        depends_on: JSON.stringify(['circ-s1']),
+        sort_order: 1,
+      });
+
+      const res = await app.request('/prd-circ/dependencies/validate');
+      expect(res.status).toBe(200);
+      const json = await res.json();
+      expect(json.ok).toBe(true);
+      expect(json.data.valid).toBe(false);
+      const circularWarnings = json.data.warnings.filter(
+        (w: any) => w.type === 'circular_dependency',
+      );
+      expect(circularWarnings.length).toBeGreaterThanOrEqual(1);
+    });
+
+    test('detects blocked in-progress story', async () => {
+      insertPrd({ id: 'prd-blocked' });
+      insertStory({
+        id: 'blocked-s1',
+        prd_id: 'prd-blocked',
+        title: 'Dependency',
+        status: 'pending',
+        sort_order: 0,
+      });
+      insertStory({
+        id: 'blocked-s2',
+        prd_id: 'prd-blocked',
+        title: 'In Progress Story',
+        status: 'in_progress',
+        depends_on: JSON.stringify(['blocked-s1']),
+        sort_order: 1,
+      });
+
+      const res = await app.request('/prd-blocked/dependencies/validate');
+      expect(res.status).toBe(200);
+      const json = await res.json();
+      expect(json.ok).toBe(true);
+      expect(json.data.valid).toBe(false);
+      const blockedWarnings = json.data.warnings.filter((w: any) => w.type === 'blocked_story');
+      expect(blockedWarnings.length).toBeGreaterThanOrEqual(1);
+      expect(blockedWarnings[0].message).toContain('In Progress Story');
+    });
+  });
+
+  // ---------------------------------------------------------------
+  // POST /:prdId/stories/:storyId/estimate — AI estimate for PRD story
+  // ---------------------------------------------------------------
+  describe('POST /:prdId/stories/:storyId/estimate — AI estimate for PRD story', () => {
+    test('returns 404 for non-existent PRD', async () => {
+      const res = await app.request('/nonexistent/stories/story-1/estimate', {
+        method: 'POST',
+        body: JSON.stringify({}),
+        headers: { 'Content-Type': 'application/json' },
+      });
+      expect(res.status).toBe(404);
+    });
+
+    test('returns 404 for non-existent story', async () => {
+      insertPrd({ id: 'prd-est' });
+
+      const res = await app.request('/prd-est/stories/nonexistent/estimate', {
+        method: 'POST',
+        body: JSON.stringify({}),
+        headers: { 'Content-Type': 'application/json' },
+      });
+      expect(res.status).toBe(404);
+    });
+
+    test('generates AI estimate and persists to DB', async () => {
+      insertPrd({ id: 'prd-est2', name: 'Test PRD', description: 'A project' });
+      insertStory({
+        id: 'est-s1',
+        prd_id: 'prd-est2',
+        title: 'Build auth',
+        description: 'OAuth login',
+      });
+
+      const mockEstimate = {
+        size: 'medium',
+        storyPoints: 5,
+        confidence: 'high',
+        confidenceScore: 85,
+        factors: [{ factor: 'OAuth complexity', impact: 'increases', weight: 'moderate' }],
+        reasoning: 'OAuth is moderately complex',
+      };
+
+      mockCallLlmResponse = JSON.stringify(mockEstimate);
+
+      const res = await app.request('/prd-est2/stories/est-s1/estimate', {
+        method: 'POST',
+        body: JSON.stringify({}),
+        headers: { 'Content-Type': 'application/json' },
+      });
+
+      expect(res.status).toBe(200);
+      const json = await res.json();
+      expect(json.ok).toBe(true);
+      expect(json.data.storyId).toBe('est-s1');
+      expect(json.data.estimate.size).toBe('medium');
+      expect(json.data.estimate.storyPoints).toBe(5);
+      expect(json.data.estimate.isManualOverride).toBe(false);
+
+      // Verify in DB
+      const row = testDb
+        .query('SELECT estimate FROM prd_stories WHERE id = ?')
+        .get('est-s1') as any;
+      const saved = JSON.parse(row.estimate);
+      expect(saved.storyPoints).toBe(5);
+    });
+
+    test('handles AI error gracefully', async () => {
+      insertPrd({ id: 'prd-est3' });
+      insertStory({ id: 'est-s2', prd_id: 'prd-est3', title: 'Story' });
+
+      mockCallLlmResponse = new Error('LLM call failed');
+
+      const res = await app.request('/prd-est3/stories/est-s2/estimate', {
+        method: 'POST',
+        body: JSON.stringify({}),
+        headers: { 'Content-Type': 'application/json' },
+      });
+
+      expect(res.status).toBe(500);
+      const json = await res.json();
+      expect(json.ok).toBe(false);
+      expect(json.error).toContain('estimation failed');
+    });
+
+    test('handles invalid JSON in AI response', async () => {
+      insertPrd({ id: 'prd-est4' });
+      insertStory({ id: 'est-s3', prd_id: 'prd-est4', title: 'Story' });
+
+      mockCallLlmResponse = 'Not JSON at all';
+
+      const res = await app.request('/prd-est4/stories/est-s3/estimate', {
+        method: 'POST',
+        body: JSON.stringify({}),
+        headers: { 'Content-Type': 'application/json' },
+      });
+
+      expect(res.status).toBe(502);
+      const json = await res.json();
+      expect(json.ok).toBe(false);
+      expect(json.error).toContain('parse');
+    });
+  });
+
+  // ---------------------------------------------------------------
+  // PUT /:prdId/stories/:storyId/estimate — Manual estimate for PRD story
+  // ---------------------------------------------------------------
+  describe('PUT /:prdId/stories/:storyId/estimate — manual estimate for PRD story', () => {
+    test('saves a manual estimate override', async () => {
+      insertPrd({ id: 'prd-mest' });
+      insertStory({ id: 'mest-s1', prd_id: 'prd-mest', title: 'Story' });
+
+      const res = await app.request('/prd-mest/stories/mest-s1/estimate', {
+        method: 'PUT',
+        body: JSON.stringify({ size: 'large', storyPoints: 8, reasoning: 'Complex' }),
+        headers: { 'Content-Type': 'application/json' },
+      });
+
+      expect(res.status).toBe(200);
+      const json = await res.json();
+      expect(json.ok).toBe(true);
+      expect(json.data.storyId).toBe('mest-s1');
+      expect(json.data.estimate.size).toBe('large');
+      expect(json.data.estimate.storyPoints).toBe(8);
+      expect(json.data.estimate.isManualOverride).toBe(true);
+      expect(json.data.estimate.reasoning).toBe('Complex');
+    });
+
+    test('returns 404 for non-existent story', async () => {
+      insertPrd({ id: 'prd-mest2' });
+
+      const res = await app.request('/prd-mest2/stories/nonexistent/estimate', {
+        method: 'PUT',
+        body: JSON.stringify({ size: 'small', storyPoints: 1 }),
+        headers: { 'Content-Type': 'application/json' },
+      });
+      expect(res.status).toBe(404);
+    });
+
+    test('rejects invalid size', async () => {
+      insertPrd({ id: 'prd-mest3' });
+      insertStory({ id: 'mest-s2', prd_id: 'prd-mest3', title: 'Story' });
+
+      const res = await app.request('/prd-mest3/stories/mest-s2/estimate', {
+        method: 'PUT',
+        body: JSON.stringify({ size: 'gigantic', storyPoints: 5 }),
+        headers: { 'Content-Type': 'application/json' },
+      });
+      expect(res.status).toBe(400);
+      const json = await res.json();
+      expect(json.error).toContain('size');
+    });
+
+    test('rejects invalid story points', async () => {
+      insertPrd({ id: 'prd-mest4' });
+      insertStory({ id: 'mest-s3', prd_id: 'prd-mest4', title: 'Story' });
+
+      const res = await app.request('/prd-mest4/stories/mest-s3/estimate', {
+        method: 'PUT',
+        body: JSON.stringify({ size: 'medium', storyPoints: 7 }),
+        headers: { 'Content-Type': 'application/json' },
+      });
+      expect(res.status).toBe(400);
+      const json = await res.json();
+      expect(json.error).toContain('story points');
+    });
+
+    test('preserves existing AI factors on manual override', async () => {
+      insertPrd({ id: 'prd-mest5' });
+      const existingEstimate = {
+        storyId: 'mest-s4',
+        size: 'small',
+        storyPoints: 2,
+        confidence: 'high',
+        confidenceScore: 90,
+        factors: [{ factor: 'Simple task', impact: 'decreases', weight: 'minor' }],
+        reasoning: 'AI estimate',
+        isManualOverride: false,
+      };
+      insertStory({
+        id: 'mest-s4',
+        prd_id: 'prd-mest5',
+        title: 'Story',
+        estimate: JSON.stringify(existingEstimate),
+      });
+
+      const res = await app.request('/prd-mest5/stories/mest-s4/estimate', {
+        method: 'PUT',
+        body: JSON.stringify({ size: 'large', storyPoints: 13 }),
+        headers: { 'Content-Type': 'application/json' },
+      });
+
+      const json = await res.json();
+      expect(json.data.estimate.size).toBe('large');
+      expect(json.data.estimate.storyPoints).toBe(13);
+      expect(json.data.estimate.isManualOverride).toBe(true);
+      // AI factors preserved
+      expect(json.data.estimate.factors).toEqual(existingEstimate.factors);
+      // Confidence preserved from existing
+      expect(json.data.estimate.confidence).toBe('high');
+    });
+  });
+
+  // ---------------------------------------------------------------
+  // POST /:id/estimate — Bulk estimate all PRD stories
+  // ---------------------------------------------------------------
+  describe('POST /:id/estimate — bulk estimate PRD stories', () => {
+    test('returns 404 for non-existent PRD', async () => {
+      const res = await app.request('/nonexistent/estimate', {
+        method: 'POST',
+        body: JSON.stringify({}),
+        headers: { 'Content-Type': 'application/json' },
+      });
+      expect(res.status).toBe(404);
+    });
+
+    test('returns 400 when PRD has no stories', async () => {
+      insertPrd({ id: 'prd-best1' });
+
+      const res = await app.request('/prd-best1/estimate', {
+        method: 'POST',
+        body: JSON.stringify({}),
+        headers: { 'Content-Type': 'application/json' },
+      });
+      expect(res.status).toBe(400);
+      const json = await res.json();
+      expect(json.error).toContain('No stories');
+    });
+
+    test('bulk estimates stories using AI and persists results', async () => {
+      insertPrd({
+        id: 'prd-best2',
+        name: 'Bulk Est PRD',
+        description: 'Project for bulk estimation',
+      });
+      insertStory({
+        id: 'best2-s1',
+        prd_id: 'prd-best2',
+        title: 'Auth Module',
+        description: 'Implement authentication',
+        sort_order: 0,
+      });
+      insertStory({
+        id: 'best2-s2',
+        prd_id: 'prd-best2',
+        title: 'Dashboard',
+        description: 'Build dashboard view',
+        sort_order: 1,
+      });
+
+      mockCallLlmResponse = JSON.stringify([
+        {
+          storyId: 'best2-s1',
+          size: 'medium',
+          storyPoints: 5,
+          confidence: 'high',
+          confidenceScore: 85,
+          factors: [{ factor: 'OAuth complexity', impact: 'increases', weight: 'moderate' }],
+          reasoning: 'Medium complexity OAuth flow',
+        },
+        {
+          storyId: 'best2-s2',
+          size: 'small',
+          storyPoints: 2,
+          confidence: 'high',
+          confidenceScore: 90,
+          factors: [{ factor: 'Simple UI', impact: 'decreases', weight: 'minor' }],
+          reasoning: 'Standard dashboard layout',
+        },
+      ]);
+
+      const res = await app.request('/prd-best2/estimate', {
+        method: 'POST',
+        body: JSON.stringify({}),
+        headers: { 'Content-Type': 'application/json' },
+      });
+
+      expect(res.status).toBe(200);
+      const json = await res.json();
+      expect(json.ok).toBe(true);
+      expect(json.data.prdId).toBe('prd-best2');
+      expect(json.data.summary.totalPoints).toBe(7);
+      expect(json.data.estimates).toHaveLength(2);
+      expect(json.data.summary.smallCount).toBe(1);
+      expect(json.data.summary.mediumCount).toBe(1);
+
+      // Verify persisted in DB
+      const row1 = testDb
+        .query('SELECT estimate FROM prd_stories WHERE id = ?')
+        .get('best2-s1') as any;
+      const est1 = JSON.parse(row1.estimate);
+      expect(est1.size).toBe('medium');
+      expect(est1.storyPoints).toBe(5);
+    });
+
+    test('returns current estimates when all stories already estimated', async () => {
+      insertPrd({ id: 'prd-best3' });
+      insertStory({
+        id: 'best3-s1',
+        prd_id: 'prd-best3',
+        title: 'Story',
+        estimate: JSON.stringify({
+          storyId: 'best3-s1',
+          size: 'small',
+          storyPoints: 2,
+          confidence: 'high',
+          confidenceScore: 90,
+          factors: [],
+          reasoning: 'Simple',
+          isManualOverride: true,
+        }),
+      });
+
+      const res = await app.request('/prd-best3/estimate', {
+        method: 'POST',
+        body: JSON.stringify({}),
+        headers: { 'Content-Type': 'application/json' },
+      });
+
+      expect(res.status).toBe(200);
+      const json = await res.json();
+      expect(json.ok).toBe(true);
+      expect(json.data.summary.totalPoints).toBe(2);
+    });
+
+    test('handles AI error in bulk estimation', async () => {
+      insertPrd({ id: 'prd-best4' });
+      insertStory({ id: 'best4-s1', prd_id: 'prd-best4', title: 'Story' });
+
+      mockCallLlmResponse = new Error('LLM service unavailable');
+
+      const res = await app.request('/prd-best4/estimate', {
+        method: 'POST',
+        body: JSON.stringify({}),
+        headers: { 'Content-Type': 'application/json' },
+      });
+
+      expect(res.status).toBe(500);
+      const json = await res.json();
+      expect(json.ok).toBe(false);
+      expect(json.error).toContain('Bulk estimation failed');
+    });
+
+    test('handles invalid JSON in bulk estimation AI response', async () => {
+      insertPrd({ id: 'prd-best5' });
+      insertStory({ id: 'best5-s1', prd_id: 'prd-best5', title: 'Story' });
+
+      mockCallLlmResponse = 'not valid json at all';
+
+      const res = await app.request('/prd-best5/estimate', {
+        method: 'POST',
+        body: JSON.stringify({}),
+        headers: { 'Content-Type': 'application/json' },
+      });
+
+      expect(res.status).toBe(502);
+      const json = await res.json();
+      expect(json.ok).toBe(false);
+      expect(json.error).toContain('parse');
+    });
+
+    test('re-estimates stories when reEstimate is true', async () => {
+      insertPrd({ id: 'prd-best6', name: 'Re-est PRD' });
+      insertStory({
+        id: 'best6-s1',
+        prd_id: 'prd-best6',
+        title: 'Story',
+        estimate: JSON.stringify({
+          storyId: 'best6-s1',
+          size: 'small',
+          storyPoints: 2,
+          confidence: 'low',
+          confidenceScore: 30,
+          factors: [],
+          reasoning: 'Old',
+          isManualOverride: false,
+        }),
+      });
+
+      mockCallLlmResponse = JSON.stringify([
+        {
+          storyId: 'best6-s1',
+          size: 'large',
+          storyPoints: 8,
+          confidence: 'high',
+          confidenceScore: 85,
+          factors: [],
+          reasoning: 'Re-estimated as large',
+          suggestedBreakdown: ['Step 1', 'Step 2'],
+        },
+      ]);
+
+      const res = await app.request('/prd-best6/estimate', {
+        method: 'POST',
+        body: JSON.stringify({ reEstimate: true }),
+        headers: { 'Content-Type': 'application/json' },
+      });
+
+      expect(res.status).toBe(200);
+      const json = await res.json();
+      expect(json.ok).toBe(true);
+      expect(json.data.estimates[0].size).toBe('large');
+      expect(json.data.estimates[0].storyPoints).toBe(8);
+    });
+
+    test('includes workspace memory context when available', async () => {
+      insertPrd({ id: 'prd-best7', name: 'Memory PRD', description: 'Project with memories' });
+      insertStory({ id: 'best7-s1', prd_id: 'prd-best7', title: 'Story' });
+      insertMemory({
+        id: 'mem-best7',
+        workspace_path: '/test/project',
+        category: 'convention',
+        key: 'style',
+        content: 'Use functional components',
+      });
+
+      mockCallLlmResponse = JSON.stringify([
+        {
+          storyId: 'best7-s1',
+          size: 'small',
+          storyPoints: 2,
+          confidence: 'high',
+          confidenceScore: 90,
+          factors: [],
+          reasoning: 'Simple',
+        },
+      ]);
+
+      const res = await app.request('/prd-best7/estimate', {
+        method: 'POST',
+        body: JSON.stringify({}),
+        headers: { 'Content-Type': 'application/json' },
+      });
+
+      expect(res.status).toBe(200);
+      const json = await res.json();
+      expect(json.ok).toBe(true);
+      // Verify the LLM was called with memory context in the system prompt
+      expect(mockCallLlmCapture.system).toContain('Project Memory');
+    });
+  });
+
+  // ---------------------------------------------------------------
+  // POST /:id/completeness — PRD completeness analysis
+  // ---------------------------------------------------------------
+  describe('POST /:id/completeness — PRD completeness analysis', () => {
+    test('returns 404 for non-existent PRD', async () => {
+      const res = await app.request('/nonexistent/completeness', {
+        method: 'POST',
+        body: JSON.stringify({}),
+        headers: { 'Content-Type': 'application/json' },
+      });
+      expect(res.status).toBe(404);
+    });
+
+    test('analyzes PRD completeness using AI', async () => {
+      insertPrd({ id: 'prd-comp', name: 'My PRD', description: 'Build an e-commerce platform' });
+      insertStory({ id: 'comp-s1', prd_id: 'prd-comp', title: 'Auth', sort_order: 0 });
+
+      const mockAnalysis = {
+        overallScore: 65,
+        overallLabel: 'Fair',
+        summary: 'PRD covers goals but lacks success metrics.',
+        sections: [
+          {
+            section: 'goals',
+            label: 'Goals & Objectives',
+            present: true,
+            severity: 'critical',
+            score: 80,
+            feedback: 'Goals are clear.',
+            questions: ['What is the primary KPI?'],
+          },
+          {
+            section: 'scope',
+            label: 'Scope & Boundaries',
+            present: false,
+            severity: 'critical',
+            score: 20,
+            feedback: 'Scope is not defined.',
+            questions: ['What is out of scope?'],
+          },
+        ],
+        suggestedQuestions: ['What are the success metrics?', 'Who are the target users?'],
+      };
+
+      mockCallLlmResponse = JSON.stringify(mockAnalysis);
+
+      const res = await app.request('/prd-comp/completeness', {
+        method: 'POST',
+        body: JSON.stringify({}),
+        headers: { 'Content-Type': 'application/json' },
+      });
+
+      expect(res.status).toBe(200);
+      const json = await res.json();
+      expect(json.ok).toBe(true);
+      expect(json.data.analysis.overallScore).toBeGreaterThanOrEqual(0);
+      expect(json.data.analysis.overallScore).toBeLessThanOrEqual(100);
+      expect(json.data.analysis.sections).toBeDefined();
+      expect(json.data.analysis.suggestedQuestions).toBeDefined();
+    });
+
+    test('handles AI error gracefully', async () => {
+      insertPrd({ id: 'prd-comp2', name: 'Test', description: 'Something' });
+
+      mockCallLlmResponse = new Error('LLM call failed');
+
+      const res = await app.request('/prd-comp2/completeness', {
+        method: 'POST',
+        body: JSON.stringify({}),
+        headers: { 'Content-Type': 'application/json' },
+      });
+
+      expect(res.status).toBe(500);
+      const json = await res.json();
+      expect(json.ok).toBe(false);
+    });
+
+    test('handles invalid JSON in AI response', async () => {
+      insertPrd({ id: 'prd-comp3', name: 'Test', description: 'Something' });
+
+      mockCallLlmResponse = 'Not valid JSON';
+
+      const res = await app.request('/prd-comp3/completeness', {
+        method: 'POST',
+        body: JSON.stringify({}),
+        headers: { 'Content-Type': 'application/json' },
+      });
+
+      expect(res.status).toBe(502);
+      const json = await res.json();
+      expect(json.ok).toBe(false);
+      expect(json.error).toContain('parse');
+    });
+
+    test('handles code-fenced JSON response from AI', async () => {
+      insertPrd({ id: 'prd-comp4', name: 'Fenced PRD', description: 'Testing fences' });
+      insertStory({ id: 'comp4-s1', prd_id: 'prd-comp4', title: 'Story', sort_order: 0 });
+
+      // Wrap response in markdown code fences like some LLMs do
+      mockCallLlmResponse =
+        '```json\n' +
+        JSON.stringify({
+          overallScore: 60,
+          overallLabel: 'Fair',
+          summary: 'Needs more detail.',
+          sections: [
+            {
+              section: 'goals',
+              present: true,
+              score: 70,
+              feedback: 'Goals are clear.',
+              questions: ['What KPIs?'],
+            },
+          ],
+          suggestedQuestions: ['What are the success metrics?'],
+        }) +
+        '\n```';
+
+      const res = await app.request('/prd-comp4/completeness', {
+        method: 'POST',
+        body: JSON.stringify({}),
+        headers: { 'Content-Type': 'application/json' },
+      });
+
+      expect(res.status).toBe(200);
+      const json = await res.json();
+      expect(json.ok).toBe(true);
+      expect(json.data.analysis.overallScore).toBe(60);
+    });
+
+    test('derives overallLabel when AI omits it', async () => {
+      insertPrd({ id: 'prd-comp5', name: 'Label PRD', description: 'Test label derivation' });
+
+      mockCallLlmResponse = JSON.stringify({
+        overallScore: 45,
+        // overallLabel intentionally omitted
+        summary: 'Needs work.',
+        sections: [],
+        suggestedQuestions: [],
+      });
+
+      const res = await app.request('/prd-comp5/completeness', {
+        method: 'POST',
+        body: JSON.stringify({}),
+        headers: { 'Content-Type': 'application/json' },
+      });
+
+      expect(res.status).toBe(200);
+      const json = await res.json();
+      expect(json.ok).toBe(true);
+      expect(json.data.analysis.overallLabel).toBe('Needs Work');
+    });
+
+    test('builds suggested questions from low-scoring sections when AI omits them', async () => {
+      insertPrd({ id: 'prd-comp6', name: 'Q PRD', description: 'Test question derivation' });
+
+      mockCallLlmResponse = JSON.stringify({
+        overallScore: 30,
+        summary: 'Incomplete.',
+        sections: [
+          {
+            section: 'goals',
+            present: false,
+            score: 0,
+            feedback: 'Missing.',
+            questions: ['What goals?'],
+          },
+          {
+            section: 'scope',
+            present: false,
+            score: 10,
+            feedback: 'Vague.',
+            questions: ['What is scope?'],
+          },
+        ],
+        // suggestedQuestions intentionally omitted (not an array)
+        suggestedQuestions: 'not an array',
+      });
+
+      const res = await app.request('/prd-comp6/completeness', {
+        method: 'POST',
+        body: JSON.stringify({}),
+        headers: { 'Content-Type': 'application/json' },
+      });
+
+      expect(res.status).toBe(200);
+      const json = await res.json();
+      expect(json.ok).toBe(true);
+      // Should derive suggestedQuestions from the low-scoring sections
+      expect(json.data.analysis.suggestedQuestions.length).toBeGreaterThan(0);
+    });
+
+    test('includes project memory context in completeness analysis', async () => {
+      insertPrd({ id: 'prd-comp7', name: 'Memory PRD', description: 'Test memory context' });
+      insertMemory({
+        id: 'mem-comp7',
+        workspace_path: '/test/project',
+        category: 'context',
+        key: 'project-type',
+        content: 'Microservices architecture',
+      });
+
+      mockCallLlmResponse = JSON.stringify({
+        overallScore: 75,
+        overallLabel: 'Good',
+        summary: 'Good PRD.',
+        sections: [],
+        suggestedQuestions: ['Any more questions?'],
+      });
+
+      const res = await app.request('/prd-comp7/completeness', {
+        method: 'POST',
+        body: JSON.stringify({}),
+        headers: { 'Content-Type': 'application/json' },
+      });
+
+      expect(res.status).toBe(200);
+      expect(mockCallLlmCapture.system).toContain('Project Memory');
+      expect(mockCallLlmCapture.system).toContain('Microservices');
+    });
+
+    test('fills in missing sections that AI did not analyze', async () => {
+      insertPrd({ id: 'prd-comp8', name: 'Partial PRD', description: 'Test missing section fill' });
+
+      // AI only analyzes 'goals' but the endpoint checks all 10 standard sections
+      mockCallLlmResponse = JSON.stringify({
+        overallScore: 50,
+        overallLabel: 'Fair',
+        summary: 'Partial.',
+        sections: [
+          { section: 'goals', present: true, score: 80, feedback: 'Good goals.', questions: [] },
+        ],
+        suggestedQuestions: [],
+      });
+
+      const res = await app.request('/prd-comp8/completeness', {
+        method: 'POST',
+        body: JSON.stringify({}),
+        headers: { 'Content-Type': 'application/json' },
+      });
+
+      expect(res.status).toBe(200);
+      const json = await res.json();
+      expect(json.ok).toBe(true);
+      // Should have all 10 standard sections filled in
+      expect(json.data.analysis.sections.length).toBe(10);
+      // The goals section should be present
+      const goals = json.data.analysis.sections.find((s: any) => s.section === 'goals');
+      expect(goals.present).toBe(true);
+      expect(goals.score).toBe(80);
+      // Missing sections should be marked as not present with score 0
+      const scope = json.data.analysis.sections.find((s: any) => s.section === 'scope');
+      expect(scope.present).toBe(false);
+      expect(scope.score).toBe(0);
+      expect(scope.feedback).toContain('not found');
+    });
+  });
+
+  // ---------------------------------------------------------------
+  // POST /:id/sprint-plan — Generate sprint plan
+  // ---------------------------------------------------------------
+  describe('POST /:id/sprint-plan — generate sprint plan', () => {
+    test('returns 400 when capacity is missing or invalid', async () => {
+      insertPrd({ id: 'prd-sp1' });
+
+      const res = await app.request('/prd-sp1/sprint-plan', {
+        method: 'POST',
+        body: JSON.stringify({}),
+        headers: { 'Content-Type': 'application/json' },
+      });
+      expect(res.status).toBe(400);
+      const json = await res.json();
+      expect(json.error).toContain('capacity');
+    });
+
+    test('returns 404 for non-existent PRD', async () => {
+      const res = await app.request('/nonexistent/sprint-plan', {
+        method: 'POST',
+        body: JSON.stringify({ capacity: 10 }),
+        headers: { 'Content-Type': 'application/json' },
+      });
+      expect(res.status).toBe(404);
+    });
+
+    test('returns 400 when PRD has no stories', async () => {
+      insertPrd({ id: 'prd-sp2' });
+
+      const res = await app.request('/prd-sp2/sprint-plan', {
+        method: 'POST',
+        body: JSON.stringify({ capacity: 10 }),
+        headers: { 'Content-Type': 'application/json' },
+      });
+      expect(res.status).toBe(400);
+      const json = await res.json();
+      expect(json.error).toContain('No stories');
+    });
+
+    test('returns plan with unassigned stories when none are estimated', async () => {
+      insertPrd({ id: 'prd-sp3' });
+      insertStory({ id: 'sp3-s1', prd_id: 'prd-sp3', title: 'Story', status: 'pending' });
+
+      const res = await app.request('/prd-sp3/sprint-plan', {
+        method: 'POST',
+        body: JSON.stringify({ capacity: 10 }),
+        headers: { 'Content-Type': 'application/json' },
+      });
+
+      expect(res.status).toBe(200);
+      const json = await res.json();
+      expect(json.ok).toBe(true);
+      expect(json.data.sprints).toHaveLength(0);
+      expect(json.data.unassignedStories).toHaveLength(1);
+      expect(json.data.unassignedStories[0].reason).toContain('estimate');
+    });
+
+    test('generates sprint plan with estimated stories using AI', async () => {
+      insertPrd({ id: 'prd-sp4', name: 'Plan PRD', description: 'A project' });
+      const estimate1 = JSON.stringify({
+        storyId: 'sp4-s1',
+        size: 'medium',
+        storyPoints: 5,
+        confidence: 'high',
+        confidenceScore: 85,
+        factors: [],
+        reasoning: 'Medium',
+        isManualOverride: false,
+      });
+      const estimate2 = JSON.stringify({
+        storyId: 'sp4-s2',
+        size: 'small',
+        storyPoints: 3,
+        confidence: 'high',
+        confidenceScore: 90,
+        factors: [],
+        reasoning: 'Small',
+        isManualOverride: false,
+      });
+      insertStory({
+        id: 'sp4-s1',
+        prd_id: 'prd-sp4',
+        title: 'Auth',
+        status: 'pending',
+        estimate: estimate1,
+        sort_order: 0,
+      });
+      insertStory({
+        id: 'sp4-s2',
+        prd_id: 'prd-sp4',
+        title: 'Dashboard',
+        status: 'pending',
+        estimate: estimate2,
+        sort_order: 1,
+      });
+
+      mockCallLlmResponse = JSON.stringify({
+        sprints: [
+          {
+            sprintNumber: 1,
+            storyIds: ['sp4-s1', 'sp4-s2'],
+            storyReasons: { 'sp4-s1': 'Foundation', 'sp4-s2': 'Core UI' },
+            rationale: 'Both stories fit in one sprint',
+          },
+        ],
+        summary: 'Single sprint plan',
+      });
+
+      const res = await app.request('/prd-sp4/sprint-plan', {
+        method: 'POST',
+        body: JSON.stringify({ capacity: 10 }),
+        headers: { 'Content-Type': 'application/json' },
+      });
+
+      expect(res.status).toBe(200);
+      const json = await res.json();
+      expect(json.ok).toBe(true);
+      expect(json.data.sprints.length).toBeGreaterThanOrEqual(1);
+      expect(json.data.prdId).toBe('prd-sp4');
+      expect(json.data.totalPoints).toBeGreaterThan(0);
+    });
+
+    test('handles invalid JSON in sprint plan AI response', async () => {
+      insertPrd({ id: 'prd-sp5' });
+      const estimate = JSON.stringify({
+        storyId: 'sp5-s1',
+        size: 'small',
+        storyPoints: 2,
+        confidence: 'high',
+        confidenceScore: 90,
+        factors: [],
+        reasoning: 'Small',
+        isManualOverride: false,
+      });
+      insertStory({
+        id: 'sp5-s1',
+        prd_id: 'prd-sp5',
+        title: 'Story',
+        status: 'pending',
+        estimate,
+        sort_order: 0,
+      });
+
+      mockCallLlmResponse = 'not valid json';
+
+      const res = await app.request('/prd-sp5/sprint-plan', {
+        method: 'POST',
+        body: JSON.stringify({ capacity: 10 }),
+        headers: { 'Content-Type': 'application/json' },
+      });
+
+      expect(res.status).toBe(502);
+      const json = await res.json();
+      expect(json.ok).toBe(false);
+      expect(json.error).toContain('parse');
+    });
+
+    test('handles AI response missing sprints array', async () => {
+      insertPrd({ id: 'prd-sp6' });
+      const estimate = JSON.stringify({
+        storyId: 'sp6-s1',
+        size: 'small',
+        storyPoints: 2,
+        confidence: 'high',
+        confidenceScore: 90,
+        factors: [],
+        reasoning: 'Small',
+        isManualOverride: false,
+      });
+      insertStory({
+        id: 'sp6-s1',
+        prd_id: 'prd-sp6',
+        title: 'Story',
+        status: 'pending',
+        estimate,
+        sort_order: 0,
+      });
+
+      mockCallLlmResponse = JSON.stringify({ summary: 'No sprints here' });
+
+      const res = await app.request('/prd-sp6/sprint-plan', {
+        method: 'POST',
+        body: JSON.stringify({ capacity: 10 }),
+        headers: { 'Content-Type': 'application/json' },
+      });
+
+      expect(res.status).toBe(502);
+      const json = await res.json();
+      expect(json.error).toContain('sprints');
+    });
+
+    test('creates overflow sprint for stories AI missed', async () => {
+      insertPrd({ id: 'prd-sp7' });
+      const mkEstimate = (id: string, pts: number) =>
+        JSON.stringify({
+          storyId: id,
+          size: 'small',
+          storyPoints: pts,
+          confidence: 'high',
+          confidenceScore: 90,
+          factors: [],
+          reasoning: 'Est',
+          isManualOverride: false,
+        });
+
+      insertStory({
+        id: 'sp7-s1',
+        prd_id: 'prd-sp7',
+        title: 'Assigned Story',
+        status: 'pending',
+        estimate: mkEstimate('sp7-s1', 3),
+        sort_order: 0,
+      });
+      insertStory({
+        id: 'sp7-s2',
+        prd_id: 'prd-sp7',
+        title: 'Missed Story',
+        status: 'pending',
+        estimate: mkEstimate('sp7-s2', 5),
+        sort_order: 1,
+      });
+
+      // AI only assigns sp7-s1 but misses sp7-s2
+      mockCallLlmResponse = JSON.stringify({
+        sprints: [
+          {
+            sprintNumber: 1,
+            storyIds: ['sp7-s1'],
+            storyReasons: { 'sp7-s1': 'Foundation' },
+            rationale: 'Sprint 1',
+          },
+        ],
+        summary: 'Plan with missing story',
+      });
+
+      const res = await app.request('/prd-sp7/sprint-plan', {
+        method: 'POST',
+        body: JSON.stringify({ capacity: 3 }),
+        headers: { 'Content-Type': 'application/json' },
+      });
+
+      expect(res.status).toBe(200);
+      const json = await res.json();
+      expect(json.ok).toBe(true);
+      // sp7-s2 should be placed in an overflow sprint since sprint 1 is at capacity (3/3)
+      expect(json.data.totalPoints).toBe(8);
+      const allStoryIds = json.data.sprints.flatMap((s: any) =>
+        s.stories.map((st: any) => st.storyId),
+      );
+      expect(allStoryIds).toContain('sp7-s1');
+      expect(allStoryIds).toContain('sp7-s2');
+    });
+
+    test('handles AI error in sprint planning', async () => {
+      insertPrd({ id: 'prd-sp8' });
+      const estimate = JSON.stringify({
+        storyId: 'sp8-s1',
+        size: 'small',
+        storyPoints: 2,
+        confidence: 'high',
+        confidenceScore: 90,
+        factors: [],
+        reasoning: 'Small',
+        isManualOverride: false,
+      });
+      insertStory({
+        id: 'sp8-s1',
+        prd_id: 'prd-sp8',
+        title: 'Story',
+        status: 'pending',
+        estimate,
+        sort_order: 0,
+      });
+
+      mockCallLlmResponse = new Error('LLM service down');
+
+      const res = await app.request('/prd-sp8/sprint-plan', {
+        method: 'POST',
+        body: JSON.stringify({ capacity: 10 }),
+        headers: { 'Content-Type': 'application/json' },
+      });
+
+      expect(res.status).toBe(500);
+      const json = await res.json();
+      expect(json.ok).toBe(false);
+      expect(json.error).toContain('Sprint planning failed');
+    });
+  });
+
+  // ---------------------------------------------------------------
+  // PUT /:id/sprint-plan — Save adjusted sprint plan
+  // ---------------------------------------------------------------
+  describe('PUT /:id/sprint-plan — save adjusted sprint plan', () => {
+    test('returns 404 for non-existent PRD', async () => {
+      const res = await app.request('/nonexistent/sprint-plan', {
+        method: 'PUT',
+        body: JSON.stringify({ sprints: [] }),
+        headers: { 'Content-Type': 'application/json' },
+      });
+      expect(res.status).toBe(404);
+    });
+
+    test('returns 400 when sprints array is missing', async () => {
+      insertPrd({ id: 'prd-spu1' });
+
+      const res = await app.request('/prd-spu1/sprint-plan', {
+        method: 'PUT',
+        body: JSON.stringify({}),
+        headers: { 'Content-Type': 'application/json' },
+      });
+      expect(res.status).toBe(400);
+      const json = await res.json();
+      expect(json.error).toContain('sprints');
+    });
+
+    test('saves manually adjusted sprint plan', async () => {
+      insertPrd({ id: 'prd-spu2' });
+      const estimate = JSON.stringify({
+        storyId: 'spu2-s1',
+        size: 'medium',
+        storyPoints: 5,
+        confidence: 'high',
+        confidenceScore: 85,
+        factors: [],
+        reasoning: 'Medium',
+        isManualOverride: false,
+      });
+      insertStory({
+        id: 'spu2-s1',
+        prd_id: 'prd-spu2',
+        title: 'Story A',
+        estimate: estimate,
+        sort_order: 0,
+      });
+
+      const res = await app.request('/prd-spu2/sprint-plan', {
+        method: 'PUT',
+        body: JSON.stringify({
+          sprints: [
+            {
+              stories: [{ storyId: 'spu2-s1', reason: 'Priority work' }],
+              rationale: 'First sprint',
+            },
+          ],
+          summary: 'Adjusted plan',
+        }),
+        headers: { 'Content-Type': 'application/json' },
+      });
+
+      expect(res.status).toBe(200);
+      const json = await res.json();
+      expect(json.ok).toBe(true);
+      expect(json.data.prdId).toBe('prd-spu2');
+      expect(json.data.sprints).toHaveLength(1);
+      expect(json.data.sprints[0].stories[0].storyId).toBe('spu2-s1');
+      expect(json.data.sprints[0].stories[0].title).toBe('Story A');
+      expect(json.data.sprints[0].stories[0].storyPoints).toBe(5);
+      expect(json.data.totalPoints).toBe(5);
+      expect(json.data.summary).toBe('Adjusted plan');
     });
   });
 });

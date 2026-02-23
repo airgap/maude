@@ -24,6 +24,8 @@ export default defineConfig({
         'src/lib/components/editor/extensions/**', // LSP extensions (need runtime LSP)
         'src/lib/components/editor/e-cm-theme.ts', // CodeMirror theme (runtime dep)
         'src/lib/components/editor/language-map.ts', // Static mapping (tested via highlight.ts)
+        'src/lib/services/terminal-connection.ts', // WebSocket + xterm.js (browser-only runtime)
+        'src/lib/services/commentary-tts.ts', // Web Speech API + audio playback (browser-only)
       ],
     },
   },

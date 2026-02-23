@@ -353,17 +353,23 @@
       </div>
 
       <!-- Loop controls for external stories -->
-      {#if workStore.filteredStories.some((s) => s.status === 'pending' || s.status === 'in_progress')}
-        <div class="loop-controls">
-          {#if !loopStore.isActive && loopStore.activeLoopChecked}
-            <button class="btn-sm btn-primary" onclick={startStandaloneLoop}
-              ><svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor" stroke="none"
-                ><polygon points="5 3 19 12 5 21 5 3" /></svg
-              > Activate Golem
-            </button>
+      <div class="loop-controls">
+        {#if !loopStore.isActive && loopStore.activeLoopChecked}
+          <button
+            class="btn-sm btn-primary"
+            onclick={startStandaloneLoop}
+            disabled={!workStore.filteredStories.some(
+              (s) => s.status === 'pending' || s.status === 'in_progress',
+            )}
+            ><svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor" stroke="none"
+              ><polygon points="5 3 19 12 5 21 5 3" /></svg
+            > Activate Golem
+          </button>
+          {#if !workStore.filteredStories.some((s) => s.status === 'pending' || s.status === 'in_progress')}
+            <span class="golem-hint">No pending external stories</span>
           {/if}
-        </div>
-      {/if}
+        {/if}
+      </div>
     </div>
   {:else if workStore.activeFilter === 'standalone'}
     <!-- Standalone Stories View -->
@@ -773,37 +779,40 @@
       </div>
 
       <!-- Loop controls for standalone -->
-      {#if workStore.standaloneStories.some((s) => s.status === 'pending' || s.status === 'in_progress')}
-        <div class="loop-controls">
-          {#if loopStore.isActive && !loopStore.activeLoop?.prdId}
-            <div class="loop-progress">
-              <div class="progress-bar">
-                <div class="progress-fill" style="width: {loopStore.progress}%"></div>
-              </div>
-              <span class="progress-text"
-                >{loopStore.completedStories}/{loopStore.totalStories}</span
-              >
+      <div class="loop-controls">
+        {#if loopStore.isActive && !loopStore.activeLoop?.prdId}
+          <div class="loop-progress">
+            <div class="progress-bar">
+              <div class="progress-fill" style="width: {loopStore.progress}%"></div>
             </div>
-            <div class="loop-actions">
-              {#if loopStore.isRunning}
-                <button class="btn-sm" onclick={() => loopStore.pauseLoop()}>Pause</button>
-              {:else if loopStore.isPaused}
-                <button class="btn-sm btn-primary" onclick={() => loopStore.resumeLoop()}
-                  >Resume</button
-                >
-              {/if}
-              <button class="btn-sm btn-ghost" onclick={() => loopStore.cancelLoop()}>Cancel</button
+            <span class="progress-text">{loopStore.completedStories}/{loopStore.totalStories}</span>
+          </div>
+          <div class="loop-actions">
+            {#if loopStore.isRunning}
+              <button class="btn-sm" onclick={() => loopStore.pauseLoop()}>Pause</button>
+            {:else if loopStore.isPaused}
+              <button class="btn-sm btn-primary" onclick={() => loopStore.resumeLoop()}
+                >Resume</button
               >
-            </div>
-          {:else if !loopStore.isActive && loopStore.activeLoopChecked}
-            <button class="btn-sm btn-primary" onclick={startStandaloneLoop}
-              ><svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor" stroke="none"
-                ><polygon points="5 3 19 12 5 21 5 3" /></svg
-              > Activate Golem
-            </button>
+            {/if}
+            <button class="btn-sm btn-ghost" onclick={() => loopStore.cancelLoop()}>Cancel</button>
+          </div>
+        {:else if !loopStore.isActive && loopStore.activeLoopChecked}
+          <button
+            class="btn-sm btn-primary"
+            onclick={startStandaloneLoop}
+            disabled={!workStore.standaloneStories.some(
+              (s) => s.status === 'pending' || s.status === 'in_progress',
+            )}
+            ><svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor" stroke="none"
+              ><polygon points="5 3 19 12 5 21 5 3" /></svg
+            > Activate Golem
+          </button>
+          {#if !workStore.standaloneStories.some((s) => s.status === 'pending' || s.status === 'in_progress')}
+            <span class="golem-hint">No pending standalone stories</span>
           {/if}
-        </div>
-      {/if}
+        {/if}
+      </div>
     </div>
   {:else if workStore.activeFilter === 'all'}
     <!-- All Stories Overview -->
@@ -1304,6 +1313,12 @@
     display: flex;
     flex-direction: column;
     gap: 6px;
+  }
+  .golem-hint {
+    font-size: var(--fs-xxs);
+    color: var(--text-tertiary);
+    text-align: center;
+    line-height: 1.3;
   }
   .loop-progress {
     display: flex;

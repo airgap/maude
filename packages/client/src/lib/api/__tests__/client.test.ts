@@ -2128,3 +2128,968 @@ describe('auth token handling', () => {
     setAuthToken(null);
   });
 });
+
+// ── api.manager ──
+
+describe('api.manager', () => {
+  test('overview calls GET /api/manager/overview', async () => {
+    const responseData = {
+      ok: true,
+      data: {
+        workspaces: [],
+        pendingApprovals: [],
+        inProgressStories: [],
+        completedStories: [],
+        summary: {},
+      },
+    };
+    mockFetch.mockResolvedValue(mockJsonResponse(responseData));
+    const result = await api.manager.overview();
+    expect(result).toEqual(responseData);
+    expect(mockFetch).toHaveBeenCalledWith('/api/manager/overview', expect.any(Object));
+  });
+});
+
+// ── api.artifacts ──
+
+describe('api.artifacts', () => {
+  test('list calls GET /api/artifacts with conversationId', async () => {
+    mockFetch.mockResolvedValue(mockJsonResponse({ ok: true, data: [] }));
+    await api.artifacts.list('conv-1');
+    expect(mockFetch).toHaveBeenCalledWith(
+      expect.stringContaining('/api/artifacts?conversationId=conv-1'),
+      expect.any(Object),
+    );
+  });
+
+  test('get calls GET /api/artifacts/:id', async () => {
+    mockFetch.mockResolvedValue(mockJsonResponse({ ok: true, data: { id: 'art-1' } }));
+    await api.artifacts.get('art-1');
+    expect(mockFetch).toHaveBeenCalledWith('/api/artifacts/art-1', expect.any(Object));
+  });
+
+  test('create calls POST /api/artifacts', async () => {
+    mockFetch.mockResolvedValue(mockJsonResponse({ ok: true, data: { id: 'art-new' } }));
+    await api.artifacts.create({
+      title: 'Test',
+      content: 'hello',
+      type: 'code',
+      conversationId: 'conv-1',
+    } as any);
+    expect(mockFetch).toHaveBeenCalledWith(
+      '/api/artifacts',
+      expect.objectContaining({ method: 'POST' }),
+    );
+  });
+
+  test('update calls PATCH /api/artifacts/:id', async () => {
+    mockFetch.mockResolvedValue(mockJsonResponse({ ok: true, data: { id: 'art-1' } }));
+    await api.artifacts.update('art-1', { title: 'Updated' } as any);
+    expect(mockFetch).toHaveBeenCalledWith(
+      '/api/artifacts/art-1',
+      expect.objectContaining({ method: 'PATCH' }),
+    );
+  });
+
+  test('delete calls DELETE /api/artifacts/:id', async () => {
+    mockFetch.mockResolvedValue(mockJsonResponse({ ok: true }));
+    await api.artifacts.delete('art-1');
+    expect(mockFetch).toHaveBeenCalledWith(
+      '/api/artifacts/art-1',
+      expect.objectContaining({ method: 'DELETE' }),
+    );
+  });
+
+  test('pin calls PATCH /api/artifacts/:id with pinned body', async () => {
+    mockFetch.mockResolvedValue(mockJsonResponse({ ok: true, data: { id: 'art-1' } }));
+    await api.artifacts.pin('art-1', true);
+    const call = mockFetch.mock.calls[0];
+    expect(call[0]).toBe('/api/artifacts/art-1');
+    expect(JSON.parse(call[1].body)).toEqual({ pinned: true });
+  });
+});
+
+// ── api.agentNotes ──
+
+describe('api.agentNotes', () => {
+  test('list calls GET /api/agent-notes with workspacePath', async () => {
+    mockFetch.mockResolvedValue(mockJsonResponse({ ok: true, data: [] }));
+    await api.agentNotes.list('/my/project');
+    expect(mockFetch).toHaveBeenCalledWith(
+      expect.stringContaining('/api/agent-notes?workspacePath='),
+      expect.any(Object),
+    );
+  });
+
+  test('list with status and category filters', async () => {
+    mockFetch.mockResolvedValue(mockJsonResponse({ ok: true, data: [] }));
+    await api.agentNotes.list('/proj', { status: 'unread', category: 'suggestion' });
+    const url = mockFetch.mock.calls[0][0] as string;
+    expect(url).toContain('status=unread');
+    expect(url).toContain('category=suggestion');
+  });
+
+  test('get calls GET /api/agent-notes/:id', async () => {
+    mockFetch.mockResolvedValue(mockJsonResponse({ ok: true, data: { id: 'n-1' } }));
+    await api.agentNotes.get('n-1');
+    expect(mockFetch).toHaveBeenCalledWith('/api/agent-notes/n-1', expect.any(Object));
+  });
+
+  test('create calls POST /api/agent-notes', async () => {
+    mockFetch.mockResolvedValue(mockJsonResponse({ ok: true, data: { id: 'n-new' } }));
+    await api.agentNotes.create({ title: 'Note', content: 'text', workspacePath: '/proj' } as any);
+    expect(mockFetch).toHaveBeenCalledWith(
+      '/api/agent-notes',
+      expect.objectContaining({ method: 'POST' }),
+    );
+  });
+
+  test('update calls PATCH /api/agent-notes/:id', async () => {
+    mockFetch.mockResolvedValue(mockJsonResponse({ ok: true, data: { id: 'n-1' } }));
+    await api.agentNotes.update('n-1', { status: 'read' } as any);
+    expect(mockFetch).toHaveBeenCalledWith(
+      '/api/agent-notes/n-1',
+      expect.objectContaining({ method: 'PATCH' }),
+    );
+  });
+
+  test('delete calls DELETE /api/agent-notes/:id', async () => {
+    mockFetch.mockResolvedValue(mockJsonResponse({ ok: true }));
+    await api.agentNotes.delete('n-1');
+    expect(mockFetch).toHaveBeenCalledWith(
+      '/api/agent-notes/n-1',
+      expect.objectContaining({ method: 'DELETE' }),
+    );
+  });
+
+  test('markRead calls PATCH /api/agent-notes/mark-read', async () => {
+    mockFetch.mockResolvedValue(mockJsonResponse({ ok: true, data: { updated: 3 } }));
+    await api.agentNotes.markRead('/proj');
+    expect(mockFetch).toHaveBeenCalledWith(
+      '/api/agent-notes/mark-read',
+      expect.objectContaining({ method: 'PATCH' }),
+    );
+  });
+
+  test('unreadCount calls GET /api/agent-notes/unread-count', async () => {
+    mockFetch.mockResolvedValue(mockJsonResponse({ ok: true, data: { count: 5 } }));
+    await api.agentNotes.unreadCount('/proj');
+    expect(mockFetch).toHaveBeenCalledWith(
+      expect.stringContaining('/api/agent-notes/unread-count'),
+      expect.any(Object),
+    );
+  });
+});
+
+// ── api.commentary ──
+
+describe('api.commentary', () => {
+  test('getWorkspaceHistory calls correct endpoint', async () => {
+    mockFetch.mockResolvedValue(mockJsonResponse({ ok: true, data: { history: [] } }));
+    await api.commentary.getWorkspaceHistory('ws-1', 50, 10);
+    const url = mockFetch.mock.calls[0][0] as string;
+    expect(url).toContain('/api/commentary/ws-1/history');
+    expect(url).toContain('limit=50');
+    expect(url).toContain('offset=10');
+  });
+
+  test('getWorkspaceHistory without optional params', async () => {
+    mockFetch.mockResolvedValue(mockJsonResponse({ ok: true, data: { history: [] } }));
+    await api.commentary.getWorkspaceHistory('ws-1');
+    const url = mockFetch.mock.calls[0][0] as string;
+    expect(url).toContain('/api/commentary/ws-1/history');
+    expect(url).not.toContain('limit=');
+  });
+
+  test('getConversationHistory calls correct endpoint', async () => {
+    mockFetch.mockResolvedValue(mockJsonResponse({ ok: true, data: { history: [] } }));
+    await api.commentary.getConversationHistory('conv-1', 20);
+    const url = mockFetch.mock.calls[0][0] as string;
+    expect(url).toContain('/api/commentary/conversation/conv-1');
+    expect(url).toContain('limit=20');
+  });
+
+  test('clearHistory calls DELETE', async () => {
+    mockFetch.mockResolvedValue(mockJsonResponse({ ok: true, data: { success: true } }));
+    await api.commentary.clearHistory('ws-1');
+    expect(mockFetch).toHaveBeenCalledWith(
+      expect.stringContaining('/api/commentary/ws-1/history'),
+      expect.objectContaining({ method: 'DELETE' }),
+    );
+  });
+
+  test('exportHistory with options', async () => {
+    mockFetch.mockResolvedValue(
+      mockJsonResponse({ ok: true, data: { metadata: {}, entries: [] } }),
+    );
+    await api.commentary.exportHistory('ws-1', {
+      format: 'json',
+      startTime: 1000,
+      endTime: 2000,
+      limit: 100,
+    });
+    const url = mockFetch.mock.calls[0][0] as string;
+    expect(url).toContain('/api/commentary/ws-1/export');
+    expect(url).toContain('format=json');
+    expect(url).toContain('startTime=1000');
+  });
+
+  test('getSettings calls GET', async () => {
+    mockFetch.mockResolvedValue(
+      mockJsonResponse({
+        ok: true,
+        data: { enabled: true, personality: 'wizard', verbosity: 'strategic' },
+      }),
+    );
+    await api.commentary.getSettings('ws-1');
+    expect(mockFetch).toHaveBeenCalledWith(
+      expect.stringContaining('/api/commentary/ws-1/settings'),
+      expect.any(Object),
+    );
+  });
+
+  test('updateSettings calls PUT', async () => {
+    mockFetch.mockResolvedValue(mockJsonResponse({ ok: true, data: { enabled: false } }));
+    await api.commentary.updateSettings('ws-1', { enabled: false });
+    expect(mockFetch).toHaveBeenCalledWith(
+      expect.stringContaining('/api/commentary/ws-1/settings'),
+      expect.objectContaining({ method: 'PUT' }),
+    );
+  });
+});
+
+// ── api.crossSession ──
+
+describe('api.crossSession', () => {
+  test('listSessions calls GET /api/cross-session/sessions', async () => {
+    mockFetch.mockResolvedValue(mockJsonResponse({ ok: true, data: [] }));
+    await api.crossSession.listSessions();
+    expect(mockFetch).toHaveBeenCalledWith(
+      expect.stringContaining('/api/cross-session/sessions'),
+      expect.any(Object),
+    );
+  });
+
+  test('listSessions with exclude param', async () => {
+    mockFetch.mockResolvedValue(mockJsonResponse({ ok: true, data: [] }));
+    await api.crossSession.listSessions('sess-1');
+    const url = mockFetch.mock.calls[0][0] as string;
+    expect(url).toContain('exclude=sess-1');
+  });
+
+  test('send calls POST /api/cross-session/send', async () => {
+    mockFetch.mockResolvedValue(mockJsonResponse({ ok: true, data: { id: 'msg-1' } }));
+    await api.crossSession.send('conv-from', 'conv-to', 'Hello');
+    expect(mockFetch).toHaveBeenCalledWith(
+      '/api/cross-session/send',
+      expect.objectContaining({ method: 'POST' }),
+    );
+  });
+
+  test('getUndelivered calls correct endpoint', async () => {
+    mockFetch.mockResolvedValue(mockJsonResponse({ ok: true, data: [] }));
+    await api.crossSession.getUndelivered('conv-1');
+    expect(mockFetch).toHaveBeenCalledWith(
+      expect.stringContaining('/api/cross-session/messages/conv-1'),
+      expect.any(Object),
+    );
+  });
+
+  test('markDelivered calls POST', async () => {
+    mockFetch.mockResolvedValue(mockJsonResponse({ ok: true }));
+    await api.crossSession.markDelivered('msg-1');
+    expect(mockFetch).toHaveBeenCalledWith(
+      expect.stringContaining('/api/cross-session/messages/msg-1/delivered'),
+      expect.objectContaining({ method: 'POST' }),
+    );
+  });
+
+  test('getHistory calls correct endpoint with options', async () => {
+    mockFetch.mockResolvedValue(mockJsonResponse({ ok: true, data: [] }));
+    await api.crossSession.getHistory('conv-1', { direction: 'sent', limit: 50 });
+    const url = mockFetch.mock.calls[0][0] as string;
+    expect(url).toContain('/api/cross-session/history/conv-1');
+    expect(url).toContain('direction=sent');
+    expect(url).toContain('limit=50');
+  });
+
+  test('getFlow calls correct endpoint', async () => {
+    mockFetch.mockResolvedValue(mockJsonResponse({ ok: true, data: [] }));
+    await api.crossSession.getFlow(1000);
+    const url = mockFetch.mock.calls[0][0] as string;
+    expect(url).toContain('/api/cross-session/flow');
+    expect(url).toContain('since=1000');
+  });
+});
+
+// ── api.ai ──
+
+describe('api.ai', () => {
+  test('codeAction calls POST /api/ai/code-action', async () => {
+    mockFetch.mockResolvedValue(
+      mockJsonResponse({ ok: true, data: { result: 'optimized code', action: 'optimize' } }),
+    );
+    await api.ai.codeAction('const x = 1', 'optimize', {
+      filePath: '/foo.ts',
+      language: 'typescript',
+    });
+    expect(mockFetch).toHaveBeenCalledWith(
+      '/api/ai/code-action',
+      expect.objectContaining({ method: 'POST' }),
+    );
+  });
+
+  test('listActions calls GET /api/ai/actions', async () => {
+    mockFetch.mockResolvedValue(mockJsonResponse({ ok: true, data: { actions: [] } }));
+    await api.ai.listActions();
+    expect(mockFetch).toHaveBeenCalledWith('/api/ai/actions', expect.any(Object));
+  });
+});
+
+// ── api.review ──
+
+describe('api.review', () => {
+  test('proactive calls POST /api/review/proactive', async () => {
+    mockFetch.mockResolvedValue(mockJsonResponse({ ok: true, data: { warnings: [] } }));
+    await api.review.proactive('const x: any = 1', '/foo.ts', 'typescript');
+    expect(mockFetch).toHaveBeenCalledWith(
+      '/api/review/proactive',
+      expect.objectContaining({ method: 'POST' }),
+    );
+  });
+});
+
+// ── api.format ──
+
+describe('api.format', () => {
+  test('format calls POST /api/format', async () => {
+    mockFetch.mockResolvedValue(
+      mockJsonResponse({ ok: true, data: { formatted: true, formatter: 'prettier' } }),
+    );
+    await api.format.format('/foo.ts', 'typescript', '/project');
+    expect(mockFetch).toHaveBeenCalledWith(
+      '/api/format',
+      expect.objectContaining({ method: 'POST' }),
+    );
+  });
+
+  test('formatters calls GET /api/format/formatters', async () => {
+    mockFetch.mockResolvedValue(mockJsonResponse({ ok: true, data: { formatters: [] } }));
+    await api.format.formatters('/project');
+    expect(mockFetch).toHaveBeenCalledWith(
+      expect.stringContaining('/api/format/formatters'),
+      expect.any(Object),
+    );
+  });
+});
+
+// ── api.tests ──
+
+describe('api.tests', () => {
+  test('affected calls POST /api/tests/affected', async () => {
+    mockFetch.mockResolvedValue(mockJsonResponse({ ok: true, data: { affected: [], total: 0 } }));
+    await api.tests.affected('/root', ['src/foo.ts']);
+    expect(mockFetch).toHaveBeenCalledWith(
+      '/api/tests/affected',
+      expect.objectContaining({ method: 'POST' }),
+    );
+  });
+
+  test('run calls POST /api/tests/run', async () => {
+    mockFetch.mockResolvedValue(
+      mockJsonResponse({
+        ok: true,
+        data: { command: 'vitest run foo.test.ts', testFile: 'foo.test.ts' },
+      }),
+    );
+    await api.tests.run('/root', 'foo.test.ts', 'myTest', 'vitest');
+    expect(mockFetch).toHaveBeenCalledWith(
+      '/api/tests/run',
+      expect.objectContaining({ method: 'POST' }),
+    );
+  });
+
+  test('generate calls POST /api/tests/generate', async () => {
+    mockFetch.mockResolvedValue(
+      mockJsonResponse({
+        ok: true,
+        data: { testCode: '...', testFile: 'foo.test.ts', framework: 'vitest' },
+      }),
+    );
+    await api.tests.generate('const x = 1', '/foo.ts', 'myFunc', 'typescript', 'vitest');
+    expect(mockFetch).toHaveBeenCalledWith(
+      '/api/tests/generate',
+      expect.objectContaining({ method: 'POST' }),
+    );
+  });
+});
+
+// ── api.profiles ──
+
+describe('api.profiles', () => {
+  test('list calls GET /api/profiles', async () => {
+    mockFetch.mockResolvedValue(mockJsonResponse({ ok: true, data: [] }));
+    await api.profiles.list();
+    expect(mockFetch).toHaveBeenCalledWith('/api/profiles', expect.any(Object));
+  });
+
+  test('get calls GET /api/profiles/:id', async () => {
+    mockFetch.mockResolvedValue(mockJsonResponse({ ok: true, data: { id: 'p-1' } }));
+    await api.profiles.get('p-1');
+    expect(mockFetch).toHaveBeenCalledWith('/api/profiles/p-1', expect.any(Object));
+  });
+
+  test('create calls POST /api/profiles', async () => {
+    mockFetch.mockResolvedValue(mockJsonResponse({ ok: true, data: { id: 'p-new' } }));
+    await api.profiles.create({ name: 'Test', systemPrompt: 'Be nice' } as any);
+    expect(mockFetch).toHaveBeenCalledWith(
+      '/api/profiles',
+      expect.objectContaining({ method: 'POST' }),
+    );
+  });
+
+  test('update calls PATCH /api/profiles/:id', async () => {
+    mockFetch.mockResolvedValue(mockJsonResponse({ ok: true, data: { id: 'p-1' } }));
+    await api.profiles.update('p-1', { name: 'Updated' } as any);
+    expect(mockFetch).toHaveBeenCalledWith(
+      '/api/profiles/p-1',
+      expect.objectContaining({ method: 'PATCH' }),
+    );
+  });
+
+  test('delete calls DELETE /api/profiles/:id', async () => {
+    mockFetch.mockResolvedValue(mockJsonResponse({ ok: true }));
+    await api.profiles.delete('p-1');
+    expect(mockFetch).toHaveBeenCalledWith(
+      '/api/profiles/p-1',
+      expect.objectContaining({ method: 'DELETE' }),
+    );
+  });
+});
+
+// ── api.loops.resetFailed ──
+
+describe('api.loops.resetFailed', () => {
+  test('calls POST /api/loops/stories/reset-failed', async () => {
+    mockFetch.mockResolvedValue(
+      mockJsonResponse({ ok: true, data: { resetCount: 2, loopId: null } }),
+    );
+    await api.loops.resetFailed({ prdId: 'p-1', workspacePath: '/project' });
+    expect(mockFetch).toHaveBeenCalledWith(
+      '/api/loops/stories/reset-failed',
+      expect.objectContaining({ method: 'POST' }),
+    );
+  });
+
+  test('includes restart and config in body', async () => {
+    mockFetch.mockResolvedValue(
+      mockJsonResponse({ ok: true, data: { resetCount: 1, loopId: 'loop-1' } }),
+    );
+    await api.loops.resetFailed({
+      prdId: null,
+      workspacePath: '/ws',
+      restart: true,
+      config: { foo: 1 },
+    });
+    const body = JSON.parse(mockFetch.mock.calls[0][1].body);
+    expect(body.restart).toBe(true);
+    expect(body.config).toEqual({ foo: 1 });
+  });
+});
+
+// ── utility functions ──
+
+describe('utility functions', () => {
+  test('getBaseUrl returns /api', async () => {
+    const { getBaseUrl } = await import('../client');
+    expect(getBaseUrl()).toBe('/api');
+  });
+
+  test('getWsBase returns websocket URL', async () => {
+    const { getWsBase } = await import('../client');
+    const wsBase = getWsBase();
+    expect(wsBase).toMatch(/^wss?:\/\/.+\/api$/);
+  });
+
+  test('getDirectWsBase returns websocket URL', async () => {
+    const { getDirectWsBase } = await import('../client');
+    const wsBase = getDirectWsBase();
+    expect(wsBase).toMatch(/^wss?:\/\/.+\/api$/);
+  });
+
+  test('setServerPort is a no-op', async () => {
+    const { setServerPort } = await import('../client');
+    // Should not throw
+    setServerPort(3002);
+  });
+
+  test('waitForServer resolves immediately', async () => {
+    const { waitForServer } = await import('../client');
+    await waitForServer();
+  });
+
+  test('getCsrfToken returns null when not initialized', async () => {
+    const { getCsrfToken } = await import('../client');
+    // Could be null or previously set from other tests
+    const token = getCsrfToken();
+    expect(token === null || typeof token === 'string').toBe(true);
+  });
+
+  test('initCsrfToken fetches CSRF token from server', async () => {
+    const { initCsrfToken } = await import('../client');
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      headers: new Headers({ 'content-type': 'application/json' }),
+      json: () => Promise.resolve({ data: { token: 'csrf-test-123' } }),
+    });
+
+    await initCsrfToken();
+    // The fetch should have been called for the CSRF token endpoint
+    // (may or may not actually fetch depending on cached state)
+  });
+
+  test('setAuthToken and getAuthToken work together', async () => {
+    const { setAuthToken, getAuthToken } = await import('../client');
+    setAuthToken('test-token-123');
+    expect(getAuthToken()).toBe('test-token-123');
+    // Clean up
+    setAuthToken(null);
+  });
+});
+
+// ── api.skillsRegistry additional methods ──
+
+describe('api.skillsRegistry (additional methods)', () => {
+  test('browse with all params', async () => {
+    mockFetch.mockResolvedValue(mockJsonResponse({ ok: true, data: {} }));
+    await api.skillsRegistry.browse({
+      query: 'test',
+      category: 'dev',
+      sortBy: 'name',
+      tier: 'free',
+      page: 2,
+      pageSize: 10,
+      workspacePath: '/project',
+    });
+    const url = mockFetch.mock.calls[0][0];
+    expect(url).toContain('query=test');
+    expect(url).toContain('category=dev');
+    expect(url).toContain('page=2');
+    expect(url).toContain('workspacePath=%2Fproject');
+  });
+
+  test('getSkill with workspacePath', async () => {
+    mockFetch.mockResolvedValue(mockJsonResponse({ ok: true, data: {} }));
+    await api.skillsRegistry.getSkill('sk-1', '/project');
+    expect(mockFetch.mock.calls[0][0]).toContain('workspacePath=');
+  });
+
+  test('suggest calls correct URL', async () => {
+    mockFetch.mockResolvedValue(mockJsonResponse({ ok: true, data: [] }));
+    await api.skillsRegistry.suggest('deploy app');
+    expect(mockFetch.mock.calls[0][0]).toContain('/api/skills-registry/suggest');
+  });
+
+  test('bundled calls correct URL', async () => {
+    mockFetch.mockResolvedValue(mockJsonResponse({ ok: true, data: [] }));
+    await api.skillsRegistry.bundled();
+    expect(mockFetch.mock.calls[0][0]).toContain('/api/skills-registry/bundled');
+  });
+
+  test('activate calls PATCH with correct body', async () => {
+    mockFetch.mockResolvedValue(mockJsonResponse({ ok: true }));
+    await api.skillsRegistry.activate('sk-1', true, '/project');
+    const body = JSON.parse(mockFetch.mock.calls[0][1].body);
+    expect(body.skillId).toBe('sk-1');
+    expect(body.activated).toBe(true);
+  });
+
+  test('pinVersion calls PATCH', async () => {
+    mockFetch.mockResolvedValue(mockJsonResponse({ ok: true }));
+    await api.skillsRegistry.pinVersion('sk-1', '1.0.0');
+    expect(mockFetch).toHaveBeenCalledWith(
+      '/api/skills-registry/pin-version',
+      expect.objectContaining({ method: 'PATCH' }),
+    );
+  });
+
+  test('checkUpdates calls POST', async () => {
+    mockFetch.mockResolvedValue(mockJsonResponse({ ok: true, data: { updates: [] } }));
+    await api.skillsRegistry.checkUpdates();
+    expect(mockFetch).toHaveBeenCalledWith(
+      '/api/skills-registry/check-updates',
+      expect.objectContaining({ method: 'POST' }),
+    );
+  });
+
+  test('updateConfig calls PATCH', async () => {
+    mockFetch.mockResolvedValue(mockJsonResponse({ ok: true }));
+    await api.skillsRegistry.updateConfig('sk-1', { key: 'val' });
+    expect(mockFetch).toHaveBeenCalledWith(
+      '/api/skills-registry/config',
+      expect.objectContaining({ method: 'PATCH' }),
+    );
+  });
+});
+
+// ── api.rules additional methods ──
+
+describe('api.rules (additional methods)', () => {
+  test('create calls POST /api/rules', async () => {
+    mockFetch.mockResolvedValue(mockJsonResponse({ ok: true, data: { path: '/r', name: 'test' } }));
+    await api.rules.create('/ws', 'test-rule', 'content here');
+    expect(mockFetch).toHaveBeenCalledWith(
+      '/api/rules',
+      expect.objectContaining({ method: 'POST' }),
+    );
+  });
+
+  test('updateContent calls PUT /api/rules/content', async () => {
+    mockFetch.mockResolvedValue(mockJsonResponse({ ok: true }));
+    await api.rules.updateContent('/path/rule.md', 'new content');
+    expect(mockFetch).toHaveBeenCalledWith(
+      '/api/rules/content',
+      expect.objectContaining({ method: 'PUT' }),
+    );
+  });
+
+  test('setMode calls PATCH /api/rules/mode', async () => {
+    mockFetch.mockResolvedValue(mockJsonResponse({ ok: true }));
+    await api.rules.setMode('/ws', '/path/rule.md', 'active');
+    expect(mockFetch).toHaveBeenCalledWith(
+      '/api/rules/mode',
+      expect.objectContaining({ method: 'PATCH' }),
+    );
+  });
+
+  test('getActive calls GET with workspacePath', async () => {
+    mockFetch.mockResolvedValue(mockJsonResponse({ ok: true, data: { context: '', count: 0 } }));
+    await api.rules.getActive('/ws');
+    expect(mockFetch.mock.calls[0][0]).toContain('workspacePath=');
+  });
+
+  test('getByName calls correct endpoint', async () => {
+    mockFetch.mockResolvedValue(
+      mockJsonResponse({ ok: true, data: { path: '/r', name: 'test', content: '' } }),
+    );
+    await api.rules.getByName('test-rule', '/ws');
+    expect(mockFetch.mock.calls[0][0]).toContain('/api/rules/by-name/test-rule');
+  });
+});
+
+// ── api.git additional methods ──
+
+describe('api.git (additional streaming methods)', () => {
+  test('pushStream handles successful push', async () => {
+    const encoder = new TextEncoder();
+    const stream = new ReadableStream({
+      start(controller) {
+        controller.enqueue(
+          encoder.encode(
+            'data: {"type":"status","message":"Pushing..."}\n' +
+              'data: {"type":"complete","setUpstream":true}\n',
+          ),
+        );
+        controller.close();
+      },
+    });
+
+    mockFetch.mockResolvedValue({ ok: true, body: stream, headers: new Headers() });
+
+    const events: any[] = [];
+    const result = await api.git.pushStream('/project', (evt) => events.push(evt));
+
+    expect(result.ok).toBe(true);
+    expect(result.setUpstream).toBe(true);
+    expect(events.length).toBeGreaterThan(0);
+  });
+
+  test('pushStream handles error event', async () => {
+    const encoder = new TextEncoder();
+    const stream = new ReadableStream({
+      start(controller) {
+        controller.enqueue(encoder.encode('data: {"type":"error","message":"Push rejected"}\n'));
+        controller.close();
+      },
+    });
+
+    mockFetch.mockResolvedValue({ ok: true, body: stream, headers: new Headers() });
+
+    const result = await api.git.pushStream('/project', () => {});
+
+    expect(result.ok).toBe(false);
+    expect(result.error).toBe('Push rejected');
+  });
+
+  test('pushStream handles HTTP error', async () => {
+    mockFetch.mockResolvedValue({
+      ok: false,
+      status: 500,
+      statusText: 'Internal Server Error',
+      body: null,
+      headers: new Headers(),
+      json: () => Promise.resolve({ error: 'Server broke' }),
+    });
+
+    const result = await api.git.pushStream('/project', () => {});
+    expect(result.ok).toBe(false);
+    expect(result.error).toBe('Server broke');
+  });
+
+  test('pushStream handles stream ending without complete event', async () => {
+    const encoder = new TextEncoder();
+    const stream = new ReadableStream({
+      start(controller) {
+        controller.enqueue(encoder.encode('data: {"type":"status","message":"Starting"}\n'));
+        controller.close();
+      },
+    });
+
+    mockFetch.mockResolvedValue({ ok: true, body: stream, headers: new Headers() });
+
+    const result = await api.git.pushStream('/project', () => {});
+    expect(result.ok).toBe(false);
+    expect(result.error).toContain('unexpectedly');
+  });
+
+  test('pushStream handles reader throwing', async () => {
+    const stream = new ReadableStream({
+      start(controller) {
+        controller.error(new Error('broken'));
+      },
+    });
+
+    mockFetch.mockResolvedValue({ ok: true, body: stream, headers: new Headers() });
+
+    const result = await api.git.pushStream('/project', () => {});
+    expect(result.ok).toBe(false);
+  });
+
+  test('suggestCommitGroups calls POST', async () => {
+    mockFetch.mockResolvedValue(mockJsonResponse({ ok: true, data: { groups: [] } }));
+    await api.git.suggestCommitGroups('/project');
+    expect(mockFetch).toHaveBeenCalledWith(
+      '/api/git/suggest-commit-groups',
+      expect.objectContaining({ method: 'POST' }),
+    );
+  });
+
+  test('aiMerge calls POST', async () => {
+    mockFetch.mockResolvedValue(mockJsonResponse({ ok: true, data: { mergedText: 'merged' } }));
+    await api.git.aiMerge('/ws', '/file.ts', 'content', {
+      startLine: 1,
+      sepLine: 5,
+      endLine: 10,
+      currentLabel: 'HEAD',
+      incomingLabel: 'feature',
+    });
+    expect(mockFetch).toHaveBeenCalledWith(
+      '/api/git/ai-merge',
+      expect.objectContaining({ method: 'POST' }),
+    );
+  });
+
+  test('generateCommitMessage calls POST', async () => {
+    mockFetch.mockResolvedValue(
+      mockJsonResponse({ ok: true, data: { message: 'feat: add thing' } }),
+    );
+    await api.git.generateCommitMessage('/project');
+    expect(mockFetch).toHaveBeenCalledWith(
+      '/api/git/generate-commit-message',
+      expect.objectContaining({ method: 'POST' }),
+    );
+  });
+
+  test('clean calls POST', async () => {
+    mockFetch.mockResolvedValue(mockJsonResponse({ ok: true, data: { cleaned: true } }));
+    await api.git.clean('/project');
+    expect(mockFetch).toHaveBeenCalledWith(
+      '/api/git/clean',
+      expect.objectContaining({ method: 'POST' }),
+    );
+  });
+
+  test('diagnose calls GET', async () => {
+    mockFetch.mockResolvedValue(mockJsonResponse({ ok: true, data: { checks: [] } }));
+    await api.git.diagnose('/project');
+    expect(mockFetch.mock.calls[0][0]).toContain('/api/git/diagnose');
+  });
+
+  test('push calls POST', async () => {
+    mockFetch.mockResolvedValue(
+      mockJsonResponse({ ok: true, data: { pushed: true, setUpstream: false } }),
+    );
+    await api.git.push('/project', 'origin', 'main');
+    expect(mockFetch).toHaveBeenCalledWith(
+      '/api/git/push',
+      expect.objectContaining({ method: 'POST' }),
+    );
+  });
+
+  test('blame calls GET', async () => {
+    mockFetch.mockResolvedValue(mockJsonResponse({ ok: true, data: { blame: [] } }));
+    await api.git.blame('/project', 'src/app.ts');
+    expect(mockFetch.mock.calls[0][0]).toContain('/api/git/blame');
+  });
+
+  test('commit calls POST', async () => {
+    mockFetch.mockResolvedValue(mockJsonResponse({ ok: true, data: { sha: 'abc123' } }));
+    await api.git.commit('/project', 'fix: bug');
+    expect(mockFetch).toHaveBeenCalledWith(
+      '/api/git/commit',
+      expect.objectContaining({ method: 'POST' }),
+    );
+  });
+
+  test('snapshotByMessage calls GET', async () => {
+    mockFetch.mockResolvedValue(mockJsonResponse({ ok: true, data: {} }));
+    await api.git.snapshotByMessage('msg-1');
+    expect(mockFetch.mock.calls[0][0]).toContain('/api/git/snapshot/by-message/msg-1');
+  });
+
+  test('restoreSnapshot calls POST', async () => {
+    mockFetch.mockResolvedValue(mockJsonResponse({ ok: true, data: { restored: true } }));
+    await api.git.restoreSnapshot('snap-1');
+    expect(mockFetch).toHaveBeenCalledWith(
+      '/api/git/snapshot/snap-1/restore',
+      expect.objectContaining({ method: 'POST' }),
+    );
+  });
+});
+
+// ── request error handling (additional) ──
+
+describe('request error handling (additional)', () => {
+  test('handles non-JSON content-type on ok response', async () => {
+    mockFetch.mockResolvedValue({
+      ok: true,
+      status: 200,
+      statusText: 'OK',
+      headers: new Headers({ 'content-type': 'text/html' }),
+      json: () => Promise.resolve({}),
+    });
+
+    await expect(api.conversations.list()).rejects.toThrow('non-JSON response');
+  });
+
+  test('handles non-JSON content-type on error response', async () => {
+    mockFetch.mockResolvedValue({
+      ok: false,
+      status: 502,
+      statusText: 'Bad Gateway',
+      headers: new Headers({ 'content-type': 'text/html' }),
+      json: () => Promise.resolve({}),
+    });
+
+    await expect(api.conversations.list()).rejects.toThrow('HTTP 502');
+  });
+
+  test('handles fetch failure (network down)', async () => {
+    mockFetch.mockRejectedValue(new Error('Failed to fetch'));
+
+    await expect(api.conversations.list()).rejects.toThrow('Cannot connect to server');
+  });
+
+  test('handles non-ok JSON response with error field', async () => {
+    mockFetch.mockResolvedValue({
+      ok: false,
+      status: 400,
+      statusText: 'Bad Request',
+      headers: new Headers({ 'content-type': 'application/json' }),
+      json: () => Promise.resolve({ error: 'Invalid input' }),
+    });
+
+    await expect(api.conversations.list()).rejects.toThrow('Invalid input');
+  });
+
+  test('handles non-ok JSON response without error field', async () => {
+    mockFetch.mockResolvedValue({
+      ok: false,
+      status: 403,
+      statusText: 'Forbidden',
+      headers: new Headers({ 'content-type': 'application/json' }),
+      json: () => Promise.resolve({}),
+    });
+
+    await expect(api.conversations.list()).rejects.toThrow('HTTP 403');
+  });
+
+  test('handles non-ok response when json() fails', async () => {
+    mockFetch.mockResolvedValue({
+      ok: false,
+      status: 500,
+      statusText: 'Internal Server Error',
+      headers: new Headers({ 'content-type': 'application/json' }),
+      json: () => Promise.reject(new Error('parse error')),
+    });
+
+    await expect(api.conversations.list()).rejects.toThrow('Internal Server Error');
+  });
+});
+
+// ── api.stream additional methods ──
+
+describe('api.stream (sessions / reconnect)', () => {
+  test('sessions fetches with raw fetch and returns data', async () => {
+    mockFetch.mockResolvedValue({
+      ok: true,
+      status: 200,
+      headers: new Headers({ 'content-type': 'application/json' }),
+      json: () => Promise.resolve({ ok: true, data: [{ id: 'sess-1' }] }),
+    });
+
+    const result = await api.stream.sessions();
+    expect(result.data).toHaveLength(1);
+    expect(mockFetch.mock.calls[0][0]).toContain('/api/stream/sessions');
+  });
+
+  test('sessions throws on non-ok response', async () => {
+    mockFetch.mockResolvedValue({
+      ok: false,
+      status: 500,
+      statusText: 'Internal Server Error',
+      headers: new Headers(),
+    });
+
+    await expect(api.stream.sessions()).rejects.toThrow('HTTP 500');
+  });
+
+  test('sessions throws on non-JSON response', async () => {
+    mockFetch.mockResolvedValue({
+      ok: true,
+      status: 200,
+      headers: new Headers({ 'content-type': 'text/html' }),
+      json: () => Promise.resolve({}),
+    });
+
+    await expect(api.stream.sessions()).rejects.toThrow('non-JSON response');
+  });
+
+  test('reconnect calls fetch with session ID in URL', async () => {
+    mockFetch.mockResolvedValue({ ok: true, body: null, headers: new Headers() });
+    await api.stream.reconnect('sess-123');
+    expect(mockFetch.mock.calls[0][0]).toContain('/api/stream/reconnect/sess-123');
+  });
+
+  test('answerQuestion calls POST with correct body', async () => {
+    mockFetch.mockResolvedValue(mockJsonResponse({ ok: true }));
+    await api.stream.answerQuestion('conv-1', 'sess-1', 'tc-1', { q1: 'yes' });
+    expect(mockFetch).toHaveBeenCalledWith(
+      '/api/stream/conv-1/answer',
+      expect.objectContaining({ method: 'POST' }),
+    );
+    const body = JSON.parse(mockFetch.mock.calls[0][1].body);
+    expect(body.toolCallId).toBe('tc-1');
+    expect(body.answers).toEqual({ q1: 'yes' });
+  });
+
+  test('nudge calls POST with content', async () => {
+    mockFetch.mockResolvedValue(mockJsonResponse({ ok: true, queued: true, messageId: 'm-1' }));
+    await api.stream.nudge('conv-1', 'sess-1', 'keep going');
+    expect(mockFetch).toHaveBeenCalledWith(
+      '/api/stream/conv-1/nudge',
+      expect.objectContaining({ method: 'POST' }),
+    );
+  });
+});

@@ -7,6 +7,18 @@ mock.module('../../db/database', () => ({
   initDatabase: () => {},
 }));
 
+// Mock summarizeWithLLM so the summarize endpoint doesn't make real LLM calls
+mock.module('../../services/chat-compaction', () => ({
+  summarizeWithLLM: async () => ({
+    summaryText: 'Mocked summary of the conversation.',
+    summaryMessage: {
+      role: 'user',
+      content: [{ type: 'text', text: '[Summary] Mocked summary.' }],
+    },
+    usedLLM: false,
+  }),
+}));
+
 // Import after mock setup so the module picks up the mock
 import { conversationRoutes as app } from '../conversations';
 
@@ -1012,6 +1024,179 @@ describe('Conversation Routes', () => {
         .query('SELECT cli_session_id FROM conversations WHERE id = ?')
         .get(json.data.id) as any;
       expect(newConv.cli_session_id).toBeNull();
+    });
+  });
+
+  // ---------------------------------------------------------------
+  // GET /:id/summary — Get stored compact summary
+  // ---------------------------------------------------------------
+  describe('GET /:id/summary — get summary', () => {
+    test('returns 404 for non-existent conversation', async () => {
+      const res = await app.request('/nonexistent/summary');
+      expect(res.status).toBe(404);
+      const json = await res.json();
+      expect(json.ok).toBe(false);
+      expect(json.error).toBe('Not found');
+    });
+
+    test('returns null summary when none is stored', async () => {
+      insertConversation({ id: 'conv-1', title: 'My Chat' });
+
+      const res = await app.request('/conv-1/summary');
+      expect(res.status).toBe(200);
+      const json = await res.json();
+      expect(json.ok).toBe(true);
+      expect(json.data.id).toBe('conv-1');
+      expect(json.data.title).toBe('My Chat');
+      expect(json.data.summary).toBeNull();
+    });
+
+    test('returns stored compact_summary when present', async () => {
+      insertConversation({ id: 'conv-1', title: 'My Chat' });
+      testDb
+        .query('UPDATE conversations SET compact_summary = ? WHERE id = ?')
+        .run('This is a summary of the conversation.', 'conv-1');
+
+      const res = await app.request('/conv-1/summary');
+      expect(res.status).toBe(200);
+      const json = await res.json();
+      expect(json.ok).toBe(true);
+      expect(json.data.summary).toBe('This is a summary of the conversation.');
+    });
+  });
+
+  // ---------------------------------------------------------------
+  // POST /:id/summarize — Generate and store compact summary
+  // ---------------------------------------------------------------
+  describe('POST /:id/summarize — generate summary', () => {
+    test('returns 404 for non-existent conversation', async () => {
+      const res = await app.request('/nonexistent/summarize', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      });
+      expect(res.status).toBe(404);
+      const json = await res.json();
+      expect(json.ok).toBe(false);
+      expect(json.error).toBe('Not found');
+    });
+
+    test('returns cached summary if compact_summary already exists', async () => {
+      insertConversation({ id: 'conv-1', title: 'My Chat' });
+      testDb
+        .query('UPDATE conversations SET compact_summary = ? WHERE id = ?')
+        .run('Existing summary.', 'conv-1');
+
+      const res = await app.request('/conv-1/summarize', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      });
+      expect(res.status).toBe(200);
+      const json = await res.json();
+      expect(json.ok).toBe(true);
+      expect(json.data.summary).toBe('Existing summary.');
+      expect(json.data.cached).toBe(true);
+    });
+
+    test('returns null summary when no messages exist', async () => {
+      insertConversation({ id: 'conv-1', title: 'Empty Chat' });
+
+      const res = await app.request('/conv-1/summarize', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      });
+      expect(res.status).toBe(200);
+      const json = await res.json();
+      expect(json.ok).toBe(true);
+      expect(json.data.summary).toBeNull();
+      expect(json.data.cached).toBe(false);
+    });
+
+    test('generates and persists a summary via summarizeWithLLM', async () => {
+      insertConversation({ id: 'conv-1', title: 'Chat to summarize' });
+      insertMessage({
+        id: 'msg-1',
+        conversation_id: 'conv-1',
+        role: 'user',
+        content: JSON.stringify([{ type: 'text', text: 'Tell me about TypeScript' }]),
+        timestamp: 100,
+      });
+      insertMessage({
+        id: 'msg-2',
+        conversation_id: 'conv-1',
+        role: 'assistant',
+        content: JSON.stringify([
+          { type: 'text', text: 'TypeScript is a typed superset of JavaScript.' },
+        ]),
+        timestamp: 200,
+      });
+
+      const res = await app.request('/conv-1/summarize', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      });
+      expect(res.status).toBe(200);
+      const json = await res.json();
+      expect(json.ok).toBe(true);
+      expect(json.data.summary).toBe('Mocked summary of the conversation.');
+      expect(json.data.cached).toBe(false);
+
+      // Verify it was persisted in DB
+      const row = testDb
+        .query('SELECT compact_summary FROM conversations WHERE id = ?')
+        .get('conv-1') as any;
+      expect(row.compact_summary).toBe('Mocked summary of the conversation.');
+    });
+
+    test('skips unparseable messages gracefully', async () => {
+      insertConversation({ id: 'conv-1', title: 'Chat with bad msgs' });
+      // Insert a message with invalid JSON content
+      testDb
+        .query(
+          'INSERT INTO messages (id, conversation_id, role, content, timestamp) VALUES (?, ?, ?, ?, ?)',
+        )
+        .run('msg-bad', 'conv-1', 'user', 'not-valid-json', 100);
+      // Insert a valid message
+      insertMessage({
+        id: 'msg-good',
+        conversation_id: 'conv-1',
+        role: 'assistant',
+        content: JSON.stringify([{ type: 'text', text: 'Valid' }]),
+        timestamp: 200,
+      });
+
+      const res = await app.request('/conv-1/summarize', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      });
+      expect(res.status).toBe(200);
+      const json = await res.json();
+      expect(json.ok).toBe(true);
+      // Should still produce a summary from the valid message
+      expect(json.data.summary).toBe('Mocked summary of the conversation.');
+    });
+
+    test('returns null summary when all messages are unparseable', async () => {
+      insertConversation({ id: 'conv-1' });
+      testDb
+        .query(
+          'INSERT INTO messages (id, conversation_id, role, content, timestamp) VALUES (?, ?, ?, ?, ?)',
+        )
+        .run('msg-bad1', 'conv-1', 'user', 'not-json', 100);
+      testDb
+        .query(
+          'INSERT INTO messages (id, conversation_id, role, content, timestamp) VALUES (?, ?, ?, ?, ?)',
+        )
+        .run('msg-bad2', 'conv-1', 'assistant', '{broken', 200);
+
+      const res = await app.request('/conv-1/summarize', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      });
+      expect(res.status).toBe(200);
+      const json = await res.json();
+      expect(json.ok).toBe(true);
+      expect(json.data.summary).toBeNull();
+      expect(json.data.cached).toBe(false);
     });
   });
 });

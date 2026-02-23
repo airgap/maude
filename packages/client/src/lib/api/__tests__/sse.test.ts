@@ -9,6 +9,7 @@ const { mockStreamStore, mockConversationStore, mockSend, mockCancel } = vi.hois
     setSessionId: vi.fn(),
     setReconnecting: vi.fn(),
     isStreaming: false,
+    isReconnecting: false,
     status: 'idle' as string,
     sessionId: 'session-1' as string | null,
     conversationId: null as string | null,
@@ -87,6 +88,9 @@ import {
   reconnectActiveStream,
   abortActiveStream,
   getReconnectionPromise,
+  reconnectToConversation,
+  startConversationPolling,
+  stopConversationPolling,
 } from '../sse';
 
 beforeEach(() => {
@@ -95,6 +99,7 @@ beforeEach(() => {
   mockStreamStore.sessionId = 'session-1';
   mockStreamStore.conversationId = null;
   mockStreamStore.isStreaming = false;
+  mockStreamStore.isReconnecting = false;
   mockStreamStore.status = 'idle';
   mockStreamStore.abortController = null;
   mockConversationStore.active = {
@@ -2426,5 +2431,729 @@ describe('content sync edge cases', () => {
     // But in-loop syncs still happen for each event
     // Since no events were processed, updateLastAssistantMessageIn should not be called
     expect(mockConversationStore.updateLastAssistantMessageIn).not.toHaveBeenCalled();
+  });
+});
+
+// ============================================================================
+// reconnectToConversation
+// ============================================================================
+describe('reconnectToConversation', () => {
+  const rtcMockSessions = vi.fn();
+  const rtcMockReconnect = vi.fn();
+  const rtcMockConversationsGet = vi.fn();
+
+  beforeEach(async () => {
+    const apiMock = (await import('../client')).api as any;
+    apiMock.stream.sessions = rtcMockSessions;
+    apiMock.stream.reconnect = rtcMockReconnect;
+    apiMock.conversations = {
+      get: rtcMockConversationsGet,
+      summarize: vi.fn().mockResolvedValue(undefined),
+    };
+
+    rtcMockSessions.mockReset();
+    rtcMockReconnect.mockReset();
+    rtcMockConversationsGet.mockReset();
+
+    mockStreamStore.isStreaming = false;
+    mockStreamStore.isReconnecting = false;
+  });
+
+  test('returns null when already streaming and not reconnecting', async () => {
+    mockStreamStore.isStreaming = true;
+    mockStreamStore.isReconnecting = false;
+
+    const result = await reconnectToConversation('conv-1');
+    expect(result).toBeNull();
+  });
+
+  test('returns null when no active sessions', async () => {
+    rtcMockSessions.mockResolvedValue({ ok: true, data: [] });
+
+    const result = await reconnectToConversation('conv-1');
+    expect(result).toBeNull();
+  });
+
+  test('returns null when sessions request fails', async () => {
+    rtcMockSessions.mockRejectedValue(new Error('fail'));
+
+    const result = await reconnectToConversation('conv-1');
+    expect(result).toBeNull();
+  });
+
+  test('returns null when no session matches the target conversation', async () => {
+    rtcMockSessions.mockResolvedValue({
+      ok: true,
+      data: [
+        {
+          id: 'sess-1',
+          conversationId: 'conv-other',
+          status: 'running',
+          streamComplete: false,
+          bufferedEvents: 5,
+        },
+      ],
+    });
+
+    const result = await reconnectToConversation('conv-1');
+    expect(result).toBeNull();
+  });
+
+  test('reconnects to active running session for the target conversation', async () => {
+    const stream = new ReadableStream({
+      start(c) {
+        c.close();
+      },
+    });
+
+    rtcMockSessions.mockResolvedValue({
+      ok: true,
+      data: [
+        {
+          id: 'sess-1',
+          conversationId: 'conv-target',
+          status: 'running',
+          streamComplete: false,
+          bufferedEvents: 3,
+        },
+      ],
+    });
+    rtcMockConversationsGet.mockResolvedValue({
+      ok: true,
+      data: { id: 'conv-target', model: 'test', messages: [] },
+    });
+    rtcMockReconnect.mockResolvedValue({ ok: true, body: stream, headers: new Headers() });
+
+    const result = await reconnectToConversation('conv-target');
+
+    expect(result).toBe('sess-1');
+    expect(mockStreamStore.startStream).toHaveBeenCalledWith('conv-target');
+    expect(mockStreamStore.setSessionId).toHaveBeenCalledWith('sess-1');
+    expect(mockStreamStore.setReconnecting).toHaveBeenCalledWith(true);
+    expect(mockStreamStore.setReconnecting).toHaveBeenCalledWith(false);
+  });
+
+  test('reconnects to completed session with buffered events', async () => {
+    const stream = new ReadableStream({
+      start(c) {
+        c.close();
+      },
+    });
+
+    rtcMockSessions.mockResolvedValue({
+      ok: true,
+      data: [
+        {
+          id: 'sess-1',
+          conversationId: 'conv-target',
+          status: 'idle',
+          streamComplete: true,
+          bufferedEvents: 5,
+        },
+      ],
+    });
+    rtcMockConversationsGet.mockResolvedValue({
+      ok: true,
+      data: { id: 'conv-target', model: 'test', messages: [] },
+    });
+    rtcMockReconnect.mockResolvedValue({ ok: true, body: stream, headers: new Headers() });
+
+    const result = await reconnectToConversation('conv-target');
+
+    expect(result).toBe('sess-1');
+  });
+
+  test('returns null when conversation not found', async () => {
+    rtcMockSessions.mockResolvedValue({
+      ok: true,
+      data: [
+        {
+          id: 'sess-1',
+          conversationId: 'conv-target',
+          status: 'running',
+          streamComplete: false,
+          bufferedEvents: 3,
+        },
+      ],
+    });
+    rtcMockConversationsGet.mockResolvedValue({ ok: false, data: null });
+
+    const result = await reconnectToConversation('conv-target');
+
+    expect(result).toBeNull();
+    expect(mockStreamStore.setReconnecting).toHaveBeenCalledWith(false);
+  });
+
+  test('returns null when reconnect response fails', async () => {
+    rtcMockSessions.mockResolvedValue({
+      ok: true,
+      data: [
+        {
+          id: 'sess-1',
+          conversationId: 'conv-target',
+          status: 'running',
+          streamComplete: false,
+          bufferedEvents: 3,
+        },
+      ],
+    });
+    rtcMockConversationsGet.mockResolvedValue({
+      ok: true,
+      data: { id: 'conv-target', model: 'test', messages: [] },
+    });
+    rtcMockReconnect.mockResolvedValue({ ok: false, body: null, headers: new Headers() });
+
+    const result = await reconnectToConversation('conv-target');
+
+    expect(result).toBeNull();
+    expect(mockStreamStore.setReconnecting).toHaveBeenCalledWith(false);
+  });
+
+  test('handles reconnect throwing', async () => {
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    rtcMockSessions.mockResolvedValue({
+      ok: true,
+      data: [
+        {
+          id: 'sess-1',
+          conversationId: 'conv-target',
+          status: 'running',
+          streamComplete: false,
+          bufferedEvents: 3,
+        },
+      ],
+    });
+    rtcMockConversationsGet.mockResolvedValue({
+      ok: true,
+      data: { id: 'conv-target', model: 'test', messages: [] },
+    });
+    rtcMockReconnect.mockRejectedValue(new Error('ECONNREFUSED'));
+
+    const result = await reconnectToConversation('conv-target');
+
+    expect(result).toBeNull();
+    expect(mockStreamStore.setReconnecting).toHaveBeenCalledWith(false);
+    consoleError.mockRestore();
+  });
+
+  test('adds assistant placeholder when last message is not assistant', async () => {
+    const stream = new ReadableStream({
+      start(c) {
+        c.close();
+      },
+    });
+
+    rtcMockSessions.mockResolvedValue({
+      ok: true,
+      data: [
+        {
+          id: 'sess-1',
+          conversationId: 'conv-target',
+          status: 'running',
+          streamComplete: false,
+          bufferedEvents: 0,
+        },
+      ],
+    });
+    rtcMockConversationsGet.mockResolvedValue({
+      ok: true,
+      data: {
+        id: 'conv-target',
+        model: 'claude-opus-4-6',
+        messages: [{ role: 'user', content: [] }],
+      },
+    });
+    rtcMockReconnect.mockResolvedValue({ ok: true, body: stream, headers: new Headers() });
+
+    await reconnectToConversation('conv-target');
+
+    expect(mockConversationStore.addMessageTo).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ role: 'assistant', content: [], model: 'claude-opus-4-6' }),
+    );
+  });
+
+  test('skips adding assistant placeholder when last message is already assistant', async () => {
+    const stream = new ReadableStream({
+      start(c) {
+        c.close();
+      },
+    });
+
+    rtcMockSessions.mockResolvedValue({
+      ok: true,
+      data: [
+        {
+          id: 'sess-1',
+          conversationId: 'conv-target',
+          status: 'running',
+          streamComplete: false,
+          bufferedEvents: 0,
+        },
+      ],
+    });
+    rtcMockConversationsGet.mockResolvedValue({
+      ok: true,
+      data: { id: 'conv-target', model: 'test', messages: [{ role: 'assistant', content: [] }] },
+    });
+    rtcMockReconnect.mockResolvedValue({ ok: true, body: stream, headers: new Headers() });
+
+    await reconnectToConversation('conv-target');
+
+    expect(mockConversationStore.addMessageTo).not.toHaveBeenCalled();
+  });
+
+  test('processes SSE events during reconnect', async () => {
+    const encoder = new TextEncoder();
+    const stream = new ReadableStream({
+      start(controller) {
+        controller.enqueue(
+          encoder.encode(
+            'data: {"type":"message_start","message":{"id":"m1"}}\n\n' +
+              'data: {"type":"content_block_delta","index":0,"delta":{"text":"hi"}}\n\n' +
+              'data: {"type":"message_stop"}\n\n',
+          ),
+        );
+        controller.close();
+      },
+    });
+
+    rtcMockSessions.mockResolvedValue({
+      ok: true,
+      data: [
+        {
+          id: 'sess-1',
+          conversationId: 'conv-target',
+          status: 'running',
+          streamComplete: false,
+          bufferedEvents: 3,
+        },
+      ],
+    });
+    rtcMockConversationsGet.mockResolvedValue({
+      ok: true,
+      data: { id: 'conv-target', model: 'test', messages: [] },
+    });
+    rtcMockReconnect.mockResolvedValue({ ok: true, body: stream, headers: new Headers() });
+
+    await reconnectToConversation('conv-target');
+
+    const eventTypes = mockStreamStore.handleEvent.mock.calls.map((c: any) => c[0]?.type);
+    expect(eventTypes).toContain('message_start');
+    expect(eventTypes).toContain('content_block_delta');
+    expect(eventTypes).toContain('message_stop');
+  });
+
+  test('forces message_stop when stream ends in streaming state', async () => {
+    const stream = new ReadableStream({
+      start(c) {
+        c.close();
+      },
+    });
+    mockStreamStore.status = 'streaming';
+
+    rtcMockSessions.mockResolvedValue({
+      ok: true,
+      data: [
+        {
+          id: 'sess-1',
+          conversationId: 'conv-target',
+          status: 'running',
+          streamComplete: false,
+          bufferedEvents: 0,
+        },
+      ],
+    });
+    rtcMockConversationsGet.mockResolvedValue({
+      ok: true,
+      data: { id: 'conv-target', model: 'test', messages: [] },
+    });
+    rtcMockReconnect.mockResolvedValue({ ok: true, body: stream, headers: new Headers() });
+
+    await reconnectToConversation('conv-target');
+
+    const stopCalls = mockStreamStore.handleEvent.mock.calls.filter(
+      (call: any) => call[0]?.type === 'message_stop',
+    );
+    expect(stopCalls.length).toBeGreaterThan(0);
+  });
+
+  test('retries sessions request up to 3 times on failure', async () => {
+    rtcMockSessions
+      .mockRejectedValueOnce(new Error('fail'))
+      .mockRejectedValueOnce(new Error('fail'))
+      .mockResolvedValueOnce({ ok: true, data: [] });
+
+    const result = await reconnectToConversation('conv-1');
+    expect(result).toBeNull();
+    expect(rtcMockSessions).toHaveBeenCalledTimes(3);
+  });
+
+  test('clears in-flight and reloads after successful reconnect', async () => {
+    const stream = new ReadableStream({
+      start(c) {
+        c.close();
+      },
+    });
+
+    rtcMockSessions.mockResolvedValue({
+      ok: true,
+      data: [
+        {
+          id: 'sess-1',
+          conversationId: 'conv-target',
+          status: 'running',
+          streamComplete: false,
+          bufferedEvents: 0,
+        },
+      ],
+    });
+    rtcMockConversationsGet.mockResolvedValue({
+      ok: true,
+      data: { id: 'conv-target', model: 'test', messages: [] },
+    });
+    rtcMockReconnect.mockResolvedValue({ ok: true, body: stream, headers: new Headers() });
+
+    await reconnectToConversation('conv-target');
+
+    expect(mockConversationStore.clearInflight).toHaveBeenCalledWith('conv-target');
+    expect(mockConversationStore.reloadById).toHaveBeenCalledWith('conv-target');
+  });
+
+  test('syncs final content blocks after reconnect stream ends', async () => {
+    const stream = new ReadableStream({
+      start(c) {
+        c.close();
+      },
+    });
+    mockStreamStore.contentBlocks = [{ type: 'text', text: 'content' }];
+
+    rtcMockSessions.mockResolvedValue({
+      ok: true,
+      data: [
+        {
+          id: 'sess-1',
+          conversationId: 'conv-target',
+          status: 'running',
+          streamComplete: false,
+          bufferedEvents: 0,
+        },
+      ],
+    });
+    rtcMockConversationsGet.mockResolvedValue({
+      ok: true,
+      data: { id: 'conv-target', model: 'test', messages: [] },
+    });
+    rtcMockReconnect.mockResolvedValue({ ok: true, body: stream, headers: new Headers() });
+
+    await reconnectToConversation('conv-target');
+
+    expect(mockConversationStore.updateLastAssistantMessageIn).toHaveBeenCalled();
+  });
+
+  test('error during reconnect with streaming status emits message_stop', async () => {
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+    mockStreamStore.status = 'streaming';
+
+    rtcMockSessions.mockResolvedValue({
+      ok: true,
+      data: [
+        {
+          id: 'sess-1',
+          conversationId: 'conv-target',
+          status: 'running',
+          streamComplete: false,
+          bufferedEvents: 0,
+        },
+      ],
+    });
+    rtcMockConversationsGet.mockResolvedValue({
+      ok: true,
+      data: { id: 'conv-target', model: 'test', messages: [] },
+    });
+    rtcMockReconnect.mockRejectedValue(new Error('stream broke'));
+
+    await reconnectToConversation('conv-target');
+
+    const stopCalls = mockStreamStore.handleEvent.mock.calls.filter(
+      (call: any) => call[0]?.type === 'message_stop',
+    );
+    expect(stopCalls.length).toBeGreaterThan(0);
+    consoleError.mockRestore();
+  });
+});
+
+// ============================================================================
+// Conversation Polling Fallback
+// ============================================================================
+describe('startConversationPolling / stopConversationPolling', () => {
+  const pollingMockSessions = vi.fn();
+  const pollingMockConversationsGet = vi.fn();
+
+  beforeEach(async () => {
+    vi.useFakeTimers();
+    const apiMock = (await import('../client')).api as any;
+    apiMock.stream = {
+      ...apiMock.stream,
+      sessions: pollingMockSessions,
+    };
+    apiMock.conversations = {
+      get: pollingMockConversationsGet,
+      summarize: vi.fn().mockResolvedValue(undefined),
+    };
+
+    pollingMockSessions.mockReset();
+    pollingMockConversationsGet.mockReset();
+    mockStreamStore.isStreaming = false;
+    mockStreamStore.status = 'idle';
+  });
+
+  afterEach(() => {
+    stopConversationPolling();
+    vi.useRealTimers();
+  });
+
+  test('polls conversation immediately and at interval', async () => {
+    pollingMockSessions.mockResolvedValue({ ok: true, data: [] });
+    pollingMockConversationsGet.mockResolvedValue({
+      ok: true,
+      data: { id: 'conv-1', messages: [] },
+    });
+
+    startConversationPolling('conv-1');
+
+    // First poll fires immediately
+    await vi.advanceTimersByTimeAsync(0);
+
+    // Server not running, so polling should stop
+    expect(pollingMockConversationsGet).toHaveBeenCalledWith('conv-1');
+  });
+
+  test('stops polling when no active server session found', async () => {
+    pollingMockSessions.mockResolvedValue({ ok: true, data: [] });
+    pollingMockConversationsGet.mockResolvedValue({
+      ok: true,
+      data: { id: 'conv-1', messages: [{ role: 'user', content: [] }] },
+    });
+
+    startConversationPolling('conv-1');
+    await vi.advanceTimersByTimeAsync(0);
+
+    // Should have loaded the final state
+    expect(mockConversationStore.setActive).toHaveBeenCalled();
+  });
+
+  test('detects new messages when server stream is running', async () => {
+    pollingMockSessions.mockResolvedValue({
+      ok: true,
+      data: [{ conversationId: 'conv-1', status: 'running' }],
+    });
+    pollingMockConversationsGet.mockResolvedValue({
+      ok: true,
+      data: {
+        id: 'conv-1',
+        messages: [
+          { role: 'user', content: [{ type: 'text', text: 'hello' }] },
+          { role: 'assistant', content: [{ type: 'text', text: 'world' }] },
+        ],
+      },
+    });
+
+    mockConversationStore.active = { id: 'conv-1', messages: [] } as any;
+
+    startConversationPolling('conv-1');
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(mockConversationStore.setActive).toHaveBeenCalled();
+  });
+
+  test('stops when conversation get fails', async () => {
+    pollingMockSessions.mockResolvedValue({ ok: true, data: [] });
+    pollingMockConversationsGet.mockResolvedValue({ ok: false, data: null });
+
+    startConversationPolling('conv-1');
+    await vi.advanceTimersByTimeAsync(0);
+
+    // Should not crash
+  });
+
+  test('stopConversationPolling clears interval', () => {
+    pollingMockSessions.mockResolvedValue({ ok: true, data: [] });
+    pollingMockConversationsGet.mockResolvedValue({
+      ok: true,
+      data: { id: 'conv-1', messages: [] },
+    });
+
+    startConversationPolling('conv-1');
+    stopConversationPolling();
+
+    // Should not throw or continue polling
+  });
+
+  test('does not start duplicate polling for same conversation', () => {
+    pollingMockSessions.mockResolvedValue({ ok: true, data: [] });
+    pollingMockConversationsGet.mockResolvedValue({
+      ok: true,
+      data: { id: 'conv-1', messages: [] },
+    });
+
+    startConversationPolling('conv-1');
+    startConversationPolling('conv-1'); // Should be a no-op
+
+    // Only one poll should run
+  });
+
+  test('handles sessions request failure gracefully during poll', async () => {
+    pollingMockSessions.mockRejectedValue(new Error('network'));
+    pollingMockConversationsGet.mockResolvedValue({
+      ok: true,
+      data: { id: 'conv-1', messages: [] },
+    });
+
+    startConversationPolling('conv-1');
+    await vi.advanceTimersByTimeAsync(0);
+
+    // Should not crash, should assume stream not running
+  });
+
+  test('detects growing assistant content during polling', async () => {
+    pollingMockSessions.mockResolvedValue({
+      ok: true,
+      data: [{ conversationId: 'conv-1', status: 'running' }],
+    });
+
+    // First poll: 5 chars of content
+    pollingMockConversationsGet.mockResolvedValueOnce({
+      ok: true,
+      data: {
+        id: 'conv-1',
+        messages: [{ role: 'assistant', content: [{ type: 'text', text: 'hello' }] }],
+      },
+    });
+
+    mockConversationStore.active = { id: 'conv-1', messages: [] } as any;
+
+    startConversationPolling('conv-1');
+    await vi.advanceTimersByTimeAsync(0);
+
+    // Second poll: 11 chars of content (growing)
+    pollingMockConversationsGet.mockResolvedValueOnce({
+      ok: true,
+      data: {
+        id: 'conv-1',
+        messages: [{ role: 'assistant', content: [{ type: 'text', text: 'hello world' }] }],
+      },
+    });
+    pollingMockSessions.mockResolvedValue({
+      ok: true,
+      data: [{ conversationId: 'conv-1', status: 'running' }],
+    });
+
+    await vi.advanceTimersByTimeAsync(3000);
+
+    // Should have called setActive at least twice (once for new msgs, once for content growth)
+    expect(mockConversationStore.setActive.mock.calls.length).toBeGreaterThanOrEqual(2);
+  });
+
+  test('max polls reached stops polling and clears streaming', async () => {
+    // Make the server always report "running"
+    pollingMockSessions.mockResolvedValue({
+      ok: true,
+      data: [{ conversationId: 'conv-1', status: 'running' }],
+    });
+    pollingMockConversationsGet.mockResolvedValue({
+      ok: true,
+      data: { id: 'conv-1', messages: [] },
+    });
+    mockStreamStore.isStreaming = true;
+
+    startConversationPolling('conv-1');
+
+    // Advance through 120 * 3s = 360s + initial
+    for (let i = 0; i <= 121; i++) {
+      await vi.advanceTimersByTimeAsync(3000);
+    }
+
+    // Should have emitted message_stop after max polls
+    const stopCalls = mockStreamStore.handleEvent.mock.calls.filter(
+      (call: any) => call[0]?.type === 'message_stop',
+    );
+    expect(stopCalls.length).toBeGreaterThan(0);
+  });
+
+  test('poll failure is handled gracefully', async () => {
+    const consoleWarn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    pollingMockSessions.mockResolvedValue({ ok: true, data: [] });
+    pollingMockConversationsGet.mockRejectedValue(new Error('DB error'));
+
+    startConversationPolling('conv-1');
+    await vi.advanceTimersByTimeAsync(0);
+
+    // Should not crash
+    consoleWarn.mockRestore();
+  });
+
+  test('starts streaming indicator when server confirms stream is running', async () => {
+    pollingMockSessions.mockResolvedValue({
+      ok: true,
+      data: [{ conversationId: 'conv-1', status: 'running' }],
+    });
+    pollingMockConversationsGet.mockResolvedValue({
+      ok: true,
+      data: { id: 'conv-1', messages: [] },
+    });
+    mockStreamStore.isStreaming = false;
+
+    startConversationPolling('conv-1');
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(mockStreamStore.startStream).toHaveBeenCalledWith('conv-1');
+  });
+});
+
+// ============================================================================
+// reconnectActiveStream - polling fallback path
+// ============================================================================
+describe('reconnectActiveStream polling fallback', () => {
+  const fallbackMockSessions = vi.fn();
+  const fallbackMockConversationsGet = vi.fn();
+
+  beforeEach(async () => {
+    const apiMock = (await import('../client')).api as any;
+    apiMock.stream.sessions = fallbackMockSessions;
+    apiMock.conversations = {
+      get: fallbackMockConversationsGet,
+      summarize: vi.fn().mockResolvedValue(undefined),
+    };
+
+    fallbackMockSessions.mockReset();
+    fallbackMockConversationsGet.mockReset();
+  });
+
+  test('falls back to polling when SSE reconnection fails both attempts', async () => {
+    const wsStore = (await import('$lib/stores/workspace.svelte')).workspaceStore as any;
+    wsStore.activeWorkspace = { snapshot: { activeConversationId: 'conv-poll' } };
+
+    // Both reconnection attempts find no sessions
+    fallbackMockSessions.mockResolvedValue({ ok: true, data: [] });
+    fallbackMockConversationsGet.mockResolvedValue({
+      ok: true,
+      data: { id: 'conv-poll', messages: [] },
+    });
+
+    const consoleLog = vi.spyOn(console, 'log').mockImplementation(() => {});
+
+    const result = await reconnectActiveStream();
+
+    expect(result).toBeNull();
+    // Should have tried to load the conversation for polling fallback
+    expect(fallbackMockConversationsGet).toHaveBeenCalledWith('conv-poll');
+    // Should have set the conversation active
+    expect(mockConversationStore.setActive).toHaveBeenCalled();
+
+    consoleLog.mockRestore();
+    wsStore.activeWorkspace = null;
   });
 });

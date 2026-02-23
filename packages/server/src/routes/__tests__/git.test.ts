@@ -7,6 +7,11 @@ mock.module('../../db/database', () => ({
   initDatabase: () => {},
 }));
 
+const mockCallLlm = mock(() => Promise.resolve('Add feature X'));
+mock.module('../../services/llm-oneshot', () => ({
+  callLlm: mockCallLlm,
+}));
+
 import { gitRoutes as app } from '../git';
 
 function clearTables() {
@@ -1792,6 +1797,1010 @@ index abc..def 100644
       const res = await app.request('/push', {
         method: 'POST',
         body: JSON.stringify({ path: '/proc/self' }),
+        headers: { 'Content-Type': 'application/json' },
+      });
+      expect(res.status).toBe(403);
+    });
+
+    test('blocks /proc path for stage', async () => {
+      const res = await app.request('/stage', {
+        method: 'POST',
+        body: JSON.stringify({ path: '/proc/self' }),
+        headers: { 'Content-Type': 'application/json' },
+      });
+      expect(res.status).toBe(403);
+    });
+
+    test('blocks /sys path for unstage', async () => {
+      const res = await app.request('/unstage', {
+        method: 'POST',
+        body: JSON.stringify({ path: '/sys/block' }),
+        headers: { 'Content-Type': 'application/json' },
+      });
+      expect(res.status).toBe(403);
+    });
+
+    test('blocks /dev path for snapshot', async () => {
+      const res = await app.request('/snapshot', {
+        method: 'POST',
+        body: JSON.stringify({ path: '/dev/null' }),
+        headers: { 'Content-Type': 'application/json' },
+      });
+      expect(res.status).toBe(403);
+    });
+
+    test('blocks /boot path for generate-commit-message', async () => {
+      const res = await app.request('/generate-commit-message', {
+        method: 'POST',
+        body: JSON.stringify({ path: '/boot/vmlinuz' }),
+        headers: { 'Content-Type': 'application/json' },
+      });
+      expect(res.status).toBe(403);
+    });
+
+    test('blocks /proc path for diff', async () => {
+      const res = await app.request('/diff?path=/proc/self&file=test.ts');
+      expect(res.status).toBe(403);
+    });
+
+    test('blocks /proc path for blame', async () => {
+      const res = await app.request('/blame?path=/proc/self&file=test.ts');
+      expect(res.status).toBe(403);
+    });
+  });
+
+  // ---------------------------------------------------------------
+  // GET /snapshot/by-message/:messageId — get snapshot by message ID
+  // ---------------------------------------------------------------
+  describe('GET /snapshot/by-message/:messageId', () => {
+    test('returns 404 when no snapshot exists for message', async () => {
+      const res = await app.request('/snapshot/by-message/nonexistent-msg');
+      expect(res.status).toBe(404);
+      const json = await res.json();
+      expect(json.ok).toBe(false);
+      expect(json.error).toBe('No snapshot for this message');
+    });
+
+    test('returns snapshot for a given message ID', async () => {
+      testDb
+        .query(
+          'INSERT INTO git_snapshots (id, workspace_path, conversation_id, head_sha, stash_sha, reason, has_changes, message_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+        )
+        .run('snap-msg-1', '/proj', 'conv-1', 'abc123', 'stash456', 'pre-agent', 1, 'msg-42', 5000);
+
+      const res = await app.request('/snapshot/by-message/msg-42');
+      expect(res.status).toBe(200);
+      const json = await res.json();
+      expect(json.ok).toBe(true);
+      expect(json.data.id).toBe('snap-msg-1');
+      expect(json.data.workspacePath).toBe('/proj');
+      expect(json.data.conversationId).toBe('conv-1');
+      expect(json.data.headSha).toBe('abc123');
+      expect(json.data.stashSha).toBe('stash456');
+      expect(json.data.reason).toBe('pre-agent');
+      expect(json.data.hasChanges).toBe(true);
+      expect(json.data.messageId).toBe('msg-42');
+      expect(json.data.createdAt).toBe(5000);
+    });
+
+    test('returns the most recent snapshot when multiple exist for the same message', async () => {
+      testDb
+        .query(
+          'INSERT INTO git_snapshots (id, workspace_path, head_sha, reason, has_changes, message_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
+        )
+        .run('snap-old', '/proj', 'old-sha', 'pre-agent', 0, 'msg-dup', 1000);
+      testDb
+        .query(
+          'INSERT INTO git_snapshots (id, workspace_path, head_sha, reason, has_changes, message_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
+        )
+        .run('snap-new', '/proj', 'new-sha', 'pre-agent', 0, 'msg-dup', 2000);
+
+      const res = await app.request('/snapshot/by-message/msg-dup');
+      const json = await res.json();
+      expect(json.data.id).toBe('snap-new');
+    });
+
+    test('returns null messageId when not set in row', async () => {
+      testDb
+        .query(
+          'INSERT INTO git_snapshots (id, workspace_path, head_sha, reason, has_changes, message_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
+        )
+        .run('snap-no-msg', '/proj', 'sha', 'pre-agent', 0, 'msg-x', 3000);
+
+      const res = await app.request('/snapshot/by-message/msg-x');
+      const json = await res.json();
+      expect(json.ok).toBe(true);
+      // message_id is set in this case
+      expect(json.data.messageId).toBe('msg-x');
+    });
+  });
+
+  // ---------------------------------------------------------------
+  // POST /stage — stage files
+  // ---------------------------------------------------------------
+  describe('POST /stage', () => {
+    test('returns 400 when path is missing', async () => {
+      const res = await app.request('/stage', {
+        method: 'POST',
+        body: JSON.stringify({}),
+        headers: { 'Content-Type': 'application/json' },
+      });
+      expect(res.status).toBe(400);
+      const json = await res.json();
+      expect(json.ok).toBe(false);
+      expect(json.error).toBe('path required');
+    });
+
+    test('stages all files when no files array is provided', async () => {
+      const spawnCalls: string[][] = [];
+      spawnSpy = spyOn(Bun, 'spawn').mockImplementation((...args: any[]) => {
+        spawnCalls.push(args[0] as string[]);
+        return mockProc('', 0) as any;
+      });
+
+      const res = await app.request('/stage', {
+        method: 'POST',
+        body: JSON.stringify({ path: '/proj' }),
+        headers: { 'Content-Type': 'application/json' },
+      });
+
+      const json = await res.json();
+      expect(json.ok).toBe(true);
+      // Should call `git add -A`
+      expect(spawnCalls[0]).toEqual(['git', 'add', '-A']);
+    });
+
+    test('stages specific files when files array is provided', async () => {
+      const spawnCalls: string[][] = [];
+      spawnSpy = spyOn(Bun, 'spawn').mockImplementation((...args: any[]) => {
+        spawnCalls.push(args[0] as string[]);
+        return mockProc('', 0) as any;
+      });
+
+      const res = await app.request('/stage', {
+        method: 'POST',
+        body: JSON.stringify({ path: '/proj', files: ['src/a.ts', 'src/b.ts'] }),
+        headers: { 'Content-Type': 'application/json' },
+      });
+
+      const json = await res.json();
+      expect(json.ok).toBe(true);
+      expect(spawnCalls[0]).toEqual(['git', 'add', '--', 'src/a.ts', 'src/b.ts']);
+    });
+
+    test('stages all when files is empty array', async () => {
+      const spawnCalls: string[][] = [];
+      spawnSpy = spyOn(Bun, 'spawn').mockImplementation((...args: any[]) => {
+        spawnCalls.push(args[0] as string[]);
+        return mockProc('', 0) as any;
+      });
+
+      const res = await app.request('/stage', {
+        method: 'POST',
+        body: JSON.stringify({ path: '/proj', files: [] }),
+        headers: { 'Content-Type': 'application/json' },
+      });
+
+      const json = await res.json();
+      expect(json.ok).toBe(true);
+      expect(spawnCalls[0]).toEqual(['git', 'add', '-A']);
+    });
+
+    test('returns 500 when git add fails', async () => {
+      spawnSpy = spyOn(Bun, 'spawn').mockReturnValue(
+        mockProc('', 128, 'fatal: pathspec did not match') as any,
+      );
+
+      const res = await app.request('/stage', {
+        method: 'POST',
+        body: JSON.stringify({ path: '/proj', files: ['nonexistent.ts'] }),
+        headers: { 'Content-Type': 'application/json' },
+      });
+
+      expect(res.status).toBe(500);
+      const json = await res.json();
+      expect(json.ok).toBe(false);
+      expect(json.error).toContain('git add failed');
+    });
+
+    test('returns 500 when spawn throws', async () => {
+      spawnSpy = spyOn(Bun, 'spawn').mockImplementation(() => {
+        throw new Error('stage spawn failed');
+      });
+
+      const res = await app.request('/stage', {
+        method: 'POST',
+        body: JSON.stringify({ path: '/proj' }),
+        headers: { 'Content-Type': 'application/json' },
+      });
+
+      expect(res.status).toBe(500);
+      const json = await res.json();
+      expect(json.ok).toBe(false);
+      expect(json.error).toContain('stage spawn failed');
+    });
+  });
+
+  // ---------------------------------------------------------------
+  // POST /unstage — unstage files
+  // ---------------------------------------------------------------
+  describe('POST /unstage', () => {
+    test('returns 400 when path is missing', async () => {
+      const res = await app.request('/unstage', {
+        method: 'POST',
+        body: JSON.stringify({}),
+        headers: { 'Content-Type': 'application/json' },
+      });
+      expect(res.status).toBe(400);
+      const json = await res.json();
+      expect(json.ok).toBe(false);
+      expect(json.error).toBe('path required');
+    });
+
+    test('unstages all files when no files array is provided', async () => {
+      const spawnCalls: string[][] = [];
+      spawnSpy = spyOn(Bun, 'spawn').mockImplementation((...args: any[]) => {
+        spawnCalls.push(args[0] as string[]);
+        return mockProc('', 0) as any;
+      });
+
+      const res = await app.request('/unstage', {
+        method: 'POST',
+        body: JSON.stringify({ path: '/proj' }),
+        headers: { 'Content-Type': 'application/json' },
+      });
+
+      const json = await res.json();
+      expect(json.ok).toBe(true);
+      expect(spawnCalls[0]).toEqual(['git', 'reset', 'HEAD']);
+    });
+
+    test('unstages specific files when files array is provided', async () => {
+      const spawnCalls: string[][] = [];
+      spawnSpy = spyOn(Bun, 'spawn').mockImplementation((...args: any[]) => {
+        spawnCalls.push(args[0] as string[]);
+        return mockProc('', 0) as any;
+      });
+
+      const res = await app.request('/unstage', {
+        method: 'POST',
+        body: JSON.stringify({ path: '/proj', files: ['src/a.ts'] }),
+        headers: { 'Content-Type': 'application/json' },
+      });
+
+      const json = await res.json();
+      expect(json.ok).toBe(true);
+      expect(spawnCalls[0]).toEqual(['git', 'reset', 'HEAD', '--', 'src/a.ts']);
+    });
+
+    test('unstages all when files is empty array', async () => {
+      const spawnCalls: string[][] = [];
+      spawnSpy = spyOn(Bun, 'spawn').mockImplementation((...args: any[]) => {
+        spawnCalls.push(args[0] as string[]);
+        return mockProc('', 0) as any;
+      });
+
+      const res = await app.request('/unstage', {
+        method: 'POST',
+        body: JSON.stringify({ path: '/proj', files: [] }),
+        headers: { 'Content-Type': 'application/json' },
+      });
+
+      const json = await res.json();
+      expect(json.ok).toBe(true);
+      expect(spawnCalls[0]).toEqual(['git', 'reset', 'HEAD']);
+    });
+
+    test('returns 500 when git reset fails', async () => {
+      spawnSpy = spyOn(Bun, 'spawn').mockReturnValue(
+        mockProc('', 128, 'fatal: reset failed') as any,
+      );
+
+      const res = await app.request('/unstage', {
+        method: 'POST',
+        body: JSON.stringify({ path: '/proj' }),
+        headers: { 'Content-Type': 'application/json' },
+      });
+
+      expect(res.status).toBe(500);
+      const json = await res.json();
+      expect(json.ok).toBe(false);
+      expect(json.error).toContain('git reset failed');
+    });
+
+    test('returns 500 when spawn throws', async () => {
+      spawnSpy = spyOn(Bun, 'spawn').mockImplementation(() => {
+        throw new Error('unstage spawn failed');
+      });
+
+      const res = await app.request('/unstage', {
+        method: 'POST',
+        body: JSON.stringify({ path: '/proj' }),
+        headers: { 'Content-Type': 'application/json' },
+      });
+
+      expect(res.status).toBe(500);
+      const json = await res.json();
+      expect(json.ok).toBe(false);
+      expect(json.error).toContain('unstage spawn failed');
+    });
+  });
+
+  // ---------------------------------------------------------------
+  // GET /blame — git blame
+  // ---------------------------------------------------------------
+  describe('GET /blame', () => {
+    test('returns 400 when file parameter is missing', async () => {
+      const res = await app.request('/blame');
+      expect(res.status).toBe(400);
+      const json = await res.json();
+      expect(json.ok).toBe(false);
+      expect(json.error).toBe('file parameter required');
+    });
+
+    test('returns 400 when file parameter is missing but path is provided', async () => {
+      const res = await app.request('/blame?path=/proj');
+      expect(res.status).toBe(400);
+      const json = await res.json();
+      expect(json.error).toBe('file parameter required');
+    });
+
+    test('parses porcelain blame output correctly', async () => {
+      // SHAs must be exactly 40 hex chars to match the regex
+      const sha1 = 'a'.repeat(40);
+      const sha2 = 'b'.repeat(40);
+      const blameOutput = [
+        `${sha1} 1 1 1`,
+        'author Alice',
+        'author-time 1700000000',
+        'summary Initial commit',
+        '\tconst x = 1;',
+        `${sha2} 2 2 1`,
+        'author Bob',
+        'author-time 1700100000',
+        'summary Fix bug',
+        '\tconst y = 2;',
+        '',
+      ].join('\n');
+
+      spawnSpy = spyOn(Bun, 'spawn').mockReturnValue(mockProc(blameOutput, 0) as any);
+
+      const res = await app.request('/blame?path=/proj&file=src/app.ts');
+      expect(res.status).toBe(200);
+      const json = await res.json();
+      expect(json.ok).toBe(true);
+      expect(json.data.blame).toHaveLength(2);
+
+      expect(json.data.blame[0].line).toBe(1);
+      expect(json.data.blame[0].sha).toBe(sha1.slice(0, 8));
+      expect(json.data.blame[0].author).toBe('Alice');
+      expect(json.data.blame[0].timestamp).toBe(1700000000);
+      expect(json.data.blame[0].summary).toBe('Initial commit');
+
+      expect(json.data.blame[1].line).toBe(2);
+      expect(json.data.blame[1].sha).toBe(sha2.slice(0, 8));
+      expect(json.data.blame[1].author).toBe('Bob');
+      expect(json.data.blame[1].timestamp).toBe(1700100000);
+      expect(json.data.blame[1].summary).toBe('Fix bug');
+    });
+
+    test('handles repeated SHA (same commit for multiple lines)', async () => {
+      const sha1 = 'c'.repeat(40);
+      const blameOutput = [
+        `${sha1} 1 1 2`,
+        'author Alice',
+        'author-time 1700000000',
+        'summary Initial commit',
+        '\tline 1',
+        `${sha1} 2 2 1`,
+        '\tline 2',
+        '',
+      ].join('\n');
+
+      spawnSpy = spyOn(Bun, 'spawn').mockReturnValue(mockProc(blameOutput, 0) as any);
+
+      const res = await app.request('/blame?path=/proj&file=src/app.ts');
+      const json = await res.json();
+      expect(json.ok).toBe(true);
+      expect(json.data.blame).toHaveLength(2);
+      // Both lines should reference the same commit
+      expect(json.data.blame[0].sha).toBe('cccccccc');
+      expect(json.data.blame[1].sha).toBe('cccccccc');
+      expect(json.data.blame[0].author).toBe('Alice');
+      expect(json.data.blame[1].author).toBe('Alice');
+    });
+
+    test('returns error when git blame fails', async () => {
+      spawnSpy = spyOn(Bun, 'spawn').mockReturnValue(
+        mockProc('', 128, 'fatal: no such path') as any,
+      );
+
+      const res = await app.request('/blame?path=/proj&file=nonexistent.ts');
+      expect(res.status).toBe(500);
+      const json = await res.json();
+      expect(json.ok).toBe(false);
+      expect(json.error).toContain('no such path');
+    });
+
+    test('returns generic error when blame fails with empty stderr', async () => {
+      spawnSpy = spyOn(Bun, 'spawn').mockReturnValue(mockProc('', 1, '') as any);
+
+      const res = await app.request('/blame?path=/proj&file=bad.ts');
+      expect(res.status).toBe(500);
+      const json = await res.json();
+      expect(json.error).toBe('git blame failed');
+    });
+
+    test('returns 500 when spawn throws during blame', async () => {
+      spawnSpy = spyOn(Bun, 'spawn').mockImplementation(() => {
+        throw new Error('blame spawn error');
+      });
+
+      const res = await app.request('/blame?path=/proj&file=x.ts');
+      expect(res.status).toBe(500);
+      const json = await res.json();
+      expect(json.ok).toBe(false);
+      expect(json.error).toContain('blame spawn error');
+    });
+
+    test('returns empty blame array for empty file', async () => {
+      spawnSpy = spyOn(Bun, 'spawn').mockReturnValue(mockProc('', 0) as any);
+
+      const res = await app.request('/blame?path=/proj&file=empty.ts');
+      const json = await res.json();
+      expect(json.ok).toBe(true);
+      expect(json.data.blame).toEqual([]);
+    });
+  });
+
+  // ---------------------------------------------------------------
+  // POST /push — push to remote
+  // ---------------------------------------------------------------
+  describe('POST /push', () => {
+    test('returns 400 when path is missing', async () => {
+      const res = await app.request('/push', {
+        method: 'POST',
+        body: JSON.stringify({}),
+        headers: { 'Content-Type': 'application/json' },
+      });
+      expect(res.status).toBe(400);
+      const json = await res.json();
+      expect(json.ok).toBe(false);
+      expect(json.error).toBe('path required');
+    });
+
+    test('pushes to origin with auto-detected branch', async () => {
+      let callIndex = 0;
+      const spawnCalls: string[][] = [];
+      spawnSpy = spyOn(Bun, 'spawn').mockImplementation((...args: any[]) => {
+        callIndex++;
+        spawnCalls.push(args[0] as string[]);
+        switch (callIndex) {
+          case 1: // git rev-parse --abbrev-ref HEAD
+            return mockProc('main\n', 0) as any;
+          case 2: // git push origin main
+            return mockProc('', 0) as any;
+          default:
+            return mockProc('', 0) as any;
+        }
+      });
+
+      const res = await app.request('/push', {
+        method: 'POST',
+        body: JSON.stringify({ path: '/proj' }),
+        headers: { 'Content-Type': 'application/json' },
+      });
+
+      const json = await res.json();
+      expect(json.ok).toBe(true);
+      expect(json.data.pushed).toBe(true);
+      expect(json.data.setUpstream).toBe(false);
+      expect(spawnCalls[1]).toEqual(['git', 'push', 'origin', 'main']);
+    });
+
+    test('uses specified remote and branch', async () => {
+      const spawnCalls: string[][] = [];
+      spawnSpy = spyOn(Bun, 'spawn').mockImplementation((...args: any[]) => {
+        spawnCalls.push(args[0] as string[]);
+        return mockProc('', 0) as any;
+      });
+
+      const res = await app.request('/push', {
+        method: 'POST',
+        body: JSON.stringify({ path: '/proj', remote: 'upstream', branch: 'feature' }),
+        headers: { 'Content-Type': 'application/json' },
+      });
+
+      const json = await res.json();
+      expect(json.ok).toBe(true);
+      // Should not call rev-parse when branch is specified
+      expect(spawnCalls[0]).toEqual(['git', 'push', 'upstream', 'feature']);
+    });
+
+    test('retries with --set-upstream when no upstream branch', async () => {
+      let callIndex = 0;
+      spawnSpy = spyOn(Bun, 'spawn').mockImplementation(() => {
+        callIndex++;
+        switch (callIndex) {
+          case 1: // git rev-parse --abbrev-ref HEAD
+            return mockProc('new-branch\n', 0) as any;
+          case 2: // git push origin new-branch — fails with no upstream
+            return mockProc('', 1, 'fatal: The current branch has no upstream branch') as any;
+          case 3: // git push --set-upstream origin new-branch
+            return mockProc('', 0) as any;
+          default:
+            return mockProc('', 0) as any;
+        }
+      });
+
+      const res = await app.request('/push', {
+        method: 'POST',
+        body: JSON.stringify({ path: '/proj' }),
+        headers: { 'Content-Type': 'application/json' },
+      });
+
+      const json = await res.json();
+      expect(json.ok).toBe(true);
+      expect(json.data.pushed).toBe(true);
+      expect(json.data.setUpstream).toBe(true);
+    });
+
+    test('returns 500 when --set-upstream push also fails', async () => {
+      let callIndex = 0;
+      spawnSpy = spyOn(Bun, 'spawn').mockImplementation(() => {
+        callIndex++;
+        switch (callIndex) {
+          case 1:
+            return mockProc('feat\n', 0) as any;
+          case 2:
+            return mockProc('', 1, 'fatal: has no upstream') as any;
+          case 3: // upstream push also fails
+            return mockProc('', 1, 'fatal: remote rejected') as any;
+          default:
+            return mockProc('', 0) as any;
+        }
+      });
+
+      const res = await app.request('/push', {
+        method: 'POST',
+        body: JSON.stringify({ path: '/proj' }),
+        headers: { 'Content-Type': 'application/json' },
+      });
+
+      expect(res.status).toBe(500);
+      const json = await res.json();
+      expect(json.ok).toBe(false);
+      expect(json.error).toContain('remote rejected');
+    });
+
+    test('returns 500 when push fails for non-upstream reason', async () => {
+      let callIndex = 0;
+      spawnSpy = spyOn(Bun, 'spawn').mockImplementation(() => {
+        callIndex++;
+        switch (callIndex) {
+          case 1:
+            return mockProc('main\n', 0) as any;
+          case 2:
+            return mockProc('', 1, 'fatal: remote host unreachable') as any;
+          default:
+            return mockProc('', 0) as any;
+        }
+      });
+
+      const res = await app.request('/push', {
+        method: 'POST',
+        body: JSON.stringify({ path: '/proj' }),
+        headers: { 'Content-Type': 'application/json' },
+      });
+
+      expect(res.status).toBe(500);
+      const json = await res.json();
+      expect(json.ok).toBe(false);
+      expect(json.error).toContain('remote host unreachable');
+    });
+
+    test('returns 500 when branch detection fails', async () => {
+      spawnSpy = spyOn(Bun, 'spawn').mockReturnValue(mockProc('', 128, 'fatal') as any);
+
+      const res = await app.request('/push', {
+        method: 'POST',
+        body: JSON.stringify({ path: '/proj' }),
+        headers: { 'Content-Type': 'application/json' },
+      });
+
+      expect(res.status).toBe(500);
+      const json = await res.json();
+      expect(json.ok).toBe(false);
+      expect(json.error).toContain('Could not determine current branch');
+    });
+
+    test('returns 500 when spawn throws during push', async () => {
+      spawnSpy = spyOn(Bun, 'spawn').mockImplementation(() => {
+        throw new Error('push spawn failed');
+      });
+
+      const res = await app.request('/push', {
+        method: 'POST',
+        body: JSON.stringify({ path: '/proj' }),
+        headers: { 'Content-Type': 'application/json' },
+      });
+
+      expect(res.status).toBe(500);
+      const json = await res.json();
+      expect(json.ok).toBe(false);
+      expect(json.error).toContain('push spawn failed');
+    });
+
+    test('returns generic error when push stderr is empty', async () => {
+      let callIndex = 0;
+      spawnSpy = spyOn(Bun, 'spawn').mockImplementation(() => {
+        callIndex++;
+        switch (callIndex) {
+          case 1:
+            return mockProc('main\n', 0) as any;
+          case 2:
+            return mockProc('', 1, '') as any;
+          default:
+            return mockProc('', 0) as any;
+        }
+      });
+
+      const res = await app.request('/push', {
+        method: 'POST',
+        body: JSON.stringify({ path: '/proj' }),
+        headers: { 'Content-Type': 'application/json' },
+      });
+
+      expect(res.status).toBe(500);
+      const json = await res.json();
+      expect(json.error).toBe('git push failed');
+    });
+  });
+
+  // ---------------------------------------------------------------
+  // POST /generate-commit-message — LLM commit message generation
+  // ---------------------------------------------------------------
+  describe('POST /generate-commit-message', () => {
+    test('returns 400 when path is missing', async () => {
+      const res = await app.request('/generate-commit-message', {
+        method: 'POST',
+        body: JSON.stringify({}),
+        headers: { 'Content-Type': 'application/json' },
+      });
+      expect(res.status).toBe(400);
+      const json = await res.json();
+      expect(json.error).toBe('path required');
+    });
+
+    test('generates a commit message from diff', async () => {
+      let callIndex = 0;
+      spawnSpy = spyOn(Bun, 'spawn').mockImplementation(() => {
+        callIndex++;
+        switch (callIndex) {
+          case 1: // git diff HEAD
+            return mockProc('diff --git a/file.ts\n+new line\n', 0) as any;
+          case 2: // git ls-files --others --exclude-standard
+            return mockProc('', 0) as any;
+          default:
+            return mockProc('', 0) as any;
+        }
+      });
+
+      mockCallLlm.mockResolvedValue('  Add new feature  ');
+
+      const res = await app.request('/generate-commit-message', {
+        method: 'POST',
+        body: JSON.stringify({ path: '/proj' }),
+        headers: { 'Content-Type': 'application/json' },
+      });
+
+      const json = await res.json();
+      expect(json.ok).toBe(true);
+      expect(json.data.message).toBe('Add new feature');
+    });
+
+    test('includes untracked files in prompt', async () => {
+      let callIndex = 0;
+      spawnSpy = spyOn(Bun, 'spawn').mockImplementation(() => {
+        callIndex++;
+        switch (callIndex) {
+          case 1: // git diff HEAD — no diff
+            return mockProc('', 0) as any;
+          case 2: // git ls-files — untracked files
+            return mockProc('new-file.ts\nanother.ts\n', 0) as any;
+          default:
+            return mockProc('', 0) as any;
+        }
+      });
+
+      mockCallLlm.mockResolvedValue('Add new files');
+
+      const res = await app.request('/generate-commit-message', {
+        method: 'POST',
+        body: JSON.stringify({ path: '/proj' }),
+        headers: { 'Content-Type': 'application/json' },
+      });
+
+      const json = await res.json();
+      expect(json.ok).toBe(true);
+      expect(json.data.message).toBe('Add new files');
+    });
+
+    test('returns 400 when no changes to describe', async () => {
+      let callIndex = 0;
+      spawnSpy = spyOn(Bun, 'spawn').mockImplementation(() => {
+        callIndex++;
+        switch (callIndex) {
+          case 1: // git diff HEAD — empty
+            return mockProc('', 0) as any;
+          case 2: // git ls-files — empty (no untracked)
+            return mockProc('', 0) as any;
+          default:
+            return mockProc('', 0) as any;
+        }
+      });
+
+      const res = await app.request('/generate-commit-message', {
+        method: 'POST',
+        body: JSON.stringify({ path: '/proj' }),
+        headers: { 'Content-Type': 'application/json' },
+      });
+
+      expect(res.status).toBe(400);
+      const json = await res.json();
+      expect(json.ok).toBe(false);
+      expect(json.error).toBe('No changes to describe');
+    });
+
+    test('returns 500 when LLM call fails', async () => {
+      let callIndex = 0;
+      spawnSpy = spyOn(Bun, 'spawn').mockImplementation(() => {
+        callIndex++;
+        switch (callIndex) {
+          case 1:
+            return mockProc('diff content\n', 0) as any;
+          case 2:
+            return mockProc('', 0) as any;
+          default:
+            return mockProc('', 0) as any;
+        }
+      });
+
+      mockCallLlm.mockRejectedValue(new Error('LLM service unavailable'));
+
+      const res = await app.request('/generate-commit-message', {
+        method: 'POST',
+        body: JSON.stringify({ path: '/proj' }),
+        headers: { 'Content-Type': 'application/json' },
+      });
+
+      expect(res.status).toBe(500);
+      const json = await res.json();
+      expect(json.ok).toBe(false);
+      expect(json.error).toContain('LLM service unavailable');
+    });
+
+    test('returns 500 when spawn throws', async () => {
+      spawnSpy = spyOn(Bun, 'spawn').mockImplementation(() => {
+        throw new Error('gen spawn failed');
+      });
+
+      const res = await app.request('/generate-commit-message', {
+        method: 'POST',
+        body: JSON.stringify({ path: '/proj' }),
+        headers: { 'Content-Type': 'application/json' },
+      });
+
+      expect(res.status).toBe(500);
+      const json = await res.json();
+      expect(json.ok).toBe(false);
+      expect(json.error).toContain('gen spawn failed');
+    });
+  });
+
+  // ---------------------------------------------------------------
+  // POST /commit — skips auto-stage when files are already staged
+  // ---------------------------------------------------------------
+  describe('POST /commit — already-staged files', () => {
+    test('skips git add when files are already staged', async () => {
+      let callIndex = 0;
+      const spawnCalls: string[][] = [];
+      spawnSpy = spyOn(Bun, 'spawn').mockImplementation((...args: any[]) => {
+        callIndex++;
+        spawnCalls.push(args[0] as string[]);
+        switch (callIndex) {
+          case 1: // runExitCode: git diff --cached --quiet → 1 = has staged changes
+            return mockProc('', 1) as any;
+          case 2: // run: git commit -m (no git add)
+            return mockProc('[main def789] commit msg\n', 0) as any;
+          case 3: // run: git rev-parse HEAD
+            return mockProc('def789abcdef\n', 0) as any;
+          default:
+            return mockProc('', 0) as any;
+        }
+      });
+
+      const res = await app.request('/commit', {
+        method: 'POST',
+        body: JSON.stringify({ path: '/proj', message: 'commit msg' }),
+        headers: { 'Content-Type': 'application/json' },
+      });
+
+      const json = await res.json();
+      expect(json.ok).toBe(true);
+      expect(json.data.sha).toBe('def789abcdef');
+
+      // Should NOT have called git add (only 3 calls: diff-check, commit, rev-parse)
+      expect(spawnCalls).toHaveLength(3);
+      const addCalls = spawnCalls.filter((cmd) => cmd.includes('add'));
+      expect(addCalls).toHaveLength(0);
+    });
+  });
+
+  // ---------------------------------------------------------------
+  // GET /status — mixed porcelain statuses
+  // ---------------------------------------------------------------
+  describe('GET /status — mixed porcelain statuses', () => {
+    test('emits both staged and unstaged entries for MM status', async () => {
+      spawnSpy = spyOn(Bun, 'spawn').mockReturnValue(mockProc('MM both.ts\n', 0) as any);
+
+      const res = await app.request('/status?path=/proj');
+      const json = await res.json();
+      expect(json.data.files).toHaveLength(2);
+      // First entry: staged M
+      expect(json.data.files[0]).toEqual({ path: 'both.ts', status: 'M', staged: true });
+      // Second entry: unstaged M
+      expect(json.data.files[1]).toEqual({ path: 'both.ts', status: 'M', staged: false });
+    });
+
+    test('handles deleted file in working tree (unstaged)', async () => {
+      spawnSpy = spyOn(Bun, 'spawn').mockReturnValue(mockProc(' D deleted.ts\n', 0) as any);
+
+      const res = await app.request('/status?path=/proj');
+      const json = await res.json();
+      expect(json.data.files).toHaveLength(1);
+      expect(json.data.files[0]).toEqual({ path: 'deleted.ts', status: 'D', staged: false });
+    });
+
+    test('handles staged added file with unstaged modifications (AM)', async () => {
+      spawnSpy = spyOn(Bun, 'spawn').mockReturnValue(mockProc('AM newmod.ts\n', 0) as any);
+
+      const res = await app.request('/status?path=/proj');
+      const json = await res.json();
+      expect(json.data.files).toHaveLength(2);
+      expect(json.data.files[0]).toEqual({ path: 'newmod.ts', status: 'A', staged: true });
+      expect(json.data.files[1]).toEqual({ path: 'newmod.ts', status: 'M', staged: false });
+    });
+  });
+
+  // ---------------------------------------------------------------
+  // POST /snapshot — stores messageId
+  // ---------------------------------------------------------------
+  describe('POST /snapshot — messageId', () => {
+    test('stores messageId when provided', async () => {
+      let callIndex = 0;
+      spawnSpy = spyOn(Bun, 'spawn').mockImplementation(() => {
+        callIndex++;
+        switch (callIndex) {
+          case 1:
+            return mockProc('true\n', 0) as any;
+          case 2:
+            return mockProc('sha123\n', 0) as any;
+          case 3:
+            return mockProc('', 0) as any;
+          default:
+            return mockProc('', 0) as any;
+        }
+      });
+
+      const res = await app.request('/snapshot', {
+        method: 'POST',
+        body: JSON.stringify({ path: '/proj', messageId: 'msg-99' }),
+        headers: { 'Content-Type': 'application/json' },
+      });
+
+      const json = await res.json();
+      expect(json.ok).toBe(true);
+
+      const row = testDb.query('SELECT * FROM git_snapshots WHERE id = ?').get(json.data.id) as any;
+      expect(row.message_id).toBe('msg-99');
+    });
+  });
+
+  // ---------------------------------------------------------------
+  // GET /snapshots — messageId in output
+  // ---------------------------------------------------------------
+  describe('GET /snapshots — messageId field', () => {
+    test('returns messageId when set', async () => {
+      testDb
+        .query(
+          'INSERT INTO git_snapshots (id, workspace_path, head_sha, reason, has_changes, message_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
+        )
+        .run('snap-m1', '/test', 'abc', 'pre-agent', 0, 'msg-10', 1000);
+
+      const res = await app.request('/snapshots?path=/test');
+      const json = await res.json();
+      expect(json.data[0].messageId).toBe('msg-10');
+    });
+
+    test('returns null messageId when not set', async () => {
+      testDb
+        .query(
+          'INSERT INTO git_snapshots (id, workspace_path, head_sha, reason, has_changes, message_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
+        )
+        .run('snap-m2', '/test', 'abc', 'pre-agent', 0, null, 1000);
+
+      const res = await app.request('/snapshots?path=/test');
+      const json = await res.json();
+      expect(json.data[0].messageId).toBeNull();
+    });
+  });
+
+  // ---------------------------------------------------------------
+  // POST /commit/stream — validation
+  // ---------------------------------------------------------------
+  describe('POST /commit/stream — validation', () => {
+    test('returns 400 when path is missing', async () => {
+      const res = await app.request('/commit/stream', {
+        method: 'POST',
+        body: JSON.stringify({ message: 'test' }),
+        headers: { 'Content-Type': 'application/json' },
+      });
+      expect(res.status).toBe(400);
+      const json = await res.json();
+      expect(json.ok).toBe(false);
+      expect(json.error).toBe('path required');
+    });
+
+    test('returns 400 when message is missing', async () => {
+      const res = await app.request('/commit/stream', {
+        method: 'POST',
+        body: JSON.stringify({ path: '/proj' }),
+        headers: { 'Content-Type': 'application/json' },
+      });
+      expect(res.status).toBe(400);
+      const json = await res.json();
+      expect(json.error).toBe('commit message required');
+    });
+
+    test('returns 400 when message is blank', async () => {
+      const res = await app.request('/commit/stream', {
+        method: 'POST',
+        body: JSON.stringify({ path: '/proj', message: '   ' }),
+        headers: { 'Content-Type': 'application/json' },
+      });
+      expect(res.status).toBe(400);
+    });
+
+    test('returns 403 for blocked paths', async () => {
+      const res = await app.request('/commit/stream', {
+        method: 'POST',
+        body: JSON.stringify({ path: '/proc/something', message: 'test' }),
+        headers: { 'Content-Type': 'application/json' },
+      });
+      expect(res.status).toBe(403);
+    });
+  });
+
+  // ---------------------------------------------------------------
+  // POST /push/stream — validation
+  // ---------------------------------------------------------------
+  describe('POST /push/stream — validation', () => {
+    test('returns 400 when path is missing', async () => {
+      const res = await app.request('/push/stream', {
+        method: 'POST',
+        body: JSON.stringify({}),
+        headers: { 'Content-Type': 'application/json' },
+      });
+      expect(res.status).toBe(400);
+      const json = await res.json();
+      expect(json.error).toBe('path required');
+    });
+
+    test('returns 403 for blocked paths', async () => {
+      const res = await app.request('/push/stream', {
+        method: 'POST',
+        body: JSON.stringify({ path: '/dev/null' }),
         headers: { 'Content-Type': 'application/json' },
       });
       expect(res.status).toBe(403);

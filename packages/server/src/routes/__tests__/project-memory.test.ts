@@ -7,10 +7,26 @@ mock.module('../../db/database', () => ({
   initDatabase: () => {},
 }));
 
+// Mock the memory-extractor so LLM extraction endpoints don't make real LLM calls
+mock.module('../../services/memory-extractor', () => ({
+  extractMemoriesFromConversation: async () => [
+    { category: 'convention', key: 'indent-style', content: 'Use 2 spaces', confidence: 0.7 },
+  ],
+  extractMemoriesFromCommits: async () => [
+    { category: 'decision', key: 'use-sqlite', content: 'Decided to use SQLite', confidence: 0.6 },
+  ],
+}));
+
 import { workspaceMemoryRoutes as app } from '../project-memory';
 
 function clearTables() {
   testDb.exec('DELETE FROM workspace_memories');
+  // Also clear version history table if it exists
+  try {
+    testDb.exec('DELETE FROM workspace_memory_versions');
+  } catch {
+    // Table may not exist yet
+  }
 }
 
 function insertMemory(overrides: Record<string, any> = {}) {
@@ -720,6 +736,266 @@ describe('Project Memory Routes', () => {
       expect(json.ok).toBe(true);
       // Should detect the decision pattern
       expect(json.data.extracted).toBeGreaterThanOrEqual(0);
+    });
+  });
+
+  // ---------------------------------------------------------------
+  // POST /extract-llm — LLM-powered extraction from conversation
+  // ---------------------------------------------------------------
+  describe('POST /extract-llm — LLM-powered memory extraction', () => {
+    test('returns 400 when workspacePath is missing', async () => {
+      const res = await app.request('/extract-llm', {
+        method: 'POST',
+        body: JSON.stringify({ messages: [{ role: 'user', content: 'test' }] }),
+        headers: { 'Content-Type': 'application/json' },
+      });
+      expect(res.status).toBe(400);
+      const json = await res.json();
+      expect(json.error).toBe('workspacePath and messages[] required');
+    });
+
+    test('returns 400 when messages is missing', async () => {
+      const res = await app.request('/extract-llm', {
+        method: 'POST',
+        body: JSON.stringify({ workspacePath: '/test' }),
+        headers: { 'Content-Type': 'application/json' },
+      });
+      expect(res.status).toBe(400);
+    });
+
+    test('returns 400 when messages is not an array', async () => {
+      const res = await app.request('/extract-llm', {
+        method: 'POST',
+        body: JSON.stringify({ workspacePath: '/test', messages: 'not-array' }),
+        headers: { 'Content-Type': 'application/json' },
+      });
+      expect(res.status).toBe(400);
+    });
+
+    test('extracts memories from conversation using LLM', async () => {
+      const res = await app.request('/extract-llm', {
+        method: 'POST',
+        body: JSON.stringify({
+          workspacePath: '/test',
+          messages: [
+            { role: 'user', content: 'We always use 2 spaces for indentation' },
+            { role: 'assistant', content: 'Got it, 2 spaces it is.' },
+          ],
+        }),
+        headers: { 'Content-Type': 'application/json' },
+      });
+      expect(res.status).toBe(200);
+      const json = await res.json();
+      expect(json.ok).toBe(true);
+      expect(json.data.extracted).toBe(1);
+      expect(json.data.created).toBe(1);
+
+      // Verify the memory was inserted in DB
+      const rows = testDb
+        .query('SELECT * FROM workspace_memories WHERE workspace_path = ?')
+        .all('/test') as any[];
+      expect(rows.length).toBeGreaterThanOrEqual(1);
+      const found = rows.find((r: any) => r.key === 'indent-style');
+      expect(found).toBeDefined();
+      expect(found.source).toBe('auto');
+    });
+
+    test('reinforces existing memory on re-extraction', async () => {
+      // Insert existing memory
+      insertMemory({
+        id: 'mem-llm-1',
+        workspace_path: '/test',
+        key: 'indent-style',
+        content: 'Use tabs',
+        confidence: 0.5,
+        times_seen: 1,
+      });
+
+      const res = await app.request('/extract-llm', {
+        method: 'POST',
+        body: JSON.stringify({
+          workspacePath: '/test',
+          messages: [{ role: 'user', content: 'We use spaces' }],
+        }),
+        headers: { 'Content-Type': 'application/json' },
+      });
+      expect(res.status).toBe(200);
+      const json = await res.json();
+      expect(json.ok).toBe(true);
+      expect(json.data.extracted).toBe(1);
+      expect(json.data.created).toBe(0); // reinforced, not created
+
+      // Check that times_seen was incremented
+      const row = testDb
+        .query('SELECT times_seen, confidence FROM workspace_memories WHERE id = ?')
+        .get('mem-llm-1') as any;
+      expect(row.times_seen).toBe(2);
+      expect(row.confidence).toBeGreaterThan(0.5);
+    });
+  });
+
+  // ---------------------------------------------------------------
+  // POST /extract-commits — LLM-powered extraction from git commits
+  // ---------------------------------------------------------------
+  describe('POST /extract-commits — commit-based memory extraction', () => {
+    test('returns 400 when workspacePath is missing', async () => {
+      const res = await app.request('/extract-commits', {
+        method: 'POST',
+        body: JSON.stringify({ commits: [{ message: 'feat: add thing' }] }),
+        headers: { 'Content-Type': 'application/json' },
+      });
+      expect(res.status).toBe(400);
+      const json = await res.json();
+      expect(json.error).toBe('workspacePath and commits[] required');
+    });
+
+    test('returns 400 when commits is missing', async () => {
+      const res = await app.request('/extract-commits', {
+        method: 'POST',
+        body: JSON.stringify({ workspacePath: '/test' }),
+        headers: { 'Content-Type': 'application/json' },
+      });
+      expect(res.status).toBe(400);
+    });
+
+    test('returns 400 when commits is not an array', async () => {
+      const res = await app.request('/extract-commits', {
+        method: 'POST',
+        body: JSON.stringify({ workspacePath: '/test', commits: 'not-array' }),
+        headers: { 'Content-Type': 'application/json' },
+      });
+      expect(res.status).toBe(400);
+    });
+
+    test('extracts memories from commit messages', async () => {
+      const res = await app.request('/extract-commits', {
+        method: 'POST',
+        body: JSON.stringify({
+          workspacePath: '/test',
+          commits: [
+            { message: 'feat: switch to SQLite for local storage', files: ['db.ts'] },
+            { message: 'fix: handle null values in parser', files: ['parser.ts'] },
+          ],
+        }),
+        headers: { 'Content-Type': 'application/json' },
+      });
+      expect(res.status).toBe(200);
+      const json = await res.json();
+      expect(json.ok).toBe(true);
+      expect(json.data.extracted).toBe(1);
+      expect(json.data.created).toBe(1);
+    });
+
+    test('reinforces existing memory from commits', async () => {
+      // Insert existing memory
+      insertMemory({
+        id: 'mem-commit-1',
+        workspace_path: '/test',
+        key: 'use-sqlite',
+        content: 'Use SQLite',
+        confidence: 0.4,
+        times_seen: 1,
+      });
+
+      const res = await app.request('/extract-commits', {
+        method: 'POST',
+        body: JSON.stringify({
+          workspacePath: '/test',
+          commits: [{ message: 'refactor: improve SQLite queries' }],
+        }),
+        headers: { 'Content-Type': 'application/json' },
+      });
+      expect(res.status).toBe(200);
+      const json = await res.json();
+      expect(json.ok).toBe(true);
+      expect(json.data.extracted).toBe(1);
+      expect(json.data.created).toBe(0);
+
+      // Check reinforcement
+      const row = testDb
+        .query('SELECT times_seen, confidence FROM workspace_memories WHERE id = ?')
+        .get('mem-commit-1') as any;
+      expect(row.times_seen).toBe(2);
+      expect(row.confidence).toBeGreaterThan(0.4);
+    });
+  });
+
+  // ---------------------------------------------------------------
+  // GET /versions/:id — Version history for a memory
+  // ---------------------------------------------------------------
+  describe('GET /versions/:id — version history', () => {
+    test('returns empty array when no versions exist', async () => {
+      const res = await app.request('/versions/mem-1');
+      expect(res.status).toBe(200);
+      const json = await res.json();
+      expect(json.ok).toBe(true);
+      expect(json.data).toEqual([]);
+    });
+
+    test('returns versions after an update creates a version snapshot', async () => {
+      // Insert a memory
+      insertMemory({
+        id: 'mem-ver-1',
+        workspace_path: '/test',
+        key: 'indent',
+        content: 'Use tabs',
+        confidence: 0.5,
+        category: 'convention',
+      });
+
+      // Update it (the PATCH handler saves a version before updating)
+      await app.request('/mem-ver-1', {
+        method: 'PATCH',
+        body: JSON.stringify({ content: 'Use 2 spaces' }),
+        headers: { 'Content-Type': 'application/json' },
+      });
+
+      // Now check versions
+      const res = await app.request('/versions/mem-ver-1');
+      expect(res.status).toBe(200);
+      const json = await res.json();
+      expect(json.ok).toBe(true);
+      expect(json.data.length).toBeGreaterThanOrEqual(1);
+
+      // The version should contain the OLD content
+      const version = json.data[0];
+      expect(version.memoryId).toBe('mem-ver-1');
+      expect(version.content).toBe('Use tabs');
+      expect(version.confidence).toBe(0.5);
+      expect(version.category).toBe('convention');
+      expect(version.savedAt).toBeDefined();
+    });
+
+    test('returns multiple versions after multiple updates', async () => {
+      // Insert a memory
+      insertMemory({
+        id: 'mem-ver-2',
+        workspace_path: '/test',
+        key: 'style',
+        content: 'Version 1',
+        confidence: 0.3,
+        category: 'convention',
+      });
+
+      // Update twice to create two version snapshots
+      await app.request('/mem-ver-2', {
+        method: 'PATCH',
+        body: JSON.stringify({ content: 'Version 2' }),
+        headers: { 'Content-Type': 'application/json' },
+      });
+      await app.request('/mem-ver-2', {
+        method: 'PATCH',
+        body: JSON.stringify({ content: 'Version 3' }),
+        headers: { 'Content-Type': 'application/json' },
+      });
+
+      const res = await app.request('/versions/mem-ver-2');
+      const json = await res.json();
+      expect(json.data.length).toBe(2);
+      // Both previous contents should be present as versions
+      const contents = json.data.map((v: any) => v.content);
+      expect(contents).toContain('Version 1');
+      expect(contents).toContain('Version 2');
     });
   });
 });

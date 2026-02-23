@@ -7,6 +7,30 @@ mock.module('../../db/database', () => ({
   initDatabase: () => {},
 }));
 
+// Mock external services that settings routes call
+const mockCheckOllamaHealth = mock(() => Promise.resolve(true));
+const mockListOllamaModels = mock(() => Promise.resolve([{ name: 'llama3' }]));
+const mockResetOllamaCache = mock(() => {});
+const mockListOpenAIModels = mock(() => Promise.resolve([{ id: 'gpt-4' }]));
+const mockListGeminiModels = mock(() => Promise.resolve([{ name: 'gemini-pro' }]));
+
+mock.module('../../services/ollama-provider', () => ({
+  checkOllamaHealth: mockCheckOllamaHealth,
+  listOllamaModels: mockListOllamaModels,
+}));
+
+mock.module('../../services/llm-oneshot', () => ({
+  resetOllamaCache: mockResetOllamaCache,
+}));
+
+mock.module('../../services/openai-provider-v2', () => ({
+  listOpenAIModels: mockListOpenAIModels,
+}));
+
+mock.module('../../services/gemini-provider-v2', () => ({
+  listGeminiModels: mockListGeminiModels,
+}));
+
 import { settingsRoutes as app } from '../settings';
 
 function clearTables() {
@@ -524,6 +548,657 @@ describe('Settings Routes', () => {
       const res = await app.request('/sessionBudgetUsd');
       const json = await res.json();
       expect(json.data).toBe(15.0);
+    });
+  });
+
+  // ---------------------------------------------------------------
+  // GET /budget — Get session budget
+  // ---------------------------------------------------------------
+  describe('GET /budget — get session budget', () => {
+    test('returns null when no budget is set', async () => {
+      const res = await app.request('/budget');
+      expect(res.status).toBe(200);
+      const json = await res.json();
+      expect(json.ok).toBe(true);
+      expect(json.data.budgetUsd).toBeNull();
+    });
+
+    test('returns the configured budget', async () => {
+      insertSetting('sessionBudgetUsd', 25.0);
+
+      const res = await app.request('/budget');
+      const json = await res.json();
+      expect(json.ok).toBe(true);
+      expect(json.data.budgetUsd).toBe(25.0);
+    });
+
+    test('returns a zero budget correctly', async () => {
+      insertSetting('sessionBudgetUsd', 0);
+
+      const res = await app.request('/budget');
+      const json = await res.json();
+      expect(json.data.budgetUsd).toBe(0);
+    });
+
+    test('returns a fractional budget', async () => {
+      insertSetting('sessionBudgetUsd', 0.5);
+
+      const res = await app.request('/budget');
+      const json = await res.json();
+      expect(json.data.budgetUsd).toBe(0.5);
+    });
+  });
+
+  // ---------------------------------------------------------------
+  // PATCH / — resetOllamaCache when oneshot settings change
+  // ---------------------------------------------------------------
+  describe('PATCH / — oneshot settings trigger cache reset', () => {
+    test('resets Ollama cache when oneshotProvider changes', async () => {
+      mockResetOllamaCache.mockClear();
+
+      await app.request('/', {
+        method: 'PATCH',
+        body: JSON.stringify({ oneshotProvider: 'ollama' }),
+        headers: { 'Content-Type': 'application/json' },
+      });
+
+      expect(mockResetOllamaCache).toHaveBeenCalledTimes(1);
+    });
+
+    test('resets Ollama cache when oneshotModel changes', async () => {
+      mockResetOllamaCache.mockClear();
+
+      await app.request('/', {
+        method: 'PATCH',
+        body: JSON.stringify({ oneshotModel: 'llama3' }),
+        headers: { 'Content-Type': 'application/json' },
+      });
+
+      expect(mockResetOllamaCache).toHaveBeenCalledTimes(1);
+    });
+
+    test('resets Ollama cache when oneshotProvider is inside settings wrapper', async () => {
+      mockResetOllamaCache.mockClear();
+
+      await app.request('/', {
+        method: 'PATCH',
+        body: JSON.stringify({ settings: { oneshotProvider: 'openai' } }),
+        headers: { 'Content-Type': 'application/json' },
+      });
+
+      expect(mockResetOllamaCache).toHaveBeenCalledTimes(1);
+    });
+
+    test('does NOT reset Ollama cache when unrelated settings change', async () => {
+      mockResetOllamaCache.mockClear();
+
+      await app.request('/', {
+        method: 'PATCH',
+        body: JSON.stringify({ theme: 'dark' }),
+        headers: { 'Content-Type': 'application/json' },
+      });
+
+      expect(mockResetOllamaCache).not.toHaveBeenCalled();
+    });
+  });
+
+  // ---------------------------------------------------------------
+  // PUT /api-key — environment variable side effects
+  // ---------------------------------------------------------------
+  describe('PUT /api-key — environment variable for openai and google', () => {
+    test('sets environment variable for openai', async () => {
+      const saved = process.env.OPENAI_API_KEY;
+      delete process.env.OPENAI_API_KEY;
+
+      await app.request('/api-key', {
+        method: 'PUT',
+        body: JSON.stringify({ provider: 'openai', apiKey: 'sk-openai-env' }),
+        headers: { 'Content-Type': 'application/json' },
+      });
+
+      // @ts-expect-error -- env var was just set above
+      expect(process.env.OPENAI_API_KEY).toBe('sk-openai-env');
+
+      if (saved) process.env.OPENAI_API_KEY = saved;
+      else delete process.env.OPENAI_API_KEY;
+    });
+
+    test('sets environment variable for google', async () => {
+      const saved = process.env.GOOGLE_API_KEY;
+      delete process.env.GOOGLE_API_KEY;
+
+      await app.request('/api-key', {
+        method: 'PUT',
+        body: JSON.stringify({ provider: 'google', apiKey: 'AIza-google-env' }),
+        headers: { 'Content-Type': 'application/json' },
+      });
+
+      // @ts-expect-error -- env var was just set above
+      expect(process.env.GOOGLE_API_KEY).toBe('AIza-google-env');
+
+      if (saved) process.env.GOOGLE_API_KEY = saved;
+      else delete process.env.GOOGLE_API_KEY;
+    });
+  });
+
+  // ---------------------------------------------------------------
+  // GET /api-keys/status — mixed DB and env var state
+  // ---------------------------------------------------------------
+  describe('GET /api-keys/status — edge cases', () => {
+    test('returns false for provider with empty string in DB and no env var', async () => {
+      const saved = process.env.GOOGLE_API_KEY;
+      delete process.env.GOOGLE_API_KEY;
+
+      insertSetting('googleApiKey', '');
+
+      const res = await app.request('/api-keys/status');
+      const json = await res.json();
+      expect(json.data.google).toBe(false);
+
+      if (saved) process.env.GOOGLE_API_KEY = saved;
+    });
+
+    test('returns true when DB is empty but env var is set', async () => {
+      const saved = process.env.GOOGLE_API_KEY;
+      process.env.GOOGLE_API_KEY = 'AIza-env-only';
+
+      const res = await app.request('/api-keys/status');
+      const json = await res.json();
+      expect(json.data.google).toBe(true);
+
+      if (saved) process.env.GOOGLE_API_KEY = saved;
+      else delete process.env.GOOGLE_API_KEY;
+    });
+  });
+
+  // ---------------------------------------------------------------
+  // Ollama endpoints
+  // ---------------------------------------------------------------
+  describe('GET /ollama/status — Ollama health check', () => {
+    test('returns available=true when Ollama is healthy', async () => {
+      mockCheckOllamaHealth.mockResolvedValue(true);
+
+      const res = await app.request('/ollama/status');
+      expect(res.status).toBe(200);
+      const json = await res.json();
+      expect(json.ok).toBe(true);
+      expect(json.data.available).toBe(true);
+    });
+
+    test('returns available=false when Ollama is not healthy', async () => {
+      mockCheckOllamaHealth.mockResolvedValue(false);
+
+      const res = await app.request('/ollama/status');
+      const json = await res.json();
+      expect(json.ok).toBe(true);
+      expect(json.data.available).toBe(false);
+    });
+  });
+
+  describe('GET /ollama/models — Ollama model list', () => {
+    test('returns model list from Ollama', async () => {
+      mockListOllamaModels.mockResolvedValue([{ name: 'llama3' }, { name: 'codellama' }]);
+
+      const res = await app.request('/ollama/models');
+      expect(res.status).toBe(200);
+      const json = await res.json();
+      expect(json.ok).toBe(true);
+      expect(json.data).toHaveLength(2);
+      expect(json.data[0].name).toBe('llama3');
+    });
+
+    test('returns empty array when no models installed', async () => {
+      mockListOllamaModels.mockResolvedValue([]);
+
+      const res = await app.request('/ollama/models');
+      const json = await res.json();
+      expect(json.data).toEqual([]);
+    });
+  });
+
+  // ---------------------------------------------------------------
+  // OpenAI models endpoint
+  // ---------------------------------------------------------------
+  describe('GET /openai/models — OpenAI model list', () => {
+    test('returns model list from OpenAI', async () => {
+      mockListOpenAIModels.mockResolvedValue([{ id: 'gpt-4' }, { id: 'gpt-3.5-turbo' }]);
+
+      const res = await app.request('/openai/models');
+      expect(res.status).toBe(200);
+      const json = await res.json();
+      expect(json.ok).toBe(true);
+      expect(json.data).toHaveLength(2);
+    });
+  });
+
+  // ---------------------------------------------------------------
+  // Gemini models endpoint
+  // ---------------------------------------------------------------
+  describe('GET /gemini/models — Gemini model list', () => {
+    test('returns model list from Gemini', async () => {
+      mockListGeminiModels.mockResolvedValue([{ name: 'gemini-pro' }]);
+
+      const res = await app.request('/gemini/models');
+      expect(res.status).toBe(200);
+      const json = await res.json();
+      expect(json.ok).toBe(true);
+      expect(json.data).toHaveLength(1);
+      expect(json.data[0].name).toBe('gemini-pro');
+    });
+  });
+
+  // ---------------------------------------------------------------
+  // Permission Rules CRUD
+  // ---------------------------------------------------------------
+  describe('GET /permission-rules/presets — list presets', () => {
+    test('returns the permission presets', async () => {
+      const res = await app.request('/permission-rules/presets');
+      expect(res.status).toBe(200);
+      const json = await res.json();
+      expect(json.ok).toBe(true);
+      expect(Array.isArray(json.data)).toBe(true);
+      expect(json.data.length).toBeGreaterThan(0);
+      // Every preset should have id, name, rules
+      for (const preset of json.data) {
+        expect(preset.id).toBeDefined();
+        expect(preset.name).toBeDefined();
+        expect(Array.isArray(preset.rules)).toBe(true);
+      }
+    });
+  });
+
+  describe('GET /permission-rules — list rules', () => {
+    test('returns empty array when no rules exist', async () => {
+      const res = await app.request('/permission-rules');
+      expect(res.status).toBe(200);
+      const json = await res.json();
+      expect(json.ok).toBe(true);
+      expect(json.data).toEqual([]);
+    });
+
+    test('returns rules after creating them', async () => {
+      // Create a global rule
+      await app.request('/permission-rules', {
+        method: 'POST',
+        body: JSON.stringify({ type: 'allow', tool: 'Read', scope: 'global' }),
+        headers: { 'Content-Type': 'application/json' },
+      });
+
+      const res = await app.request('/permission-rules');
+      const json = await res.json();
+      expect(json.ok).toBe(true);
+      expect(json.data.length).toBeGreaterThanOrEqual(1);
+    });
+
+    test('filters by scope query parameter', async () => {
+      // Create both global and project-scoped rules
+      await app.request('/permission-rules', {
+        method: 'POST',
+        body: JSON.stringify({ type: 'allow', tool: 'Read', scope: 'global' }),
+        headers: { 'Content-Type': 'application/json' },
+      });
+      await app.request('/permission-rules', {
+        method: 'POST',
+        body: JSON.stringify({
+          type: 'deny',
+          tool: 'Bash',
+          scope: 'project',
+          workspacePath: '/proj',
+        }),
+        headers: { 'Content-Type': 'application/json' },
+      });
+
+      const res = await app.request('/permission-rules?scope=global');
+      const json = await res.json();
+      expect(json.ok).toBe(true);
+      for (const rule of json.data) {
+        expect(rule.scope).toBe('global');
+      }
+    });
+
+    test('filters by workspacePath', async () => {
+      await app.request('/permission-rules', {
+        method: 'POST',
+        body: JSON.stringify({
+          type: 'allow',
+          tool: 'Write',
+          scope: 'project',
+          workspacePath: '/specific-proj',
+        }),
+        headers: { 'Content-Type': 'application/json' },
+      });
+
+      const res = await app.request('/permission-rules?workspacePath=/specific-proj');
+      const json = await res.json();
+      expect(json.ok).toBe(true);
+      // Should include the project-scoped rule for /specific-proj
+      expect(json.data.length).toBeGreaterThanOrEqual(1);
+    });
+  });
+
+  describe('POST /permission-rules — create rule', () => {
+    test('creates a rule with all required fields', async () => {
+      const res = await app.request('/permission-rules', {
+        method: 'POST',
+        body: JSON.stringify({
+          type: 'allow',
+          tool: 'Read',
+          scope: 'global',
+        }),
+        headers: { 'Content-Type': 'application/json' },
+      });
+      expect(res.status).toBe(200);
+      const json = await res.json();
+      expect(json.ok).toBe(true);
+      expect(json.data.id).toBeDefined();
+      expect(json.data.type).toBe('allow');
+      expect(json.data.tool).toBe('Read');
+      expect(json.data.scope).toBe('global');
+    });
+
+    test('creates a rule with a pattern', async () => {
+      const res = await app.request('/permission-rules', {
+        method: 'POST',
+        body: JSON.stringify({
+          type: 'deny',
+          tool: 'Bash',
+          pattern: 'rm -rf *',
+          scope: 'global',
+        }),
+        headers: { 'Content-Type': 'application/json' },
+      });
+      const json = await res.json();
+      expect(json.ok).toBe(true);
+      expect(json.data.pattern).toBe('rm -rf *');
+    });
+
+    test('returns 400 when type is missing', async () => {
+      const res = await app.request('/permission-rules', {
+        method: 'POST',
+        body: JSON.stringify({ tool: 'Read', scope: 'global' }),
+        headers: { 'Content-Type': 'application/json' },
+      });
+      expect(res.status).toBe(400);
+      const json = await res.json();
+      expect(json.ok).toBe(false);
+      expect(json.error).toContain('type');
+    });
+
+    test('returns 400 when tool is missing', async () => {
+      const res = await app.request('/permission-rules', {
+        method: 'POST',
+        body: JSON.stringify({ type: 'allow', scope: 'global' }),
+        headers: { 'Content-Type': 'application/json' },
+      });
+      expect(res.status).toBe(400);
+    });
+
+    test('returns 400 when scope is missing', async () => {
+      const res = await app.request('/permission-rules', {
+        method: 'POST',
+        body: JSON.stringify({ type: 'allow', tool: 'Read' }),
+        headers: { 'Content-Type': 'application/json' },
+      });
+      expect(res.status).toBe(400);
+    });
+
+    test('creates a project-scoped rule with workspacePath', async () => {
+      const res = await app.request('/permission-rules', {
+        method: 'POST',
+        body: JSON.stringify({
+          type: 'ask',
+          tool: 'Write',
+          scope: 'project',
+          workspacePath: '/my-project',
+        }),
+        headers: { 'Content-Type': 'application/json' },
+      });
+      const json = await res.json();
+      expect(json.ok).toBe(true);
+      expect(json.data.scope).toBe('project');
+    });
+
+    test('creates a session-scoped rule with conversationId', async () => {
+      const res = await app.request('/permission-rules', {
+        method: 'POST',
+        body: JSON.stringify({
+          type: 'allow',
+          tool: 'Bash',
+          scope: 'session',
+          conversationId: 'conv-123',
+        }),
+        headers: { 'Content-Type': 'application/json' },
+      });
+      const json = await res.json();
+      expect(json.ok).toBe(true);
+      expect(json.data.scope).toBe('session');
+    });
+
+    test('creates rule without pattern (undefined)', async () => {
+      const res = await app.request('/permission-rules', {
+        method: 'POST',
+        body: JSON.stringify({
+          type: 'allow',
+          tool: 'Glob',
+          scope: 'global',
+        }),
+        headers: { 'Content-Type': 'application/json' },
+      });
+      const json = await res.json();
+      expect(json.ok).toBe(true);
+      expect(json.data.pattern).toBeUndefined();
+    });
+  });
+
+  describe('PATCH /permission-rules/:id — update rule', () => {
+    test('updates an existing rule', async () => {
+      // First create a rule
+      const createRes = await app.request('/permission-rules', {
+        method: 'POST',
+        body: JSON.stringify({ type: 'allow', tool: 'Read', scope: 'global' }),
+        headers: { 'Content-Type': 'application/json' },
+      });
+      const created = await createRes.json();
+      const ruleId = created.data.id;
+
+      // Update it
+      const updateRes = await app.request(`/permission-rules/${ruleId}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ type: 'deny' }),
+        headers: { 'Content-Type': 'application/json' },
+      });
+      expect(updateRes.status).toBe(200);
+      const updated = await updateRes.json();
+      expect(updated.ok).toBe(true);
+      expect(updated.data.id).toBe(ruleId);
+      expect(updated.data.type).toBe('deny');
+      // Original tool should be preserved via spread
+      expect(updated.data.tool).toBe('Read');
+    });
+
+    test('returns 404 for non-existent rule', async () => {
+      const res = await app.request('/permission-rules/nonexistent-id', {
+        method: 'PATCH',
+        body: JSON.stringify({ type: 'deny' }),
+        headers: { 'Content-Type': 'application/json' },
+      });
+      expect(res.status).toBe(404);
+      const json = await res.json();
+      expect(json.ok).toBe(false);
+      expect(json.error).toBe('Rule not found');
+    });
+
+    test('preserves rule id even if body tries to change it', async () => {
+      const createRes = await app.request('/permission-rules', {
+        method: 'POST',
+        body: JSON.stringify({ type: 'allow', tool: 'Read', scope: 'global' }),
+        headers: { 'Content-Type': 'application/json' },
+      });
+      const created = await createRes.json();
+      const ruleId = created.data.id;
+
+      const updateRes = await app.request(`/permission-rules/${ruleId}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ id: 'hacked-id', type: 'ask' }),
+        headers: { 'Content-Type': 'application/json' },
+      });
+      const updated = await updateRes.json();
+      expect(updated.data.id).toBe(ruleId); // id must NOT change
+      expect(updated.data.type).toBe('ask');
+    });
+  });
+
+  describe('DELETE /permission-rules/:id — delete rule', () => {
+    test('deletes an existing rule', async () => {
+      // Create a rule first
+      const createRes = await app.request('/permission-rules', {
+        method: 'POST',
+        body: JSON.stringify({ type: 'allow', tool: 'Read', scope: 'global' }),
+        headers: { 'Content-Type': 'application/json' },
+      });
+      const created = await createRes.json();
+      const ruleId = created.data.id;
+
+      // Delete it
+      const delRes = await app.request(`/permission-rules/${ruleId}`, {
+        method: 'DELETE',
+      });
+      expect(delRes.status).toBe(200);
+      const delJson = await delRes.json();
+      expect(delJson.ok).toBe(true);
+
+      // Verify it is gone (loadPermissionRules for global)
+      const listRes = await app.request('/permission-rules');
+      const listJson = await listRes.json();
+      const found = listJson.data.find((r: any) => r.id === ruleId);
+      expect(found).toBeUndefined();
+    });
+
+    test('returns ok even for non-existent rule (idempotent)', async () => {
+      const res = await app.request('/permission-rules/does-not-exist', {
+        method: 'DELETE',
+      });
+      expect(res.status).toBe(200);
+      const json = await res.json();
+      expect(json.ok).toBe(true);
+    });
+  });
+
+  describe('POST /permission-rules/apply-preset — apply preset', () => {
+    test('applies the safe-coding preset as global scope', async () => {
+      const res = await app.request('/permission-rules/apply-preset', {
+        method: 'POST',
+        body: JSON.stringify({ presetId: 'safe-coding', scope: 'global' }),
+        headers: { 'Content-Type': 'application/json' },
+      });
+      expect(res.status).toBe(200);
+      const json = await res.json();
+      expect(json.ok).toBe(true);
+      expect(Array.isArray(json.data)).toBe(true);
+      expect(json.data.length).toBeGreaterThan(0);
+      // All rules should have the requested scope
+      for (const rule of json.data) {
+        expect(rule.scope).toBe('global');
+        expect(rule.id).toBeDefined();
+      }
+    });
+
+    test('applies the full-auto preset', async () => {
+      const res = await app.request('/permission-rules/apply-preset', {
+        method: 'POST',
+        body: JSON.stringify({ presetId: 'full-auto', scope: 'global' }),
+        headers: { 'Content-Type': 'application/json' },
+      });
+      const json = await res.json();
+      expect(json.ok).toBe(true);
+      expect(json.data.length).toBe(1);
+      expect(json.data[0].type).toBe('allow');
+      expect(json.data[0].tool).toBe('*');
+    });
+
+    test('returns 404 for unknown preset', async () => {
+      const res = await app.request('/permission-rules/apply-preset', {
+        method: 'POST',
+        body: JSON.stringify({ presetId: 'nonexistent-preset', scope: 'global' }),
+        headers: { 'Content-Type': 'application/json' },
+      });
+      expect(res.status).toBe(404);
+      const json = await res.json();
+      expect(json.ok).toBe(false);
+      expect(json.error).toBe('Preset not found');
+    });
+
+    test('replaces existing global rules when applying a global preset', async () => {
+      // First apply one preset
+      await app.request('/permission-rules/apply-preset', {
+        method: 'POST',
+        body: JSON.stringify({ presetId: 'full-auto', scope: 'global' }),
+        headers: { 'Content-Type': 'application/json' },
+      });
+
+      // Now apply a different preset to the same scope
+      const res = await app.request('/permission-rules/apply-preset', {
+        method: 'POST',
+        body: JSON.stringify({ presetId: 'safe-coding', scope: 'global' }),
+        headers: { 'Content-Type': 'application/json' },
+      });
+      const json = await res.json();
+      expect(json.ok).toBe(true);
+
+      // Verify the old full-auto rules are gone, only safe-coding rules remain
+      const listRes = await app.request('/permission-rules?scope=global');
+      const listJson = await listRes.json();
+      // None of the rules should be the full-auto wildcard (tool: '*')
+      const wildcardRules = listJson.data.filter((r: any) => r.tool === '*');
+      // safe-coding does not have a wildcard allow rule
+      expect(wildcardRules).toHaveLength(0);
+    });
+
+    test('applies preset as project scope and replaces project rules', async () => {
+      // Create a project-scoped rule manually
+      await app.request('/permission-rules', {
+        method: 'POST',
+        body: JSON.stringify({
+          type: 'deny',
+          tool: 'Bash',
+          scope: 'project',
+          workspacePath: '/my-proj',
+        }),
+        headers: { 'Content-Type': 'application/json' },
+      });
+
+      // Apply preset to project scope
+      const res = await app.request('/permission-rules/apply-preset', {
+        method: 'POST',
+        body: JSON.stringify({
+          presetId: 'full-auto',
+          scope: 'project',
+          workspacePath: '/my-proj',
+        }),
+        headers: { 'Content-Type': 'application/json' },
+      });
+      const json = await res.json();
+      expect(json.ok).toBe(true);
+      expect(json.data).toHaveLength(1);
+      expect(json.data[0].scope).toBe('project');
+    });
+
+    test('applies preset as session scope', async () => {
+      const res = await app.request('/permission-rules/apply-preset', {
+        method: 'POST',
+        body: JSON.stringify({
+          presetId: 'read-only',
+          scope: 'session',
+          conversationId: 'conv-abc',
+        }),
+        headers: { 'Content-Type': 'application/json' },
+      });
+      const json = await res.json();
+      expect(json.ok).toBe(true);
+      expect(json.data.length).toBeGreaterThan(0);
+      for (const rule of json.data) {
+        expect(rule.scope).toBe('session');
+      }
     });
   });
 });

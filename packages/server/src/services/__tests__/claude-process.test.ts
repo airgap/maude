@@ -1106,4 +1106,350 @@ describe('translateCliEvent edge cases', () => {
     expect(parsed[7].content_block.type).toBe('tool_use');
     expect(parsed[7].content_block.name).toBe('Write');
   });
+
+  test('result event without cache tokens defaults to 0', () => {
+    const events = translateCliEvent({
+      type: 'result',
+      usage: { input_tokens: 100, output_tokens: 50 },
+    });
+
+    const parsed = events.map((e) => JSON.parse(e));
+    expect(parsed[0].usage.cache_creation_input_tokens).toBe(0);
+    expect(parsed[0].usage.cache_read_input_tokens).toBe(0);
+  });
+
+  test('handles result event with partial usage object', () => {
+    const events = translateCliEvent({
+      type: 'result',
+      stop_reason: 'tool_use',
+      usage: { input_tokens: 42 },
+    });
+
+    const parsed = events.map((e) => JSON.parse(e));
+    expect(parsed[0].delta.stop_reason).toBe('tool_use');
+    expect(parsed[0].usage.input_tokens).toBe(42);
+    expect(parsed[0].usage.output_tokens).toBe(0);
+  });
+
+  test('handles multiple tool_use blocks in single assistant event', () => {
+    const events = translateCliEvent({
+      type: 'assistant',
+      message: {
+        id: 'msg-multi-tool',
+        model: 'claude-sonnet-4',
+        content: [
+          { type: 'tool_use', id: 'tu-1', name: 'Read', input: { file_path: '/a.ts' } },
+          {
+            type: 'tool_use',
+            id: 'tu-2',
+            name: 'Write',
+            input: { file_path: '/b.ts', content: 'x' },
+          },
+          { type: 'tool_use', id: 'tu-3', name: 'Bash', input: { command: 'ls' } },
+        ],
+      },
+    });
+
+    const parsed = events.map((e) => JSON.parse(e));
+    // message_start + 3 * (start + delta + stop) = 10
+    expect(parsed).toHaveLength(10);
+
+    // Verify each tool_use block at correct indices
+    expect(parsed[1].content_block.name).toBe('Read');
+    expect(parsed[1].index).toBe(0);
+    expect(parsed[4].content_block.name).toBe('Write');
+    expect(parsed[4].index).toBe(1);
+    expect(parsed[7].content_block.name).toBe('Bash');
+    expect(parsed[7].index).toBe(2);
+  });
+
+  test('handles assistant event with only text, no thinking or tool_use', () => {
+    const events = translateCliEvent({
+      type: 'assistant',
+      message: {
+        id: 'msg-text-only',
+        model: 'claude-haiku-4',
+        content: [
+          { type: 'text', text: 'First paragraph.' },
+          { type: 'text', text: 'Second paragraph.' },
+        ],
+      },
+    });
+
+    const parsed = events.map((e) => JSON.parse(e));
+    // message_start + 2 * (start + delta + stop) = 7
+    expect(parsed).toHaveLength(7);
+    expect(parsed[2].delta.text).toBe('First paragraph.');
+    expect(parsed[5].delta.text).toBe('Second paragraph.');
+  });
+
+  test('handles user event type (no output expected)', () => {
+    const events = translateCliEvent({
+      type: 'user',
+      message: {
+        content: [{ type: 'tool_result', tool_use_id: 'tu-1', content: 'result text' }],
+      },
+    });
+
+    // user events fall through to default case and produce no events
+    expect(events).toEqual([]);
+  });
+
+  test('parent_tool_use_id is correctly propagated to all sub-events', () => {
+    const events = translateCliEvent({
+      type: 'assistant',
+      parent_tool_use_id: 'parent-xyz',
+      message: {
+        id: 'msg-nested',
+        content: [
+          { type: 'thinking', thinking: 'thinking inside tool' },
+          { type: 'text', text: 'nested response' },
+          { type: 'tool_use', id: 'tu-inner', name: 'Read', input: { file_path: '/x' } },
+        ],
+      },
+    });
+
+    const parsed = events.map((e) => JSON.parse(e));
+    // ALL 10 events should have parent_tool_use_id = 'parent-xyz'
+    expect(parsed).toHaveLength(10);
+    for (const evt of parsed) {
+      expect(evt.parent_tool_use_id).toBe('parent-xyz');
+    }
+  });
+});
+
+// ============================================================================
+// Additional ClaudeProcessManager tests
+// ============================================================================
+describe('ClaudeProcessManager - additional lifecycle', () => {
+  test('queueNudge returns true for existing session', async () => {
+    const sessionId = await claudeManager.createSession('conv-nudge-ret');
+    const result = claudeManager.queueNudge(sessionId, 'Test nudge');
+    expect(result).toBe(true);
+  });
+
+  test('queueNudge accumulates multiple nudges in order', async () => {
+    const sessionId = await claudeManager.createSession('conv-nudge-order');
+    claudeManager.queueNudge(sessionId, 'First');
+    claudeManager.queueNudge(sessionId, 'Second');
+    claudeManager.queueNudge(sessionId, 'Third');
+
+    const session = claudeManager.getSession(sessionId)!;
+    expect(session.pendingNudges).toEqual(['First', 'Second', 'Third']);
+  });
+
+  test('createSession with no options uses defaults', async () => {
+    const sessionId = await claudeManager.createSession('conv-defaults');
+    const session = claudeManager.getSession(sessionId)!;
+
+    expect(session.model).toBeUndefined();
+    expect(session.systemPrompt).toBeUndefined();
+    expect(session.workspacePath).toBeUndefined();
+    expect(session.effort).toBeUndefined();
+    expect(session.maxBudgetUsd).toBeUndefined();
+    expect(session.maxTurns).toBeUndefined();
+    expect(session.allowedTools).toBeUndefined();
+    expect(session.disallowedTools).toBeUndefined();
+    expect(session.cliSessionId).toBeUndefined();
+    expect(session.pendingNudges).toEqual([]);
+    expect(session.eventBuffer).toEqual([]);
+    expect(session.streamComplete).toBe(false);
+  });
+
+  test('terminateSession kills cliProcess if present', async () => {
+    const sessionId = await claudeManager.createSession('conv-term-proc');
+    const session = claudeManager.getSession(sessionId)!;
+
+    // Mock a cliProcess with a kill method
+    let killCalled = false;
+    session.cliProcess = {
+      pid: 12345,
+      stdout: new ReadableStream(),
+      stderr: null,
+      write: () => {},
+      kill: () => {
+        killCalled = true;
+      },
+      exited: Promise.resolve(0),
+      exitCode: null,
+    } as any;
+
+    claudeManager.terminateSession(sessionId);
+    expect(killCalled).toBe(true);
+    expect(claudeManager.getSession(sessionId)).toBeUndefined();
+  });
+
+  test('writeStdin returns true when cliProcess.write succeeds', async () => {
+    const sessionId = await claudeManager.createSession('conv-stdin-ok');
+    const session = claudeManager.getSession(sessionId)!;
+
+    let writtenData = '';
+    session.cliProcess = {
+      pid: 12345,
+      stdout: new ReadableStream(),
+      stderr: null,
+      write: (data: string) => {
+        writtenData = data;
+      },
+      kill: () => {},
+      exited: Promise.resolve(0),
+      exitCode: null,
+    } as any;
+
+    const result = claudeManager.writeStdin(sessionId, 'test input');
+    expect(result).toBe(true);
+    expect(writtenData).toBe('test input');
+  });
+
+  test('writeStdin returns false when cliProcess.write throws', async () => {
+    const sessionId = await claudeManager.createSession('conv-stdin-fail');
+    const session = claudeManager.getSession(sessionId)!;
+
+    session.cliProcess = {
+      pid: 12345,
+      stdout: new ReadableStream(),
+      stderr: null,
+      write: () => {
+        throw new Error('stdin closed');
+      },
+      kill: () => {},
+      exited: Promise.resolve(0),
+      exitCode: null,
+    } as any;
+
+    const result = claudeManager.writeStdin(sessionId, 'test input');
+    expect(result).toBe(false);
+  });
+
+  test('clearStaleSessionIds clears all CLI session IDs from DB', () => {
+    // Insert conversations with cli_session_id set
+    testDb
+      .query(
+        "INSERT OR IGNORE INTO conversations (id, title, model, cli_session_id, created_at, updated_at) VALUES ('conv-stale-1', 'Test 1', 'claude-sonnet-4', 'old-session-1', ?, ?)",
+      )
+      .run(Date.now(), Date.now());
+    testDb
+      .query(
+        "INSERT OR IGNORE INTO conversations (id, title, model, cli_session_id, created_at, updated_at) VALUES ('conv-stale-2', 'Test 2', 'claude-sonnet-4', 'old-session-2', ?, ?)",
+      )
+      .run(Date.now(), Date.now());
+
+    // Verify they have session IDs
+    const before1 = testDb
+      .query("SELECT cli_session_id FROM conversations WHERE id = 'conv-stale-1'")
+      .get() as any;
+    expect(before1.cli_session_id).toBe('old-session-1');
+
+    // Clear stale sessions
+    claudeManager.clearStaleSessionIds();
+
+    // Verify they are now cleared
+    const after1 = testDb
+      .query("SELECT cli_session_id FROM conversations WHERE id = 'conv-stale-1'")
+      .get() as any;
+    const after2 = testDb
+      .query("SELECT cli_session_id FROM conversations WHERE id = 'conv-stale-2'")
+      .get() as any;
+    expect(after1.cli_session_id).toBeNull();
+    expect(after2.cli_session_id).toBeNull();
+  });
+
+  test('createLightweightSession sets status to running', () => {
+    const sessionId = claudeManager.createLightweightSession('conv-lw-status');
+    const session = claudeManager.getSession(sessionId)!;
+    expect(session.status).toBe('running');
+  });
+
+  test('createLightweightSession has no cliProcess', () => {
+    const sessionId = claudeManager.createLightweightSession('conv-lw-noproc');
+    const session = claudeManager.getSession(sessionId)!;
+    expect(session.cliProcess).toBeUndefined();
+  });
+
+  test('multiple sessions for same conversation are independent', async () => {
+    const session1 = await claudeManager.createSession('conv-shared');
+    const session2 = await claudeManager.createSession('conv-shared');
+
+    expect(session1).not.toBe(session2);
+
+    const s1 = claudeManager.getSession(session1)!;
+    const s2 = claudeManager.getSession(session2)!;
+
+    expect(s1.conversationId).toBe(s2.conversationId);
+    expect(s1.id).not.toBe(s2.id);
+
+    // Terminate one should not affect the other
+    claudeManager.terminateSession(session1);
+    expect(claudeManager.getSession(session1)).toBeUndefined();
+    expect(claudeManager.getSession(session2)).toBeDefined();
+  });
+
+  test('cancelGeneration does not change session status directly', async () => {
+    const sessionId = await claudeManager.createSession('conv-cancel-status');
+    const session = claudeManager.getSession(sessionId)!;
+    expect(session.status).toBe('idle');
+
+    // Cancel should emit the event but status is changed by the event handler,
+    // not by cancelGeneration itself
+    claudeManager.cancelGeneration(sessionId);
+    // Status remains idle since no stream handler is listening to change it
+    expect(session.status).toBe('idle');
+  });
+
+  test('reconnectStream with completed session replays and closes', async () => {
+    const sessionId = await claudeManager.createSession('conv-reconnect-complete-close');
+    const session = claudeManager.getSession(sessionId)!;
+
+    session.eventBuffer = [
+      'data: {"type":"message_start","message":{"id":"m1","role":"assistant"}}\n\n',
+      'data: {"type":"message_stop"}\n\n',
+    ];
+    session.streamComplete = true;
+
+    const stream = claudeManager.reconnectStream(sessionId)!;
+    expect(stream).not.toBeNull();
+
+    const reader = stream.getReader();
+    const decoder = new TextDecoder();
+    let allData = '';
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      allData += decoder.decode(value, { stream: true });
+    }
+
+    expect(allData).toContain('message_start');
+    expect(allData).toContain('message_stop');
+  });
+
+  test('wrapProviderStream handles stream with non-SSE data', async () => {
+    const sessionId = claudeManager.createLightweightSession('conv-wrap-non-sse');
+    const encoder = new TextEncoder();
+
+    const providerStream = new ReadableStream({
+      start(controller) {
+        // Some data that isn't SSE formatted
+        controller.enqueue(encoder.encode('plain text without data: prefix\n'));
+        controller.enqueue(encoder.encode('data: {"type":"message_stop"}\n\n'));
+        controller.close();
+      },
+    });
+
+    const wrappedStream = claudeManager.wrapProviderStream(sessionId, providerStream);
+    const reader = wrappedStream.getReader();
+
+    while (true) {
+      const { done } = await reader.read();
+      if (done) break;
+    }
+
+    const session = claudeManager.getSession(sessionId)!;
+    // Only the SSE-formatted line should be buffered
+    const sseEvents = session.eventBuffer.filter((e) => e.includes('message_stop'));
+    expect(sseEvents.length).toBe(1);
+    // Non-SSE data should NOT be in the buffer
+    const nonSse = session.eventBuffer.filter((e) => e.includes('plain text'));
+    expect(nonSse.length).toBe(0);
+  });
 });
