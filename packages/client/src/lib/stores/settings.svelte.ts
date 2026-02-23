@@ -24,6 +24,12 @@ interface SettingsState {
   autoMemoryEnabled: boolean;
   /** Require change preview for AI file modifications */
   requireChangePreview: boolean;
+  /** Format on save via LSP or external formatter */
+  formatOnSave: boolean;
+  /** Organize imports on save via LSP code action */
+  organizeImportsOnSave: boolean;
+  /** Formatter preference */
+  defaultFormatter: 'auto' | 'lsp' | 'external';
   fontSize: number;
   uiFontSize: number | null; // null = follow code font size
   fontFamily: string;
@@ -130,6 +136,9 @@ const defaults: SettingsState = {
   ],
   autoMemoryEnabled: true,
   requireChangePreview: false,
+  formatOnSave: false,
+  organizeImportsOnSave: false,
+  defaultFormatter: 'auto' as const,
   fontSize: 14,
   uiFontSize: null,
   fontFamily: 'share-tech-mono',
@@ -338,6 +347,15 @@ function createSettingsStore() {
     },
     get requireChangePreview() {
       return state.requireChangePreview;
+    },
+    get formatOnSave() {
+      return state.formatOnSave;
+    },
+    get organizeImportsOnSave() {
+      return state.organizeImportsOnSave;
+    },
+    get defaultFormatter() {
+      return state.defaultFormatter;
     },
     get fontSize() {
       return state.fontSize;

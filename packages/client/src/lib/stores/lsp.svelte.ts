@@ -150,6 +150,8 @@ function createLspStore() {
                     },
                   },
                 },
+                formatting: { dynamicRegistration: false },
+                rangeFormatting: { dynamicRegistration: false },
                 synchronization: {
                   didSave: true,
                   willSave: false,
@@ -391,6 +393,84 @@ function createLspStore() {
     /**
      * Install an npm-based language server, then auto-connect on success.
      */
+    // --- Formatting helpers ---
+
+    /**
+     * Request document formatting from the LSP server.
+     * Returns TextEdit[] that should be applied to the document.
+     */
+    async formatDocument(
+      language: string,
+      uri: string,
+      options?: { tabSize?: number; insertSpaces?: boolean },
+    ): Promise<Array<{ range: any; newText: string }>> {
+      const fUri = fileUri(uri);
+      const conn = getConnection(language);
+      if (!conn || conn.status !== 'ready') return [];
+
+      // Check if server supports formatting
+      if (!conn.capabilities?.documentFormattingProvider) return [];
+
+      try {
+        const result = await this.request(language, 'textDocument/formatting', {
+          textDocument: { uri: fUri },
+          options: {
+            tabSize: options?.tabSize ?? 2,
+            insertSpaces: options?.insertSpaces ?? true,
+          },
+        });
+        return Array.isArray(result) ? result : [];
+      } catch {
+        return [];
+      }
+    },
+
+    /**
+     * Request organize imports via LSP code action.
+     * Returns TextEdit[] from the source.organizeImports action.
+     */
+    async organizeImports(
+      language: string,
+      uri: string,
+    ): Promise<Array<{ range: any; newText: string }>> {
+      const fUri = fileUri(uri);
+      const conn = getConnection(language);
+      if (!conn || conn.status !== 'ready') return [];
+
+      // Check if server supports code actions
+      if (!conn.capabilities?.codeActionProvider) return [];
+
+      try {
+        const result = await this.request(language, 'textDocument/codeAction', {
+          textDocument: { uri: fUri },
+          range: { start: { line: 0, character: 0 }, end: { line: 0, character: 0 } },
+          context: {
+            diagnostics: [],
+            only: ['source.organizeImports'],
+          },
+        });
+
+        if (!Array.isArray(result) || result.length === 0) return [];
+
+        // Get the first organize imports action and extract its edits
+        const action = result[0];
+        if (action.edit?.changes?.[fUri]) {
+          return action.edit.changes[fUri];
+        }
+        if (action.edit?.documentChanges) {
+          for (const change of action.edit.documentChanges) {
+            if (change.textDocument?.uri === fUri && change.edits) {
+              return change.edits;
+            }
+          }
+        }
+
+        return [];
+      } catch {
+        return [];
+      }
+    },
+
     async installServer(language: string, rootPath: string): Promise<void> {
       if (installing.has(language)) return;
       installing = new Set([...installing, language]);

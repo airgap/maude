@@ -44,6 +44,7 @@ import scheduledTasksRoutes from './routes/scheduled-tasks';
 import webhookRoutes, { webhookInboundApp } from './routes/webhooks';
 import { crossSessionRoutes } from './routes/cross-session';
 import { aiActionRoutes } from './routes/ai-actions';
+import { formatRoutes } from './routes/format';
 import { authMiddleware } from './middleware/auth';
 import { csrfMiddleware, isOriginAllowed } from './middleware/csrf';
 import { websocket } from './ws';
@@ -147,6 +148,7 @@ app.route('/api/scheduled-tasks', scheduledTasksRoutes);
 app.route('/api/webhooks', webhookRoutes);
 app.route('/api/cross-session', crossSessionRoutes);
 app.route('/api/ai', aiActionRoutes);
+app.route('/api/format', formatRoutes);
 
 // Inbound webhook endpoint — bypasses auth/CSRF (uses its own token-based auth)
 app.route('/api/webhooks/inbound', webhookInboundApp);

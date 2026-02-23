@@ -1,5 +1,7 @@
 import { api } from '$lib/api/client';
 import { uiStore } from './ui.svelte';
+import { settingsStore } from './settings.svelte';
+import { lspStore } from './lsp.svelte';
 import { uuid } from '$lib/utils/uuid';
 import type { EditorConfigProps } from '@e/shared';
 
@@ -114,6 +116,110 @@ export function applyEditorConfig(content: string, config: EditorConfigProps): s
   }
 
   return result;
+}
+
+// ── Format on save helpers ──
+
+/** Apply LSP TextEdits to content string. Edits applied in reverse order. */
+function applyTextEdits(
+  content: string,
+  edits: Array<{
+    range: { start: { line: number; character: number }; end: { line: number; character: number } };
+    newText: string;
+  }>,
+): string {
+  if (!edits || edits.length === 0) return content;
+  const lines = content.split('\n');
+
+  // Sort edits in reverse to apply from bottom to top
+  const sorted = [...edits].sort((a, b) => {
+    const lineDiff = b.range.start.line - a.range.start.line;
+    return lineDiff !== 0 ? lineDiff : b.range.start.character - a.range.start.character;
+  });
+
+  for (const edit of sorted) {
+    const { start, end } = edit.range;
+    // Convert line:character to offset
+    let fromOffset = 0;
+    for (let i = 0; i < start.line && i < lines.length; i++) {
+      fromOffset += lines[i].length + 1;
+    }
+    fromOffset += Math.min(start.character, lines[start.line]?.length ?? 0);
+
+    let toOffset = 0;
+    for (let i = 0; i < end.line && i < lines.length; i++) {
+      toOffset += lines[i].length + 1;
+    }
+    toOffset += Math.min(end.character, lines[end.line]?.length ?? 0);
+
+    content = content.slice(0, fromOffset) + edit.newText + content.slice(toOffset);
+  }
+
+  return content;
+}
+
+interface EditorTabLike {
+  filePath: string;
+  language: string;
+  editorConfig?: EditorConfigProps | null;
+}
+
+/** Try LSP formatting first, then fall back to external formatter. */
+async function formatContent(tab: EditorTabLike, content: string): Promise<string> {
+  const language = tab.language;
+  const pref = settingsStore.defaultFormatter;
+
+  // Try LSP first (unless explicitly set to 'external')
+  if (pref !== 'external' && lspStore.isConnected(language)) {
+    try {
+      const tabSize = tab.editorConfig?.tab_width ?? tab.editorConfig?.indent_size ?? 2;
+      const insertSpaces = tab.editorConfig?.indent_style !== 'tab';
+      const edits = await lspStore.formatDocument(language, tab.filePath, {
+        tabSize,
+        insertSpaces,
+      });
+      if (edits.length > 0) {
+        return applyTextEdits(content, edits);
+      }
+    } catch {
+      // LSP formatting failed — try external
+    }
+  }
+
+  // Try external formatter (unless explicitly set to 'lsp')
+  if (pref !== 'lsp') {
+    try {
+      // Write current content first so the external formatter has it
+      await api.files.write(tab.filePath, content);
+      const resp = await api.format.format(tab.filePath, language, settingsStore.workspacePath);
+      if (resp.data?.formatted) {
+        // Re-read the file after formatting
+        const readResp = await api.files.read(tab.filePath);
+        return readResp.data.content;
+      }
+    } catch {
+      // External formatting failed — use original content
+    }
+  }
+
+  return content;
+}
+
+/** Organize imports via LSP. */
+async function organizeImportsContent(tab: EditorTabLike, content: string): Promise<string> {
+  const language = tab.language;
+  if (!lspStore.isConnected(language)) return content;
+
+  try {
+    const edits = await lspStore.organizeImports(language, tab.filePath);
+    if (edits.length > 0) {
+      return applyTextEdits(content, edits);
+    }
+  } catch {
+    // Organize imports failed — non-fatal
+  }
+
+  return content;
 }
 
 function createEditorStore() {
@@ -364,10 +470,28 @@ function createEditorStore() {
       const tab = tabs.find((t) => t.id === id);
       if (!tab) return;
       try {
-        // Apply editorconfig rules before saving
-        if (tab.editorConfig) {
-          tab.content = applyEditorConfig(tab.content, tab.editorConfig);
+        let content = tab.content;
+
+        // 1. Format on save (LSP or external)
+        if (settingsStore.formatOnSave) {
+          content = await formatContent(tab, content);
         }
+
+        // 2. Organize imports on save
+        if (settingsStore.organizeImportsOnSave) {
+          content = await organizeImportsContent(tab, content);
+        }
+
+        // 3. Apply editorconfig rules before saving
+        if (tab.editorConfig) {
+          content = applyEditorConfig(content, tab.editorConfig);
+        }
+
+        // Update the tab content if formatting changed it
+        if (content !== tab.content) {
+          tab.content = content;
+        }
+
         await api.files.write(tab.filePath, tab.content);
         tab.originalContent = tab.content;
         tabs = [...tabs]; // trigger reactivity

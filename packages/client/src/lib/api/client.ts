@@ -2279,4 +2279,21 @@ export const api = {
         data: { actions: Array<{ name: string; label: string }> };
       }>('/ai/actions'),
   },
+
+  // ── Format ──
+
+  format: {
+    /** Format a file using an external formatter */
+    format: (filePath: string, language: string, workspacePath: string) =>
+      request<{ ok: boolean; data: { formatted: boolean; formatter: string } }>('/format', {
+        method: 'POST',
+        body: JSON.stringify({ filePath, language, workspacePath }),
+      }),
+    /** List available formatters for a workspace */
+    formatters: (workspacePath: string) =>
+      request<{
+        ok: boolean;
+        data: { formatters: Array<{ name: string; languages: string[] }> };
+      }>(`/format/formatters?workspacePath=${encodeURIComponent(workspacePath)}`),
+  },
 };
