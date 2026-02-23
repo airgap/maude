@@ -8,7 +8,6 @@ import { createGeminiStreamV2 } from '../services/gemini-provider-v2';
 import { getDb } from '../db/database';
 import { readFile, readdir } from 'fs/promises';
 import { join, basename } from 'path';
-import { getSoulMemoryContext } from './soul-memory';
 
 const app = new Hono();
 
@@ -189,10 +188,9 @@ async function getSessionOpts(conv: any) {
   } catch {}
 
   // Build system prompt (outermost → innermost):
-  //   [PLAN/TEACH directive] + [user system prompt] + [base prompt] + [soul memory] + [workspace memories] + [active rules]
+  //   [PLAN/TEACH directive] + [user system prompt] + [base prompt] + [workspace memories] + [active rules]
   const memoryContext = getWorkspaceMemoryContext(conv.workspace_path);
   const rulesContext = await getActiveRulesContext(conv.workspace_path);
-  const soulMemoryContext = await getSoulMemoryContext(conv.workspace_path);
   let systemPrompt = BASE_SYSTEM_PROMPT + (conv.system_prompt ? '\n\n' + conv.system_prompt : '');
 
   if (conv.plan_mode) {
@@ -201,11 +199,6 @@ async function getSessionOpts(conv: any) {
 
   if (conv.permission_mode === 'teach') {
     systemPrompt = TEACH_MODE_DIRECTIVE + systemPrompt;
-  }
-
-  // Soul memory files (.e/SOUL.md, .e/KNOWLEDGE.md, .e/TOOLS.md) — injected before DB memories
-  if (soulMemoryContext) {
-    systemPrompt = systemPrompt + soulMemoryContext;
   }
 
   if (memoryContext) {

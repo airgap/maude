@@ -9,6 +9,7 @@
   import { panelDragStore } from '$lib/stores/panelDrag.svelte';
   import { loopStore } from '$lib/stores/loop.svelte';
   import TopBar from './TopBar.svelte';
+  import CommentaryTicker from './CommentaryTicker.svelte';
   import StatusBar from './StatusBar.svelte';
   import MainContent from './MainContent.svelte';
   import TerminalPanel from '../editor/TerminalPanel.svelte';
@@ -467,6 +468,7 @@
   {:else}
     <!-- ── Desktop: multi-column layout with sidebar panels ── -->
     <TopBar />
+    <CommentaryTicker />
 
     <div class="app-body">
       <!-- Left edge drop zone (when no left column exists) -->

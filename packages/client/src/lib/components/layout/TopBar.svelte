@@ -5,10 +5,30 @@
   import { uiStore } from '$lib/stores/ui.svelte';
   import { loopStore } from '$lib/stores/loop.svelte';
   import { deviceStore } from '$lib/stores/device.svelte';
+  import { workspaceStore } from '$lib/stores/workspace.svelte';
+  import { commentaryStore } from '$lib/stores/commentary.svelte';
+  import { findTheme } from '$lib/config/themes';
   import { api } from '$lib/api/client';
   import WorkspaceTabBar from './WorkspaceTabBar.svelte';
   import WindowControls from './WindowControls.svelte';
   import ProfileSwitcher from './ProfileSwitcher.svelte';
+
+  let commentaryActive = $derived(commentaryStore.isActive);
+  let commentaryWorkspaceId = $derived(commentaryStore.workspaceId);
+  let activeWorkspaceId = $derived(workspaceStore.activeWorkspace?.workspaceId);
+
+  function toggleCommentary() {
+    if (!activeWorkspaceId) return;
+    if (commentaryActive && commentaryWorkspaceId === activeWorkspaceId) {
+      commentaryStore.stopCommentary();
+    } else {
+      const personality =
+        commentaryStore.personality ||
+        findTheme(settingsStore.theme)?.suggestedPersonality ||
+        'sports_announcer';
+      commentaryStore.startCommentary(activeWorkspaceId, personality);
+    }
+  }
 
   const models = [
     { id: 'claude-opus-4-6', label: 'Opus 4.6' },
@@ -169,6 +189,34 @@
         )}%"
       ></div>
     </div>
+
+    <button
+      class="icon-btn commentary-toggle"
+      class:active={commentaryActive && commentaryWorkspaceId === activeWorkspaceId}
+      onclick={toggleCommentary}
+      title={commentaryActive && commentaryWorkspaceId === activeWorkspaceId
+        ? 'Stop commentary'
+        : 'Start live commentary'}
+      aria-label="Toggle live commentary"
+    >
+      <svg
+        width="16"
+        height="16"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <!-- broadcast/radio icon -->
+        <path d="M4.9 19.1C1 15.2 1 8.8 4.9 4.9" />
+        <path d="M7.8 16.2c-2.3-2.3-2.3-6.1 0-8.4" />
+        <path d="M16.2 7.8c2.3 2.3 2.3 6.1 0 8.4" />
+        <path d="M19.1 4.9C23 8.8 23 15.1 19.1 19" />
+        <circle cx="12" cy="12" r="2" />
+      </svg>
+    </button>
 
     <button
       class="icon-btn"
@@ -460,6 +508,26 @@
     }
     100% {
       transform: rotate(360deg);
+    }
+  }
+
+  /* ── Commentary toggle ── */
+  .commentary-toggle.active {
+    color: var(--accent-primary);
+    background: color-mix(in srgb, var(--accent-primary) 12%, transparent);
+    border-color: var(--accent-primary);
+    box-shadow: 0 0 6px color-mix(in srgb, var(--accent-primary) 25%, transparent);
+  }
+  .commentary-toggle.active svg {
+    animation: commentaryPulse 2.5s ease-in-out infinite;
+  }
+  @keyframes commentaryPulse {
+    0%,
+    100% {
+      opacity: 1;
+    }
+    50% {
+      opacity: 0.6;
     }
   }
 

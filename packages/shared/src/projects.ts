@@ -85,12 +85,6 @@ export interface WorkspaceSettings {
   crossSessionPermission?: 'open' | 'send_only' | 'receive_only' | 'disabled';
   /** Max cross-session messages per minute for this workspace */
   crossSessionMaxPerMinute?: number;
-  /** Enable/disable SOUL.md injection (default: true) */
-  soulMemorySoulEnabled?: boolean;
-  /** Enable/disable KNOWLEDGE.md injection (default: true) */
-  soulMemoryKnowledgeEnabled?: boolean;
-  /** Enable/disable TOOLS.md injection (default: true) */
-  soulMemoryToolsEnabled?: boolean;
 }
 
 export interface WorkspaceSummary {

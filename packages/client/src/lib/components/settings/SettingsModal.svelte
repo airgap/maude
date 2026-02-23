@@ -22,8 +22,6 @@
   import { THEMES } from '$lib/config/themes';
   import { workspaceStore } from '$lib/stores/workspace.svelte';
   import WebhookSettings from './WebhookSettings.svelte';
-  import { SOUL_MEMORY_FILES } from '@e/shared';
-  import { soulMemoryStore } from '$lib/stores/soul-memory.svelte';
 
   const cliProviders: { id: CliProvider; label: string; desc: string }[] = [
     { id: 'claude', label: 'Claude Code', desc: 'Anthropic Claude CLI' },
@@ -45,8 +43,7 @@
     | 'mcp'
     | 'keybindings'
     | 'profiles'
-    | 'webhooks'
-    | 'soul-memory' {
+    | 'webhooks' {
     if (typeof localStorage !== 'undefined') {
       const tab = localStorage.getItem('e-settings-tab');
       if (tab) {
@@ -70,7 +67,6 @@
     | 'keybindings'
     | 'profiles'
     | 'webhooks'
-    | 'soul-memory'
   >(getInitialTab());
 
   // --- BYOK state ---
@@ -257,45 +253,6 @@
     };
     commentaryPreviewText = sampleTexts[commentaryPersonality] || sampleTexts.technical_analyst;
     commentaryPreviewLoading = false;
-  }
-
-  // --- Soul Memory settings ---
-  let soulMemorySettings = $state<Record<string, boolean>>({
-    soulMemorySoulEnabled: true,
-    soulMemoryKnowledgeEnabled: true,
-    soulMemoryToolsEnabled: true,
-  });
-
-  async function loadSoulMemorySettings() {
-    const wsId = workspaceStore.activeWorkspaceId;
-    if (!wsId) return;
-    try {
-      const wsRes = await api.workspaces.get(wsId);
-      if (wsRes.ok && wsRes.data?.settings) {
-        const s = wsRes.data.settings;
-        soulMemorySettings = {
-          soulMemorySoulEnabled: s.soulMemorySoulEnabled !== false,
-          soulMemoryKnowledgeEnabled: s.soulMemoryKnowledgeEnabled !== false,
-          soulMemoryToolsEnabled: s.soulMemoryToolsEnabled !== false,
-        };
-      }
-    } catch {
-      // Keep defaults
-    }
-  }
-
-  async function saveSoulMemorySetting(key: string, value: boolean) {
-    const wsId = workspaceStore.activeWorkspaceId;
-    if (!wsId) return;
-    try {
-      const wsRes = await api.workspaces.get(wsId);
-      const currentSettings = wsRes.ok ? wsRes.data?.settings || {} : {};
-      const newSettings = { ...currentSettings, [key]: value };
-      await api.workspaces.update(wsId, { settings: newSettings });
-      soulMemorySettings = { ...soulMemorySettings, [key]: value };
-    } catch {
-      uiStore.toast('Failed to save setting', 'error');
-    }
   }
 
   // --- Sandbox state ---
@@ -619,7 +576,6 @@
     loadPermissionRules();
     loadDetectedShells();
     loadCommentarySettings();
-    loadSoulMemorySettings();
     profilesStore.load();
   });
 
@@ -844,17 +800,13 @@
           </button>
         {/each}
         <span class="settings-section-header">Integrations</span>
-        {#each ['mcp', 'webhooks', 'soul-memory'] as tab}
+        {#each ['mcp', 'webhooks'] as tab}
           <button
             class="settings-tab"
             class:active={activeTab === tab}
             onclick={() => (activeTab = tab as any)}
           >
-            {tab === 'mcp'
-              ? 'MCP'
-              : tab === 'soul-memory'
-                ? 'Memory'
-                : tab.charAt(0).toUpperCase() + tab.slice(1)}
+            {tab === 'mcp' ? 'MCP' : tab.charAt(0).toUpperCase() + tab.slice(1)}
           </button>
         {/each}
       </nav>
@@ -2847,69 +2799,6 @@
           </div>
         {:else if activeTab === 'webhooks'}
           <WebhookSettings />
-        {:else if activeTab === 'soul-memory'}
-          <div class="setting-group">
-            <label class="setting-label">Agent Memory Files</label>
-            <p class="setting-hint">
-              Human-editable markdown files in <code>.e/</code> that are injected into agent prompts.
-              Version-controlled with git and portable across machines.
-            </p>
-          </div>
-
-          <div class="setting-group">
-            <label class="setting-label">Enable/Disable Files</label>
-            <p class="setting-hint">
-              Toggle which memory files are injected into agent system prompts for this workspace.
-            </p>
-
-            {#each SOUL_MEMORY_FILES as def}
-              {@const settingKey = `soulMemory${def.kind.charAt(0).toUpperCase() + def.kind.slice(1)}Enabled`}
-              <div class="soul-setting-row">
-                <div class="soul-setting-info">
-                  <span class="soul-setting-name">{def.fileName}</span>
-                  <span class="soul-setting-desc">{def.description}</span>
-                </div>
-                <label class="toggle">
-                  <input
-                    type="checkbox"
-                    checked={soulMemorySettings[settingKey] !== false}
-                    onchange={async (e) => {
-                      const checked = (e.target as HTMLInputElement).checked;
-                      await saveSoulMemorySetting(settingKey, checked);
-                      uiStore.toast(
-                        `${def.fileName} ${checked ? 'enabled' : 'disabled'}`,
-                        'success',
-                      );
-                    }}
-                  />
-                  <span class="toggle-slider"></span>
-                </label>
-              </div>
-            {/each}
-          </div>
-
-          <div class="setting-group">
-            <label class="setting-label">File Paths</label>
-            <p class="setting-hint">
-              Memory files are stored in the <code>.e/</code> directory of your workspace root.
-            </p>
-            <div class="soul-paths">
-              {#each SOUL_MEMORY_FILES as def}
-                <div class="soul-path-row">
-                  <code class="soul-path-code">{def.relativePath}</code>
-                  <span class="soul-path-label">{def.label}</span>
-                </div>
-              {/each}
-            </div>
-          </div>
-
-          <div class="setting-group">
-            <label class="setting-label">Context Limits</label>
-            <p class="setting-hint">
-              Files exceeding 8,000 characters are automatically truncated before injection to
-              respect context window limits. Keep files focused and concise for best results.
-            </p>
-          </div>
         {:else}
           <!-- keybindings (last branch — no explicit type check needed) -->
           <div class="keybindings-list">
@@ -4722,55 +4611,5 @@
     .settings-content {
       padding: 12px 16px;
     }
-  }
-
-  /* Soul memory settings */
-  .soul-setting-row {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 8px 0;
-    border-bottom: 1px solid var(--border-primary);
-  }
-  .soul-setting-row:last-child {
-    border-bottom: none;
-  }
-  .soul-setting-info {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-  }
-  .soul-setting-name {
-    font-size: var(--fs-sm);
-    font-weight: 600;
-    color: var(--text-primary);
-    font-family: var(--font-family);
-  }
-  .soul-setting-desc {
-    font-size: var(--fs-xs);
-    color: var(--text-tertiary);
-  }
-  .soul-paths {
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-    margin-top: 4px;
-  }
-  .soul-path-row {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    padding: 4px 0;
-  }
-  .soul-path-code {
-    font-family: var(--font-family);
-    font-size: var(--fs-xs);
-    background: var(--bg-tertiary);
-    padding: 2px 6px;
-    color: var(--accent-primary);
-  }
-  .soul-path-label {
-    font-size: var(--fs-xs);
-    color: var(--text-secondary);
   }
 </style>
