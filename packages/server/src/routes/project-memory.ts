@@ -124,6 +124,10 @@ app.get('/context', (c) => {
     preference: 'User Preferences',
     pattern: 'Common Patterns',
     context: 'Workspace Context',
+    architecture: 'System Architecture',
+    naming: 'Naming Conventions',
+    forbidden: 'Forbidden / Avoid',
+    testing: 'Testing Conventions',
   };
 
   let context = '## Workspace Memory\n\n';
@@ -148,8 +152,11 @@ app.patch('/:id', async (c) => {
   const body = await c.req.json();
   const db = getDb();
 
-  const existing = db.query(`SELECT * FROM workspace_memories WHERE id = ?`).get(id);
+  const existing = db.query(`SELECT * FROM workspace_memories WHERE id = ?`).get(id) as any;
   if (!existing) return c.json({ ok: false, error: 'Not found' }, 404);
+
+  // Save version before updating
+  saveVersion(db, existing);
 
   const updates: string[] = [];
   const values: any[] = [];
@@ -178,6 +185,129 @@ app.delete('/:id', (c) => {
   const result = db.query(`DELETE FROM workspace_memories WHERE id = ?`).run(c.req.param('id'));
   if (result.changes === 0) return c.json({ ok: false, error: 'Not found' }, 404);
   return c.json({ ok: true });
+});
+
+// LLM-powered extraction from conversation messages
+app.post('/extract-llm', async (c) => {
+  const body = await c.req.json();
+  const { workspacePath, messages } = body;
+
+  if (!workspacePath || !messages || !Array.isArray(messages)) {
+    return c.json({ ok: false, error: 'workspacePath and messages[] required' }, 400);
+  }
+
+  try {
+    const { extractMemoriesFromConversation } = await import('../services/memory-extractor');
+    const extracted = await extractMemoriesFromConversation(messages);
+
+    const db = getDb();
+    const created: string[] = [];
+
+    for (const mem of extracted) {
+      const existing = db
+        .query(`SELECT * FROM workspace_memories WHERE workspace_path = ? AND key = ?`)
+        .get(workspacePath, mem.key) as any;
+
+      if (existing) {
+        // Reinforce existing memory, save old version
+        saveVersion(db, existing);
+        db.query(
+          `UPDATE workspace_memories SET content = ?, confidence = MIN(1.0, confidence + 0.1), times_seen = times_seen + 1, updated_at = ? WHERE id = ?`,
+        ).run(mem.content, Date.now(), existing.id);
+      } else {
+        const id = nanoid();
+        const now = Date.now();
+        db.query(
+          `INSERT INTO workspace_memories (id, workspace_path, category, key, content, source, confidence, times_seen, created_at, updated_at) VALUES (?, ?, ?, ?, ?, 'auto', ?, 1, ?, ?)`,
+        ).run(id, workspacePath, mem.category, mem.key, mem.content, mem.confidence, now, now);
+        created.push(id);
+      }
+    }
+
+    return c.json({ ok: true, data: { extracted: extracted.length, created: created.length } });
+  } catch (err) {
+    return c.json(
+      {
+        ok: false,
+        error: `LLM extraction failed: ${err instanceof Error ? err.message : String(err)}`,
+      },
+      500,
+    );
+  }
+});
+
+// LLM-powered extraction from git commits
+app.post('/extract-commits', async (c) => {
+  const body = await c.req.json();
+  const { workspacePath, commits } = body;
+
+  if (!workspacePath || !commits || !Array.isArray(commits)) {
+    return c.json({ ok: false, error: 'workspacePath and commits[] required' }, 400);
+  }
+
+  try {
+    const { extractMemoriesFromCommits } = await import('../services/memory-extractor');
+    const extracted = await extractMemoriesFromCommits(commits);
+
+    const db = getDb();
+    const created: string[] = [];
+
+    for (const mem of extracted) {
+      const existing = db
+        .query(`SELECT * FROM workspace_memories WHERE workspace_path = ? AND key = ?`)
+        .get(workspacePath, mem.key) as any;
+
+      if (existing) {
+        saveVersion(db, existing);
+        db.query(
+          `UPDATE workspace_memories SET content = ?, confidence = MIN(1.0, confidence + 0.05), times_seen = times_seen + 1, updated_at = ? WHERE id = ?`,
+        ).run(mem.content, Date.now(), existing.id);
+      } else {
+        const id = nanoid();
+        const now = Date.now();
+        db.query(
+          `INSERT INTO workspace_memories (id, workspace_path, category, key, content, source, confidence, times_seen, created_at, updated_at) VALUES (?, ?, ?, ?, ?, 'auto', ?, 1, ?, ?)`,
+        ).run(id, workspacePath, mem.category, mem.key, mem.content, mem.confidence, now, now);
+        created.push(id);
+      }
+    }
+
+    return c.json({ ok: true, data: { extracted: extracted.length, created: created.length } });
+  } catch (err) {
+    return c.json(
+      {
+        ok: false,
+        error: `Commit extraction failed: ${err instanceof Error ? err.message : String(err)}`,
+      },
+      500,
+    );
+  }
+});
+
+// Get version history for a memory
+app.get('/versions/:id', (c) => {
+  const memoryId = c.req.param('id');
+  const db = getDb();
+
+  ensureVersionsTable(db);
+
+  const rows = db
+    .query(
+      `SELECT * FROM workspace_memory_versions WHERE memory_id = ? ORDER BY saved_at DESC LIMIT 20`,
+    )
+    .all(memoryId) as any[];
+
+  return c.json({
+    ok: true,
+    data: rows.map((r: any) => ({
+      id: r.id,
+      memoryId: r.memory_id,
+      content: r.content,
+      confidence: r.confidence,
+      category: r.category,
+      savedAt: r.saved_at,
+    })),
+  });
 });
 
 // Bulk extract endpoint — receives conversation text and extracts memories
@@ -317,6 +447,36 @@ function extractMemories(
     seen.add(k);
     return true;
   });
+}
+
+// ── Version history helpers ──────────────────────────────────────────────
+
+function ensureVersionsTable(db: ReturnType<typeof getDb>) {
+  db.query(
+    `CREATE TABLE IF NOT EXISTS workspace_memory_versions (
+      id TEXT PRIMARY KEY,
+      memory_id TEXT NOT NULL,
+      content TEXT NOT NULL,
+      confidence REAL,
+      category TEXT,
+      saved_at INTEGER NOT NULL
+    )`,
+  ).run();
+}
+
+function saveVersion(db: ReturnType<typeof getDb>, existing: any) {
+  ensureVersionsTable(db);
+  const versionId = nanoid();
+  db.query(
+    `INSERT INTO workspace_memory_versions (id, memory_id, content, confidence, category, saved_at) VALUES (?, ?, ?, ?, ?, ?)`,
+  ).run(
+    versionId,
+    existing.id,
+    existing.content,
+    existing.confidence,
+    existing.category,
+    Date.now(),
+  );
 }
 
 export { app as workspaceMemoryRoutes };

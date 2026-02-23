@@ -11,15 +11,24 @@ function createWorkspaceMemoryStore() {
     filterCategory === 'all' ? memories : memories.filter((m) => m.category === filterCategory),
   );
 
+  const allCategories: MemoryCategory[] = [
+    'convention',
+    'decision',
+    'preference',
+    'pattern',
+    'context',
+    'architecture',
+    'naming',
+    'forbidden',
+    'testing',
+  ];
+
   const stats = $derived({
     total: memories.length,
     auto: memories.filter((m) => m.source === 'auto').length,
     manual: memories.filter((m) => m.source === 'manual').length,
     byCategory: Object.fromEntries(
-      (['convention', 'decision', 'preference', 'pattern', 'context'] as const).map((cat) => [
-        cat,
-        memories.filter((m) => m.category === cat).length,
-      ]),
+      allCategories.map((cat) => [cat, memories.filter((m) => m.category === cat).length]),
     ),
   });
 
@@ -119,6 +128,53 @@ function createWorkspaceMemoryStore() {
       } catch {
         return { extracted: 0, created: 0 };
       }
+    },
+
+    /** LLM-powered extraction from conversation messages (smarter than regex) */
+    async extractWithLlm(
+      workspacePath: string,
+      messages: Array<{ role: string; content: string }>,
+    ) {
+      try {
+        const res = await api.workspaceMemory.extractLlm(workspacePath, messages);
+        if (res.data.created > 0 && currentWorkspacePath === workspacePath) {
+          await this.load(workspacePath);
+        }
+        return res.data;
+      } catch {
+        return { extracted: 0, created: 0 };
+      }
+    },
+
+    /** LLM-powered extraction from git commits */
+    async extractFromCommits(
+      workspacePath: string,
+      commits: Array<{ message: string; files?: string[] }>,
+    ) {
+      try {
+        const res = await api.workspaceMemory.extractCommits(workspacePath, commits);
+        if (res.data.created > 0 && currentWorkspacePath === workspacePath) {
+          await this.load(workspacePath);
+        }
+        return res.data;
+      } catch {
+        return { extracted: 0, created: 0 };
+      }
+    },
+
+    /** Get version history for a memory entry */
+    async getVersionHistory(id: string) {
+      try {
+        const res = await api.workspaceMemory.versions(id);
+        return res.data ?? [];
+      } catch {
+        return [];
+      }
+    },
+
+    /** All available categories */
+    get categories(): MemoryCategory[] {
+      return allCategories;
     },
   };
 }

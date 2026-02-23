@@ -1206,6 +1206,40 @@ export const api = {
         `/workspace-memory/context?${params}`,
       );
     },
+    /** LLM-powered extraction from conversation messages */
+    extractLlm: (workspacePath: string, messages: Array<{ role: string; content: string }>) =>
+      request<{ ok: boolean; data: { extracted: number; created: number } }>(
+        '/workspace-memory/extract-llm',
+        {
+          method: 'POST',
+          body: JSON.stringify({ workspacePath, messages }),
+        },
+      ),
+    /** LLM-powered extraction from git commits */
+    extractCommits: (
+      workspacePath: string,
+      commits: Array<{ message: string; files?: string[] }>,
+    ) =>
+      request<{ ok: boolean; data: { extracted: number; created: number } }>(
+        '/workspace-memory/extract-commits',
+        {
+          method: 'POST',
+          body: JSON.stringify({ workspacePath, commits }),
+        },
+      ),
+    /** Get version history for a memory entry */
+    versions: (id: string) =>
+      request<{
+        ok: boolean;
+        data: Array<{
+          id: string;
+          memoryId: string;
+          content: string;
+          confidence: number;
+          category: string;
+          savedAt: number;
+        }>;
+      }>(`/workspace-memory/versions/${id}`),
   },
 
   // --- PRDs ---

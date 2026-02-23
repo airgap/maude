@@ -1,4 +1,13 @@
-export type MemoryCategory = 'convention' | 'decision' | 'preference' | 'pattern' | 'context';
+export type MemoryCategory =
+  | 'convention'
+  | 'decision'
+  | 'preference'
+  | 'pattern'
+  | 'context'
+  | 'architecture'
+  | 'naming'
+  | 'forbidden'
+  | 'testing';
 
 export type MemorySource = 'auto' | 'manual';
 
