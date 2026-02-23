@@ -9,7 +9,6 @@
   import MessageAnimation from './MessageAnimation.svelte';
   import { renderMarkdown, renderMarkdownPartial } from '$lib/utils/markdown';
   import ProseBlock from './ProseBlock.svelte';
-  import ConversationBranchButton from './ConversationBranchButton.svelte';
   import { ttsStore } from '$lib/services/tts.svelte';
   import { uiStore } from '$lib/stores/ui.svelte';
   import { api } from '$lib/api/client';
@@ -366,9 +365,6 @@
             </svg>
           </button>
         </Tooltip>
-        {#if conversationId}
-          <ConversationBranchButton {conversationId} messageId={message.id} role={message.role} />
-        {/if}
         {#if message.role === 'assistant'}
           <Tooltip
             content={restoringSnapshot ? 'Restoring…' : 'Restore snapshot'}
