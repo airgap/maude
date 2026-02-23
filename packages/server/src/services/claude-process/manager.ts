@@ -1,202 +1,35 @@
 import { type Subprocess } from 'bun';
 import { nanoid } from 'nanoid';
 import { EventEmitter } from 'events';
-import { getDb } from '../db/database';
-import { generateMcpConfig } from './mcp-config';
-import { buildCliCommand } from './cli-provider';
+import { getDb } from '../../db/database';
+import { generateMcpConfig } from '../mcp-config';
+import { buildCliCommand } from '../cli-provider';
 import type { CliProvider } from '@e/shared';
 import {
   parseMcpToolName,
-  isMcpToolDangerous,
   isMcpFileWriteTool,
   extractFilePath,
   extractEditLineHint,
 } from '@e/shared';
 import type { PermissionMode } from '@e/shared';
-import { getSandboxConfig } from '../middleware/sandbox';
-import { verifyFile } from './code-verifier';
+import { getSandboxConfig } from '../../middleware/sandbox';
+import { verifyFile } from '../code-verifier';
 import {
   shouldRequireApproval,
   loadPermissionRules,
   loadTerminalCommandPolicy,
-  extractToolInputForMatching,
-} from './permission-rules';
+} from '../permission-rules';
 import {
   getContextLimit,
   getAutoCompactThreshold,
   getRecommendedOptions,
   loadConversationHistory,
   summarizeWithLLM,
-} from './chat-compaction';
-import { eventBridge } from './event-bridge';
-
-// Check if `script` utility is available (util-linux) for PTY-wrapped spawning.
-// This avoids native addon issues with node-pty in Bun.
-import { execSync } from 'child_process';
-let hasScript = false;
-try {
-  execSync('which script', { stdio: 'ignore' });
-  hasScript = true;
-} catch {
-  console.warn('[claude] `script` not available — pipe mode may buffer stdout');
-}
-
-/** Map signal number to name for diagnostic messages */
-function signalName(sig: number): string {
-  const names: Record<number, string> = {
-    1: 'SIGHUP',
-    2: 'SIGINT',
-    3: 'SIGQUIT',
-    6: 'SIGABRT',
-    9: 'SIGKILL',
-    14: 'SIGALRM',
-    15: 'SIGTERM',
-  };
-  return names[sig] || `SIG${sig}`;
-}
-
-/** Abstraction over Bun.spawn and node-pty so the streaming code works with either. */
-interface CliProcess {
-  readonly pid: number;
-  /** ReadableStream of stdout data (for pipe mode) or combined pty output. */
-  readonly stdout: ReadableStream<Uint8Array>;
-  /** Separate stderr stream (pipe mode only; null in PTY mode where stderr is merged). */
-  readonly stderr: ReadableStream<Uint8Array> | null;
-  /** Write to the process's stdin / pty input. */
-  write(data: string): void;
-  /** Kill the process. */
-  kill(signal?: string): void;
-  /** Promise that resolves with the exit code when the process exits. */
-  readonly exited: Promise<number>;
-  /** The exit code if the process has already exited, or null. */
-  readonly exitCode: number | null;
-}
-
-/** Shell-escape a string for use in single-quoted shell arguments. */
-function shellEscape(s: string): string {
-  return "'" + s.replace(/'/g, "'\\''") + "'";
-}
-
-/**
- * Spawn the CLI wrapped in `script -qec` (allocates a real PTY via util-linux).
- * This forces the child process to see a TTY on stdout, preventing full-buffer mode
- * that causes the CLI to withhold output until its buffer fills or it exits.
- */
-function spawnWithScript(
-  binary: string,
-  args: string[],
-  cwd: string,
-  env: Record<string, string>,
-): CliProcess {
-  // Build shell-safe command string for `script -c`.
-  // Disable PTY echo (stty -echo) so stdin writes aren't reflected in stdout.
-  const escaped = [binary, ...args].map(shellEscape).join(' ');
-  const command = `stty -echo 2>/dev/null; ${escaped}`;
-  // -q: quiet (no "Script started/done" messages)
-  // -e: return child's exit code (--return)
-  // -c: command to run
-  // /dev/null: typescript file (discard PTY recording)
-  const proc = Bun.spawn(['script', '-qec', command, '/dev/null'], {
-    cwd,
-    stdin: 'pipe',
-    stdout: 'pipe',
-    stderr: 'pipe',
-    env: { ...env, TERM: 'dumb' },
-  });
-
-  return {
-    get pid() {
-      return proc.pid;
-    },
-    get stdout() {
-      return proc.stdout as ReadableStream<Uint8Array>;
-    },
-    get stderr() {
-      return proc.stderr as ReadableStream<Uint8Array>;
-    },
-    write(data: string) {
-      try {
-        const stdin = proc.stdin as any;
-        if (stdin?.write) {
-          stdin.write(new TextEncoder().encode(data));
-          stdin.flush?.();
-        }
-      } catch {
-        /* stdin closed */
-      }
-    },
-    kill(signal?: string) {
-      try {
-        if (signal === 'SIGINT') proc.kill(2);
-        else if (signal === 'SIGTERM') proc.kill(15);
-        else proc.kill();
-      } catch {
-        /* already dead */
-      }
-    },
-    get exited() {
-      return proc.exited;
-    },
-    get exitCode() {
-      return proc.exitCode;
-    },
-  };
-}
-
-/** Spawn the CLI using Bun.spawn (pipe mode — used as fallback if node-pty is unavailable). */
-function spawnWithPipe(
-  binary: string,
-  args: string[],
-  cwd: string,
-  env: Record<string, string>,
-): CliProcess {
-  const proc = Bun.spawn([binary, ...args], {
-    cwd,
-    stdin: 'pipe',
-    stdout: 'pipe',
-    stderr: 'pipe',
-    env,
-  });
-
-  return {
-    get pid() {
-      return proc.pid;
-    },
-    get stdout() {
-      return proc.stdout as ReadableStream<Uint8Array>;
-    },
-    get stderr() {
-      return proc.stderr as ReadableStream<Uint8Array>;
-    },
-    write(data: string) {
-      try {
-        // Bun's proc.stdin is a FileSink, not a WritableStream
-        const stdin = proc.stdin as any;
-        if (stdin?.write) {
-          stdin.write(new TextEncoder().encode(data));
-          stdin.flush?.();
-        }
-      } catch {
-        /* stdin closed */
-      }
-    },
-    kill(signal?: string) {
-      try {
-        if (signal === 'SIGINT') proc.kill(2);
-        else if (signal === 'SIGTERM') proc.kill(15);
-        else proc.kill();
-      } catch {
-        /* already dead */
-      }
-    },
-    get exited() {
-      return proc.exited;
-    },
-    get exitCode() {
-      return proc.exitCode;
-    },
-  };
-}
+} from '../chat-compaction';
+import { eventBridge } from '../event-bridge';
+import type { CliProcess } from './spawner';
+import { hasScript, signalName, spawnWithScript, spawnWithPipe } from './spawner';
+import { translateCliEvent, extractAndStoreArtifacts } from './event-translator';
 
 interface ClaudeSession {
   id: string;
@@ -222,231 +55,7 @@ interface ClaudeSession {
   pendingNudges: string[];
 }
 
-/**
- * Translates Claude CLI stream-json events into Anthropic API-style SSE events.
- *
- * CLI format:
- *   {"type":"system","subtype":"init", ...}
- *   {"type":"assistant","message":{"content":[...],"model":"...", ...}, ...}
- *   {"type":"result","subtype":"success","usage":{...}, ...}
- *
- * API format we produce:
- *   {"type":"message_start","message":{"id":"...","role":"assistant","model":"..."}}
- *   {"type":"content_block_start","index":0,"content_block":{"type":"text","text":""}}
- *   {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"..."}}
- *   {"type":"content_block_stop","index":0}
- *   {"type":"message_delta","delta":{"stop_reason":"end_turn"},"usage":{...}}
- *   {"type":"message_stop"}
- */
-export function translateCliEvent(event: any): string[] {
-  const events: string[] = [];
-  const parentId = event.parent_tool_use_id || null;
-
-  switch (event.type) {
-    case 'system':
-      // Init event — nothing to emit yet, but we could use it for metadata
-      break;
-
-    case 'assistant': {
-      const msg = event.message;
-      if (!msg) break;
-
-      // Emit message_start
-      events.push(
-        JSON.stringify({
-          type: 'message_start',
-          message: {
-            id: msg.id || nanoid(),
-            role: 'assistant',
-            model: msg.model || 'unknown',
-          },
-          parent_tool_use_id: parentId,
-        }),
-      );
-
-      // Emit content blocks in their original order
-      const content = msg.content || [];
-      for (let i = 0; i < content.length; i++) {
-        const block = content[i];
-
-        if (block.type === 'text') {
-          events.push(
-            JSON.stringify({
-              type: 'content_block_start',
-              index: i,
-              content_block: { type: 'text', text: '' },
-              parent_tool_use_id: parentId,
-            }),
-          );
-          events.push(
-            JSON.stringify({
-              type: 'content_block_delta',
-              index: i,
-              delta: { type: 'text_delta', text: block.text || '' },
-              parent_tool_use_id: parentId,
-            }),
-          );
-          events.push(
-            JSON.stringify({
-              type: 'content_block_stop',
-              index: i,
-              parent_tool_use_id: parentId,
-            }),
-          );
-        } else if (block.type === 'thinking') {
-          events.push(
-            JSON.stringify({
-              type: 'content_block_start',
-              index: i,
-              content_block: { type: 'thinking', thinking: '' },
-              parent_tool_use_id: parentId,
-            }),
-          );
-          events.push(
-            JSON.stringify({
-              type: 'content_block_delta',
-              index: i,
-              delta: { type: 'thinking_delta', thinking: block.thinking || '' },
-              parent_tool_use_id: parentId,
-            }),
-          );
-          events.push(
-            JSON.stringify({
-              type: 'content_block_stop',
-              index: i,
-              parent_tool_use_id: parentId,
-            }),
-          );
-        } else if (block.type === 'tool_use') {
-          events.push(
-            JSON.stringify({
-              type: 'content_block_start',
-              index: i,
-              content_block: {
-                type: 'tool_use',
-                id: block.id || nanoid(),
-                name: block.name || 'unknown',
-              },
-              parent_tool_use_id: parentId,
-            }),
-          );
-          events.push(
-            JSON.stringify({
-              type: 'content_block_delta',
-              index: i,
-              delta: {
-                type: 'input_json_delta',
-                partial_json: JSON.stringify(block.input || {}),
-              },
-              parent_tool_use_id: parentId,
-            }),
-          );
-          events.push(
-            JSON.stringify({
-              type: 'content_block_stop',
-              index: i,
-              parent_tool_use_id: parentId,
-            }),
-          );
-        }
-      }
-      break;
-    }
-
-    case 'result': {
-      // Emit message_delta with usage info
-      const usage = event.usage || {};
-      events.push(
-        JSON.stringify({
-          type: 'message_delta',
-          delta: { stop_reason: event.stop_reason || 'end_turn' },
-          usage: {
-            input_tokens: usage.input_tokens || 0,
-            output_tokens: usage.output_tokens || 0,
-            cache_creation_input_tokens: usage.cache_creation_input_tokens || 0,
-            cache_read_input_tokens: usage.cache_read_input_tokens || 0,
-          },
-        }),
-      );
-
-      // Emit message_stop
-      events.push(JSON.stringify({ type: 'message_stop' }));
-      break;
-    }
-
-    default:
-      // Unknown event type — skip
-      break;
-  }
-
-  return events;
-}
-
-/**
- * Parse and store <artifact> XML blocks from assistant message text content.
- * Returns an array of SSE event strings for each extracted artifact so the
- * client can update the Artifacts panel in real time.
- *
- * Supported format:
- * <artifact type="plan|diff|screenshot|walkthrough" title="...">
- * ...content...
- * </artifact>
- */
-function extractAndStoreArtifacts(
-  conversationId: string,
-  messageId: string,
-  content: any[],
-): string[] {
-  const sseEvents: string[] = [];
-  const db = getDb();
-
-  const artifactRegex = /<artifact\s+type="([^"]+)"\s+title="([^"]+)">([\s\S]*?)<\/artifact>/gi;
-
-  for (const block of content) {
-    if (block.type !== 'text' || !block.text) continue;
-
-    let match: RegExpExecArray | null;
-    artifactRegex.lastIndex = 0;
-    while ((match = artifactRegex.exec(block.text)) !== null) {
-      const [, rawType, title, artifactContent] = match;
-      const validTypes = ['plan', 'diff', 'screenshot', 'walkthrough'];
-      const type = validTypes.includes(rawType) ? rawType : 'plan';
-
-      try {
-        const id = nanoid(12);
-        const now = Date.now();
-        db.query(
-          `INSERT INTO artifacts (id, conversation_id, message_id, type, title, content, metadata, pinned, created_at, updated_at)
-           VALUES (?, ?, ?, ?, ?, ?, '{}', 0, ?, ?)`,
-        ).run(id, conversationId, messageId, type, title.trim(), artifactContent.trim(), now, now);
-
-        const artifactEvent = JSON.stringify({
-          type: 'artifact_created',
-          artifact: {
-            id,
-            conversationId,
-            messageId,
-            type,
-            title: title.trim(),
-            content: artifactContent.trim(),
-            metadata: {},
-            pinned: false,
-            createdAt: now,
-            updatedAt: now,
-          },
-        });
-        sseEvents.push(`data: ${artifactEvent}\n\n`);
-        console.log(`[artifacts] Stored artifact "${title}" (${type}) from message ${messageId}`);
-      } catch (err) {
-        console.error('[artifacts] Failed to store artifact:', err);
-      }
-    }
-  }
-
-  return sseEvents;
-}
-
-class ClaudeProcessManager {
+export class ClaudeProcessManager {
   private sessions = new Map<string, ClaudeSession>();
   /** Timers for auto-removing completed sessions after a grace period. */
   private cleanupTimers = new Map<string, ReturnType<typeof setTimeout>>();
@@ -1892,9 +1501,3 @@ class ClaudeProcessManager {
     });
   }
 }
-
-// Persist across Bun --hot reloads: store the singleton on globalThis so
-// a module re-evaluation doesn't orphan running CLI processes.
-const GLOBAL_KEY = '__e_claudeManager';
-export const claudeManager: ClaudeProcessManager =
-  (globalThis as any)[GLOBAL_KEY] ?? ((globalThis as any)[GLOBAL_KEY] = new ClaudeProcessManager());

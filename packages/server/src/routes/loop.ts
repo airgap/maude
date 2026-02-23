@@ -1,5 +1,5 @@
 import { Hono } from 'hono';
-import { loopOrchestrator } from '../services/loop-orchestrator';
+import { loopOrchestrator } from '../services/loop';
 import { getDb } from '../db/database';
 import type { StreamLoopEvent } from '@e/shared';
 

@@ -18,7 +18,7 @@ mock.module('../../services/llm-oneshot', () => ({
   },
 }));
 
-import { prdRoutes as app } from '../prd';
+import { prdRoutes as app } from '../prd/index';
 
 function clearTables() {
   testDb.exec('DELETE FROM prd_stories');

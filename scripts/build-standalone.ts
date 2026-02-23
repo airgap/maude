@@ -34,8 +34,18 @@ const outDirArg = process.argv.indexOf('--outdir');
 const outDir =
   outDirArg !== -1 ? resolve(process.argv[outDirArg + 1]) : join(root, 'dist', 'standalone');
 
+// Platform-suffixed binary name for release artifacts
+function platformSuffix(): string {
+  const platform =
+    process.platform === 'darwin' ? 'darwin' : process.platform === 'win32' ? 'windows' : 'linux';
+  const arch = process.arch === 'arm64' ? 'arm64' : 'x64';
+  return `${platform}-${arch}`;
+}
+
+const suffix = platformSuffix();
 const ext = process.platform === 'win32' ? '.exe' : '';
-const binaryOut = join(outDir, `e${ext}`);
+const binaryName = `e-${suffix}${ext}`;
+const binaryOut = join(outDir, binaryName);
 const clientOut = join(outDir, 'client');
 
 console.log('');

@@ -12,7 +12,7 @@ mock.module('../../services/llm-oneshot', () => ({
   callLlm: async () => 'Auto-generated commit message',
 }));
 
-import { gitRoutes as app } from '../git';
+import { gitRoutes as app } from '../git/index';
 
 // ---------------------------------------------------------------------------
 // Helpers

@@ -12,7 +12,7 @@ mock.module('../../services/llm-oneshot', () => ({
   callLlm: mockCallLlm,
 }));
 
-import { gitRoutes as app } from '../git';
+import { gitRoutes as app } from '../git/index';
 
 function clearTables() {
   testDb.exec('DELETE FROM git_snapshots');

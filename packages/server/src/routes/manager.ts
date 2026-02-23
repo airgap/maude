@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import { getDb } from '../db/database';
 import { claudeManager } from '../services/claude-process';
-import { loopOrchestrator } from '../services/loop-orchestrator';
+import { loopOrchestrator } from '../services/loop';
 
 const app = new Hono();
 

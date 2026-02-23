@@ -3,8 +3,8 @@
 # 1. Format staged files with prettier via lint-staged
 npx lint-staged
 
-# 2. Typecheck all packages
-bun run check
+# 2. Typecheck only affected packages
+npx nx affected --target=check --base=HEAD
 
-# 3. Run tests
-bun run test
+# 3. Test only affected packages
+npx nx affected --target=test --base=HEAD

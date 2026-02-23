@@ -1,0 +1,140 @@
+import { resolve } from 'path';
+
+// ---------------------------------------------------------------------------
+// Helpers for safe Bun.spawn — always consume piped streams to prevent deadlocks
+// ---------------------------------------------------------------------------
+
+/**
+ * Run a command and return { stdout, stderr, exitCode }.
+ * Reads both stdout and stderr concurrently so the process never blocks
+ * waiting on a full pipe buffer (classic deadlock with Bun.spawn 'pipe' mode).
+ */
+export async function run(
+  args: string[],
+  opts: { cwd: string },
+): Promise<{ stdout: string; stderr: string; exitCode: number }> {
+  const proc = Bun.spawn(args, {
+    cwd: opts.cwd,
+    stdout: 'pipe',
+    stderr: 'pipe',
+  });
+  // Read both streams concurrently to avoid deadlock
+  const [stdout, stderr] = await Promise.all([
+    new Response(proc.stdout).text(),
+    new Response(proc.stderr).text(),
+  ]);
+  const exitCode = await proc.exited;
+  return { stdout, stderr, exitCode };
+}
+
+/**
+ * Run a command and return only the exit code.
+ * Discards stdout/stderr safely (inherits to parent process).
+ */
+export async function runExitCode(args: string[], opts: { cwd: string }): Promise<number> {
+  const proc = Bun.spawn(args, {
+    cwd: opts.cwd,
+    stdout: 'pipe',
+    stderr: 'pipe',
+  });
+  // Consume both to prevent deadlock, even though we discard the content
+  await Promise.all([new Response(proc.stdout).text(), new Response(proc.stderr).text()]);
+  return proc.exited;
+}
+
+/**
+ * Validate that a path is a plausible workspace directory.
+ * Prevents path traversal attacks via the cwd parameter.
+ */
+export function validateWorkspacePath(rawPath: string): {
+  valid: boolean;
+  resolved: string;
+  reason?: string;
+} {
+  const resolved = resolve(rawPath);
+
+  // Block obvious system directories that shouldn't be used as cwd
+  const blockedPrefixes = ['/proc', '/sys', '/dev', '/boot', '/sbin'];
+  for (const prefix of blockedPrefixes) {
+    if (resolved.startsWith(prefix)) {
+      return { valid: false, resolved, reason: `Path ${prefix} is not a valid workspace` };
+    }
+  }
+
+  return { valid: true, resolved };
+}
+
+/**
+ * Parse raw git commit failure output into a concise, human-readable summary.
+ * Pre-commit hooks (lint-staged, typecheck, tests) produce large output — we
+ * extract the key failure reason so the user doesn't have to scroll through it.
+ */
+export function parseCommitFailure(stderr: string, stdout: string): string {
+  const combined = `${stderr}\n${stdout}`;
+
+  // Pre-commit hook failure
+  if (combined.includes('pre-commit hook') || combined.includes('husky')) {
+    // Look for test failures
+    const testFailMatch = combined.match(/(\d+)\s+fail/i);
+    const testPassMatch = combined.match(/(\d+)\s+pass/i);
+    if (testFailMatch) {
+      const failCount = testFailMatch[1];
+      const passCount = testPassMatch?.[1] ?? '?';
+      return `Pre-commit hook failed: ${failCount} test(s) failed (${passCount} passed). Fix failing tests or commit with --no-verify.`;
+    }
+
+    // Look for typecheck errors
+    if (combined.includes('found') && combined.includes('error')) {
+      const errorMatch = combined.match(/found\s+(\d+)\s+error/i);
+      if (errorMatch) {
+        return `Pre-commit hook failed: ${errorMatch[1]} type error(s). Fix type errors or commit with --no-verify.`;
+      }
+    }
+
+    // Look for lint-staged / prettier errors
+    if (combined.includes('lint-staged') && combined.includes('failed')) {
+      return 'Pre-commit hook failed: lint-staged reported formatting errors. Run your formatter and try again.';
+    }
+
+    // Generic hook failure
+    return 'Pre-commit hook failed. Check the output above for details, or commit with --no-verify to skip hooks.';
+  }
+
+  // Exit code from a script
+  if (combined.includes('exited with code') || combined.includes('Exited with code')) {
+    const exitMatch = combined.match(/[Ee]xited? with code\s+(\d+)/);
+    const scriptMatch = combined.match(/script\s+"([^"]+)"\s+exited/);
+    if (scriptMatch && exitMatch) {
+      return `Commit aborted: "${scriptMatch[1]}" failed (exit ${exitMatch[1]}). Fix the issue or commit with --no-verify.`;
+    }
+  }
+
+  // Nothing to commit
+  if (combined.includes('nothing to commit')) {
+    return 'Nothing to commit — working tree clean.';
+  }
+
+  // Empty commit message
+  if (
+    combined.includes('empty commit message') ||
+    combined.includes('Aborting commit due to empty')
+  ) {
+    return 'Commit aborted: empty commit message.';
+  }
+
+  // Truncate raw message to something readable
+  const firstLine =
+    (stderr || stdout)
+      .split('\n')
+      .filter((l) => l.trim())
+      .pop() || 'Unknown error';
+  return `git commit failed: ${firstLine.length > 200 ? firstLine.slice(0, 200) + '\u2026' : firstLine}`;
+}
+
+/** Shared type for diagnostic checks */
+export interface DiagnosticCheck {
+  name: string;
+  status: 'ok' | 'warn' | 'error';
+  message: string;
+  detail?: string;
+}

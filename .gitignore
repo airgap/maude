@@ -6,6 +6,8 @@ packages/client/build/
 packages/server/dist/
 packages/server/src/native/pty-helper
 .svelte-kit/
+dist/
+release-artifacts/
 
 # Runtime databases
 *.db
@@ -35,6 +37,9 @@ src-tauri/icons/
 # OS
 .DS_Store
 Thumbs.db
+
+# Nx
+.nx/
 
 # Claude Code
 .claude/
