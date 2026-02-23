@@ -289,6 +289,9 @@ function createEditorStore() {
       pendingGoTo = null;
       return val;
     },
+    setPendingGoTo(target: { line: number; col: number }) {
+      pendingGoTo = target;
+    },
 
     /** Follow Along scroll target — set when an agent edits a file and Follow Along is on. */
     get followAlongTarget() {
