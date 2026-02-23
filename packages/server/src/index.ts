@@ -152,6 +152,18 @@ app.route('/api/webhooks/inbound', webhookInboundApp);
 // Initialize database
 initDatabase();
 
+// Register the built-in e-work MCP server for PRD/story/loop management.
+// Uses upsert so we never duplicate — safe across restarts and HMR.
+{
+  const db = (await import('./db/database')).getDb();
+  const serverPath = resolve(import.meta.dir, 'mcp/e-work-server.ts');
+  db.query(
+    `INSERT INTO mcp_servers (name, transport, command, args, env, scope, status)
+     VALUES ('e-work', 'stdio', 'bun', ?, NULL, 'local', 'disconnected')
+     ON CONFLICT(name) DO UPDATE SET command = 'bun', args = excluded.args`,
+  ).run(JSON.stringify([serverPath]));
+}
+
 // Clear stale CLI session IDs from any previous server instance —
 // all in-memory CLI processes are gone after a restart.
 claudeManager.clearStaleSessionIds();

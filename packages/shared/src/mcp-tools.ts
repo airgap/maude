@@ -111,6 +111,23 @@ const KNOWN_MCP_TOOLS: Record<string, ToolMapping> = {
   d1_database_query: { renderAs: 'Bash', displayName: 'D1 Query' },
   r2_buckets_list: { renderAs: 'Read', displayName: 'List R2' },
   search_cloudflare_documentation: { renderAs: 'WebSearch', displayName: 'CF Docs' },
+
+  // ── E Work (PRD/Story/Loop Management) ──
+  list_prds: { renderAs: 'Read', displayName: 'List PRDs' },
+  get_prd: { renderAs: 'Read', displayName: 'Get PRD' },
+  create_prd: { renderAs: 'Write', displayName: 'Create PRD' },
+  update_prd: { renderAs: 'Write', displayName: 'Update PRD' },
+  delete_prd: { renderAs: 'Write', displayName: 'Delete PRD' },
+  list_stories: { renderAs: 'Read', displayName: 'List Stories' },
+  create_story: { renderAs: 'Write', displayName: 'Create Story' },
+  update_story: { renderAs: 'Write', displayName: 'Update Story' },
+  delete_story: { renderAs: 'Write', displayName: 'Delete Story' },
+  reorder_stories: { renderAs: 'Write', displayName: 'Reorder Stories' },
+  archive_completed_stories: { renderAs: 'Write', displayName: 'Archive Stories' },
+  batch_create_stories: { renderAs: 'Write', displayName: 'Batch Create Stories' },
+  batch_update_stories: { renderAs: 'Write', displayName: 'Batch Update Stories' },
+  list_loops: { renderAs: 'Read', displayName: 'List Loops' },
+  get_loop: { renderAs: 'Read', displayName: 'Get Loop' },
 };
 
 /**
@@ -138,6 +155,17 @@ const DANGEROUS_MCP_TOOLS = new Set([
   'create_relations',
   'delete_entities',
   'delete_relations',
+  // E Work management (modify PRDs/stories/loops)
+  'create_prd',
+  'update_prd',
+  'delete_prd',
+  'create_story',
+  'update_story',
+  'delete_story',
+  'reorder_stories',
+  'archive_completed_stories',
+  'batch_create_stories',
+  'batch_update_stories',
 ]);
 
 /**
