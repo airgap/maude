@@ -6,6 +6,7 @@
   import { primaryPaneStore } from '$lib/stores/primaryPane.svelte';
   import { gitOperationsStore } from '$lib/stores/gitOperations.svelte';
   import { editorStore } from '$lib/stores/editor.svelte';
+  import CommitGroupPanel from './CommitGroupPanel.svelte';
 
   // ── Derived state ────────────────────────────────────────────────────────
 
@@ -897,6 +898,11 @@
       <p>No changes — working tree clean</p>
     </div>
   {:else}
+    <!-- ── Smart Staging ─────────────────────────────────────────────────── -->
+    <div class="smart-staging-section">
+      <CommitGroupPanel />
+    </div>
+
     <div class="file-sections">
       <!-- ── Staged ─────────────────────────────────────────────────────── -->
       {#if stagedFiles.length > 0}
@@ -1999,5 +2005,11 @@
     font-family: var(--font-mono, monospace);
     max-height: 80px;
     overflow-y: auto;
+  }
+
+  /* ── Smart Staging ── */
+  .smart-staging-section {
+    padding: 6px 10px;
+    border-bottom: 1px solid var(--border);
   }
 </style>

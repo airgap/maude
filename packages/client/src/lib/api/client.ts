@@ -1115,6 +1115,22 @@ export const api = {
         method: 'POST',
         body: JSON.stringify({ workspacePath, filePath, fileContent, region }),
       }),
+    suggestCommitGroups: (path: string) =>
+      request<{
+        ok: boolean;
+        error?: string;
+        data: {
+          groups: Array<{
+            name: string;
+            message: string;
+            files: string[];
+            reason: string;
+          }>;
+        };
+      }>('/git/suggest-commit-groups', {
+        method: 'POST',
+        body: JSON.stringify({ path }),
+      }),
   },
 
   // --- Workspace Memory ---

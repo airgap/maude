@@ -46,6 +46,7 @@ import { crossSessionRoutes } from './routes/cross-session';
 import { aiActionRoutes } from './routes/ai-actions';
 import { formatRoutes } from './routes/format';
 import { mergeResolveRoutes } from './routes/merge-resolve';
+import { gitSuggestRoutes } from './routes/git-suggest';
 import { authMiddleware } from './middleware/auth';
 import { csrfMiddleware, isOriginAllowed } from './middleware/csrf';
 import { websocket } from './ws';
@@ -151,6 +152,7 @@ app.route('/api/cross-session', crossSessionRoutes);
 app.route('/api/ai', aiActionRoutes);
 app.route('/api/format', formatRoutes);
 app.route('/api/git', mergeResolveRoutes);
+app.route('/api/git', gitSuggestRoutes);
 
 // Inbound webhook endpoint — bypasses auth/CSRF (uses its own token-based auth)
 app.route('/api/webhooks/inbound', webhookInboundApp);
