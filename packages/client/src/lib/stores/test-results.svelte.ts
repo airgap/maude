@@ -137,6 +137,24 @@ function createTestResultsStore() {
       fileResults = newMap;
       version++;
     },
+
+    /** Get all file paths that have test results */
+    get testedFiles(): string[] {
+      return Array.from(fileResults.keys());
+    },
+
+    /** Get summary stats for the latest run */
+    get summary() {
+      if (!latestRun) return null;
+      const results = latestRun.results;
+      return {
+        total: results.length,
+        passed: results.filter((r: any) => r.status === 'passed').length,
+        failed: results.filter((r: any) => r.status === 'failed').length,
+        skipped: results.filter((r: any) => r.status === 'skipped' || r.status === 'pending')
+          .length,
+      };
+    },
   };
 }
 

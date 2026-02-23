@@ -1,6 +1,7 @@
 /**
  * CM6 gutter extension that shows test pass/fail/skip markers next to test
  * functions. Reads from testResultsStore and renders ✓/✗/○ icons.
+ * Click a marker to re-run that specific test.
  */
 
 import { gutter, GutterMarker, ViewPlugin, type ViewUpdate } from '@codemirror/view';
@@ -8,6 +9,16 @@ import { StateField, StateEffect, RangeSet, type Range, type Extension } from '@
 import { testResultsStore, type TestGutterMarker } from '$lib/stores/test-results.svelte';
 import { fileUriField } from './file-uri-field';
 import type { TestStatus } from '@e/shared';
+
+// ── Re-run callback ──
+
+// Callback for re-running a test — set externally by CodeEditor
+let _onRerunTest: ((testName: string, filePath: string) => void) | null = null;
+
+/** Set the callback that fires when user clicks the re-run button in the gutter. */
+export function setTestRerunCallback(cb: (testName: string, filePath: string) => void) {
+  _onRerunTest = cb;
+}
 
 // ── StateEffect to push markers into CM6 ──
 
@@ -19,6 +30,7 @@ class TestPassMarker extends GutterMarker {
   constructor(
     private testName: string,
     private duration?: number,
+    private filePath?: string,
   ) {
     super();
   }
@@ -27,8 +39,14 @@ class TestPassMarker extends GutterMarker {
     const el = document.createElement('span');
     el.className = 'cm-test-marker cm-test-pass';
     el.textContent = '\u2713';
-    el.title = `PASS: ${this.testName}${this.duration != null ? ` (${this.duration}ms)` : ''}`;
+    el.title = `PASS: ${this.testName}${this.duration != null ? ` (${this.duration}ms)` : ''}\nClick to re-run`;
     el.setAttribute('aria-label', `Test passed: ${this.testName}`);
+    el.style.cursor = 'pointer';
+    el.addEventListener('click', () => {
+      if (_onRerunTest && this.filePath) {
+        _onRerunTest(this.testName, this.filePath);
+      }
+    });
     return el;
   }
 }
@@ -37,6 +55,7 @@ class TestFailMarker extends GutterMarker {
   constructor(
     private testName: string,
     private errorMessage?: string,
+    private filePath?: string,
   ) {
     super();
   }
@@ -45,14 +64,23 @@ class TestFailMarker extends GutterMarker {
     const el = document.createElement('span');
     el.className = 'cm-test-marker cm-test-fail';
     el.textContent = '\u2717';
-    el.title = `FAIL: ${this.testName}${this.errorMessage ? `\n${this.errorMessage.slice(0, 200)}` : ''}`;
+    el.title = `FAIL: ${this.testName}${this.errorMessage ? `\n${this.errorMessage.slice(0, 200)}` : ''}\nClick to re-run`;
     el.setAttribute('aria-label', `Test failed: ${this.testName}`);
+    el.style.cursor = 'pointer';
+    el.addEventListener('click', () => {
+      if (_onRerunTest && this.filePath) {
+        _onRerunTest(this.testName, this.filePath);
+      }
+    });
     return el;
   }
 }
 
 class TestSkipMarker extends GutterMarker {
-  constructor(private testName: string) {
+  constructor(
+    private testName: string,
+    private filePath?: string,
+  ) {
     super();
   }
 
@@ -60,21 +88,27 @@ class TestSkipMarker extends GutterMarker {
     const el = document.createElement('span');
     el.className = 'cm-test-marker cm-test-skip';
     el.textContent = '\u25CB';
-    el.title = `SKIP: ${this.testName}`;
+    el.title = `SKIP: ${this.testName}\nClick to run`;
     el.setAttribute('aria-label', `Test skipped: ${this.testName}`);
+    el.style.cursor = 'pointer';
+    el.addEventListener('click', () => {
+      if (_onRerunTest && this.filePath) {
+        _onRerunTest(this.testName, this.filePath);
+      }
+    });
     return el;
   }
 }
 
-function markerForStatus(m: TestGutterMarker): GutterMarker {
+function markerForStatus(m: TestGutterMarker, filePath?: string): GutterMarker {
   switch (m.status) {
     case 'passed':
-      return new TestPassMarker(m.testName, m.duration);
+      return new TestPassMarker(m.testName, m.duration, filePath);
     case 'failed':
-      return new TestFailMarker(m.testName, m.errorMessage);
+      return new TestFailMarker(m.testName, m.errorMessage, filePath);
     case 'skipped':
     case 'pending':
-      return new TestSkipMarker(m.testName);
+      return new TestSkipMarker(m.testName, filePath);
   }
 }
 
@@ -93,10 +127,14 @@ const testMarkerField = StateField.define<RangeSet<GutterMarker>>({
         const newRanges: Range<GutterMarker>[] = [];
         const doc = tr.state.doc;
 
+        // Get file path for re-run
+        const uri = tr.state.field(fileUriField, false) ?? '';
+        const filePath = uri.replace(/^file:\/\//, '');
+
         for (const m of effect.value) {
           if (m.line >= 1 && m.line <= doc.lines) {
             const lineStart = doc.line(m.line).from;
-            newRanges.push(markerForStatus(m).range(lineStart));
+            newRanges.push(markerForStatus(m, filePath).range(lineStart));
           }
         }
 

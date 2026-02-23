@@ -2411,4 +2411,35 @@ export const api = {
         data: { formatters: Array<{ name: string; languages: string[] }> };
       }>(`/format/formatters?workspacePath=${encodeURIComponent(workspacePath)}`),
   },
+
+  // ── Tests ──
+
+  tests: {
+    /** Find test files affected by changed files via import graph analysis */
+    affected: (rootPath: string, changedFiles: string[], maxDepth?: number) =>
+      request<{
+        ok: boolean;
+        data: {
+          affected: Array<{
+            testFile: string;
+            relativePath: string;
+            reason: string;
+            depth: number;
+          }>;
+          total: number;
+        };
+      }>('/tests/affected', {
+        method: 'POST',
+        body: JSON.stringify({ rootPath, changedFiles, maxDepth }),
+      }),
+    /** Get the command to run a specific test */
+    run: (rootPath: string, testFile: string, testName?: string, framework?: string) =>
+      request<{
+        ok: boolean;
+        data: { command: string; testFile: string; testName?: string };
+      }>('/tests/run', {
+        method: 'POST',
+        body: JSON.stringify({ rootPath, testFile, testName, framework }),
+      }),
+  },
 };
