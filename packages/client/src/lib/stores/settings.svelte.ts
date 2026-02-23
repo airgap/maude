@@ -30,6 +30,8 @@ interface SettingsState {
   organizeImportsOnSave: boolean;
   /** Formatter preference */
   defaultFormatter: 'auto' | 'lsp' | 'external';
+  /** Show LSP inlay type hints inline in the editor */
+  showInlayHints: boolean;
   fontSize: number;
   uiFontSize: number | null; // null = follow code font size
   fontFamily: string;
@@ -139,6 +141,7 @@ const defaults: SettingsState = {
   formatOnSave: false,
   organizeImportsOnSave: false,
   defaultFormatter: 'auto' as const,
+  showInlayHints: false,
   fontSize: 14,
   uiFontSize: null,
   fontFamily: 'share-tech-mono',
@@ -353,6 +356,9 @@ function createSettingsStore() {
     },
     get organizeImportsOnSave() {
       return state.organizeImportsOnSave;
+    },
+    get showInlayHints() {
+      return state.showInlayHints;
     },
     get defaultFormatter() {
       return state.defaultFormatter;

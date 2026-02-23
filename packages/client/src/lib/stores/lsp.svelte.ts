@@ -152,6 +152,7 @@ function createLspStore() {
                 },
                 formatting: { dynamicRegistration: false },
                 rangeFormatting: { dynamicRegistration: false },
+                inlayHint: { dynamicRegistration: false },
                 synchronization: {
                   didSave: true,
                   willSave: false,

@@ -363,6 +363,26 @@ export const eEditorTheme = EditorView.theme(
     '.cm-conflict-incoming': {
       backgroundColor: 'rgba(59, 130, 246, 0.08)',
     },
+    // Inlay type hints
+    '.cm-inlay-hint': {
+      fontFamily: 'var(--font-family)',
+      fontSize: '11px',
+      color: 'var(--text-tertiary)',
+      opacity: '0.7',
+      fontStyle: 'italic',
+      padding: '0 2px',
+      borderRadius: '2px',
+      backgroundColor: 'rgba(148, 163, 184, 0.08)',
+      border: '1px solid rgba(148, 163, 184, 0.1)',
+      verticalAlign: 'baseline',
+      lineHeight: '1',
+    },
+    '.cm-inlay-hint-type': {
+      color: 'var(--syn-type, var(--text-tertiary))',
+    },
+    '.cm-inlay-hint-parameter': {
+      color: 'var(--syn-variable, var(--text-tertiary))',
+    },
     // Search panel inputs
     '.cm-panel input': {
       backgroundColor: 'var(--bg-input)',

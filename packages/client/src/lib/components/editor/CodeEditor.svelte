@@ -63,6 +63,7 @@
     type ConflictResolution,
   } from './extensions/merge-conflict';
   import { mergeConflictsStore } from '$lib/stores/merge-conflicts.svelte';
+  import { lspInlayHintsExtension } from './extensions/lsp-inlay-hints';
   import EditorContextMenu from './EditorContextMenu.svelte';
   import QuickFixMenu from './QuickFixMenu.svelte';
   import AiActionResult from './AiActionResult.svelte';
@@ -281,6 +282,10 @@
       hoverHighlightExtension(),
       // LSP diagnostics (only when connected)
       ...(lspStore.isConnected(tab.language) ? [lspDiagnosticsExtension(tab.language)] : []),
+      // LSP inlay type hints (when connected and enabled)
+      ...(lspStore.isConnected(tab.language) && settingsStore.showInlayHints
+        ? lspInlayHintsExtension(tab.language)
+        : []),
       // Code action lightbulb gutter (shows on lines with diagnostics)
       ...codeActionGutterExtension(handleQuickFixRequest),
       // Merge conflict inline resolution (only when content has conflict markers)
