@@ -2441,5 +2441,20 @@ export const api = {
         method: 'POST',
         body: JSON.stringify({ rootPath, testFile, testName, framework }),
       }),
+    /** Generate unit tests for code using AI */
+    generate: (
+      code: string,
+      filePath: string,
+      functionName?: string,
+      language?: string,
+      testFramework?: string,
+    ) =>
+      request<{
+        ok: boolean;
+        data: { testCode: string; testFile: string; framework: string };
+      }>('/tests/generate', {
+        method: 'POST',
+        body: JSON.stringify({ code, filePath, functionName, language, testFramework }),
+      }),
   },
 };

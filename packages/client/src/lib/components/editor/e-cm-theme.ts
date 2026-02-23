@@ -421,6 +421,16 @@ export const eEditorTheme = EditorView.theme(
       pointerEvents: 'auto',
       cursor: 'default',
     },
+    // Code coverage overlay
+    '.cm-coverage-covered': {
+      backgroundColor: 'rgba(34, 197, 94, 0.08)',
+    },
+    '.cm-coverage-uncovered': {
+      backgroundColor: 'rgba(239, 68, 68, 0.10)',
+    },
+    '.cm-coverage-partial': {
+      backgroundColor: 'rgba(234, 179, 8, 0.08)',
+    },
     // Proactive AI warnings
     '.cm-proactive-underline-error': {
       textDecoration: 'underline wavy var(--accent-error)',
