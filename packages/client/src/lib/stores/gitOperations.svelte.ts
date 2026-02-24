@@ -78,6 +78,17 @@ function clearPersistedErrors() {
   }
 }
 
+/**
+ * Strip ANSI escape sequences (colors, cursor movement, etc.) from a string.
+ * Git, nx, prettier, and other CLI tools emit these when they detect a TTY or
+ * when `--color=always` is set. They render as garbled `[32m` in HTML.
+ */
+// eslint-disable-next-line no-control-regex
+const ANSI_RE = /\x1b\[[0-9;]*[a-zA-Z]|\x1b\].*?(?:\x07|\x1b\\)|\x1b[()][0-9A-B]/g;
+function stripAnsi(s: string): string {
+  return s.replace(ANSI_RE, '');
+}
+
 function createGitOperationsStore() {
   // Restore any errors that survived a page reload
   const restored = loadPersistedErrors();
@@ -130,12 +141,13 @@ function createGitOperationsStore() {
         console.warn('[gitOps] addCommitProgress DROPPED (not in progress):', message);
         return;
       }
-      commitOperation.progress = [...commitOperation.progress, message];
+      commitOperation.progress = [...commitOperation.progress, stripAnsi(message)];
     },
 
     setCommitError(error: string) {
-      console.error('[gitOps] setCommitError:', error);
-      commitOperation.error = error;
+      const clean = stripAnsi(error);
+      console.error('[gitOps] setCommitError:', clean);
+      commitOperation.error = clean;
       persistErrors(commitOperation, pushOperation);
     },
 
@@ -174,12 +186,12 @@ function createGitOperationsStore() {
 
     addPushProgress(message: string) {
       if (pushOperation.inProgress) {
-        pushOperation.progress = [...pushOperation.progress, message];
+        pushOperation.progress = [...pushOperation.progress, stripAnsi(message)];
       }
     },
 
     setPushError(error: string) {
-      pushOperation.error = error;
+      pushOperation.error = stripAnsi(error);
       persistErrors(commitOperation, pushOperation);
     },
 
