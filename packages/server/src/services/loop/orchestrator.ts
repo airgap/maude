@@ -116,8 +116,10 @@ class LoopOrchestrator {
     }
   }
 
-  /** How long a runner can go without a heartbeat before being considered dead. */
-  private static HEARTBEAT_STALE_MS = 90_000; // 90 seconds
+  /** How long a runner can go without a heartbeat before being considered dead.
+   * Needs to be long enough to accommodate slow quality checks (typecheck can take 10+ minutes)
+   * and long-running git operations (pre-commit hooks can take 30+ minutes). */
+  private static HEARTBEAT_STALE_MS = 45 * 60 * 1000; // 45 minutes
 
   /** Find loops marked running/paused in DB that have no in-memory runner
    *  (or whose heartbeat is stale) and mark them failed. */
