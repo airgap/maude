@@ -6,6 +6,8 @@ import type {
   TerminalCommandPolicy,
   PermissionRule,
   ShellProfile,
+  VoiceMode,
+  VoiceInputProvider,
 } from '@e/shared';
 import { convertVsCodeSnippets, type ConvertedSnippet } from '$lib/utils/vscode-snippet-converter';
 import { convertVsCodeTheme, type ConvertedTheme } from '$lib/utils/vscode-theme-converter';
@@ -125,6 +127,12 @@ interface SettingsState {
   mobileNavTabs: string[];
   // Snappy cursor effect (FTL prediction)
   snappyCursor: boolean;
+  // Voice mode
+  voiceMode: VoiceMode;
+  voiceInputProvider: VoiceInputProvider;
+  voiceWakeWord: string;
+  voiceAutoSpeak: boolean;
+  voiceLanguage: string;
 }
 
 const defaults: SettingsState = {
@@ -214,6 +222,11 @@ const defaults: SettingsState = {
   oneshotModel: 'qwen3:1.7b',
   mobileNavTabs: ['chat', 'files', 'terminal', 'work'],
   snappyCursor: false,
+  voiceMode: 'disabled',
+  voiceInputProvider: 'browser',
+  voiceWakeWord: 'Hey E',
+  voiceAutoSpeak: true,
+  voiceLanguage: 'en-US',
 };
 
 function loadFromStorage(): SettingsState {
@@ -561,6 +574,21 @@ function createSettingsStore() {
     },
     get snappyCursor() {
       return state.snappyCursor;
+    },
+    get voiceMode() {
+      return state.voiceMode;
+    },
+    get voiceInputProvider() {
+      return state.voiceInputProvider;
+    },
+    get voiceWakeWord() {
+      return state.voiceWakeWord;
+    },
+    get voiceAutoSpeak() {
+      return state.voiceAutoSpeak;
+    },
+    get voiceLanguage() {
+      return state.voiceLanguage;
     },
     get all() {
       return state;

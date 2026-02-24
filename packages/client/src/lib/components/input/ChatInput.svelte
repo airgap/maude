@@ -13,6 +13,7 @@
   import { workStore } from '$lib/stores/work.svelte';
   import { loopStore } from '$lib/stores/loop.svelte';
   import { draftsStore } from '$lib/stores/drafts.svelte';
+  import { voiceStore } from '$lib/stores/voice.svelte';
   import { onMount, tick } from 'svelte';
   import SlashCommandMenu from './SlashCommandMenu.svelte';
   import MentionMenu from './MentionMenu.svelte';
@@ -21,7 +22,7 @@
   import MentionRulePicker from './MentionRulePicker.svelte';
   import MentionThreadPicker from './MentionThreadPicker.svelte';
   import TaskSplitSuggestion from './TaskSplitSuggestion.svelte';
-  import VoiceButton from './VoiceButton.svelte';
+  import VoiceInputButton from '$lib/components/voice/VoiceInputButton.svelte';
   import ModeSelector, { type ConversationMode } from './ModeSelector.svelte';
   import {
     detectMultiPartRequest,
@@ -966,11 +967,34 @@
     textarea.style.height = Math.min(textarea.scrollHeight, 300) + 'px';
   }
 
-  function handleVoiceTranscript(text: string) {
-    inputText = inputText ? inputText + ' ' + text : text;
+  // Track if the current message is from voice input
+  let isVoiceMessage = $state(false);
+
+  function handleVoiceTranscript(text: string, isWakeWord = false) {
+    // Mark this as a voice message
+    isVoiceMessage = true;
+
+    if (isWakeWord) {
+      // For wake word triggered input, replace the entire input
+      inputText = text;
+    } else {
+      // For push-to-talk, append to existing text
+      inputText = inputText ? inputText + ' ' + text : text;
+    }
+
     resizeTextarea();
     draftsStore.save(conversationStore.activeId, inputText);
+
+    // If auto-send is enabled for wake word mode, send the message
+    if (isWakeWord && voiceStore.autoSpeak) {
+      send();
+    }
   }
+
+  // Register voice transcript callback
+  $effect(() => {
+    voiceStore.setTranscriptCallback(handleVoiceTranscript);
+  });
 
   function selectSlashCommand(command: string) {
     // For commands that need args (theme, model, permissions), put them in the input
@@ -1349,7 +1373,7 @@
         </span>
       {/if}
 
-      <VoiceButton onTranscript={handleVoiceTranscript} />
+      <VoiceInputButton />
 
       {#if streamStore.isStreaming && conversationStore.activeId != null && streamStore.conversationId === conversationStore.activeId}
         <button

@@ -12,6 +12,7 @@
   import { conversationStore } from '$lib/stores/conversation.svelte';
   import { api } from '$lib/api/client';
   import { throbberStore } from '$lib/stores/throbber.svelte';
+  import VoiceModeIndicator from '$lib/components/voice/VoiceModeIndicator.svelte';
 
   // Client-side pricing table (per million tokens)
   const PRICING: Record<string, { input: number; output: number }> = {
@@ -808,6 +809,8 @@
     <span class="status-item mode">
       {settingsStore.permissionMode}
     </span>
+
+    <VoiceModeIndicator />
 
     <button
       class="status-item model"

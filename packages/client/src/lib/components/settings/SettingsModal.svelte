@@ -1632,6 +1632,114 @@
               {/each}
             </div>
           </div>
+
+          <!-- Voice Mode Settings -->
+          <div class="setting-group">
+            <label class="setting-label">Voice Mode</label>
+            <p class="setting-desc">
+              Bidirectional voice interaction — speak to E and hear responses aloud
+            </p>
+            <div class="voice-mode-options">
+              {#each [{ value: 'disabled', label: 'Disabled', desc: 'No voice input' }, { value: 'push-to-talk', label: 'Push to Talk', desc: 'Hold Space to speak' }, { value: 'always-on', label: 'Always On', desc: 'Continuous listening with wake word' }] as opt}
+                <label
+                  class="voice-mode-option"
+                  class:active={settingsStore.voiceMode === opt.value}
+                >
+                  <input
+                    type="radio"
+                    name="voiceMode"
+                    value={opt.value}
+                    checked={settingsStore.voiceMode === opt.value}
+                    onchange={() => settingsStore.update({ voiceMode: opt.value as any })}
+                  />
+                  <div class="voice-mode-content">
+                    <span class="voice-mode-name">{opt.label}</span>
+                    <span class="voice-mode-desc">{opt.desc}</span>
+                  </div>
+                </label>
+              {/each}
+            </div>
+          </div>
+
+          {#if settingsStore.voiceMode !== 'disabled'}
+            <div class="setting-group">
+              <label class="setting-label">Voice Input Provider</label>
+              <p class="setting-desc">Choose the speech recognition engine</p>
+              <select
+                class="select"
+                value={settingsStore.voiceInputProvider}
+                onchange={(e) =>
+                  settingsStore.update({
+                    voiceInputProvider: (e.target as HTMLSelectElement).value as
+                      | 'browser'
+                      | 'whisper',
+                  })}
+              >
+                <option value="browser">Browser (Web Speech API)</option>
+                <option value="whisper">Whisper API (requires API key)</option>
+              </select>
+            </div>
+
+            {#if settingsStore.voiceMode === 'always-on'}
+              <div class="setting-group">
+                <label class="setting-label">Wake Word</label>
+                <p class="setting-desc">Phrase to activate voice input in always-on mode</p>
+                <input
+                  type="text"
+                  class="text-input"
+                  value={settingsStore.voiceWakeWord}
+                  oninput={(e) =>
+                    settingsStore.update({
+                      voiceWakeWord: (e.target as HTMLInputElement).value,
+                    })}
+                  placeholder="Hey E"
+                />
+              </div>
+            {/if}
+
+            <div class="setting-group">
+              <label class="setting-label">Voice Language</label>
+              <p class="setting-desc">Language for speech recognition</p>
+              <select
+                class="select"
+                value={settingsStore.voiceLanguage}
+                onchange={(e) =>
+                  settingsStore.update({
+                    voiceLanguage: (e.target as HTMLSelectElement).value,
+                  })}
+              >
+                <option value="en-US">English (US)</option>
+                <option value="en-GB">English (UK)</option>
+                <option value="en-AU">English (Australia)</option>
+                <option value="es-ES">Spanish</option>
+                <option value="fr-FR">French</option>
+                <option value="de-DE">German</option>
+                <option value="it-IT">Italian</option>
+                <option value="pt-BR">Portuguese (Brazil)</option>
+                <option value="ja-JP">Japanese</option>
+                <option value="zh-CN">Chinese (Simplified)</option>
+                <option value="ko-KR">Korean</option>
+              </select>
+            </div>
+
+            <div class="setting-group">
+              <label class="toggle-label">
+                <label class="toggle">
+                  <input
+                    type="checkbox"
+                    checked={settingsStore.voiceAutoSpeak}
+                    onchange={() =>
+                      settingsStore.update({ voiceAutoSpeak: !settingsStore.voiceAutoSpeak })}
+                  />
+                  <span class="toggle-slider"></span>
+                </label>
+                <div>
+                  <span class="toggle-label-text">Auto-speak responses</span>
+                  <p class="setting-hint">Read agent responses aloud using text-to-speech</p>
+                </div>
+              </label>
+            </div>
+          {/if}
         {:else if activeTab === 'commentary'}
           <div class="setting-group">
             <label class="setting-label">AI Commentary</label>
@@ -4675,5 +4783,91 @@
     .settings-content {
       padding: 12px 16px;
     }
+  }
+
+  /* Voice mode settings */
+  .voice-mode-options {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .voice-mode-option {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 12px;
+    border: 2px solid var(--border-secondary);
+    border-radius: var(--radius);
+    cursor: pointer;
+    transition: all var(--transition);
+  }
+
+  .voice-mode-option:hover {
+    border-color: var(--border-primary);
+    background: var(--bg-hover);
+  }
+
+  .voice-mode-option.active {
+    border-color: var(--accent-primary);
+    background: var(--bg-active);
+  }
+
+  .voice-mode-option input[type='radio'] {
+    margin-top: 2px;
+  }
+
+  .voice-mode-content {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    flex: 1;
+  }
+
+  .voice-mode-name {
+    font-size: var(--fs-sm);
+    font-weight: 600;
+    color: var(--text-primary);
+  }
+
+  .voice-mode-desc {
+    font-size: var(--fs-xs);
+    color: var(--text-tertiary);
+  }
+
+  .text-input {
+    width: 100%;
+    padding: 8px 12px;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-secondary);
+    border-radius: var(--radius);
+    color: var(--text-primary);
+    font-size: var(--fs-sm);
+    font-family: var(--font-family);
+    transition: all var(--transition);
+  }
+
+  .text-input:focus {
+    outline: none;
+    border-color: var(--accent-primary);
+    background: var(--bg-secondary);
+  }
+
+  .toggle-label {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+  }
+
+  .toggle-label-text {
+    font-size: var(--fs-sm);
+    font-weight: 500;
+    color: var(--text-primary);
+  }
+
+  .setting-hint {
+    font-size: var(--fs-xs);
+    color: var(--text-tertiary);
+    margin-top: 2px;
   }
 </style>

@@ -86,6 +86,8 @@ export type {
   ThemeId,
   CliProvider,
   OneshotProvider,
+  VoiceMode,
+  VoiceInputProvider,
   Settings,
   Keybinding,
   ServerOnlySettings,

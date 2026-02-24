@@ -42,6 +42,21 @@ export type CliProvider = 'claude' | 'kiro' | 'gemini-cli' | 'copilot' | 'ollama
  */
 export type OneshotProvider = 'auto' | 'ollama' | 'cli';
 
+/**
+ * Voice mode for bidirectional voice interaction
+ * - 'disabled': No voice input
+ * - 'push-to-talk': Hold a key to activate voice input
+ * - 'always-on': Continuous listening with wake word detection
+ */
+export type VoiceMode = 'disabled' | 'push-to-talk' | 'always-on';
+
+/**
+ * Voice input provider
+ * - 'browser': Web Speech API (built-in, real-time)
+ * - 'whisper': OpenAI Whisper API (higher accuracy, requires API key)
+ */
+export type VoiceInputProvider = 'browser' | 'whisper';
+
 export interface Settings {
   theme: ThemeId;
   cliProvider: CliProvider;
@@ -74,6 +89,12 @@ export interface Settings {
   notifyOnCompletion: boolean;
   notifyOnFailure: boolean;
   notifyOnApproval: boolean;
+  // Voice mode
+  voiceMode: VoiceMode;
+  voiceInputProvider: VoiceInputProvider;
+  voiceWakeWord: string;
+  voiceAutoSpeak: boolean;
+  voiceLanguage: string;
 }
 
 export interface Keybinding {
@@ -89,6 +110,7 @@ export interface ServerOnlySettings {
   workspacePaths: string[];
   sessionPersistence: boolean;
   debugMode: boolean;
+  whisperApiKey?: string;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -142,4 +164,9 @@ export const DEFAULT_SETTINGS: Settings = {
   notifyOnCompletion: true,
   notifyOnFailure: true,
   notifyOnApproval: true,
+  voiceMode: 'disabled',
+  voiceInputProvider: 'browser',
+  voiceWakeWord: 'Hey E',
+  voiceAutoSpeak: true,
+  voiceLanguage: 'en-US',
 };
