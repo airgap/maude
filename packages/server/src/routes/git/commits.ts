@@ -40,7 +40,13 @@ app.post('/commit', async (c) => {
       }
     }
 
-    const commitArgs = ['git', 'commit', ...(noVerify ? ['--no-verify'] : []), '-m', message.trim()];
+    const commitArgs = [
+      'git',
+      'commit',
+      ...(noVerify ? ['--no-verify'] : []),
+      '-m',
+      message.trim(),
+    ];
     console.log('[git/commit] Running:', commitArgs.join(' '));
     const commitResult = await run(commitArgs, {
       cwd: pathCheck.resolved,
@@ -162,7 +168,13 @@ app.post('/commit/stream', async (c) => {
         }),
       });
 
-      const commitArgs = ['git', 'commit', ...(noVerify ? ['--no-verify'] : []), '-m', message.trim()];
+      const commitArgs = [
+        'git',
+        'commit',
+        ...(noVerify ? ['--no-verify'] : []),
+        '-m',
+        message.trim(),
+      ];
       console.log('[git/commit/stream] Running:', commitArgs.join(' '));
       const commitProc = Bun.spawn(commitArgs, {
         cwd: pathCheck.resolved,
@@ -305,29 +317,36 @@ app.post('/commit-group', async (c) => {
       return c.json({ ok: false, error: `git reset failed: ${resetResult.stderr.trim()}` }, 500);
     }
 
-    // 2. Stage only the group's files
-    const addResult = await run(['git', 'add', '--', ...files], { cwd });
-    if (addResult.exitCode !== 0) {
-      return c.json(
-        { ok: false, error: `git add failed: ${addResult.stderr.trim()}` },
-        500,
-      );
+    // 2. Stage only the group's files.
+    //    Use --ignore-errors so one bad path doesn't block the whole group.
+    //    Step 3 verifies at least something was staged.
+    console.log('[git/commit-group] Staging %d files:', files.length, files);
+    const addResult = await run(['git', 'add', '--ignore-errors', '--', ...files], { cwd });
+    if (addResult.stderr.trim()) {
+      // Log warnings (e.g. "pathspec 'x' did not match") but don't fail yet —
+      // step 3 checks whether anything was actually staged.
+      console.warn('[git/commit-group] git add warnings:', addResult.stderr.trim());
     }
 
     // 3. Verify something is actually staged (catches bad file paths)
     const stagedExit = await runExitCode(['git', 'diff', '--cached', '--quiet'], { cwd });
     if (stagedExit === 0) {
       return c.json(
-        { ok: false, error: 'Nothing staged after adding files — check file paths' },
+        {
+          ok: false,
+          error: `Nothing staged after adding files — pathspecs may be wrong.\nFiles attempted: ${files.join(', ')}`,
+        },
         400,
       );
     }
 
     // 4. Commit
     const commitArgs = [
-      'git', 'commit',
+      'git',
+      'commit',
       ...(noVerify ? ['--no-verify'] : []),
-      '-m', message.trim(),
+      '-m',
+      message.trim(),
     ];
     console.log('[git/commit-group] Running:', commitArgs.join(' '), 'files:', files.length);
     const commitResult = await run(commitArgs, { cwd });

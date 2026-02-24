@@ -222,11 +222,50 @@ function mockProc(stdout: string, exitCode: number, stderr = '') {
   };
 }
 
+/**
+ * Create a Bun.spawn mock for the GET /status endpoint.
+ *
+ * The endpoint makes two spawn calls:
+ *   1. `git status --porcelain -uall` → returns the porcelain output
+ *   2. `git rev-parse --git-dir` → returns the git directory path
+ *
+ * Then it calls `Bun.file(lockPath).exists()` to check for index.lock.
+ * The returned `fileSpy` mocks that to always return false (no lock).
+ */
+function mockStatusSpawn(
+  porcelain: string,
+  exitCode: number,
+  stderr = '',
+): {
+  spawnSpy: ReturnType<typeof spyOn>;
+  fileSpy: ReturnType<typeof spyOn>;
+} {
+  let callIndex = 0;
+  const spawnSpy = spyOn(Bun, 'spawn').mockImplementation(() => {
+    callIndex++;
+    if (callIndex === 1) {
+      // git status --porcelain -uall
+      return mockProc(porcelain, exitCode, stderr) as any;
+    }
+    // git rev-parse --git-dir
+    return mockProc('.git\n', 0) as any;
+  });
+  const originalFile = Bun.file.bind(Bun);
+  const fileSpy = spyOn(Bun, 'file').mockImplementation((path: any, ...rest: any[]) => {
+    if (typeof path === 'string' && path.endsWith('index.lock')) {
+      return { exists: () => Promise.resolve(false) } as any;
+    }
+    return originalFile(path, ...rest);
+  });
+  return { spawnSpy, fileSpy };
+}
+
 // ---------------------------------------------------------------------------
 // Tests that mock Bun.spawn for git command endpoints
 // ---------------------------------------------------------------------------
 describe('Git Routes — Bun.spawn mocked', () => {
   let spawnSpy: ReturnType<typeof spyOn>;
+  let fileSpy: ReturnType<typeof spyOn> | undefined;
 
   beforeEach(() => {
     // Reset DB tables used by snapshot endpoints
@@ -234,6 +273,10 @@ describe('Git Routes — Bun.spawn mocked', () => {
   });
 
   afterEach(() => {
+    if (fileSpy) {
+      fileSpy.mockRestore();
+      fileSpy = undefined;
+    }
     if (spawnSpy) spawnSpy.mockRestore();
   });
 
@@ -242,9 +285,7 @@ describe('Git Routes — Bun.spawn mocked', () => {
   // ---------------------------------------------------------------
   describe('GET /status', () => {
     test('parses porcelain output with modified files', async () => {
-      spawnSpy = spyOn(Bun, 'spawn').mockReturnValue(
-        mockProc(' M src/app.ts\n M README.md\n', 0) as any,
-      );
+      ({ spawnSpy, fileSpy } = mockStatusSpawn(' M src/app.ts\n M README.md\n', 0));
 
       const res = await app.request('/status?path=/myproject');
       const json = await res.json();
@@ -256,7 +297,7 @@ describe('Git Routes — Bun.spawn mocked', () => {
     });
 
     test('parses untracked files', async () => {
-      spawnSpy = spyOn(Bun, 'spawn').mockReturnValue(mockProc('?? newfile.ts\n', 0) as any);
+      ({ spawnSpy, fileSpy } = mockStatusSpawn('?? newfile.ts\n', 0));
 
       const res = await app.request('/status?path=/myproject');
       const json = await res.json();
@@ -265,7 +306,7 @@ describe('Git Routes — Bun.spawn mocked', () => {
     });
 
     test('parses staged added files', async () => {
-      spawnSpy = spyOn(Bun, 'spawn').mockReturnValue(mockProc('A  new.ts\n', 0) as any);
+      ({ spawnSpy, fileSpy } = mockStatusSpawn('A  new.ts\n', 0));
 
       const res = await app.request('/status?path=/proj');
       const json = await res.json();
@@ -273,7 +314,7 @@ describe('Git Routes — Bun.spawn mocked', () => {
     });
 
     test('parses staged deleted files', async () => {
-      spawnSpy = spyOn(Bun, 'spawn').mockReturnValue(mockProc('D  removed.ts\n', 0) as any);
+      ({ spawnSpy, fileSpy } = mockStatusSpawn('D  removed.ts\n', 0));
 
       const res = await app.request('/status?path=/proj');
       const json = await res.json();
@@ -281,7 +322,7 @@ describe('Git Routes — Bun.spawn mocked', () => {
     });
 
     test('parses renamed files', async () => {
-      spawnSpy = spyOn(Bun, 'spawn').mockReturnValue(mockProc('R  old.ts -> new.ts\n', 0) as any);
+      ({ spawnSpy, fileSpy } = mockStatusSpawn('R  old.ts -> new.ts\n', 0));
 
       const res = await app.request('/status?path=/proj');
       const json = await res.json();
@@ -290,7 +331,7 @@ describe('Git Routes — Bun.spawn mocked', () => {
     });
 
     test('parses staged modified files (M in index)', async () => {
-      spawnSpy = spyOn(Bun, 'spawn').mockReturnValue(mockProc('M  staged.ts\n', 0) as any);
+      ({ spawnSpy, fileSpy } = mockStatusSpawn('M  staged.ts\n', 0));
 
       const res = await app.request('/status?path=/proj');
       const json = await res.json();
@@ -310,7 +351,7 @@ describe('Git Routes — Bun.spawn mocked', () => {
     });
 
     test('returns empty files array for clean repo', async () => {
-      spawnSpy = spyOn(Bun, 'spawn').mockReturnValue(mockProc('', 0) as any);
+      ({ spawnSpy, fileSpy } = mockStatusSpawn('', 0));
 
       const res = await app.request('/status?path=/clean');
       const json = await res.json();
@@ -2642,7 +2683,7 @@ index abc..def 100644
   // ---------------------------------------------------------------
   describe('GET /status — mixed porcelain statuses', () => {
     test('emits both staged and unstaged entries for MM status', async () => {
-      spawnSpy = spyOn(Bun, 'spawn').mockReturnValue(mockProc('MM both.ts\n', 0) as any);
+      ({ spawnSpy, fileSpy } = mockStatusSpawn('MM both.ts\n', 0));
 
       const res = await app.request('/status?path=/proj');
       const json = await res.json();
@@ -2654,7 +2695,7 @@ index abc..def 100644
     });
 
     test('handles deleted file in working tree (unstaged)', async () => {
-      spawnSpy = spyOn(Bun, 'spawn').mockReturnValue(mockProc(' D deleted.ts\n', 0) as any);
+      ({ spawnSpy, fileSpy } = mockStatusSpawn(' D deleted.ts\n', 0));
 
       const res = await app.request('/status?path=/proj');
       const json = await res.json();
@@ -2663,7 +2704,7 @@ index abc..def 100644
     });
 
     test('handles staged added file with unstaged modifications (AM)', async () => {
-      spawnSpy = spyOn(Bun, 'spawn').mockReturnValue(mockProc('AM newmod.ts\n', 0) as any);
+      ({ spawnSpy, fileSpy } = mockStatusSpawn('AM newmod.ts\n', 0));
 
       const res = await app.request('/status?path=/proj');
       const json = await res.json();

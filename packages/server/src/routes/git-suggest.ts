@@ -48,7 +48,171 @@ function validateWorkspacePath(rawPath: string): {
 }
 
 // ---------------------------------------------------------------------------
-// POST /suggest-commit-groups
+// JSON extraction — handle noisy LLM output
+// ---------------------------------------------------------------------------
+
+/**
+ * Robustly extract a JSON array from LLM output that may contain:
+ * - `<think>...</think>` blocks (qwen3 and similar reasoning models)
+ * - Markdown fences (```json ... ```)
+ * - Explanatory text before/after the JSON
+ * - Trailing commas in arrays/objects
+ * - Single quotes instead of double quotes
+ * - JavaScript-style comments
+ * - Unquoted property keys
+ */
+function extractJsonArray(raw: string): string {
+  let text = raw.trim();
+
+  // 1. Strip <think>...</think> blocks (greedy — may appear multiple times)
+  text = text.replace(/<think>[\s\S]*?<\/think>/gi, '').trim();
+
+  // 2. Strip markdown fences (may appear multiple times or wrap the whole output)
+  text = text.replace(/```(?:json|jsonc)?\s*\n?/gi, '').trim();
+
+  // 3. If the whole thing parses, great
+  try {
+    JSON.parse(text);
+    return text;
+  } catch {
+    // continue to extraction
+  }
+
+  // 4. Find the outermost [...] bracket pair
+  const start = text.indexOf('[');
+  const end = text.lastIndexOf(']');
+  if (start !== -1 && end > start) {
+    let candidate = text.slice(start, end + 1);
+
+    // Try raw candidate first before any repair
+    try {
+      JSON.parse(candidate);
+      return candidate;
+    } catch {
+      // continue to repair
+    }
+
+    candidate = repairJson(candidate);
+
+    try {
+      JSON.parse(candidate);
+      return candidate;
+    } catch {
+      // last resort — return as-is and let caller handle the parse error
+    }
+  }
+
+  return text;
+}
+
+/**
+ * Attempt to repair common JSON mistakes from small language models.
+ */
+function repairJson(input: string): string {
+  let text = input;
+
+  // Strip single-line comments (// ...)
+  text = text.replace(/\/\/[^\n]*/g, '');
+
+  // Strip multi-line comments (/* ... */)
+  text = text.replace(/\/\*[\s\S]*?\*\//g, '');
+
+  // Fix trailing commas before ] or } (very common)
+  text = text.replace(/,\s*([\]}])/g, '$1');
+
+  // Try parsing after comment/comma fixes — this handles most cases
+  try {
+    JSON.parse(text);
+    return text;
+  } catch {
+    // continue to more aggressive repairs
+  }
+
+  // Replace single-quoted strings with double-quoted strings.
+  // This is tricky — we walk character by character to avoid breaking
+  // apostrophes inside double-quoted strings.
+  text = replaceSingleQuotedStrings(text);
+
+  // Fix unquoted property keys: { name: "..." } → { "name": "..." }
+  // Match word chars before a colon that aren't inside quotes
+  text = text.replace(/(?<=[\{,]\s*)([a-zA-Z_]\w*)(?=\s*:)/g, '"$1"');
+
+  // Fix escaped single quotes that are now inside double quotes
+  text = text.replace(/\\'/g, "'");
+
+  return text;
+}
+
+/**
+ * Replace single-quoted JSON strings with double-quoted ones.
+ * Walks the string character by character to correctly handle
+ * apostrophes inside already-double-quoted strings.
+ */
+function replaceSingleQuotedStrings(input: string): string {
+  const chars = [...input];
+  const result: string[] = [];
+  let i = 0;
+
+  while (i < chars.length) {
+    const ch = chars[i];
+
+    // Skip double-quoted strings entirely — they're already fine
+    if (ch === '"') {
+      result.push(ch);
+      i++;
+      while (i < chars.length) {
+        if (chars[i] === '\\') {
+          result.push(chars[i], chars[i + 1] ?? '');
+          i += 2;
+        } else if (chars[i] === '"') {
+          result.push(chars[i]);
+          i++;
+          break;
+        } else {
+          result.push(chars[i]);
+          i++;
+        }
+      }
+      continue;
+    }
+
+    // Convert single-quoted strings to double-quoted
+    if (ch === "'") {
+      result.push('"');
+      i++;
+      while (i < chars.length) {
+        if (chars[i] === '\\' && chars[i + 1] === "'") {
+          // Escaped single quote → just the quote
+          result.push("'");
+          i += 2;
+        } else if (chars[i] === '\\') {
+          result.push(chars[i], chars[i + 1] ?? '');
+          i += 2;
+        } else if (chars[i] === "'") {
+          result.push('"');
+          i++;
+          break;
+        } else if (chars[i] === '"') {
+          // Escape double quotes that appear inside the string
+          result.push('\\"');
+          i++;
+        } else {
+          result.push(chars[i]);
+          i++;
+        }
+      }
+      continue;
+    }
+
+    result.push(ch);
+    i++;
+  }
+
+  return result.join('');
+}
+
+// ---------------------------------------------------------------------------
+// Grouping strategies
 // ---------------------------------------------------------------------------
 
 export interface CommitGroup {
@@ -57,6 +221,203 @@ export interface CommitGroup {
   files: string[];
   reason: string;
 }
+
+/**
+ * Strategy 1: Ask the LLM for a JSON array of groups.
+ * Works well with larger models (Claude, GPT-4, large Ollama models).
+ * Returns [] if parsing fails.
+ */
+async function tryJsonGrouping(
+  changedFiles: string[],
+  diffPrompt: string,
+  opts?: { forceCliProvider?: boolean },
+): Promise<CommitGroup[]> {
+  try {
+    const llmResult = await callLlm({
+      forceCliProvider: opts?.forceCliProvider,
+      system: `You are a JSON API. You ONLY output valid JSON arrays — nothing else.
+You analyze git diffs and group changed files into logical atomic commits.
+
+RULES:
+- Each group = related files for one feature, fix, or refactoring
+- Every input file must appear in exactly one group
+- Commit messages: imperative mood, under 72 chars
+- Output ONLY a JSON array. No text before or after. No markdown fences.
+
+REQUIRED OUTPUT FORMAT (exact keys, double quotes, valid JSON):
+[{"name":"group name","message":"feat: do something","files":["file1.ts"],"reason":"why"}]`,
+      user: `Group these ${changedFiles.length} changed files into logical commit groups:\n\n${diffPrompt}`,
+      timeoutMs: 60_000,
+    });
+
+    const cleaned = extractJsonArray(llmResult);
+    const groups: CommitGroup[] = JSON.parse(cleaned);
+
+    if (!Array.isArray(groups) || groups.length === 0) {
+      throw new Error('Expected non-empty array');
+    }
+
+    // Validate each group has required fields
+    for (const g of groups) {
+      if (!g.name || !g.message || !Array.isArray(g.files)) {
+        throw new Error('Group missing required fields');
+      }
+    }
+
+    // The LLM may mangle file paths (truncate, add leading /, drop directory
+    // prefixes, etc.). Filter each group to only include paths that actually
+    // exist in changedFiles.  For near-misses, try to match by basename or
+    // suffix so a response like "commits.ts" still maps to
+    // "packages/server/src/routes/git/commits.ts".
+    const changedSet = new Set(changedFiles);
+    for (const g of groups) {
+      g.files = g.files
+        .map((f: string) => {
+          const trimmed = f.trim().replace(/^\/+/, '');
+          // Exact match
+          if (changedSet.has(trimmed)) return trimmed;
+          // Suffix match — LLM dropped a leading directory segment
+          const suffixMatch = changedFiles.find(
+            (cf) => cf.endsWith(trimmed) || trimmed.endsWith(cf),
+          );
+          if (suffixMatch) return suffixMatch;
+          // No match — drop this path
+          console.warn('[git/suggest] Dropping unrecognised path from LLM:', f);
+          return null;
+        })
+        .filter((f: string | null): f is string => f !== null);
+    }
+    // Remove groups that ended up empty after filtering
+    const validGroups = groups.filter((g) => g.files.length > 0);
+    if (validGroups.length === 0) {
+      throw new Error('No valid file paths after filtering LLM response');
+    }
+
+    // Ensure every known file is accounted for
+    const assignedFiles = new Set(validGroups.flatMap((g) => g.files));
+    const missing = changedFiles.filter((f) => !assignedFiles.has(f));
+    if (missing.length > 0) {
+      validGroups.push({
+        name: 'Other changes',
+        message: 'chore: miscellaneous changes',
+        files: missing,
+        reason: 'Files not covered by other groups',
+      });
+    }
+
+    return validGroups;
+  } catch (err) {
+    console.warn('[git/suggest-commit-groups] JSON grouping failed:', (err as Error).message);
+    return [];
+  }
+}
+
+/**
+ * Strategy 2: Text-based format that small local models handle much better.
+ * Uses a simple line-based format instead of JSON.
+ * Returns [] if parsing fails.
+ */
+async function tryTextGrouping(changedFiles: string[], diffPrompt: string): Promise<CommitGroup[]> {
+  try {
+    const fileList = changedFiles.map((f, i) => `${i + 1}. ${f}`).join('\n');
+
+    const llmResult = await callLlm({
+      system: `You group git changes into logical commits. Output ONLY in this exact format, nothing else:
+
+GROUP: <short group name>
+MESSAGE: <git commit message, imperative mood, under 72 chars>
+FILES: <comma-separated file numbers from the list>
+REASON: <one sentence why these belong together>
+
+You may output multiple GROUP blocks. Every file number must appear exactly once.`,
+      user: `Group these files into logical commits:\n\n${fileList}\n\nDiffs:\n${diffPrompt}`,
+      timeoutMs: 60_000,
+    });
+
+    return parseTextGroups(llmResult, changedFiles);
+  } catch (err) {
+    console.warn('[git/suggest-commit-groups] Text grouping failed:', (err as Error).message);
+    return [];
+  }
+}
+
+/**
+ * Parse the text-based group format into CommitGroup objects.
+ */
+function parseTextGroups(raw: string, changedFiles: string[]): CommitGroup[] {
+  // Strip <think> blocks
+  const text = raw.replace(/<think>[\s\S]*?<\/think>/gi, '').trim();
+
+  const groups: CommitGroup[] = [];
+  let current: Partial<CommitGroup> & { fileNums?: number[] } = {};
+
+  for (const rawLine of text.split('\n')) {
+    const line = rawLine.trim();
+    if (!line) continue;
+
+    const groupMatch = line.match(/^GROUP:\s*(.+)/i);
+    const msgMatch = line.match(/^MESSAGE:\s*(.+)/i);
+    const filesMatch = line.match(/^FILES:\s*(.+)/i);
+    const reasonMatch = line.match(/^REASON:\s*(.+)/i);
+
+    if (groupMatch) {
+      // Flush previous group
+      if (current.name && current.fileNums?.length) {
+        groups.push({
+          name: current.name,
+          message: current.message || 'chore: update files',
+          files: current.fileNums
+            .filter((n) => n >= 1 && n <= changedFiles.length)
+            .map((n) => changedFiles[n - 1]),
+          reason: current.reason || '',
+        });
+      }
+      current = { name: groupMatch[1].trim() };
+    } else if (msgMatch) {
+      current.message = msgMatch[1].trim();
+    } else if (filesMatch) {
+      // Parse "1, 3, 5" or "1,3,5" or "1 3 5"
+      current.fileNums = filesMatch[1]
+        .split(/[\s,]+/)
+        .map((s) => parseInt(s, 10))
+        .filter((n) => !isNaN(n));
+    } else if (reasonMatch) {
+      current.reason = reasonMatch[1].trim();
+    }
+  }
+
+  // Flush last group
+  if (current.name && current.fileNums?.length) {
+    groups.push({
+      name: current.name,
+      message: current.message || 'chore: update files',
+      files: current.fileNums
+        .filter((n) => n >= 1 && n <= changedFiles.length)
+        .map((n) => changedFiles[n - 1]),
+      reason: current.reason || '',
+    });
+  }
+
+  if (groups.length === 0) return [];
+
+  // Add catch-all for missed files
+  const assigned = new Set(groups.flatMap((g) => g.files));
+  const missing = changedFiles.filter((f) => !assigned.has(f));
+  if (missing.length > 0) {
+    groups.push({
+      name: 'Other changes',
+      message: 'chore: miscellaneous changes',
+      files: missing,
+      reason: 'Files not covered by other groups',
+    });
+  }
+
+  return groups;
+}
+
+// ---------------------------------------------------------------------------
+// POST /suggest-commit-groups
+// ---------------------------------------------------------------------------
 
 app.post('/suggest-commit-groups', async (c) => {
   const body = await c.req.json();
@@ -79,10 +440,13 @@ app.post('/suggest-commit-groups', async (c) => {
       return c.json({ ok: false, error: 'No changes to group' }, 400);
     }
 
-    // Parse file list from porcelain output
+    // Parse file list from porcelain output.
+    // IMPORTANT: Do NOT trim() stdout before splitting — trim strips the leading
+    // space from the first line which is the staged-status column ("XY filename").
+    // Stripping it shifts slice(3) by one, corrupting the first file path.
     const changedFiles: string[] = [];
-    for (const line of statusResult.stdout.trim().split('\n')) {
-      if (!line.trim()) continue;
+    for (const line of statusResult.stdout.split('\n')) {
+      if (line.length < 4) continue;
       // porcelain format: "XY filename" or "XY orig -> renamed"
       const file = line.slice(3).split(' -> ').pop()?.trim();
       if (file) changedFiles.push(file);
@@ -159,64 +523,31 @@ app.post('/suggest-commit-groups', async (c) => {
 
     const prompt = fileDiffs.join('\n\n');
 
-    const llmResult = await callLlm({
-      system: `You analyze git diffs and group changed files into logical atomic commits for code review.
+    // Try grouping with escalating capability:
+    // 1. JSON format with default model (fast, works with large models)
+    // 2. Text format with default model (easier for small local models)
+    // 3. JSON format with CLI provider (Claude/Gemini — more capable but slower)
+    // 4. Fallback: single group with all files
+    let groups: CommitGroup[] = await tryJsonGrouping(changedFiles, prompt);
 
-RULES:
-- Each group should contain related files that work toward one feature, fix, or refactoring
-- Every file in the input must appear in exactly one group
-- Each group needs a concise commit message (imperative mood, under 72 chars)
-- Provide a brief reason for each grouping
+    if (!groups.length) {
+      console.log('[git/suggest-commit-groups] JSON grouping failed, trying text-based format');
+      groups = await tryTextGrouping(changedFiles, prompt);
+    }
 
-Respond with ONLY valid JSON — no markdown fences, no explanation outside the JSON:
-[
-  {
-    "name": "Short group name",
-    "message": "feat: commit message here",
-    "files": ["path/to/file1.ts", "path/to/file2.ts"],
-    "reason": "These files implement the new X feature"
-  }
-]`,
-      user: `Group these ${changedFiles.length} changed files into logical commit groups:\n\n${prompt}`,
-      timeoutMs: 60_000,
-    });
+    if (!groups.length) {
+      console.log('[git/suggest-commit-groups] Text grouping failed, escalating to CLI provider');
+      groups = await tryJsonGrouping(changedFiles, prompt, { forceCliProvider: true });
+    }
 
-    // Parse LLM response
-    let groups: CommitGroup[];
-    try {
-      // Strip markdown fences if present
-      let cleaned = llmResult.trim();
-      if (cleaned.startsWith('```')) {
-        cleaned = cleaned.replace(/^```(?:json)?\n?/, '').replace(/\n?```$/, '');
-      }
-      groups = JSON.parse(cleaned);
-
-      // Validate structure
-      if (!Array.isArray(groups)) {
-        throw new Error('Expected array');
-      }
-
-      // Ensure every file is accounted for
-      const assignedFiles = new Set(groups.flatMap((g) => g.files));
-      const missing = changedFiles.filter((f) => !assignedFiles.has(f));
-      if (missing.length > 0) {
-        // Add a catch-all group for missed files
-        groups.push({
-          name: 'Other changes',
-          message: 'chore: miscellaneous changes',
-          files: missing,
-          reason: 'Files not covered by other groups',
-        });
-      }
-    } catch (parseErr) {
-      console.error('[git/suggest-commit-groups] Failed to parse LLM response:', parseErr);
-      // Fallback: single group with all files
+    if (!groups.length) {
+      // Ultimate fallback: single group with all files
       groups = [
         {
           name: 'All changes',
           message: 'chore: update files',
           files: changedFiles,
-          reason: 'Could not parse AI grouping suggestion',
+          reason: 'Could not auto-group — all files grouped together',
         },
       ];
     }
