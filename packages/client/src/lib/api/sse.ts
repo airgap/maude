@@ -41,6 +41,7 @@ export async function sendAndStream(
   conversationId: string,
   content: string,
   attachments?: Attachment[],
+  messageMetadata?: { isVoiceMessage?: boolean },
 ): Promise<void> {
   // Stop any active polling fallback — we're starting a fresh stream
   stopConversationPolling();
@@ -102,6 +103,7 @@ export async function sendAndStream(
     role: 'user',
     content: userContentBlocks,
     timestamp: Date.now(),
+    isVoiceMessage: messageMetadata?.isVoiceMessage,
   });
 
   try {

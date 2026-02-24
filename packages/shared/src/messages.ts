@@ -72,6 +72,8 @@ export interface Message {
   tokenCount?: number;
   // For tool calls, track approval state
   toolApprovals?: Record<string, ToolApprovalState>;
+  // Voice metadata
+  isVoiceMessage?: boolean;
 }
 
 export type ToolApprovalState = 'pending' | 'approved' | 'denied';

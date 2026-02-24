@@ -722,10 +722,15 @@
     const attachmentsToSend = imageAttachments.length > 0 ? imageAttachments : undefined;
     pendingAttachments = [];
 
+    // Pass voice message metadata if this was from voice input
+    const metadata = isVoiceMessage ? { isVoiceMessage: true } : undefined;
+    isVoiceMessage = false; // Reset for next message
+
     await sendAndStream(
       conversationStore.activeId!,
       diffContext + contextPrefix + fileAttachmentContext + text,
       attachmentsToSend,
+      metadata,
     );
   }
 
@@ -2015,5 +2020,49 @@
     font-size: var(--fs-sm);
     font-weight: 600;
     letter-spacing: 0.5px;
+  }
+
+  /* Mobile-responsive styles for remote access */
+  @media (max-width: 768px) {
+    .chat-input-wrapper {
+      padding: 8px;
+    }
+
+    .input-container {
+      min-height: 40px;
+    }
+
+    .input-actions {
+      gap: 4px;
+    }
+
+    .toolbar-btn {
+      padding: 4px;
+    }
+
+    .context-chips {
+      gap: 4px;
+      flex-wrap: wrap;
+    }
+
+    .context-chip {
+      font-size: 11px;
+      padding: 3px 6px;
+    }
+  }
+
+  @media (max-width: 480px) {
+    .chat-input-wrapper {
+      padding: 6px;
+    }
+
+    .input-actions {
+      gap: 2px;
+    }
+
+    .toolbar-btn {
+      width: 32px;
+      height: 32px;
+    }
   }
 </style>

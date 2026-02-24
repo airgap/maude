@@ -2208,4 +2208,76 @@
     color: var(--text-tertiary);
     font-size: 12px;
   }
+
+  /* Mobile-responsive styles for remote access */
+  @media (max-width: 768px) {
+    .manager-panel {
+      font-size: 14px;
+    }
+
+    .workspace-card {
+      padding: 12px;
+    }
+
+    .workspace-header {
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 8px;
+    }
+
+    .workspace-actions {
+      width: 100%;
+      justify-content: flex-start;
+      gap: 6px;
+    }
+
+    .stat-grid {
+      grid-template-columns: repeat(2, 1fr);
+      gap: 8px;
+    }
+
+    .approval-card {
+      padding: 10px;
+    }
+
+    .commentary-controls {
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .personality-select,
+    .verbosity-select {
+      width: 100%;
+    }
+
+    .story-row {
+      padding: 10px;
+    }
+
+    .cross-section {
+      padding: 10px;
+    }
+
+    .cross-msg-card {
+      padding: 10px;
+    }
+  }
+
+  @media (max-width: 480px) {
+    .workspace-card {
+      padding: 10px;
+    }
+
+    .stat-grid {
+      grid-template-columns: 1fr;
+    }
+
+    .workspace-name {
+      font-size: 15px;
+    }
+
+    .stat-value {
+      font-size: 20px;
+    }
+  }
 </style>

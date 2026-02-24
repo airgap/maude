@@ -23,6 +23,8 @@
   import { THEMES } from '$lib/config/themes';
   import { workspaceStore } from '$lib/stores/workspace.svelte';
   import WebhookSettings from './WebhookSettings.svelte';
+  import RemoteAccessSettings from './RemoteAccessSettings.svelte';
+  import * as remoteAccessApi from '$lib/api/remote-access';
 
   const cliProviders: { id: CliProvider; label: string; desc: string }[] = [
     { id: 'claude', label: 'Claude Code', desc: 'Anthropic Claude CLI' },
@@ -50,7 +52,8 @@
     | 'mcp'
     | 'keybindings'
     | 'profiles'
-    | 'webhooks' {
+    | 'webhooks'
+    | 'remote' {
     if (typeof localStorage !== 'undefined') {
       const tab = localStorage.getItem('e-settings-tab');
       if (tab) {
@@ -74,6 +77,7 @@
     | 'keybindings'
     | 'profiles'
     | 'webhooks'
+    | 'remote'
   >(getInitialTab());
 
   // --- BYOK state ---
@@ -85,6 +89,7 @@
     { id: 'anthropic', label: 'Anthropic', desc: 'Claude models' },
     { id: 'openai', label: 'OpenAI', desc: 'GPT models' },
     { id: 'google', label: 'Google', desc: 'Gemini models' },
+    { id: 'whisper', label: 'Whisper', desc: 'Voice transcription (optional for voice mode)' },
   ];
 
   async function loadApiKeyStatus() {
@@ -294,6 +299,125 @@
 
   function removeSandboxPath(path: string) {
     sandboxPaths = sandboxPaths.filter((p) => p !== path);
+  }
+
+  // --- Remote Access state ---
+  let remoteAccessEnabled = $state(false);
+  let remoteAccessMode = $state<'disabled' | 'tailscale' | 'ssh'>('disabled');
+  let remoteAccessLoading = $state(false);
+  let tailscaleStatus = $state<remoteAccessApi.TailscaleStatusData | null>(null);
+  let sshTunnelCommand = $state<remoteAccessApi.SSHTunnelCommandData | null>(null);
+  let remoteClients = $state<any[]>([]);
+  let tailscaleUrl = $state<string | null>(null);
+  let tailscaleConfiguring = $state(false);
+  let sshRemoteHost = $state('');
+
+  async function loadRemoteAccessSettings() {
+    remoteAccessLoading = true;
+    try {
+      const status = await remoteAccessApi.getRemoteAccessStatus();
+      remoteAccessEnabled = status.config.enabled;
+      tailscaleStatus = status.tailscaleStatus;
+      sshTunnelCommand = status.sshTunnel;
+
+      // Determine mode based on settings
+      if (status.config.tailscaleEnabled) {
+        remoteAccessMode = 'tailscale';
+      } else if (status.config.sshTunnelEnabled) {
+        remoteAccessMode = 'ssh';
+      } else {
+        remoteAccessMode = 'disabled';
+      }
+    } catch (error) {
+      console.error('Failed to load remote access settings:', error);
+    }
+    remoteAccessLoading = false;
+  }
+
+  async function loadRemoteClients() {
+    try {
+      remoteClients = await remoteAccessApi.getRemoteClients();
+    } catch (error) {
+      console.error('Failed to load remote clients:', error);
+    }
+  }
+
+  async function toggleRemoteAccess() {
+    try {
+      const newEnabled = !remoteAccessEnabled;
+      await remoteAccessApi.updateRemoteAccessConfig({
+        enabled: newEnabled,
+        tailscaleEnabled: remoteAccessMode === 'tailscale',
+        sshTunnelEnabled: remoteAccessMode === 'ssh',
+        requireAuth: true,
+      });
+      remoteAccessEnabled = newEnabled;
+      uiStore.toast(newEnabled ? 'Remote access enabled' : 'Remote access disabled', 'success');
+    } catch (error) {
+      uiStore.toast('Failed to update remote access settings', 'error');
+    }
+  }
+
+  async function updateRemoteAccessMode(mode: 'disabled' | 'tailscale' | 'ssh') {
+    try {
+      remoteAccessMode = mode;
+      await remoteAccessApi.updateRemoteAccessConfig({
+        enabled: mode !== 'disabled',
+        tailscaleEnabled: mode === 'tailscale',
+        sshTunnelEnabled: mode === 'ssh',
+        requireAuth: true,
+      });
+      remoteAccessEnabled = mode !== 'disabled';
+      uiStore.toast('Remote access mode updated', 'success');
+
+      // Reload status to get updated info
+      await loadRemoteAccessSettings();
+    } catch (error) {
+      uiStore.toast('Failed to update remote access mode', 'error');
+    }
+  }
+
+  async function configureTailscaleServe() {
+    tailscaleConfiguring = true;
+    try {
+      const result = await remoteAccessApi.configureTailscale(false);
+      tailscaleUrl = result.url;
+      uiStore.toast('Tailscale serve configured', 'success');
+      await loadRemoteAccessSettings();
+    } catch (error: any) {
+      uiStore.toast(error.message || 'Failed to configure Tailscale', 'error');
+    }
+    tailscaleConfiguring = false;
+  }
+
+  async function stopTailscaleServe() {
+    tailscaleConfiguring = true;
+    try {
+      await remoteAccessApi.stopTailscale();
+      tailscaleUrl = null;
+      uiStore.toast('Tailscale serve stopped', 'success');
+      await loadRemoteAccessSettings();
+    } catch (error: any) {
+      uiStore.toast(error.message || 'Failed to stop Tailscale', 'error');
+    }
+    tailscaleConfiguring = false;
+  }
+
+  async function updateSshTunnelCommand() {
+    try {
+      sshTunnelCommand = await remoteAccessApi.getSSHTunnelCommand(sshRemoteHost || undefined);
+    } catch (error) {
+      console.error('Failed to get SSH tunnel command:', error);
+    }
+  }
+
+  async function copyToClipboard(text: string) {
+    try {
+      await navigator.clipboard.writeText(text);
+      uiStore.toast('Copied to clipboard', 'success');
+    } catch (error) {
+      uiStore.toast('Failed to copy to clipboard', 'error');
+    }
   }
 
   // --- Snippet import state ---
@@ -790,7 +914,7 @@
           </button>
         {/each}
         <span class="settings-section-header">Access Control</span>
-        {#each ['permissions', 'profiles', 'security'] as tab}
+        {#each ['permissions', 'profiles', 'security', 'remote'] as tab}
           <button
             class="settings-tab"
             class:active={activeTab === tab}
@@ -800,13 +924,17 @@
           </button>
         {/each}
         <span class="settings-section-header">Integrations</span>
-        {#each ['mcp', 'webhooks'] as tab}
+        {#each ['mcp', 'webhooks', 'remote'] as tab}
           <button
             class="settings-tab"
             class:active={activeTab === tab}
             onclick={() => (activeTab = tab as any)}
           >
-            {tab === 'mcp' ? 'MCP' : tab.charAt(0).toUpperCase() + tab.slice(1)}
+            {tab === 'mcp'
+              ? 'MCP'
+              : tab === 'remote'
+                ? 'Remote Access'
+                : tab.charAt(0).toUpperCase() + tab.slice(1)}
           </button>
         {/each}
       </nav>
@@ -2962,6 +3090,8 @@
           </div>
         {:else if activeTab === 'webhooks'}
           <WebhookSettings />
+        {:else if activeTab === 'remote'}
+          <RemoteAccessSettings />
         {:else}
           <!-- keybindings (last branch — no explicit type check needed) -->
           <div class="keybindings-list">

@@ -11,6 +11,7 @@
   import WorkspaceTabBar from './WorkspaceTabBar.svelte';
   import WindowControls from './WindowControls.svelte';
   import ProfileSwitcher from './ProfileSwitcher.svelte';
+  import RemoteSessionIndicator from '../common/RemoteSessionIndicator.svelte';
 
   let commentaryActive = $derived(commentaryStore.isActive);
   let commentaryWorkspaceId = $derived(commentaryStore.workspaceId);
@@ -126,6 +127,8 @@
         {/if}
       </button>
     {/if}
+
+    <RemoteSessionIndicator />
 
     {#if conversationStore.active?.planMode}
       <span class="mode-badge plan">PLAN MODE</span>

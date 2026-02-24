@@ -14,6 +14,8 @@
   import { api } from '$lib/api/client';
   import { tick } from 'svelte';
   import NudgeInput from './NudgeInput.svelte';
+  import { voiceStore } from '$lib/stores/voice.svelte';
+  import { ttsStore } from '$lib/services/tts.svelte';
 
   // Check if the current conversation is a planning conversation with edits enabled
   let isPlanningWithEdits = $derived(
@@ -113,6 +115,29 @@
     }
 
     scrollToBottom();
+  });
+
+  // Auto-speak assistant responses when voice mode is enabled with auto-speak
+  let lastSpokenMessageId: string | null = null;
+  $effect(() => {
+    if (!settingsStore.voiceAutoSpeak || !voiceStore.enabled) return;
+    if (streamStore.isStreaming) return; // Wait for stream to complete
+
+    const lastMessage = conversationStore.active?.messages.at(-1);
+    if (!lastMessage || lastMessage.role !== 'assistant') return;
+    if (lastMessage.id === lastSpokenMessageId) return; // Already spoke this one
+
+    // Get text content from the message
+    const textContent = lastMessage.content
+      .filter((c: any) => c.type === 'text' && !c.parentToolUseId)
+      .map((c: any) => c.text)
+      .join(' ')
+      .trim();
+
+    if (textContent) {
+      lastSpokenMessageId = lastMessage.id;
+      ttsStore.speak(textContent, lastMessage.id);
+    }
   });
 </script>
 

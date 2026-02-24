@@ -228,24 +228,27 @@ class WhisperRecognizer {
 
     try {
       const formData = new FormData();
-      formData.append('file', audioBlob, 'audio.webm');
-      formData.append('model', 'whisper-1');
-      formData.append('language', this.options.language.split('-')[0]);
+      formData.append('audio', audioBlob, 'audio.webm');
 
-      const response = await fetch('https://api.openai.com/v1/audio/transcriptions', {
+      // Use server-side transcription endpoint (keeps API key secure)
+      const language = this.options.language.split('-')[0]; // e.g., 'en-US' -> 'en'
+      const response = await fetch(`/api/voice/transcribe?language=${language}`, {
         method: 'POST',
-        headers: {
-          Authorization: `Bearer ${this.options.whisperApiKey}`,
-        },
         body: formData,
       });
 
       if (!response.ok) {
-        throw new Error(`Whisper API error: ${response.status}`);
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error((errorData as any).error || `Transcription failed: ${response.status}`);
       }
 
       const data = await response.json();
-      const text = data.text.trim();
+      const text = ((data as any).data?.text || '').trim();
+
+      if (!text) {
+        this.callbacks.onError?.('No transcription returned');
+        return;
+      }
 
       if (this.options.mode === 'always-on') {
         const isWakeWord = this.detectWakeWord(text);

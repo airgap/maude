@@ -57,6 +57,37 @@ export type VoiceMode = 'disabled' | 'push-to-talk' | 'always-on';
  */
 export type VoiceInputProvider = 'browser' | 'whisper';
 
+/**
+ * Remote access mode
+ * - 'disabled': No remote access
+ * - 'tailscale': Tailscale serve/funnel integration
+ * - 'ssh': SSH tunnel instructions provided
+ */
+export type RemoteAccessMode = 'disabled' | 'tailscale' | 'ssh';
+
+/**
+ * Remote session info — tracks active remote connections
+ */
+export interface RemoteSession {
+  id: string;
+  origin: string;
+  userAgent: string;
+  connectedAt: string;
+  lastActivity: string;
+  isRemote: boolean;
+}
+
+/**
+ * Remote access configuration
+ */
+export interface RemoteAccessConfig {
+  enabled: boolean;
+  mode: RemoteAccessMode;
+  requireAuth: boolean;
+  tailscaleHostname?: string;
+  sshTunnelCommand?: string;
+}
+
 export interface Settings {
   theme: ThemeId;
   cliProvider: CliProvider;
@@ -95,6 +126,10 @@ export interface Settings {
   voiceWakeWord: string;
   voiceAutoSpeak: boolean;
   voiceLanguage: string;
+  // Remote access
+  remoteAccessEnabled: boolean;
+  remoteAccessMode: RemoteAccessMode;
+  remoteAccessRequireAuth: boolean;
 }
 
 export interface Keybinding {
@@ -111,6 +146,8 @@ export interface ServerOnlySettings {
   sessionPersistence: boolean;
   debugMode: boolean;
   whisperApiKey?: string;
+  remoteAccessTailscaleHostname?: string;
+  remoteAccessSshTunnelCommand?: string;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -169,4 +206,7 @@ export const DEFAULT_SETTINGS: Settings = {
   voiceWakeWord: 'Hey E',
   voiceAutoSpeak: true,
   voiceLanguage: 'en-US',
+  remoteAccessEnabled: false,
+  remoteAccessMode: 'disabled',
+  remoteAccessRequireAuth: true,
 };

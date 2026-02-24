@@ -309,6 +309,25 @@
 {#snippet messageHeader()}
   <div class="message-header">
     <span class="role-label">{message.role === 'user' ? 'You' : 'Claude'}</span>
+    {#if message.isVoiceMessage}
+      <span class="voice-badge" title="Voice input">
+        <svg
+          width="12"
+          height="12"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <rect x="9" y="2" width="6" height="12" rx="3" />
+          <path d="M5 10a7 7 0 0 0 14 0" />
+          <line x1="12" y1="17" x2="12" y2="21" />
+          <line x1="9" y1="21" x2="15" y2="21" />
+        </svg>
+      </span>
+    {/if}
     {#if message.model}
       <span class="model-label">{message.model.split('-').slice(1, 3).join(' ')}</span>
     {/if}
@@ -802,6 +821,14 @@
   .assistant .role-label {
     color: var(--accent-secondary);
     text-shadow: var(--shadow-glow-sm);
+  }
+
+  .voice-badge {
+    display: inline-flex;
+    align-items: center;
+    color: var(--accent-primary);
+    opacity: 0.7;
+    margin-left: -4px;
   }
 
   .model-label {
