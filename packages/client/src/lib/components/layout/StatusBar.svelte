@@ -27,6 +27,15 @@
     return cost < 0.01 ? cost.toFixed(4) : cost.toFixed(2);
   }
 
+  // ── Model picker state ──
+  let modelPickerOpen = $state(false);
+
+  const MODEL_OPTIONS = [
+    { id: 'claude-opus-4-6', label: 'Opus 4.6', desc: 'Highest capability' },
+    { id: 'claude-sonnet-4-5-20250929', label: 'Sonnet 4.5', desc: 'Balanced' },
+    { id: 'claude-haiku-4-5-20251001', label: 'Haiku 4.5', desc: 'Fast & light' },
+  ];
+
   // ── Git gutter popover state ──
   const GIT_STATE_KEY = 'e-git-popup-state';
 
@@ -800,9 +809,37 @@
       {settingsStore.permissionMode}
     </span>
 
-    <span class="status-item model">
+    <button
+      class="status-item model"
+      onclick={() => (modelPickerOpen = !modelPickerOpen)}
+      title="Switch model"
+    >
       {settingsStore.model.split('-').slice(1, 3).join(' ')}
-    </span>
+    </button>
+
+    {#if modelPickerOpen}
+      <!-- svelte-ignore a11y_no_static_element_interactions -->
+      <div
+        class="model-picker-backdrop"
+        onclick={() => (modelPickerOpen = false)}
+        onkeydown={() => {}}
+      ></div>
+      <div class="model-picker">
+        {#each MODEL_OPTIONS as m}
+          <button
+            class="model-picker-option"
+            class:active={settingsStore.model === m.id}
+            onclick={() => {
+              settingsStore.setModel(m.id);
+              modelPickerOpen = false;
+            }}
+          >
+            <span class="model-picker-label">{m.label}</span>
+            <span class="model-picker-desc">{m.desc}</span>
+          </button>
+        {/each}
+      </div>
+    {/if}
   </div>
 </footer>
 
@@ -1742,6 +1779,84 @@
     font-size: var(--fs-xs);
     font-weight: 700;
     color: var(--text-secondary);
+  }
+
+  /* ── Model picker ── */
+  .model {
+    cursor: pointer;
+    text-transform: var(--ht-label-transform);
+    letter-spacing: var(--ht-label-spacing);
+    padding: 1px 8px;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-secondary);
+    border-radius: var(--radius-sm);
+    font-size: var(--fs-xs);
+    font-weight: 700;
+    color: var(--accent-primary);
+    transition: all var(--transition);
+  }
+  .model:hover {
+    border-color: var(--accent-primary);
+    box-shadow: var(--shadow-glow-sm);
+  }
+
+  .model-picker-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 99;
+  }
+  .model-picker {
+    position: absolute;
+    bottom: calc(100% + 4px);
+    right: 8px;
+    z-index: 100;
+    min-width: 200px;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-primary);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow-lg);
+    padding: 4px;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+  .model-picker-option {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 2px;
+    padding: 8px 12px;
+    border-radius: var(--radius-sm);
+    border: 1px solid transparent;
+    background: transparent;
+    color: var(--text-primary);
+    cursor: pointer;
+    transition: all var(--transition);
+    text-align: left;
+    width: 100%;
+  }
+  .model-picker-option:hover {
+    background: var(--bg-hover);
+    border-color: var(--border-primary);
+  }
+  .model-picker-option.active {
+    background: color-mix(in srgb, var(--accent-primary) 12%, transparent);
+    border-color: var(--accent-primary);
+    color: var(--accent-primary);
+  }
+  .model-picker-label {
+    font-size: var(--fs-sm);
+    font-weight: 700;
+    letter-spacing: var(--ht-label-spacing);
+    text-transform: var(--ht-label-transform);
+  }
+  .model-picker-desc {
+    font-size: var(--fs-xxs);
+    color: var(--text-tertiary);
+    font-weight: 400;
+  }
+  .model-picker-option.active .model-picker-desc {
+    color: color-mix(in srgb, var(--accent-primary) 70%, var(--text-tertiary));
   }
 
   .lsp-status {

@@ -22,6 +22,7 @@
   import MentionThreadPicker from './MentionThreadPicker.svelte';
   import TaskSplitSuggestion from './TaskSplitSuggestion.svelte';
   import VoiceButton from './VoiceButton.svelte';
+  import ModeSelector, { type ConversationMode } from './ModeSelector.svelte';
   import {
     detectMultiPartRequest,
     type DetectedTask,
@@ -44,8 +45,18 @@
   let inputText = $state('');
   let textarea: HTMLTextAreaElement;
   let lastShiftTab = 0;
-  let localPlanMode = $state(false);
-  let localTeachMode = $state(false);
+  let localMode = $state<ConversationMode>('normal');
+
+  // Derive the effective mode from the active conversation or local state
+  let effectiveMode = $derived<ConversationMode>(
+    conversationStore.active
+      ? conversationStore.active.planMode
+        ? 'plan'
+        : conversationStore.active.permissionMode === 'teach'
+          ? 'teach'
+          : 'normal'
+      : localMode,
+  );
   let showSlashMenu = $state(false);
   let slashQuery = $state('');
   let showDirPicker = $state(false);
@@ -658,7 +669,7 @@
     }
 
     // Check for multi-part tasks — suggest splitting into stories
-    if (!(conversationStore.active?.planMode || localPlanMode)) {
+    if (effectiveMode === 'normal') {
       const detection = detectMultiPartRequest(text);
       if (detection.isMultiPart && detection.tasks.length >= 2) {
         pendingMessage = text;
@@ -776,11 +787,11 @@
       title: text.slice(0, 60),
       model: settingsStore.model,
       workspacePath,
-      permissionMode: localTeachMode ? 'teach' : settingsStore.permissionMode,
+      permissionMode: localMode === 'teach' ? 'teach' : settingsStore.permissionMode,
       effort: settingsStore.effort,
       maxBudgetUsd: settingsStore.maxBudgetUsd ?? undefined,
       maxTurns: settingsStore.maxTurns ?? undefined,
-      planMode: localPlanMode || undefined,
+      planMode: localMode === 'plan' || undefined,
     });
     const convRes = await api.conversations.get(res.data.id);
     conversationStore.setActive(convRes.data);
@@ -792,8 +803,33 @@
       messageCount: 0,
       model: convRes.data.model,
     });
-    localPlanMode = false;
-    localTeachMode = false;
+    localMode = 'normal';
+  }
+
+  /** Apply a conversation mode — handles both active-conversation and pre-conversation state. */
+  function applyMode(newMode: ConversationMode) {
+    if (conversationStore.active) {
+      const planMode = newMode === 'plan';
+      const permissionMode =
+        newMode === 'teach'
+          ? 'teach'
+          : conversationStore.active.permissionMode === 'teach'
+            ? settingsStore.permissionMode
+            : conversationStore.active.permissionMode;
+
+      conversationStore.setPlanMode(planMode);
+      conversationStore.setActive({
+        ...conversationStore.active,
+        planMode,
+        permissionMode,
+      });
+
+      if (conversationStore.activeId) {
+        api.conversations.update(conversationStore.activeId, { planMode, permissionMode });
+      }
+    } else {
+      localMode = newMode;
+    }
   }
 
   function handleKeydown(e: KeyboardEvent) {
@@ -828,21 +864,15 @@
       }
     }
 
-    // Shift+Tab x2: toggle plan mode
+    // Shift+Tab x2: cycle mode Normal → Plan → Teach → Normal
     if (e.shiftKey && e.key === 'Tab') {
       e.preventDefault();
       const now = Date.now();
       if (now - lastShiftTab < 500) {
         lastShiftTab = 0;
-        if (conversationStore.active) {
-          const newMode = !conversationStore.active.planMode;
-          conversationStore.setPlanMode(newMode);
-          if (conversationStore.activeId) {
-            api.conversations.update(conversationStore.activeId, { planMode: newMode });
-          }
-        } else {
-          localPlanMode = !localPlanMode;
-        }
+        const cycle: ConversationMode[] = ['normal', 'plan', 'teach'];
+        const nextMode = cycle[(cycle.indexOf(effectiveMode) + 1) % cycle.length];
+        applyMode(nextMode);
       } else {
         lastShiftTab = now;
       }
@@ -1263,7 +1293,8 @@
   <!-- svelte-ignore a11y_no_static_element_interactions -->
   <div
     class="input-wrapper"
-    class:plan-active={conversationStore.active?.planMode || localPlanMode}
+    class:plan-active={effectiveMode === 'plan'}
+    class:teach-active={effectiveMode === 'teach'}
     onmousedown={(e) => {
       if (e.target !== textarea) {
         e.preventDefault();
@@ -1290,46 +1321,33 @@
       ></button
     >
 
+    <ModeSelector mode={effectiveMode} onchange={applyMode} />
+
     <textarea
       bind:this={textarea}
       bind:value={inputText}
       onkeydown={handleKeydown}
       oninput={handleInput}
       onpaste={handlePaste}
-      placeholder={conversationStore.active?.planMode || localPlanMode
+      placeholder={effectiveMode === 'plan'
         ? 'Describe what you want to plan...'
-        : 'Message E...'}
+        : effectiveMode === 'teach'
+          ? 'What would you like to learn?'
+          : 'Message E...'}
       rows="1"
       disabled={streamStore.status === 'tool_pending'}
     ></textarea>
 
     <div class="input-actions">
-      {#if conversationStore.active?.planMode || localPlanMode}
-        <span class="plan-indicator">PLAN</span>
+      {#if effectiveMode !== 'normal'}
+        <span
+          class="mode-indicator"
+          class:plan={effectiveMode === 'plan'}
+          class:teach={effectiveMode === 'teach'}
+        >
+          {effectiveMode === 'plan' ? 'PLAN' : 'TEACH'}
+        </span>
       {/if}
-
-      {#if localTeachMode}
-        <span class="teach-indicator">TEACH</span>
-      {/if}
-      <button
-        class="btn-icon-sm"
-        class:active={localTeachMode}
-        onclick={() => (localTeachMode = !localTeachMode)}
-        title="Teach Me Mode — E guides you with questions instead of answers"
-        ><svg
-          width="14"
-          height="14"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="2"
-          stroke-linecap="round"
-          stroke-linejoin="round"
-          ><path d="M22 10v6M2 10l10-5 10 5-10 5z" /><path
-            d="M6 12v5c0 2 3 3 6 3s6-1 6-3v-5"
-          /></svg
-        ></button
-      >
 
       <VoiceButton onTranscript={handleVoiceTranscript} />
 
@@ -1606,26 +1624,20 @@
     flex-shrink: 0;
   }
 
-  .plan-indicator {
+  .mode-indicator {
     font-size: var(--fs-xxs);
     font-weight: 700;
     padding: 2px 10px;
     border-radius: var(--radius-sm);
-    background: var(--accent-warning);
     color: var(--text-on-accent);
     letter-spacing: var(--ht-label-spacing);
     text-transform: var(--ht-label-transform);
   }
-
-  .teach-indicator {
-    font-size: var(--fs-xxs);
-    font-weight: 700;
-    padding: 2px 10px;
-    border-radius: var(--radius-sm);
+  .mode-indicator.plan {
+    background: var(--accent-warning);
+  }
+  .mode-indicator.teach {
     background: var(--accent-secondary, #10b981);
-    color: var(--text-on-accent);
-    letter-spacing: var(--ht-label-spacing);
-    text-transform: var(--ht-label-transform);
   }
   .btn-icon-sm {
     font-size: var(--fs-md);

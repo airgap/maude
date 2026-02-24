@@ -148,15 +148,16 @@
           badge: 'Feature',
           badgeColor: 'accent',
           body: `
-            <p>Switches Claude to a <strong>Socratic teaching style</strong> — instead of giving you answers, Claude asks guiding questions that help you reason through problems yourself.</p>
+            <p>Switches E to a <strong>Socratic teaching style</strong> — instead of giving you answers, E asks guiding questions that help you reason through problems yourself.</p>
             <h3>Activating Teach Mode</h3>
             <ul>
-              <li>Click the <strong>graduation cap</strong> button in the chat input bar</li>
-              <li>The input shows a <code>TEACH</code> indicator when active</li>
-              <li>Or type <code>/teach</code></li>
+              <li>Click the <strong>graduation cap</strong> segment in the <strong>mode selector</strong> next to the chat input</li>
+              <li>Press <kbd>Shift+Tab</kbd> twice to cycle past Plan to Teach mode</li>
+              <li>Type <code>/teach</code></li>
+              <li>Use the Command Palette (<kbd>Ctrl+K</kbd>) and select "Mode: Teach Me"</li>
             </ul>
             <h3>What changes</h3>
-            <p>Claude is instructed to: ask probing questions, guide rather than give answers, explain concepts step-by-step, and check your understanding before moving forward. Perfect for learning a new language, framework, or algorithm.</p>
+            <p>E is instructed to: ask probing questions, guide rather than give answers, explain concepts step-by-step, and check your understanding before moving forward. Perfect for learning a new language, framework, or algorithm.</p>
           `,
         },
         {
@@ -506,15 +507,23 @@
           id: 'plan-mode',
           title: 'Plan Mode',
           body: `
-            <p>When <strong>Plan Mode</strong> is active (press the ✏ button in the top bar, or <kbd>Shift+Tab</kbd> twice), Claude thinks through a problem in full before taking any action.</p>
-            <p>Claude will:</p>
+            <p>When <strong>Plan Mode</strong> is active, E thinks through a problem in full before taking any action.</p>
+            <h3>Activating Plan Mode</h3>
+            <ul>
+              <li>Click the <strong>pencil</strong> segment in the <strong>mode selector</strong> next to the chat input</li>
+              <li>Press <kbd>Shift+Tab</kbd> twice to cycle to Plan mode</li>
+              <li>Type <code>/plan</code></li>
+              <li>Use the Command Palette (<kbd>Ctrl+K</kbd>) and select "Mode: Plan"</li>
+            </ul>
+            <h3>What changes</h3>
+            <p>E will:</p>
             <ul>
               <li>List all steps it intends to take</li>
               <li>Identify risks and edge cases</li>
               <li>Ask clarifying questions if needed</li>
               <li>Only execute once you confirm the plan</li>
             </ul>
-            <p>Great for complex refactors or any change where you want a preview before Claude touches your code.</p>
+            <p>Great for complex refactors or any change where you want a preview before E touches your code.</p>
           `,
         },
       ],
@@ -538,7 +547,7 @@
                 <tr><td>New Conversation</td><td><kbd>Ctrl+N</kbd></td></tr>
                 <tr><td>Focus Chat Input</td><td><kbd>Ctrl+L</kbd></td></tr>
                 <tr><td>Cancel Stream</td><td><kbd>Esc</kbd></td></tr>
-                <tr><td>Toggle Plan Mode</td><td><kbd>Shift+Tab+Tab</kbd></td></tr>
+                <tr><td>Cycle Mode (Normal / Plan / Teach)</td><td><kbd>Shift+Tab+Tab</kbd></td></tr>
                 <tr><td>Previous Conversation</td><td><kbd>Ctrl+[</kbd></td></tr>
                 <tr><td>Next Conversation</td><td><kbd>Ctrl+]</kbd></td></tr>
               </tbody>

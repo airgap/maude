@@ -8,7 +8,6 @@
   import { workspaceStore } from '$lib/stores/workspace.svelte';
   import { commentaryStore } from '$lib/stores/commentary.svelte';
   import { findTheme } from '$lib/config/themes';
-  import { api } from '$lib/api/client';
   import WorkspaceTabBar from './WorkspaceTabBar.svelte';
   import WindowControls from './WindowControls.svelte';
   import ProfileSwitcher from './ProfileSwitcher.svelte';
@@ -27,21 +26,6 @@
         findTheme(settingsStore.theme)?.suggestedPersonality ||
         'documentary_narrator';
       commentaryStore.startCommentary(activeWorkspaceId, personality);
-    }
-  }
-
-  const models = [
-    { id: 'claude-opus-4-6', label: 'Opus 4.6' },
-    { id: 'claude-sonnet-4-5-20250929', label: 'Sonnet 4.5' },
-    { id: 'claude-haiku-4-5-20251001', label: 'Haiku 4.5' },
-  ];
-
-  function togglePlanMode() {
-    if (!conversationStore.active) return;
-    const newMode = !conversationStore.active.planMode;
-    conversationStore.setPlanMode(newMode);
-    if (conversationStore.activeId) {
-      api.conversations.update(conversationStore.activeId, { planMode: newMode });
     }
   }
 
@@ -144,38 +128,12 @@
     {/if}
 
     {#if conversationStore.active?.planMode}
-      <span class="plan-badge">PLAN MODE</span>
+      <span class="mode-badge plan">PLAN MODE</span>
+    {:else if conversationStore.active?.permissionMode === 'teach'}
+      <span class="mode-badge teach">TEACH MODE</span>
     {/if}
 
     <ProfileSwitcher />
-
-    <button
-      class="plan-toggle"
-      class:active={conversationStore.active?.planMode}
-      onclick={togglePlanMode}
-      title="Toggle plan mode (Shift+Tab x2)"
-    >
-      <svg
-        width="16"
-        height="16"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        stroke-width="2"
-      >
-        <path d="M12 20h9" /><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z" />
-      </svg>
-    </button>
-
-    <select
-      class="model-select"
-      value={settingsStore.model}
-      onchange={(e) => settingsStore.setModel((e.target as HTMLSelectElement).value)}
-    >
-      {#each models as m}
-        <option value={m.id}>{m.label}</option>
-      {/each}
-    </select>
 
     <div
       class="context-meter"
@@ -363,56 +321,21 @@
     box-shadow: var(--shadow-glow-sm);
   }
 
-  .model-select {
-    padding: 5px 10px;
-    font-size: var(--fs-sm);
-    font-weight: 600;
-    letter-spacing: var(--ht-label-spacing);
-    border-radius: var(--radius-sm);
-    background: var(--bg-tertiary);
-    border: 1px solid var(--border-primary);
-    color: var(--accent-primary);
-    cursor: pointer;
-    transition: all var(--transition);
-    text-transform: var(--ht-label-transform);
-  }
-  .model-select:hover {
-    border-color: var(--accent-primary);
-    box-shadow: var(--shadow-glow-sm);
-  }
-
-  .plan-badge {
+  .mode-badge {
     font-size: var(--fs-xxs);
     font-weight: 700;
     padding: 3px 10px;
     border-radius: var(--radius);
-    background: var(--accent-warning);
     color: var(--text-on-accent);
     letter-spacing: var(--ht-label-spacing);
     text-transform: var(--ht-label-transform);
     animation: hudBlink 3s infinite;
   }
-
-  .plan-toggle {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 30px;
-    height: 30px;
-    border-radius: var(--radius-sm);
-    color: var(--text-tertiary);
-    border: 1px solid transparent;
-    transition: all var(--transition);
+  .mode-badge.plan {
+    background: var(--accent-warning);
   }
-  .plan-toggle:hover {
-    background: var(--bg-hover);
-    color: var(--accent-primary);
-    border-color: var(--border-primary);
-  }
-  .plan-toggle.active {
-    color: var(--accent-warning);
-    background: var(--bg-hover);
-    border-color: var(--border-primary);
+  .mode-badge.teach {
+    background: var(--accent-secondary, #10b981);
   }
 
   .context-meter {
@@ -537,18 +460,12 @@
     gap: 6px;
   }
   /* Hide items that don't fit / aren't useful on mobile */
-  :global([data-mobile]) .plan-badge,
+  :global([data-mobile]) .mode-badge,
   :global([data-mobile]) .context-meter {
     display: none;
   }
   :global([data-mobile]) .golem-badge .golem-label {
     display: none;
-  }
-  /* Model select: larger tap target */
-  :global([data-mobile]) .model-select {
-    font-size: var(--fs-xs);
-    padding: 6px 8px;
-    min-height: 36px;
   }
   /* Topbar left: truncate workspace tabs */
   :global([data-mobile]) .topbar-left {

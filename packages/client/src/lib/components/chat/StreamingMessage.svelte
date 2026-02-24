@@ -105,7 +105,6 @@
             <span class="pulse-orb"></span>
           </span>
         {/if}
-        <span class="throbber-phrase">{throbberStore.phrase}</span>
       </div>
 
       <div class="message-body">
@@ -177,6 +176,8 @@
           <UserQuestionDialog question={pq} />
         {/each}
       </div>
+
+      <span class="throbber-phrase">{throbberStore.phrase}</span>
 
       {#if settingsStore.streamingProgressBar !== 'none'}
         <div class="progress-bar {settingsStore.streamingProgressBar}" aria-hidden="true"></div>

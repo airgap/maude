@@ -130,8 +130,44 @@ const commands: SlashCommand[] = [
       if (conversationStore.active) {
         const newMode = !conversationStore.active.planMode;
         conversationStore.setPlanMode(newMode);
+        const updates: Record<string, any> = { planMode: newMode };
+        // Clear teach when enabling plan (mutual exclusivity)
+        if (newMode && conversationStore.active.permissionMode === 'teach') {
+          updates.permissionMode = settingsStore.permissionMode;
+          conversationStore.setActive({
+            ...conversationStore.active,
+            planMode: newMode,
+            permissionMode: settingsStore.permissionMode,
+          });
+        }
         if (conversationStore.activeId) {
-          api.conversations.update(conversationStore.activeId, { planMode: newMode });
+          api.conversations.update(conversationStore.activeId, updates);
+        }
+      }
+      return { handled: true };
+    },
+  },
+  {
+    name: 'teach',
+    description: 'Toggle teach me mode',
+    execute: () => {
+      if (conversationStore.active) {
+        const isTeach = conversationStore.active.permissionMode === 'teach';
+        const newPermissionMode = isTeach ? settingsStore.permissionMode : 'teach';
+        // Clear plan when enabling teach (mutual exclusivity)
+        if (!isTeach) {
+          conversationStore.setPlanMode(false);
+        }
+        conversationStore.setActive({
+          ...conversationStore.active,
+          planMode: isTeach ? conversationStore.active.planMode : false,
+          permissionMode: newPermissionMode,
+        });
+        if (conversationStore.activeId) {
+          api.conversations.update(conversationStore.activeId, {
+            planMode: false,
+            permissionMode: newPermissionMode,
+          });
         }
       }
       return { handled: true };

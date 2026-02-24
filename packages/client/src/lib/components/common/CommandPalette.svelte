@@ -70,16 +70,69 @@
       },
     },
     {
-      id: 'plan-mode',
-      label: 'Toggle Plan Mode',
+      id: 'mode-normal',
+      label: 'Mode: Normal',
+      category: 'Mode',
+      action: () => {
+        if (conversationStore.active) {
+          const updates: Record<string, any> = { planMode: false };
+          if (conversationStore.active.permissionMode === 'teach') {
+            updates.permissionMode = settingsStore.permissionMode;
+          }
+          conversationStore.setPlanMode(false);
+          conversationStore.setActive({
+            ...conversationStore.active,
+            planMode: false,
+            permissionMode: updates.permissionMode ?? conversationStore.active.permissionMode,
+          });
+          if (conversationStore.activeId) {
+            api.conversations.update(conversationStore.activeId, updates);
+          }
+        }
+        close();
+      },
+    },
+    {
+      id: 'mode-plan',
+      label: 'Mode: Plan',
       category: 'Mode',
       shortcut: 'Shift+Tab x2',
       action: () => {
         if (conversationStore.active) {
-          const newMode = !conversationStore.active.planMode;
-          conversationStore.setPlanMode(newMode);
+          const updates: Record<string, any> = { planMode: true };
+          if (conversationStore.active.permissionMode === 'teach') {
+            updates.permissionMode = settingsStore.permissionMode;
+          }
+          conversationStore.setPlanMode(true);
+          conversationStore.setActive({
+            ...conversationStore.active,
+            planMode: true,
+            permissionMode: updates.permissionMode ?? conversationStore.active.permissionMode,
+          });
           if (conversationStore.activeId) {
-            api.conversations.update(conversationStore.activeId, { planMode: newMode });
+            api.conversations.update(conversationStore.activeId, updates);
+          }
+        }
+        close();
+      },
+    },
+    {
+      id: 'mode-teach',
+      label: 'Mode: Teach Me',
+      category: 'Mode',
+      action: () => {
+        if (conversationStore.active) {
+          conversationStore.setPlanMode(false);
+          conversationStore.setActive({
+            ...conversationStore.active,
+            planMode: false,
+            permissionMode: 'teach',
+          });
+          if (conversationStore.activeId) {
+            api.conversations.update(conversationStore.activeId, {
+              planMode: false,
+              permissionMode: 'teach',
+            });
           }
         }
         close();
