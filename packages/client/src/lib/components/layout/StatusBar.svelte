@@ -9,7 +9,9 @@
   import { terminalStore } from '$lib/stores/terminal.svelte';
   import { loopStore } from '$lib/stores/loop.svelte';
   import { uiStore } from '$lib/stores/ui.svelte';
+  import { conversationStore } from '$lib/stores/conversation.svelte';
   import { api } from '$lib/api/client';
+  import { throbberStore } from '$lib/stores/throbber.svelte';
 
   // Client-side pricing table (per million tokens)
   const PRICING: Record<string, { input: number; output: number }> = {
@@ -82,6 +84,25 @@
   let generating = $state(false);
   let commitProgress = $state<string[]>(savedState.commitProgress);
   let pushProgress = $state<string[]>([]);
+
+  // ── Throbber phrase rotation (shared store) ──
+  $effect(() => {
+    if (!streamStore.isStreaming) {
+      throbberStore.stop();
+      return;
+    }
+    throbberStore.start(settingsStore.theme);
+    return () => throbberStore.stop();
+  });
+
+  // Only show the throbber phrase in the statusbar when the streaming
+  // conversation is NOT the focused chat (i.e. the user switched away).
+  // When focused, the phrase appears inline in StreamingMessage instead.
+  let showGutterPhrase = $derived(
+    streamStore.isStreaming &&
+      streamStore.conversationId !== null &&
+      streamStore.conversationId !== conversationStore.activeId,
+  );
 
   // Auto-save state when it changes
   $effect(() => {
@@ -282,18 +303,6 @@
     <div class="statusbar-throbber {settingsStore.streamingProgressBar}" aria-hidden="true"></div>
   {/if}
   <div class="statusbar-left">
-    <span class="status-item">
-      {#if streamStore.isStreaming}
-        <span class="status-dot streaming"></span> Streaming
-      {:else if streamStore.status === 'tool_pending'}
-        <span class="status-dot pending"></span> Tool approval pending
-      {:else if streamStore.status === 'error'}
-        <span class="status-dot error"></span> Error{#if streamStore.error}: {streamStore.error}{/if}
-      {:else}
-        <span class="status-dot idle"></span> Ready
-      {/if}
-    </span>
-
     {#if gitStore.isRepo && gitStore.branch}
       <div class="git-gutter-wrapper">
         <button
@@ -651,12 +660,26 @@
         {workStore.inProgressStories[0].title}
       </span>
     {/if}
+
+    {#if showGutterPhrase}
+      <span class="status-item">
+        <span class="throbber-phrase">{throbberStore.phrase}</span>
+      </span>
+    {:else if streamStore.status === 'tool_pending'}
+      <span class="status-item">
+        <span class="status-dot pending"></span> Tool approval pending
+      </span>
+    {:else if streamStore.status === 'error'}
+      <span class="status-item">
+        <span class="status-dot error"></span> Error{#if streamStore.error}: {streamStore.error}{/if}
+      </span>
+    {/if}
   </div>
 
   <div class="statusbar-right">
     {#if editorStore.activeTab}
       <span class="status-item cursor-pos">
-        Ln {editorStore.activeTab.cursorLine}, Col {editorStore.activeTab.cursorCol}
+        {editorStore.activeTab.cursorLine}:{editorStore.activeTab.cursorCol}
       </span>
       <span class="status-item indent-label">
         {#if editorStore.activeTab.editorConfig?.indent_style === 'space'}
@@ -1229,6 +1252,23 @@
   .status-dot.error {
     background: var(--accent-error);
     box-shadow: 0 0 6px var(--accent-error);
+  }
+
+  .throbber-phrase {
+    display: inline-block;
+    animation: phraseFadeIn 0.4s ease-out;
+    font-style: italic;
+  }
+
+  @keyframes phraseFadeIn {
+    0% {
+      opacity: 0;
+      transform: translateY(2px);
+    }
+    100% {
+      opacity: 1;
+      transform: translateY(0);
+    }
   }
 
   .git-gutter-wrapper {

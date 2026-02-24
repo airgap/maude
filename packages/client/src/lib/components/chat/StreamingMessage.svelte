@@ -11,6 +11,7 @@
   import StreamingText from './StreamingText.svelte';
   import MessageAnimation from './MessageAnimation.svelte';
   import ToolCallTracker from './ToolCallTracker.svelte';
+  import { throbberStore } from '$lib/stores/throbber.svelte';
 
   // Build a grouped view: top-level blocks + agent groups.
   // A "Task" tool_use block becomes an agent header, and all blocks
@@ -104,6 +105,7 @@
             <span class="pulse-orb"></span>
           </span>
         {/if}
+        <span class="throbber-phrase">{throbberStore.phrase}</span>
       </div>
 
       <div class="message-body">
@@ -227,6 +229,10 @@
     text-transform: var(--ht-label-transform);
     color: var(--accent-secondary);
     text-shadow: var(--shadow-glow-sm);
+  }
+
+  .throbber-phrase {
+    color: var(--text-tertiary);
   }
 
   .streaming-indicator {
