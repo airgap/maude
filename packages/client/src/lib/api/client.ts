@@ -865,6 +865,20 @@ export const api = {
         body: JSON.stringify({ path, message, noAutoStage: opts?.noAutoStage, noVerify: opts?.noVerify }),
       }),
     /**
+     * Atomic group commit: unstage all → stage specific files → commit
+     * in a single server request. HMR-safe — can't be interrupted mid-group.
+     */
+    commitGroup: (
+      path: string,
+      files: string[],
+      message: string,
+      opts?: { noVerify?: boolean },
+    ) =>
+      request<{ ok: boolean; data: { sha: string } }>('/git/commit-group', {
+        method: 'POST',
+        body: JSON.stringify({ path, files, message, noVerify: opts?.noVerify }),
+      }),
+    /**
      * Streaming commit with real-time output
      * @param onProgress - Callback for progress updates
      */
