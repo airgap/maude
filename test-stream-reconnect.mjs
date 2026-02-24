@@ -14,8 +14,8 @@ async function testStreamReconnect() {
   console.log('🧪 Starting stream reconnection test...\n');
 
   const browser = await chromium.launch({
-    headless: true,   // Headless mode (no X server needed)
-    slowMo: 100       // Slight delay for realism
+    headless: true, // Headless mode (no X server needed)
+    slowMo: 100, // Slight delay for realism
   });
 
   try {
@@ -23,7 +23,7 @@ async function testStreamReconnect() {
     const page = await context.newPage();
 
     // Enable console logging from the page
-    page.on('console', msg => {
+    page.on('console', (msg) => {
       const text = msg.text();
       if (text.includes('[sse') || text.includes('[stream') || text.includes('reconnect')) {
         console.log(`  📄 Browser: ${text}`);
@@ -36,7 +36,9 @@ async function testStreamReconnect() {
 
     console.log('2️⃣  Waiting for app to initialize...');
     // Wait for the chat input to be visible
-    await page.waitForSelector('[data-testid="chat-input"], textarea, .chat-input', { timeout: 10000 });
+    await page.waitForSelector('[data-testid="chat-input"], textarea, .chat-input', {
+      timeout: 10000,
+    });
 
     console.log('3️⃣  Checking workspace state...');
     const hasWorkspace = await page.evaluate(() => {
@@ -46,7 +48,9 @@ async function testStreamReconnect() {
 
     console.log('4️⃣  Starting a conversation with streaming response...');
     const input = await page.locator('textarea').first();
-    await input.fill('Write a long story about a robot learning to code. Make it at least 500 words.');
+    await input.fill(
+      'Write a long story about a robot learning to code. Make it at least 500 words.',
+    );
 
     // Find and click the send button
     const sendButton = await page.locator('button:has-text("Send"), button[type="submit"]').first();
@@ -56,7 +60,9 @@ async function testStreamReconnect() {
     await page.waitForTimeout(2000);
 
     // Wait for streaming indicator or content to appear
-    await page.waitForSelector('.streaming, [data-streaming="true"], .message-bubble', { timeout: 10000 });
+    await page.waitForSelector('.streaming, [data-streaming="true"], .message-bubble', {
+      timeout: 10000,
+    });
 
     console.log('6️⃣  Stream started! Waiting 3 seconds for content to accumulate...');
     await page.waitForTimeout(3000);
@@ -68,7 +74,7 @@ async function testStreamReconnect() {
         isStreaming: store?.isStreaming,
         sessionId: store?.sessionId,
         conversationId: store?.conversationId,
-        contentBlocks: store?.contentBlocks?.length || 0
+        contentBlocks: store?.contentBlocks?.length || 0,
       };
     });
     console.log('    Stream state before reload:', beforeReload);
@@ -88,7 +94,7 @@ async function testStreamReconnect() {
         sessionId: store?.sessionId,
         conversationId: store?.conversationId,
         contentBlocks: store?.contentBlocks?.length || 0,
-        status: store?.status
+        status: store?.status,
       };
     });
 
@@ -103,16 +109,22 @@ async function testStreamReconnect() {
       const ws = window.localStorage.getItem('e-workspaces');
       return ws ? JSON.parse(ws) : null;
     });
-    console.log('    Active conversation ID from workspace:',
-      workspaceData?.workspaces?.[0]?.snapshot?.activeConversationId || 'none');
+    console.log(
+      '    Active conversation ID from workspace:',
+      workspaceData?.workspaces?.[0]?.snapshot?.activeConversationId || 'none',
+    );
 
     console.log('\n✅ Test completed!');
     console.log('\n📊 Results:');
     console.log(`   - Before reload: ${beforeReload.contentBlocks} content blocks`);
     console.log(`   - After reload: ${afterReload.contentBlocks} content blocks`);
     console.log(`   - Session ID preserved: ${beforeReload.sessionId === afterReload.sessionId}`);
-    console.log(`   - Conversation ID preserved: ${beforeReload.conversationId === afterReload.conversationId}`);
-    console.log(`   - Stream reconnected: ${afterReload.isStreaming || afterReload.status === 'streaming'}`);
+    console.log(
+      `   - Conversation ID preserved: ${beforeReload.conversationId === afterReload.conversationId}`,
+    );
+    console.log(
+      `   - Stream reconnected: ${afterReload.isStreaming || afterReload.status === 'streaming'}`,
+    );
     console.log(`   - Messages visible: ${conversationVisible > 0}`);
 
     if (conversationVisible > 0 && afterReload.conversationId) {
@@ -124,7 +136,6 @@ async function testStreamReconnect() {
     // Keep browser open for 5 more seconds for manual inspection
     console.log('\n⏳ Keeping browser open for 5 seconds for inspection...');
     await page.waitForTimeout(5000);
-
   } catch (error) {
     console.error('\n❌ Test failed with error:', error.message);
     console.error('Stack trace:', error.stack);
