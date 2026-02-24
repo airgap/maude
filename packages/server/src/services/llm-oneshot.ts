@@ -29,6 +29,12 @@ export interface CallLlmOptions {
   model?: string;
   /** Timeout in milliseconds (default: 120 000). */
   timeoutMs?: number;
+  /**
+   * When true, skip Ollama and go straight to the CLI provider.
+   * Useful when the local model can't handle a task (e.g. structured output)
+   * and you need a more capable model.
+   */
+  forceCliProvider?: boolean;
 }
 
 /**
@@ -121,6 +127,24 @@ export function resetOllamaCache(): void {
 export async function callLlm(opts: CallLlmOptions): Promise<string> {
   const oneshotProv = getOneshotProvider();
   const timeout = opts.timeoutMs ?? 120_000;
+
+  // --- Force CLI path (skip Ollama entirely) ---
+  if (opts.forceCliProvider) {
+    const provider = getConfiguredProvider();
+    switch (provider) {
+      case 'claude':
+      case 'gemini-cli':
+      case 'copilot':
+        return callViaCli(provider, opts, timeout);
+      case 'bedrock':
+        return callViaBedrock(opts, timeout);
+      case 'kiro':
+        return callViaKiroFallback(opts, timeout);
+      default:
+        // If CLI provider is ollama, fall through to normal routing
+        break;
+    }
+  }
 
   // --- Ollama fast path ---
   if (oneshotProv === 'ollama') {

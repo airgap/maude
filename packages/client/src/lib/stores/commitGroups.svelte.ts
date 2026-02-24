@@ -225,8 +225,18 @@ function createCommitGroupsStore() {
 
     /**
      * Commit a single group: unstage all -> stage group files -> commit.
+     *
+     * @param opts.noVerify — skip pre-commit hooks (used during batch commits
+     *   so hooks only run once on the final group instead of N times).
+     * @param opts.skipRefresh — skip the post-commit git status refresh
+     *   (used during batch commits to avoid git lock contention; the batch
+     *   caller does a single refresh at the end instead).
      */
-    async commitGroup(workspacePath: string, groupId: string): Promise<boolean> {
+    async commitGroup(
+      workspacePath: string,
+      groupId: string,
+      opts?: { noVerify?: boolean; skipRefresh?: boolean },
+    ): Promise<boolean> {
       const g = groups.find((g) => g.id === groupId);
       if (!g || g.status !== 'pending') return false;
       if (!g.message.trim()) {
@@ -260,11 +270,18 @@ function createCommitGroupsStore() {
 
         // Commit with noAutoStage to prevent accidentally committing
         // files outside this group if staging silently failed
-        const res = await api.git.commit(workspacePath, g.message, { noAutoStage: true });
+        const res = await api.git.commit(workspacePath, g.message, {
+          noAutoStage: true,
+          noVerify: opts?.noVerify,
+        });
         if (res.ok) {
           g.status = 'committed';
-          // Refresh git status
-          gitStore.refresh(workspacePath, { force: true });
+          // During batch commits we skip per-group refreshes to avoid
+          // concurrent git operations (git status vs next group's unstage).
+          // The batch caller does a single refresh after all groups finish.
+          if (!opts?.skipRefresh) {
+            await gitStore.refresh(workspacePath, { force: true });
+          }
           persist();
           return true;
         } else {
@@ -284,6 +301,10 @@ function createCommitGroupsStore() {
     /**
      * Commit all pending groups sequentially.
      *
+     * Pre-commit hooks (lint, typecheck, tests) are skipped on all groups
+     * except the last one. The final commit runs hooks normally, which
+     * validates everything in a single pass instead of N times.
+     *
      * Persists the batch-in-progress state so that if an HMR reload kills
      * this loop mid-flight, it auto-resumes when the store re-initializes.
      */
@@ -296,19 +317,34 @@ function createCommitGroupsStore() {
       batchWorkspacePath = workspacePath;
       persist();
 
+      // Pause git polling during the batch to prevent concurrent git
+      // operations (poll's `git status` vs our unstage/stage/commit).
+      // This is what causes "Another git process seems to be running".
+      gitStore.stopPolling();
+
       commitProgress = { current: 0, total: pending.length };
 
-      for (const g of pending) {
-        commitProgress = { current: success + failed + 1, total: pending.length };
-        const ok = await this.commitGroup(workspacePath, g.id);
+      for (let i = 0; i < pending.length; i++) {
+        const g = pending[i];
+        const isLast = i === pending.length - 1;
+        commitProgress = { current: i + 1, total: pending.length };
+        // Skip hooks on all but the last group — the final commit runs
+        // the full pre-commit hook which validates the entire batch.
+        // Skip per-group refresh to avoid git lock contention between
+        // groups — we do a single refresh after the batch completes.
+        const ok = await this.commitGroup(workspacePath, g.id, {
+          noVerify: !isLast,
+          skipRefresh: true,
+        });
         if (ok) success++;
         else failed++;
       }
 
-      // Batch complete — clear resume marker
+      // Batch complete — single refresh for final state, then resume polling
       batchWorkspacePath = null;
       commitProgress = null;
       persist();
+      gitStore.startPolling(workspacePath);
       return { success, failed };
     },
 

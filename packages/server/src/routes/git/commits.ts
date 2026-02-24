@@ -9,7 +9,7 @@ const app = new Hono();
 // Pass `noAutoStage: true` to skip auto-staging (used by Smart Stage grouping)
 app.post('/commit', async (c) => {
   const body = await c.req.json();
-  const { path: rootPath, message, noAutoStage } = body;
+  const { path: rootPath, message, noAutoStage, noVerify } = body;
 
   if (!rootPath) return c.json({ ok: false, error: 'path required' }, 400);
   if (!message || typeof message !== 'string' || !message.trim()) {
@@ -40,8 +40,9 @@ app.post('/commit', async (c) => {
       }
     }
 
-    console.log('[git/commit] Running git commit -m:', message.trim());
-    const commitResult = await run(['git', 'commit', '-m', message.trim()], {
+    const commitArgs = ['git', 'commit', ...(noVerify ? ['--no-verify'] : []), '-m', message.trim()];
+    console.log('[git/commit] Running:', commitArgs.join(' '));
+    const commitResult = await run(commitArgs, {
       cwd: pathCheck.resolved,
     });
     console.log('[git/commit] git commit result:', {
@@ -69,7 +70,7 @@ app.post('/commit', async (c) => {
 // Streaming commit endpoint with real-time output
 app.post('/commit/stream', async (c) => {
   const body = await c.req.json();
-  const { path: rootPath, message, noAutoStage } = body;
+  const { path: rootPath, message, noAutoStage, noVerify } = body;
 
   if (!rootPath) return c.json({ ok: false, error: 'path required' }, 400);
   if (!message || typeof message !== 'string' || !message.trim()) {
@@ -161,8 +162,9 @@ app.post('/commit/stream', async (c) => {
         }),
       });
 
-      console.log('[git/commit/stream] Running git commit -m:', message.trim());
-      const commitProc = Bun.spawn(['git', 'commit', '-m', message.trim()], {
+      const commitArgs = ['git', 'commit', ...(noVerify ? ['--no-verify'] : []), '-m', message.trim()];
+      console.log('[git/commit/stream] Running:', commitArgs.join(' '));
+      const commitProc = Bun.spawn(commitArgs, {
         cwd: pathCheck.resolved,
         stdout: 'pipe',
         stderr: 'pipe',
