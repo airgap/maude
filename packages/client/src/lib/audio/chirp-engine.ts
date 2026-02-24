@@ -2366,6 +2366,12 @@ export class ChirpEngine {
   private genPadMaster: GainNode | null = null;
   private genRoot = 261.6; // C4
 
+  // ── Autoplay policy gate ──
+  // True only after the first user gesture calls unlock().
+  // Prevents scheduling audio on a suspended AudioContext (which would
+  // cause all events to queue at currentTime=0 and burst when resumed).
+  private unlocked = false;
+
   // ── Style blending ──
   private blendRatio = 0;
   private secondaryStyle: SoundStyle | null = null;
@@ -2836,6 +2842,8 @@ export class ChirpEngine {
   }
 
   toolStart(name: string) {
+    if (!this.unlocked) return;
+
     const key: ChirpEvent = 'tool_start';
     const cooldown = EVENT_COOLDOWNS[key];
     if (cooldown !== undefined) {
@@ -2864,6 +2872,8 @@ export class ChirpEngine {
   }
 
   toolResultOk(name: string) {
+    if (!this.unlocked) return;
+
     const key: ChirpEvent = 'tool_result_ok';
     const cooldown = EVENT_COOLDOWNS[key];
     if (cooldown !== undefined) {
@@ -2893,6 +2903,8 @@ export class ChirpEngine {
   }
 
   chirp(event: ChirpEvent) {
+    if (!this.unlocked) return; // No user gesture yet — drop the event
+
     const cooldown = EVENT_COOLDOWNS[event];
     if (cooldown !== undefined) {
       const now = performance.now();
@@ -3453,6 +3465,7 @@ export class ChirpEngine {
 
   /** Play a distinctive melody when the tab is hidden — attention needed */
   playNotificationMelody(type: 'completion' | 'approval' | 'error'): void {
+    if (!this.unlocked) return;
     if (typeof document !== 'undefined' && !document.hidden) return;
 
     const scale = this.getCurrentScale();
@@ -3803,6 +3816,7 @@ export class ChirpEngine {
 
   /** Play a pentatonic note for a keystroke, cycling through the scale */
   playKeystroke(): void {
+    if (!this.unlocked) return;
     const scales: Record<string, number[]> = {
       melodic: [NOTES.C5, NOTES.D5, NOTES.E5, NOTES.G5, NOTES.A5],
       forest: [FOREST_NOTES.D4, FOREST_NOTES.E4, FOREST_NOTES.G4, FOREST_NOTES.A4, FOREST_NOTES.B4],
@@ -4105,6 +4119,7 @@ export class ChirpEngine {
   }
 
   unlock() {
+    this.unlocked = true;
     this.ensureContext();
   }
 
