@@ -9,6 +9,12 @@ export default defineConfig({
   server: {
     host: true,
     port: 3333,
+    watch: {
+      // Git operations (stage, commit, reset) modify .git/ internals.
+      // Without this, committing via Smart Staging triggers HMR reloads
+      // that abort in-flight fetch requests and reset client state.
+      ignored: ['**/.git/**'],
+    },
     proxy: {
       // Non-streaming /api/stream endpoints (e.g., /api/stream/sessions)
       // must be proxied with normal JSON handling
