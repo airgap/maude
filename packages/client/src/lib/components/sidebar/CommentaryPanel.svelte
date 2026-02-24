@@ -75,7 +75,6 @@
   let currentPersonalityOption = $derived(
     personalities.find((p) => p.id === currentPersonality) || personalities[0],
   );
-  let commentaryText = $derived(commentaryStore.commentaryText);
   let history = $derived(commentaryStore.commentaryHistory);
   let error = $derived(commentaryStore.error);
   let ttsEnabled = $derived(commentaryStore.ttsEnabled);
@@ -83,44 +82,40 @@
   let ttsPaused = $derived(commentaryStore.ttsPaused);
 
   let showPersonalityDropdown = $state(false);
+  let personalityBtnEl = $state<HTMLButtonElement | null>(null);
+  let dropdownStyle = $state('');
   let savedPersonality = $state<CommentaryPersonality | null>(null);
   let currentVerbosity = $state<CommentaryVerbosity>('strategic');
   let showExportModal = $state(false);
-  let autoScroll = $state(true);
   let contentEl = $state<HTMLDivElement | null>(null);
 
   // --- Timeline (past commentary) state ---
-  type ViewMode = 'live' | 'timeline';
-  let viewMode = $state<ViewMode>('live');
   let timelineEntries = $state<CommentaryEntry[]>([]);
   let timelineLoading = $state(false);
   let timelineHasMore = $state(false);
   let timelineOffset = $state(0);
   const TIMELINE_PAGE_SIZE = 50;
 
-  // Auto-scroll to bottom when new commentary arrives
+  // Deduplicated past entries (exclude anything already in live history)
+  let pastEntries = $derived(() => {
+    if (timelineEntries.length === 0) return [];
+    const liveTimestamps = new Set(history.map((e) => e.timestamp));
+    return timelineEntries.filter((e) => !liveTimestamps.has(e.timestamp));
+  });
+
+  // Scroll to top when new commentary arrives (newest posts are at the top)
   $effect(() => {
     // Track history length to trigger on new entries
     const _len = history.length;
-    const _text = commentaryText;
 
-    if (autoScroll && contentEl) {
-      // Use requestAnimationFrame so the DOM has been updated
+    if (contentEl) {
       requestAnimationFrame(() => {
         if (contentEl) {
-          contentEl.scrollTop = contentEl.scrollHeight;
+          contentEl.scrollTop = 0;
         }
       });
     }
   });
-
-  // Detect manual scroll to disable auto-scroll
-  function handleScroll() {
-    if (!contentEl) return;
-    const { scrollTop, scrollHeight, clientHeight } = contentEl;
-    // If user is within 40px of bottom, re-enable auto-scroll
-    autoScroll = scrollHeight - scrollTop - clientHeight < 40;
-  }
 
   // Load workspace settings to get saved personality preference
   $effect(() => {
@@ -246,6 +241,19 @@
     showPersonalityDropdown = false;
   }
 
+  function toggleDropdown() {
+    showPersonalityDropdown = !showPersonalityDropdown;
+    if (showPersonalityDropdown && personalityBtnEl) {
+      const rect = personalityBtnEl.getBoundingClientRect();
+      const dropdownW = 260;
+      // Prefer right-aligned, but clamp to viewport
+      let left = rect.right - dropdownW;
+      if (left < 8) left = 8;
+      if (left + dropdownW > window.innerWidth - 8) left = window.innerWidth - dropdownW - 8;
+      dropdownStyle = `top: ${rect.bottom + 4}px; left: ${left}px;`;
+    }
+  }
+
   async function selectVerbosity(verbosity: CommentaryVerbosity) {
     currentVerbosity = verbosity;
 
@@ -304,13 +312,12 @@
 
   // --- Timeline helpers ---
 
-  /** Switch between live and timeline views. */
-  function setViewMode(mode: ViewMode) {
-    viewMode = mode;
-    if (mode === 'timeline' && timelineEntries.length === 0) {
+  // Auto-load past commentary when workspace becomes available
+  $effect(() => {
+    if (workspaceId && timelineEntries.length === 0) {
       loadTimeline();
     }
-  }
+  });
 
   /** Load persisted commentary history from the database. */
   async function loadTimeline(append = false) {
@@ -402,7 +409,8 @@
       <div class="personality-dropdown-container">
         <button
           class="personality-btn"
-          onclick={() => (showPersonalityDropdown = !showPersonalityDropdown)}
+          bind:this={personalityBtnEl}
+          onclick={toggleDropdown}
           title="Change commentator personality"
         >
           <svg
@@ -432,7 +440,7 @@
         </button>
 
         {#if showPersonalityDropdown}
-          <div class="personality-dropdown">
+          <div class="personality-dropdown" style={dropdownStyle}>
             {#each personalities as p}
               <button
                 class="personality-option"
@@ -626,57 +634,8 @@
     </div>
   {/if}
 
-  <!-- View mode tabs: Live / Past -->
-  {#if workspacePath}
-    <div class="view-tabs">
-      <button
-        class="view-tab"
-        class:active={viewMode === 'live'}
-        onclick={() => setViewMode('live')}
-      >
-        <svg
-          width="12"
-          height="12"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="2"
-          stroke-linecap="round"
-          stroke-linejoin="round"
-        >
-          <circle cx="12" cy="12" r="10" />
-          <polyline points="12 6 12 12 16 14" />
-        </svg>
-        Live
-        {#if isActive}
-          <span class="tab-live-dot"></span>
-        {/if}
-      </button>
-      <button
-        class="view-tab"
-        class:active={viewMode === 'timeline'}
-        onclick={() => setViewMode('timeline')}
-      >
-        <svg
-          width="12"
-          height="12"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="2"
-          stroke-linecap="round"
-          stroke-linejoin="round"
-        >
-          <line x1="12" y1="20" x2="12" y2="4" />
-          <polyline points="6 10 12 4 18 10" />
-        </svg>
-        Past
-      </button>
-    </div>
-  {/if}
-
   <!-- svelte-ignore a11y_no_static_element_interactions -->
-  <div class="commentary-content" bind:this={contentEl} onscroll={handleScroll}>
+  <div class="commentary-content" bind:this={contentEl}>
     {#if !workspacePath}
       <div class="empty-state">
         <div class="empty-icon">
@@ -697,8 +656,7 @@
         </div>
         Open a workspace to start live commentary.
       </div>
-    {:else if viewMode === 'live'}
-      <!-- === LIVE VIEW === -->
+    {:else}
       {#if error}
         <div class="error-state">
           <svg
@@ -715,7 +673,27 @@
           </svg>
           <span>Error: {error}</span>
         </div>
-      {:else if !isActive && history.length === 0}
+      {/if}
+
+      <!-- Live session entries -->
+      {#if history.length > 0}
+        {#if !isActive}
+          <div class="feed-status-bar paused">Paused</div>
+        {/if}
+        <div class="feed">
+          {#each [...history].reverse() as entry, i (entry.timestamp)}
+            <article class="feed-post" class:latest={i === 0 && isActive}>
+              <div class="feed-post-meta">
+                <span class="feed-post-time">{formatTime(entry.timestamp)}</span>
+                <span class="feed-post-personality"
+                  >{personalityLabels[entry.personality] || entry.personality}</span
+                >
+              </div>
+              <div class="feed-post-text">{entry.text}</div>
+            </article>
+          {/each}
+        </div>
+      {:else if !isActive && pastEntries().length === 0}
         <div class="empty-state">
           <div class="empty-icon">
             <svg
@@ -735,150 +713,42 @@
           </div>
           Press play to start commentary.
         </div>
-      {:else}
-        <!-- Latest commentary (larger) -->
-        {#if commentaryText}
-          <div class="latest-commentary">
-            <div class="commentary-bubble">
-              {commentaryText}
-            </div>
-            {#if !isActive}
-              <div class="status-badge stopped">Paused</div>
-            {/if}
-          </div>
-        {/if}
-
-        <!-- History -->
-        {#if history.length > 1}
-          <div class="history-section">
-            <div class="history-header">Previous Commentary</div>
-            <div class="history-list">
-              {#each history.slice(0, -1).reverse() as entry (entry.timestamp)}
-                <div class="history-item">
-                  <div class="history-time">{formatTime(entry.timestamp)}</div>
-                  <div class="history-text">{entry.text}</div>
-                </div>
-              {/each}
-            </div>
-          </div>
-        {/if}
       {/if}
-    {:else}
-      <!-- === TIMELINE VIEW (Past Commentary) === -->
-      {#if timelineLoading && timelineEntries.length === 0}
+
+      <!-- Past entries from history storage -->
+      {#if pastEntries().length > 0}
+        {#if history.length > 0}
+          <div class="section-divider">
+            <span class="section-divider-label">Earlier</span>
+          </div>
+        {/if}
+        <div class="feed past-feed">
+          {#each pastEntries() as entry (entry.timestamp)}
+            <article class="feed-post past">
+              <div class="feed-post-meta">
+                <span class="feed-post-time">{formatTimelineTimestamp(entry.timestamp)}</span>
+                <span class="feed-post-personality"
+                  >{personalityLabels[entry.personality] || entry.personality}</span
+                >
+              </div>
+              <div class="feed-post-text">{entry.text}</div>
+            </article>
+          {/each}
+        </div>
+
+        {#if timelineHasMore}
+          <button class="timeline-load-more" onclick={loadMoreTimeline} disabled={timelineLoading}>
+            {timelineLoading ? 'Loading…' : 'Load more'}
+          </button>
+        {/if}
+      {:else if timelineLoading}
         <div class="empty-state">
           <div class="timeline-spinner"></div>
           Loading commentary history…
         </div>
-      {:else if timelineEntries.length === 0}
-        <div class="empty-state">
-          <div class="empty-icon">
-            <svg
-              width="32"
-              height="32"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="1.5"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-            >
-              <path d="M12 8v4l3 3" />
-              <circle cx="12" cy="12" r="10" />
-            </svg>
-          </div>
-          No past commentary stored.
-          <p class="empty-hint">Commentary is saved when history storage is enabled in settings.</p>
-        </div>
-      {:else}
-        <div class="timeline">
-          <div class="timeline-actions">
-            <button
-              class="timeline-refresh-btn"
-              onclick={() => loadTimeline(false)}
-              title="Refresh timeline"
-            >
-              <svg
-                width="12"
-                height="12"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="2"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-              >
-                <polyline points="23 4 23 10 17 10" />
-                <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" />
-              </svg>
-              Refresh
-            </button>
-            <span class="timeline-count">{timelineEntries.length} entries</span>
-          </div>
-
-          <div class="timeline-list">
-            {#each timelineEntries as entry, i (entry.timestamp + '-' + i)}
-              <div class="timeline-entry">
-                <div class="timeline-dot-col">
-                  <div class="timeline-dot"></div>
-                  {#if i < timelineEntries.length - 1}
-                    <div class="timeline-line"></div>
-                  {/if}
-                </div>
-                <div class="timeline-entry-content">
-                  <div class="timeline-entry-meta">
-                    <span class="timeline-entry-time"
-                      >{formatTimelineTimestamp(entry.timestamp)}</span
-                    >
-                    <span class="timeline-entry-personality"
-                      >{personalityLabels[entry.personality] || entry.personality}</span
-                    >
-                  </div>
-                  <div class="timeline-entry-text">{entry.text}</div>
-                </div>
-              </div>
-            {/each}
-          </div>
-
-          {#if timelineHasMore}
-            <button
-              class="timeline-load-more"
-              onclick={loadMoreTimeline}
-              disabled={timelineLoading}
-            >
-              {timelineLoading ? 'Loading…' : 'Load more'}
-            </button>
-          {/if}
-        </div>
       {/if}
     {/if}
   </div>
-
-  <!-- Auto-scroll indicator (shown when user scrolled up in live mode) -->
-  {#if viewMode === 'live' && !autoScroll && history.length > 0}
-    <button
-      class="scroll-to-bottom"
-      onclick={() => {
-        autoScroll = true;
-        if (contentEl) contentEl.scrollTop = contentEl.scrollHeight;
-      }}
-      title="Scroll to latest"
-    >
-      <svg
-        width="12"
-        height="12"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        stroke-width="2"
-        stroke-linecap="round"
-        stroke-linejoin="round"
-      >
-        <polyline points="6 9 12 15 18 9"></polyline>
-      </svg>
-      New commentary
-    </button>
-  {/if}
 </div>
 
 <CommentaryExportModal
@@ -992,15 +862,14 @@
   }
 
   .personality-dropdown {
-    position: absolute;
-    top: calc(100% + 4px);
-    right: 0;
-    min-width: 260px;
+    position: fixed;
+    z-index: 100;
+    width: 260px;
+    max-width: calc(100vw - 16px);
     background: var(--bg-secondary);
     border: 1px solid var(--border-primary);
     border-radius: var(--radius-md);
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-    z-index: 100;
     overflow: hidden;
   }
 
@@ -1270,153 +1139,112 @@
     padding: 24px 16px;
   }
 
-  .latest-commentary {
-    margin-bottom: 16px;
-  }
+  /* --- Microblog feed --- */
 
-  .commentary-bubble {
-    background: color-mix(in srgb, var(--accent-primary) 8%, transparent);
-    border: 1px solid color-mix(in srgb, var(--accent-primary) 20%, transparent);
-    border-radius: var(--radius-md);
-    padding: 12px 14px;
-    font-size: var(--fs-sm);
-    line-height: 1.6;
-    color: var(--text-primary);
-    position: relative;
-  }
-
-  .status-badge {
-    display: inline-block;
-    margin-top: 8px;
-    padding: 3px 8px;
-    border-radius: 12px;
+  .feed-status-bar {
+    padding: 4px 10px;
     font-size: var(--fs-xxs);
     font-weight: 700;
     text-transform: uppercase;
     letter-spacing: 0.05em;
-  }
-
-  .status-badge.stopped {
-    background: var(--bg-tertiary);
-    color: var(--text-tertiary);
-    border: 1px solid var(--border-secondary);
-  }
-
-  .history-section {
-    margin-top: 16px;
-    padding-top: 12px;
-    border-top: 1px solid var(--border-secondary);
-  }
-
-  .history-header {
-    font-size: var(--fs-xs);
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.06em;
-    color: var(--text-tertiary);
+    text-align: center;
     margin-bottom: 8px;
   }
 
-  .history-list {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
+  .feed-status-bar.paused {
+    background: var(--bg-tertiary);
+    color: var(--text-tertiary);
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border-secondary);
   }
 
-  .history-item {
+  .feed {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .feed-post {
     padding: 8px 10px;
     background: var(--bg-secondary);
     border: 1px solid var(--border-secondary);
     border-radius: var(--radius-sm);
+    transition: border-color var(--transition);
   }
 
-  .history-time {
-    font-size: var(--fs-xxs);
-    color: var(--text-tertiary);
+  .feed-post.latest {
+    border-color: color-mix(in srgb, var(--accent-primary) 30%, transparent);
+    background: color-mix(in srgb, var(--accent-primary) 5%, var(--bg-secondary));
+  }
+
+  .feed-post-meta {
+    display: flex;
+    align-items: center;
+    gap: 8px;
     margin-bottom: 4px;
   }
 
-  .history-text {
-    font-size: var(--fs-xs);
-    color: var(--text-secondary);
-    line-height: 1.5;
-  }
-
-  .scroll-to-bottom {
-    position: absolute;
-    bottom: 12px;
-    left: 50%;
-    transform: translateX(-50%);
-    display: flex;
-    align-items: center;
-    gap: 4px;
-    padding: 4px 12px;
-    border-radius: 12px;
-    background: var(--accent-primary);
-    color: white;
-    border: none;
-    cursor: pointer;
+  .feed-post-time {
     font-size: var(--fs-xxs);
-    font-weight: 600;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
-    transition: all var(--transition);
-    z-index: 10;
-  }
-
-  .scroll-to-bottom:hover {
-    background: color-mix(in srgb, var(--accent-primary) 90%, black);
-    box-shadow: 0 3px 12px rgba(0, 0, 0, 0.3);
-  }
-
-  /* --- View mode tabs --- */
-
-  .view-tabs {
-    display: flex;
-    gap: 0;
-    padding: 0 14px;
-    border-bottom: 1px solid var(--border-secondary);
-    flex-shrink: 0;
-  }
-
-  .view-tab {
-    display: flex;
-    align-items: center;
-    gap: 4px;
-    padding: 6px 12px;
-    background: transparent;
-    border: none;
-    border-bottom: 2px solid transparent;
-    cursor: pointer;
-    font-size: var(--fs-xs);
-    font-weight: 600;
     color: var(--text-tertiary);
-    transition: all var(--transition);
+    font-weight: 600;
+    white-space: nowrap;
   }
 
-  .view-tab:hover {
-    color: var(--text-secondary);
-  }
-
-  .view-tab.active {
+  .feed-post-personality {
+    font-size: var(--fs-xxs);
     color: var(--accent-primary);
-    border-bottom-color: var(--accent-primary);
+    font-weight: 600;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    padding: 1px 6px;
+    border-radius: 8px;
+    background: color-mix(in srgb, var(--accent-primary) 10%, transparent);
   }
 
-  .tab-live-dot {
-    display: inline-block;
-    width: 5px;
-    height: 5px;
-    border-radius: 50%;
-    background: var(--accent-primary);
-    animation: pulse 2s ease-in-out infinite;
+  .feed-post-text {
+    font-size: var(--fs-xs);
+    color: var(--text-secondary);
+    line-height: 1.55;
   }
 
-  /* --- Timeline view --- */
+  .feed-post.latest .feed-post-text {
+    color: var(--text-primary);
+  }
 
-  .empty-hint {
+  /* --- Section divider (between live and past) --- */
+
+  .section-divider {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 12px 0 8px;
+  }
+
+  .section-divider::before,
+  .section-divider::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: var(--border-secondary);
+  }
+
+  .section-divider-label {
     font-size: var(--fs-xxs);
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
     color: var(--text-tertiary);
-    margin-top: 8px;
+    white-space: nowrap;
+  }
+
+  .past-feed {
+    opacity: 0.75;
+  }
+
+  .feed-post.past {
+    border-style: dashed;
   }
 
   .timeline-spinner {
@@ -1433,123 +1261,6 @@
     to {
       transform: rotate(360deg);
     }
-  }
-
-  .timeline {
-    padding-bottom: 8px;
-  }
-
-  .timeline-actions {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 0 2px 10px;
-  }
-
-  .timeline-refresh-btn {
-    display: flex;
-    align-items: center;
-    gap: 4px;
-    padding: 3px 8px;
-    border-radius: var(--radius-sm);
-    background: transparent;
-    border: 1px solid var(--border-secondary);
-    cursor: pointer;
-    color: var(--text-tertiary);
-    font-size: var(--fs-xxs);
-    font-weight: 600;
-    transition: all var(--transition);
-  }
-
-  .timeline-refresh-btn:hover {
-    color: var(--text-secondary);
-    border-color: var(--border-primary);
-    background: var(--bg-hover);
-  }
-
-  .timeline-count {
-    font-size: var(--fs-xxs);
-    color: var(--text-tertiary);
-    font-weight: 600;
-  }
-
-  .timeline-list {
-    display: flex;
-    flex-direction: column;
-    gap: 0;
-  }
-
-  .timeline-entry {
-    display: flex;
-    gap: 10px;
-    padding: 0;
-  }
-
-  .timeline-dot-col {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    flex-shrink: 0;
-    width: 14px;
-    padding-top: 4px;
-  }
-
-  .timeline-dot {
-    width: 8px;
-    height: 8px;
-    border-radius: 50%;
-    background: var(--accent-primary);
-    flex-shrink: 0;
-    border: 2px solid color-mix(in srgb, var(--accent-primary) 30%, transparent);
-  }
-
-  .timeline-line {
-    width: 2px;
-    flex: 1;
-    background: var(--border-secondary);
-    min-height: 8px;
-  }
-
-  .timeline-entry-content {
-    flex: 1;
-    min-width: 0;
-    padding-bottom: 14px;
-  }
-
-  .timeline-entry-meta {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    margin-bottom: 4px;
-  }
-
-  .timeline-entry-time {
-    font-size: var(--fs-xxs);
-    color: var(--text-tertiary);
-    font-weight: 600;
-    white-space: nowrap;
-  }
-
-  .timeline-entry-personality {
-    font-size: var(--fs-xxs);
-    color: var(--accent-primary);
-    font-weight: 600;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    padding: 1px 6px;
-    border-radius: 8px;
-    background: color-mix(in srgb, var(--accent-primary) 10%, transparent);
-  }
-
-  .timeline-entry-text {
-    font-size: var(--fs-xs);
-    color: var(--text-secondary);
-    line-height: 1.5;
-    background: var(--bg-secondary);
-    border: 1px solid var(--border-secondary);
-    border-radius: var(--radius-sm);
-    padding: 8px 10px;
   }
 
   .timeline-load-more {

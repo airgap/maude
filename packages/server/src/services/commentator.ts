@@ -783,7 +783,7 @@ export class CommentatorService {
         PERSONALITY_PROMPTS[commentator.personality] +
         VERBOSITY_PROMPT_MODIFIERS[commentator.verbosity];
 
-      const userPrompt = `Here is a batch of recent activity from the AI coding agent:\n\n${summary}\n\nProvide a brief commentary on what's happening. Reply with ONLY the commentary text — no preamble, no labels.`;
+      const userPrompt = `Here is a batch of recent activity from the AI coding agent:\n\n${summary}\n\nProvide a brief microblog-style commentary on what's happening. Keep it to 1-2 sentences. Reply with ONLY the commentary text — no preamble, no labels, no markdown.`;
 
       const text = await this.callLlm({
         system: systemPrompt,
