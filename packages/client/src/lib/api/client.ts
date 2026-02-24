@@ -852,10 +852,10 @@ export const api = {
           }>;
         };
       }>(`/git/blame?path=${encodeURIComponent(path)}&file=${encodeURIComponent(file)}`),
-    commit: (path: string, message: string) =>
+    commit: (path: string, message: string, opts?: { noAutoStage?: boolean }) =>
       request<{ ok: boolean; data: { sha: string } }>('/git/commit', {
         method: 'POST',
-        body: JSON.stringify({ path, message }),
+        body: JSON.stringify({ path, message, noAutoStage: opts?.noAutoStage }),
       }),
     /**
      * Streaming commit with real-time output

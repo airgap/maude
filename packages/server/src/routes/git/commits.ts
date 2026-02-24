@@ -6,9 +6,10 @@ import { run, runExitCode, validateWorkspacePath, parseCommitFailure } from './h
 const app = new Hono();
 
 // Commit staged changes (auto-stages all if nothing is staged — like VS Code)
+// Pass `noAutoStage: true` to skip auto-staging (used by Smart Stage grouping)
 app.post('/commit', async (c) => {
   const body = await c.req.json();
-  const { path: rootPath, message } = body;
+  const { path: rootPath, message, noAutoStage } = body;
 
   if (!rootPath) return c.json({ ok: false, error: 'path required' }, 400);
   if (!message || typeof message !== 'string' || !message.trim()) {
@@ -22,11 +23,16 @@ app.post('/commit', async (c) => {
 
   try {
     // If nothing is staged, auto-stage all changes (VS Code behavior)
+    // When noAutoStage is set (e.g. Smart Stage grouping), skip this to avoid
+    // committing files outside the intended group.
     const stagedExit = await runExitCode(['git', 'diff', '--cached', '--quiet'], {
       cwd: pathCheck.resolved,
     });
     // exit 0 = no staged changes, exit 1 = has staged changes
     if (stagedExit === 0) {
+      if (noAutoStage) {
+        return c.json({ ok: false, error: 'Nothing staged (auto-stage disabled)' }, 400);
+      }
       console.log('[git/commit] Nothing staged — auto-staging all changes');
       const addResult = await run(['git', 'add', '-A'], { cwd: pathCheck.resolved });
       if (addResult.exitCode !== 0) {
@@ -63,7 +69,7 @@ app.post('/commit', async (c) => {
 // Streaming commit endpoint with real-time output
 app.post('/commit/stream', async (c) => {
   const body = await c.req.json();
-  const { path: rootPath, message } = body;
+  const { path: rootPath, message, noAutoStage } = body;
 
   if (!rootPath) return c.json({ ok: false, error: 'path required' }, 400);
   if (!message || typeof message !== 'string' || !message.trim()) {
@@ -103,6 +109,8 @@ app.post('/commit/stream', async (c) => {
       });
 
       // If nothing is staged, auto-stage all changes (VS Code behavior)
+      // When noAutoStage is set (e.g. Smart Stage grouping), skip to avoid
+      // committing files outside the intended group.
       const stagedExit = await runExitCode(['git', 'diff', '--cached', '--quiet'], {
         cwd: pathCheck.resolved,
       });
@@ -113,6 +121,16 @@ app.post('/commit/stream', async (c) => {
       );
       // exit 0 = no staged changes, exit 1 = has staged changes
       if (stagedExit === 0) {
+        if (noAutoStage) {
+          console.log('[git/commit/stream] Nothing staged and noAutoStage set — aborting');
+          await stream.writeSSE({
+            data: JSON.stringify({
+              type: 'error',
+              message: 'Nothing staged (auto-stage disabled)',
+            }),
+          });
+          return;
+        }
         console.log('[git/commit/stream] Nothing staged — auto-staging all changes');
         await stream.writeSSE({
           data: JSON.stringify({

@@ -171,13 +171,24 @@ function createCommitGroupsStore() {
 
       try {
         // Unstage everything first
-        await api.git.unstage(workspacePath);
+        const unstageRes = await api.git.unstage(workspacePath);
+        if (!unstageRes.ok) {
+          g.status = 'failed';
+          g.error = `Unstage failed: ${(unstageRes as Record<string, unknown>).error || 'unknown error'}`;
+          return false;
+        }
 
         // Stage only this group's files
-        await api.git.stage(workspacePath, g.files);
+        const stageRes = await api.git.stage(workspacePath, g.files);
+        if (!stageRes.ok) {
+          g.status = 'failed';
+          g.error = `Stage failed: ${(stageRes as Record<string, unknown>).error || 'unknown error'} — check that file paths are correct`;
+          return false;
+        }
 
-        // Commit
-        const res = await api.git.commit(workspacePath, g.message);
+        // Commit with noAutoStage to prevent accidentally committing
+        // files outside this group if staging silently failed
+        const res = await api.git.commit(workspacePath, g.message, { noAutoStage: true });
         if (res.ok) {
           g.status = 'committed';
           // Refresh git status
