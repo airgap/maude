@@ -266,6 +266,54 @@ export function getToolDefinitions(): ToolSchema[] {
         required: ['notebook_path', 'new_source'],
       },
     },
+
+    // Canvas tools
+    {
+      name: 'canvas_push',
+      description:
+        'Push visual content to the live canvas workspace. Supports HTML, SVG, Mermaid diagrams, and data tables. The canvas renders in real-time and persists as an artifact. Use this to create diagrams, charts, UI previews, or any visual output.',
+      input_schema: {
+        type: 'object',
+        properties: {
+          content_type: {
+            type: 'string',
+            description:
+              'Type of content to render: html (custom HTML layouts), svg (vector graphics), mermaid (diagrams), or table (data tables)',
+            enum: ['html', 'svg', 'mermaid', 'table'],
+          },
+          content: {
+            type: 'string',
+            description:
+              'The content to render. For mermaid, provide diagram syntax. For table, provide JSON array of objects. For html/svg, provide valid markup.',
+          },
+          title: {
+            type: 'string',
+            description: 'Optional title for the canvas artifact',
+          },
+          canvas_id: {
+            type: 'string',
+            description:
+              'Optional canvas ID to update an existing canvas. If not provided, creates a new canvas.',
+          },
+        },
+        required: ['content_type', 'content'],
+      },
+    },
+    {
+      name: 'canvas_snapshot',
+      description:
+        'Take a snapshot of the current canvas state. Returns the current content and metadata. Useful for checking what is currently displayed before making updates.',
+      input_schema: {
+        type: 'object',
+        properties: {
+          canvas_id: {
+            type: 'string',
+            description: 'The ID of the canvas to snapshot',
+          },
+        },
+        required: ['canvas_id'],
+      },
+    },
   ];
 }
 

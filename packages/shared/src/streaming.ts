@@ -29,7 +29,9 @@ export type StreamEvent =
   | StreamAgentNoteCreated
   | StreamCommentary
   | StreamCrossSessionMessage
-  | StreamApiRetry;
+  | StreamApiRetry
+  | StreamCanvasUpdate
+  | StreamCanvasInteraction;
 
 export interface StreamMessageStart {
   type: 'message_start';
@@ -244,4 +246,30 @@ export interface StreamCrossSessionMessage {
 export interface StreamApiRetry {
   type: 'api_retry';
   attempt: number;
+}
+
+/**
+ * Emitted when an agent pushes content to the canvas.
+ * The canvas renders live visual content (HTML/SVG/Mermaid/tables).
+ */
+export interface StreamCanvasUpdate {
+  type: 'canvas_update';
+  canvasId: string;
+  contentType: 'html' | 'svg' | 'mermaid' | 'table';
+  content: string;
+  title?: string;
+  conversationId: string;
+}
+
+/**
+ * Emitted when a user interacts with canvas elements (click, hover).
+ * Sent from client to agent to report user actions on the canvas.
+ */
+export interface StreamCanvasInteraction {
+  type: 'canvas_interaction';
+  canvasId: string;
+  interactionType: 'click' | 'hover';
+  elementId?: string;
+  coordinates?: { x: number; y: number };
+  timestamp: number;
 }

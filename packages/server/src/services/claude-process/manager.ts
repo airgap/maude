@@ -820,6 +820,31 @@ export class ClaudeProcessManager {
                           if (session.workspacePath) {
                             eventBridge.emitRaw(session.workspacePath, resultEvent);
                           }
+
+                          // Check for canvas_update metadata in tool result
+                          if (toolName === 'canvas_push' && typeof block.content === 'string') {
+                            try {
+                              const parsed = JSON.parse(block.content);
+                              if (parsed.__canvas_update) {
+                                const canvasEvent = JSON.stringify({
+                                  type: 'canvas_update',
+                                  canvasId: parsed.__canvas_update.canvasId,
+                                  contentType: parsed.__canvas_update.contentType,
+                                  content: parsed.__canvas_update.content,
+                                  title: parsed.__canvas_update.title,
+                                  conversationId: session.conversationId,
+                                });
+                                enqueueEvent(controller, `data: ${canvasEvent}\n\n`);
+
+                                // Also bridge to event bridge for cross-workspace support
+                                if (session.workspacePath) {
+                                  eventBridge.emitRaw(session.workspacePath, canvasEvent);
+                                }
+                              }
+                            } catch {
+                              // Failed to parse - ignore
+                            }
+                          }
                         }
                       }
                     }

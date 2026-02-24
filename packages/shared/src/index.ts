@@ -35,6 +35,8 @@ export type {
   StreamAgentNoteCreated,
   StreamCommentary,
   StreamCrossSessionMessage,
+  StreamCanvasUpdate,
+  StreamCanvasInteraction,
 } from './streaming.js';
 
 export type {

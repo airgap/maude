@@ -48,6 +48,10 @@ export async function executeTool(
         return await executeWebSearchTool(toolInput);
       case 'NotebookEdit':
         return await executeNotebookEditTool(toolInput);
+      case 'canvas_push':
+        return await executeCanvasPushTool(toolInput);
+      case 'canvas_snapshot':
+        return await executeCanvasSnapshotTool(toolInput);
       default:
         return {
           content: `Unknown tool: ${toolName}`,
@@ -364,5 +368,145 @@ async function executeNotebookEditTool(input: Record<string, unknown>): Promise<
       content: `Error editing notebook: ${error instanceof Error ? error.message : String(error)}`,
       is_error: true,
     };
+  }
+}
+
+/**
+ * In-memory canvas state storage.
+ * Maps canvasId -> canvas data.
+ */
+const canvasStore = new Map<
+  string,
+  {
+    id: string;
+    contentType: 'html' | 'svg' | 'mermaid' | 'table';
+    content: string;
+    title?: string;
+    conversationId?: string;
+    lastUpdated: number;
+  }
+>();
+
+async function executeCanvasPushTool(
+  input: Record<string, unknown>,
+  workspacePath?: string,
+): Promise<ToolResult> {
+  const contentType = String(input.content_type) as 'html' | 'svg' | 'mermaid' | 'table';
+  const content = String(input.content);
+  const title = input.title ? String(input.title) : undefined;
+  const canvasId = input.canvas_id ? String(input.canvas_id) : undefined;
+
+  try {
+    // Validate content type
+    if (!['html', 'svg', 'mermaid', 'table'].includes(contentType)) {
+      return {
+        content: `Invalid content_type: ${contentType}. Must be one of: html, svg, mermaid, table`,
+        is_error: true,
+      };
+    }
+
+    // For tables, validate JSON
+    if (contentType === 'table') {
+      try {
+        JSON.parse(content);
+      } catch {
+        return {
+          content: 'Invalid table content: must be valid JSON array',
+          is_error: true,
+        };
+      }
+    }
+
+    // Generate or use provided canvas ID
+    const { nanoid } = await import('nanoid');
+    const id = canvasId || nanoid(12);
+    const now = Date.now();
+
+    // Store canvas state in memory
+    canvasStore.set(id, {
+      id,
+      contentType,
+      content,
+      title,
+      lastUpdated: now,
+    });
+
+    // Return success with canvas ID and metadata for event emission
+    // The streaming layer will pick up __canvas_update metadata and emit SSE event
+    return {
+      content: JSON.stringify({
+        canvasId: id,
+        contentType,
+        title: title || 'Canvas',
+        message: canvasId
+          ? `Canvas ${id} updated successfully`
+          : `Canvas ${id} created successfully`,
+        __canvas_update: {
+          canvasId: id,
+          contentType,
+          content,
+          title,
+        },
+      }),
+    };
+  } catch (error) {
+    return {
+      content: `Error pushing to canvas: ${error instanceof Error ? error.message : String(error)}`,
+      is_error: true,
+    };
+  }
+}
+
+async function executeCanvasSnapshotTool(input: Record<string, unknown>): Promise<ToolResult> {
+  const canvasId = String(input.canvas_id);
+
+  try {
+    const canvas = canvasStore.get(canvasId);
+
+    if (!canvas) {
+      return {
+        content: `Canvas not found: ${canvasId}`,
+        is_error: true,
+      };
+    }
+
+    return {
+      content: JSON.stringify({
+        canvasId: canvas.id,
+        contentType: canvas.contentType,
+        content: canvas.content,
+        title: canvas.title,
+        lastUpdated: canvas.lastUpdated,
+      }),
+    };
+  } catch (error) {
+    return {
+      content: `Error taking canvas snapshot: ${error instanceof Error ? error.message : String(error)}`,
+      is_error: true,
+    };
+  }
+}
+
+/**
+ * Get canvas by ID (used by streaming layer to emit canvas updates)
+ */
+export function getCanvas(canvasId: string) {
+  return canvasStore.get(canvasId);
+}
+
+/**
+ * Get all canvases for a conversation (used by streaming layer)
+ */
+export function getConversationCanvases(conversationId: string) {
+  return Array.from(canvasStore.values()).filter((c) => c.conversationId === conversationId);
+}
+
+/**
+ * Set conversation ID for a canvas (used by streaming layer)
+ */
+export function setCanvasConversation(canvasId: string, conversationId: string) {
+  const canvas = canvasStore.get(canvasId);
+  if (canvas) {
+    canvas.conversationId = conversationId;
   }
 }

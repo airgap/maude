@@ -117,6 +117,11 @@ export const SIDEBAR_TABS: TabDefinition[] = [
     label: 'History',
     icon: 'M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10 10-4.5 10-10S17.5 2 12 2zM12 6v6l4 2',
   },
+  {
+    id: 'canvas',
+    label: 'Canvas',
+    icon: 'M3 3h18v18H3zM8 8h8M8 12h8M8 16h5',
+  },
 ];
 
 export function getTabDef(id: SidebarTab): TabDefinition {

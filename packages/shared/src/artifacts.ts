@@ -1,4 +1,4 @@
-export type ArtifactType = 'plan' | 'diff' | 'screenshot' | 'walkthrough' | 'report';
+export type ArtifactType = 'plan' | 'diff' | 'screenshot' | 'walkthrough' | 'report' | 'canvas';
 
 export interface Artifact {
   id: string;

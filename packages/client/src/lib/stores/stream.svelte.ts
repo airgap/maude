@@ -5,6 +5,7 @@ import { primaryPaneStore } from './primaryPane.svelte';
 import { api } from '$lib/api/client';
 import { artifactsStore } from './artifacts.svelte';
 import { agentNotesStore } from './agent-notes.svelte';
+import { canvasStore } from './canvas.svelte';
 import { handleAgentTerminalEvent, resetAgentTerminal } from '$lib/services/agent-terminal';
 
 // Context key for Svelte 5 context API - ensures proper reactivity tracking
@@ -459,6 +460,11 @@ function createStreamStore() {
           if (event.note) {
             agentNotesStore.addFromStream(event.note);
           }
+          break;
+
+        case 'canvas_update':
+          // Forward to the canvas store so the canvas panel updates in real time
+          canvasStore.handleUpdate(event);
           break;
 
         case 'cross_session_message':
