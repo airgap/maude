@@ -217,8 +217,13 @@ export function isOriginRemote(origin: string): boolean {
     const url = new URL(origin);
     const hostname = url.hostname;
 
-    // Localhost patterns
-    if (hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '::1') {
+    // Localhost patterns (including IPv6 loopback)
+    if (
+      hostname === 'localhost' ||
+      hostname === '127.0.0.1' ||
+      hostname === '::1' ||
+      hostname === '[::1]'
+    ) {
       return false;
     }
 

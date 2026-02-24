@@ -27,6 +27,16 @@ bun run start
 
 Then open **http://localhost:3002**. The server builds the SvelteKit client to static files and serves them alongside the API. Set `PORT` to change the port.
 
+## Remote Access
+
+E supports secure remote access via Tailscale or SSH tunneling. See [docs/REMOTE_ACCESS.md](docs/REMOTE_ACCESS.md) for setup instructions.
+
+**Quick setup:**
+
+- Navigate to Settings > Remote Access in the UI
+- Enable Tailscale serve/funnel or generate an SSH tunnel command
+- Access E from your phone, laptop, or anywhere with authentication
+
 ## Project Structure
 
 ```
