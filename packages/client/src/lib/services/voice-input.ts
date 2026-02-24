@@ -297,7 +297,7 @@ export class VoiceInputService {
       provider: options.provider ?? 'browser',
       mode: options.mode ?? 'push-to-talk',
       wakeWord: options.wakeWord ?? 'Hey E',
-      autoSpeak: options.autoSpeak ?? true,
+      autoSpeak: options.autoSpeak ?? false,
       language: options.language ?? 'en-US',
       whisperApiKey: options.whisperApiKey,
     };

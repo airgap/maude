@@ -42,7 +42,7 @@ function createVoiceStore() {
   // Settings
   let inputProvider = $state<VoiceInputProvider>('browser');
   let wakeWord = $state('Hey E');
-  let autoSpeak = $state(true);
+  let autoSpeak = $state(false);
   let language = $state('en-US');
   let whisperApiKey = $state<string | undefined>(undefined);
 

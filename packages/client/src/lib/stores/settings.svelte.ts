@@ -225,7 +225,7 @@ const defaults: SettingsState = {
   voiceMode: 'disabled',
   voiceInputProvider: 'browser',
   voiceWakeWord: 'Hey E',
-  voiceAutoSpeak: true,
+  voiceAutoSpeak: false,
   voiceLanguage: 'en-US',
 };
 
@@ -256,6 +256,10 @@ function loadFromStorage(): SettingsState {
       // Migrate: candyland theme was removed
       if (parsed.theme === 'candyland') {
         parsed.theme = defaults.theme;
+      }
+      // Migrate: voiceAutoSpeak was incorrectly defaulted to true — force off
+      if (parsed.voiceAutoSpeak === true) {
+        parsed.voiceAutoSpeak = false;
       }
       return parsed;
     }

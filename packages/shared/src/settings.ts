@@ -204,7 +204,7 @@ export const DEFAULT_SETTINGS: Settings = {
   voiceMode: 'disabled',
   voiceInputProvider: 'browser',
   voiceWakeWord: 'Hey E',
-  voiceAutoSpeak: true,
+  voiceAutoSpeak: false,
   voiceLanguage: 'en-US',
   remoteAccessEnabled: false,
   remoteAccessMode: 'disabled',
