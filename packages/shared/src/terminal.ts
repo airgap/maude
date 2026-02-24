@@ -286,7 +286,7 @@ export interface TerminalCommandBlock {
 }
 
 export const DEFAULT_TERMINAL_PREFERENCES: TerminalPreferences = {
-  fontFamily: 'var(--font-family-mono, monospace)',
+  fontFamily: 'var(--font-family, monospace)',
   fontSize: 13,
   fontWeight: 400,
   lineHeight: 1.2,

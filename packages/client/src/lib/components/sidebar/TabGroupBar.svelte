@@ -769,9 +769,9 @@
                 <path d={tab.icon} />
               </svg>
               <span class="menu-item-label">{tab.label}</span>
-              {#if inThisGroup}
-                <span class="menu-item-badge menu-item-badge-here">here</span>
-              {:else if placed}
+              {#if tab.wip}
+                <span class="menu-item-badge menu-item-badge-wip">WIP</span>
+              {:else if placed && !inThisGroup}
                 <span class="menu-item-badge">placed</span>
               {/if}
               <svg
@@ -1117,10 +1117,10 @@
     background: var(--bg-hover);
     border: 1px solid var(--border-primary);
   }
-  .menu-item-badge-here {
-    color: var(--accent-primary);
-    background: color-mix(in srgb, var(--accent-primary) 12%, transparent);
-    border-color: color-mix(in srgb, var(--accent-primary) 30%, transparent);
+  .menu-item-badge-wip {
+    color: var(--warning, #c89b3f);
+    background: color-mix(in srgb, var(--warning, #c89b3f) 12%, transparent);
+    border-color: color-mix(in srgb, var(--warning, #c89b3f) 30%, transparent);
   }
 
   .menu-drag-handle {

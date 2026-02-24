@@ -1,4 +1,5 @@
 import type { StreamCanvasUpdate } from '@e/shared';
+import { api } from '$lib/api/client';
 
 export interface CanvasState {
   id: string;
@@ -61,9 +62,63 @@ function createCanvasStore() {
       }
     },
 
-    /** Load canvases for a conversation */
-    setConversation(conversationId: string | null) {
+    /** Load canvases for a conversation — fetches from server API */
+    async setConversation(conversationId: string | null) {
       currentConversationId = conversationId;
+
+      if (!conversationId) return;
+
+      // Hydrate from server
+      try {
+        const res = await api.canvas.list(conversationId);
+        if (res.ok && Array.isArray(res.data)) {
+          for (const cv of res.data) {
+            const existing = canvases.find((c) => c.id === cv.id);
+            if (!existing) {
+              canvases = [
+                ...canvases,
+                {
+                  id: cv.id,
+                  contentType: cv.contentType,
+                  content: cv.content,
+                  title: cv.title,
+                  conversationId: cv.conversationId || conversationId,
+                  lastUpdated: cv.lastUpdated || Date.now(),
+                },
+              ];
+            }
+          }
+        }
+      } catch {
+        // Server may not support canvas API yet — fail silently
+      }
+    },
+
+    /** Push canvas content directly via REST API */
+    async push(opts: {
+      contentType: 'html' | 'svg' | 'mermaid' | 'table';
+      content: string;
+      title?: string;
+      canvasId?: string;
+    }) {
+      const conversationId = currentConversationId;
+      try {
+        const res = await api.canvas.push({
+          content_type: opts.contentType,
+          content: opts.content,
+          title: opts.title,
+          canvas_id: opts.canvasId,
+          conversation_id: conversationId || undefined,
+        });
+        if (res.ok && res.canvasEvent) {
+          // Inject directly into local state
+          this.handleUpdate(res.canvasEvent);
+        }
+        return res;
+      } catch (err) {
+        console.error('[canvasStore] push failed:', err);
+        throw err;
+      }
     },
 
     /** Clear all canvases for a conversation */

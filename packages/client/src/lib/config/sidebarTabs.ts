@@ -4,6 +4,7 @@ export interface TabDefinition {
   id: SidebarTab;
   label: string;
   icon: string;
+  wip?: boolean;
 }
 
 export const SIDEBAR_TABS: TabDefinition[] = [
@@ -61,6 +62,7 @@ export const SIDEBAR_TABS: TabDefinition[] = [
     id: 'ambient',
     label: 'Ambient',
     icon: 'M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0M12 9a3 3 0 1 0 0 6 3 3 0 0 0 0-6z',
+    wip: true,
   },
   {
     id: 'digest',
@@ -76,6 +78,7 @@ export const SIDEBAR_TABS: TabDefinition[] = [
     id: 'initiatives',
     label: 'Initiatives',
     icon: 'M4 22V4a1 1 0 0 1 .4-.8A6 6 0 0 1 8 2c3 0 5 2 7.333 2q2 0 3.067-.8A1 1 0 0 1 20 4v10a1 1 0 0 1-.4.8A6 6 0 0 1 16 16c-3 0-5-2-8-2a6 6 0 0 0-4 1.528',
+    wip: true,
   },
   {
     id: 'help',
@@ -91,6 +94,7 @@ export const SIDEBAR_TABS: TabDefinition[] = [
     id: 'artifacts',
     label: 'Artifacts',
     icon: 'M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2M9 5a2 2 0 0 2 2h2a2 2 0 0 0 2-2M9 5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01',
+    wip: true,
   },
   {
     id: 'notes',
@@ -106,11 +110,13 @@ export const SIDEBAR_TABS: TabDefinition[] = [
     id: 'commentary',
     label: 'Commentary',
     icon: 'M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3zM19 10v2a7 7 0 0 1-14 0v-2M12 19v4M8 23h8',
+    wip: true,
   },
   {
     id: 'golems',
     label: 'Golems',
     icon: 'M12 2a4 4 0 0 0-4 4v1H6a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-2V6a4 4 0 0 0-4-4zM9 12a1.5 1.5 0 1 1 0 3 1.5 1.5 0 0 1 0-3zM15 12a1.5 1.5 0 1 1 0 3 1.5 1.5 0 0 1 0-3z',
+    wip: true,
   },
   {
     id: 'command-history',
@@ -121,6 +127,7 @@ export const SIDEBAR_TABS: TabDefinition[] = [
     id: 'canvas',
     label: 'Canvas',
     icon: 'M3 3h18v18H3zM8 8h8M8 12h8M8 16h5',
+    wip: true,
   },
 ];
 

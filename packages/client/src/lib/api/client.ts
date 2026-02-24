@@ -862,18 +862,18 @@ export const api = {
     commit: (path: string, message: string, opts?: { noAutoStage?: boolean; noVerify?: boolean }) =>
       request<{ ok: boolean; data: { sha: string } }>('/git/commit', {
         method: 'POST',
-        body: JSON.stringify({ path, message, noAutoStage: opts?.noAutoStage, noVerify: opts?.noVerify }),
+        body: JSON.stringify({
+          path,
+          message,
+          noAutoStage: opts?.noAutoStage,
+          noVerify: opts?.noVerify,
+        }),
       }),
     /**
      * Atomic group commit: unstage all → stage specific files → commit
      * in a single server request. HMR-safe — can't be interrupted mid-group.
      */
-    commitGroup: (
-      path: string,
-      files: string[],
-      message: string,
-      opts?: { noVerify?: boolean },
-    ) =>
+    commitGroup: (path: string, files: string[], message: string, opts?: { noVerify?: boolean }) =>
       request<{ ok: boolean; data: { sha: string } }>('/git/commit-group', {
         method: 'POST',
         body: JSON.stringify({ path, files, message, noVerify: opts?.noVerify }),
@@ -2144,6 +2144,23 @@ export const api = {
       request<{ ok: boolean; data: { count: number } }>(
         `/agent-notes/unread-count?workspacePath=${encodeURIComponent(workspacePath)}`,
       ),
+  },
+
+  // --- Canvas ---
+  canvas: {
+    list: (conversationId: string) =>
+      request<{ ok: boolean; data: any[] }>(`/canvas/${conversationId}`),
+    push: (body: {
+      content_type: 'html' | 'svg' | 'mermaid' | 'table';
+      content: string;
+      title?: string;
+      canvas_id?: string;
+      conversation_id?: string;
+    }) =>
+      request<{ ok: boolean; data: any; canvasEvent: any }>('/canvas', {
+        method: 'POST',
+        body: JSON.stringify(body),
+      }),
   },
 
   // --- Commentary History ---

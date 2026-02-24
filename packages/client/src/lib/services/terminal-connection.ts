@@ -35,7 +35,7 @@ import { SerializeAddon } from '@xterm/addon-serialize';
 import { WebLinksAddon } from '@xterm/addon-web-links';
 import { Unicode11Addon } from '@xterm/addon-unicode11';
 import { ClipboardAddon } from '@xterm/addon-clipboard';
-import { getBaseUrl, getDirectWsBase, getAuthToken } from '$lib/api/client';
+import { getBaseUrl, getDirectWsBase, getAuthToken, getCsrfToken } from '$lib/api/client';
 import {
   createUrlClickHandler,
   createUrlLinkOptions,
@@ -132,6 +132,38 @@ const FALLBACK_THEME = {
  * Derive terminal theme from CSS custom properties.
  * Falls back to FALLBACK_THEME values when properties are not set.
  */
+/**
+ * Resolve the terminal font family for xterm's canvas renderer.
+ *
+ * xterm.js measures character cells using canvas measureText(), which cannot
+ * resolve CSS var() references. If the pref contains var(), we read the
+ * computed value from the DOM. As a final fallback we read --font-family
+ * (the app's mono font) directly from the root element.
+ */
+function resolveTerminalFont(pref: string): string {
+  if (typeof document === 'undefined') return pref;
+
+  let result = pref;
+
+  // If the preference is a CSS var() reference, resolve it from computed style
+  if (pref.startsWith('var(')) {
+    const style = getComputedStyle(document.documentElement);
+    const match = pref.match(/var\(\s*(--[^,)]+)/);
+    if (match) {
+      const resolved = style.getPropertyValue(match[1]).trim();
+      if (resolved) {
+        result = resolved;
+      } else {
+        // The referenced variable doesn't exist — read --font-family (app mono font)
+        const appFont = style.getPropertyValue('--font-family').trim();
+        result = appFont || 'monospace';
+      }
+    }
+  }
+
+  return result;
+}
+
 export function getThemeFromCSS(): typeof FALLBACK_THEME {
   if (typeof document === 'undefined') return { ...FALLBACK_THEME };
 
@@ -176,6 +208,8 @@ async function apiRequest<T>(path: string, opts: RequestInit = {}): Promise<T> {
   };
   const token = getAuthToken();
   if (token) headers['Authorization'] = `Bearer ${token}`;
+  const csrf = getCsrfToken();
+  if (csrf) headers['X-CSRF-Token'] = csrf;
 
   const res = await fetch(`${getBaseUrl()}${path}`, { ...opts, headers });
 
@@ -311,7 +345,7 @@ export class TerminalConnectionManager {
       cursorBlink: false,
       cursorStyle: 'block',
       fontSize: this.prefs.fontSize,
-      fontFamily: this.prefs.fontFamily,
+      fontFamily: resolveTerminalFont(this.prefs.fontFamily),
       fontWeight: this.prefs.fontWeight as any,
       lineHeight: this.prefs.lineHeight,
       scrollback: this.prefs.scrollback,
@@ -380,7 +414,7 @@ export class TerminalConnectionManager {
    * If the terminal was previously attached elsewhere it is moved, not
    * recreated.  If already attached to the same element this is a no-op.
    */
-  attachToContainer(sessionId: string, el: HTMLElement): void {
+  async attachToContainer(sessionId: string, el: HTMLElement): Promise<void> {
     const conn = this.connections.get(sessionId);
     if (!conn) throw new Error(`No connection for session ${sessionId}`);
 
@@ -408,6 +442,10 @@ export class TerminalConnectionManager {
       // Terminal was previously opened — move the existing DOM subtree
       el.appendChild(xtermEl);
     } else {
+      // Wait for fonts to be ready before opening, so xterm's canvas
+      // measureText() uses the actual font glyphs (not a fallback).
+      await document.fonts.ready;
+
       // First time opening — let xterm create its DOM
       conn.terminal.open(el);
 
@@ -941,7 +979,7 @@ export class TerminalConnectionManager {
       cursorBlink: this.prefs.cursorBlink,
       cursorStyle: this.prefs.cursorStyle,
       fontSize: this.prefs.fontSize,
-      fontFamily: this.prefs.fontFamily,
+      fontFamily: resolveTerminalFont(this.prefs.fontFamily),
       fontWeight: this.prefs.fontWeight as any,
       lineHeight: this.prefs.lineHeight,
       scrollback: this.prefs.scrollback,
@@ -1050,7 +1088,7 @@ export class TerminalConnectionManager {
     t.options.cursorBlink = this.prefs.cursorBlink;
     t.options.cursorStyle = this.prefs.cursorStyle;
     t.options.fontSize = this.prefs.fontSize;
-    t.options.fontFamily = this.prefs.fontFamily;
+    t.options.fontFamily = resolveTerminalFont(this.prefs.fontFamily);
     t.options.fontWeight = this.prefs.fontWeight as any;
     t.options.lineHeight = this.prefs.lineHeight;
     t.options.scrollback = this.prefs.scrollback;

@@ -193,7 +193,7 @@ const defaults: SettingsState = {
   notifyOnFailure: true,
   notifyOnApproval: true,
   showStartupTips: true,
-  termFontFamily: 'var(--font-family-mono, monospace)',
+  termFontFamily: 'var(--font-family, monospace)',
   termFontSize: 13,
   termFontWeight: 400,
   termLineHeight: 1.2,

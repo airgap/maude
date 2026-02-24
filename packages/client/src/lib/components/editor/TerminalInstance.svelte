@@ -10,9 +10,6 @@
   import type { ContextMenuItem } from '$lib/components/ui/ContextMenu.svelte';
   import { shellEscapePath } from '$lib/utils/shell-escape';
   import { editorStore } from '$lib/stores/editor.svelte';
-  import { terminalErrorsStore } from '$lib/stores/terminal-errors.svelte';
-  import { parseAll } from '$lib/services/error-location-parser';
-  import CommandBlockOverlay from './CommandBlockOverlay.svelte';
   import '@xterm/xterm/css/xterm.css';
 
   let { sessionId, active = true } = $props<{ sessionId: string; active?: boolean }>();
@@ -27,44 +24,6 @@
 
   // ── Drag-and-drop state ──
   let dragOver = $state(false);
-
-  // ── Command block overlay state ──
-  let cellHeight = $state(0);
-  let cellWidth = $state(0);
-  let viewportTopRow = $state(0);
-  let viewportRows = $state(0);
-  let terminalElement = $state<HTMLElement | null>(null);
-
-  /** Get the current absolute cursor row from xterm.js buffer */
-  function getAbsoluteCursorRow(): number {
-    const terminal = terminalConnectionManager.getTerminal(sessionId);
-    if (!terminal) return 0;
-    const buf = terminal.buffer.active;
-    return buf.baseY + buf.cursorY;
-  }
-
-  /** Update viewport tracking info from the terminal */
-  function updateViewportInfo() {
-    const terminal = terminalConnectionManager.getTerminal(sessionId);
-    if (!terminal) return;
-
-    // Get cell dimensions from the terminal's renderer
-    const core = (terminal as any)._core;
-    if (core?._renderService?.dimensions) {
-      const dims = core._renderService.dimensions;
-      cellHeight = dims.css.cell.height ?? 0;
-      cellWidth = dims.css.cell.width ?? 0;
-    }
-
-    const buf = terminal.buffer.active;
-    viewportTopRow = buf.viewportY;
-    viewportRows = terminal.rows;
-    terminalElement = terminal.element ?? null;
-  }
-
-  /** Command blocks for this session */
-  const commandBlocks = $derived(terminalStore.getCommandBlocks(sessionId));
-  const blockRenderingEnabled = $derived(terminalStore.isBlockRenderingEnabled(sessionId));
 
   /** Accessible label describing this terminal session */
   const terminalAriaLabel = $derived.by(() => {
@@ -520,7 +479,6 @@
 
   let cleanupCopyOnSelect: (() => void) | undefined;
   let cleanupControlListener: (() => void) | undefined;
-  let cleanupScrollTracking: (() => void) | undefined;
 
   /** Register control message listener for shell integration events */
   function registerControlListener(sid: string): () => void {
@@ -542,34 +500,10 @@
           terminalStore.setPendingCommandText(msg.id, msg.text);
           break;
         case 'command_start':
-          // Clear previous exit code badge when a new command starts
           terminalStore.clearCommandStatus(sid);
-          // Start a new command block at current cursor position
-          updateViewportInfo();
-          terminalStore.startCommandBlock(sid, msg.id, getAbsoluteCursorRow());
           break;
         case 'command_end':
           terminalStore.setCommandStatus(sid, msg.id, msg.exitCode);
-          // End the command block with exit code
-          updateViewportInfo();
-          terminalStore.endCommandBlock(sid, msg.id, msg.exitCode, getAbsoluteCursorRow());
-          // Scan failed commands for error locations
-          if (msg.exitCode !== 0) {
-            const block = terminalStore.getCommandBlocks(sid).find((b) => b.id === msg.id);
-            if (block && block.endRow > block.startRow) {
-              const outputText = terminalConnectionManager.getBufferText(
-                sid,
-                block.startRow + 1,
-                block.endRow,
-              );
-              if (outputText) {
-                const errors = parseAll(outputText);
-                if (errors.length > 0) {
-                  terminalErrorsStore.setErrors(msg.id, errors);
-                }
-              }
-            }
-          }
           break;
         case 'session_exit':
           terminalStore.setExitCode(sid, msg.exitCode);
@@ -595,43 +529,15 @@
     });
   }
 
-  /** Set up viewport scroll tracking for command block overlay */
-  function setupScrollTracking(): (() => void) | undefined {
-    const terminal = terminalConnectionManager.getTerminal(sessionId);
-    if (!terminal) return undefined;
-
-    // Update viewport info on scroll
-    const scrollDisposable = terminal.onScroll(() => {
-      updateViewportInfo();
-    });
-
-    // Update on render
-    const renderDisposable = terminal.onRender(() => {
-      updateViewportInfo();
-    });
-
-    // Initial update
-    updateViewportInfo();
-
-    return () => {
-      scrollDisposable.dispose();
-      renderDisposable.dispose();
-    };
-  }
-
   onMount(() => {
     mounted = true;
-    ensureSession().then(() => {
-      // Set up scroll tracking after session is established
-      cleanupScrollTracking = setupScrollTracking();
-    });
+    ensureSession();
     cleanupCopyOnSelect = registerCopyOnSelect();
 
     return () => {
       mounted = false;
       cleanupCopyOnSelect?.();
       cleanupControlListener?.();
-      cleanupScrollTracking?.();
       // Detach from DOM but keep session alive (AC #9)
       if (terminalConnectionManager.has(sessionId)) {
         terminalConnectionManager.detachFromContainer(sessionId);
@@ -665,18 +571,6 @@
     role="group"
     aria-label={terminalAriaLabel}
   ></div>
-
-  {#if blockRenderingEnabled && commandBlocks.length > 0}
-    <CommandBlockOverlay
-      {sessionId}
-      blocks={commandBlocks}
-      {cellHeight}
-      {cellWidth}
-      {viewportTopRow}
-      {viewportRows}
-      {terminalElement}
-    />
-  {/if}
 </div>
 
 <style>
