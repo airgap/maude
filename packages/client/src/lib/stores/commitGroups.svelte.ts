@@ -224,13 +224,16 @@ function createCommitGroupsStore() {
     },
 
     /**
-     * Commit a single group: unstage all -> stage group files -> commit.
+     * Commit a single group via the atomic server endpoint.
+     *
+     * The server handles unstage→stage→commit in one request, so HMR
+     * reloads can't leave files partially staged. The client just sends
+     * the file list and message and gets back success/failure.
      *
      * @param opts.noVerify — skip pre-commit hooks (used during batch commits
      *   so hooks only run once on the final group instead of N times).
-     * @param opts.skipRefresh — skip the post-commit git status refresh
-     *   (used during batch commits to avoid git lock contention; the batch
-     *   caller does a single refresh at the end instead).
+     * @param opts.skipRefresh — skip restarting the git poll after commit
+     *   (used during batch commits; the batch caller restarts polling once).
      */
     async commitGroup(
       workspacePath: string,
@@ -245,43 +248,28 @@ function createCommitGroupsStore() {
         return false;
       }
 
+      // Pause polling so `git status` doesn't race with the server-side
+      // unstage→stage→commit. Also set a resume marker so that if an HMR
+      // reload kills us between "set committing" and "got response", the
+      // batch can be retried on the next page load.
+      const standalone = !opts?.skipRefresh;
+      if (standalone) {
+        gitStore.stopPolling();
+        batchWorkspacePath = workspacePath;
+        persist();
+      }
+
       g.status = 'committing';
       g.error = undefined;
       persist();
 
       try {
-        // Unstage everything first
-        const unstageRes = await api.git.unstage(workspacePath);
-        if (!unstageRes.ok) {
-          g.status = 'failed';
-          g.error = `Unstage failed: ${(unstageRes as Record<string, unknown>).error || 'unknown error'}`;
-          persist();
-          return false;
-        }
-
-        // Stage only this group's files
-        const stageRes = await api.git.stage(workspacePath, g.files);
-        if (!stageRes.ok) {
-          g.status = 'failed';
-          g.error = `Stage failed: ${(stageRes as Record<string, unknown>).error || 'unknown error'} — check that file paths are correct`;
-          persist();
-          return false;
-        }
-
-        // Commit with noAutoStage to prevent accidentally committing
-        // files outside this group if staging silently failed
-        const res = await api.git.commit(workspacePath, g.message, {
-          noAutoStage: true,
+        // Single atomic request: server does unstage→stage→commit
+        const res = await api.git.commitGroup(workspacePath, g.files, g.message, {
           noVerify: opts?.noVerify,
         });
         if (res.ok) {
           g.status = 'committed';
-          // During batch commits we skip per-group refreshes to avoid
-          // concurrent git operations (git status vs next group's unstage).
-          // The batch caller does a single refresh after all groups finish.
-          if (!opts?.skipRefresh) {
-            await gitStore.refresh(workspacePath, { force: true });
-          }
           persist();
           return true;
         } else {
@@ -295,6 +283,13 @@ function createCommitGroupsStore() {
         g.error = String(err);
         persist();
         return false;
+      } finally {
+        // Standalone: clear resume marker and restart polling + refresh
+        if (standalone) {
+          batchWorkspacePath = null;
+          persist();
+          gitStore.startPolling(workspacePath);
+        }
       }
     },
 
