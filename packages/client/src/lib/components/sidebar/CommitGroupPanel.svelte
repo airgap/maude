@@ -1,10 +1,12 @@
 <script lang="ts">
   import { commitGroupsStore, type CommitGroup } from '$lib/stores/commitGroups.svelte';
   import { settingsStore } from '$lib/stores/settings.svelte';
+  import { gitStore } from '$lib/stores/git.svelte';
 
   let editingMessage = $state<string | null>(null);
 
   let workspacePath = $derived(settingsStore.workspacePath || '');
+  let locked = $derived(gitStore.indexLocked);
 
   async function handleSuggest() {
     if (!workspacePath) return;
@@ -71,7 +73,7 @@
   {:else if !commitGroupsStore.hasGroups}
     <div class="cg-empty">
       <p>AI groups your changes into logical commits</p>
-      <button class="cg-suggest-btn" onclick={handleSuggest} disabled={!workspacePath}>
+      <button class="cg-suggest-btn" onclick={handleSuggest} disabled={!workspacePath || locked}>
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <path d="M15 4V2" />
           <path d="M15 16v-2" />
@@ -173,7 +175,7 @@
             <button
               class="cg-commit-one"
               onclick={() => handleCommitGroup(group.id)}
-              disabled={!group.message.trim()}
+              disabled={!group.message.trim() || locked}
             >
               Commit this group
             </button>
@@ -194,7 +196,7 @@
           <button
             class="cg-commit-all"
             onclick={handleCommitAll}
-            disabled={commitGroupsStore.pendingGroups.some((g) => !g.message.trim())}
+            disabled={commitGroupsStore.pendingGroups.some((g) => !g.message.trim()) || locked}
           >
             Commit all ({commitGroupsStore.pendingGroups.length} groups)
           </button>

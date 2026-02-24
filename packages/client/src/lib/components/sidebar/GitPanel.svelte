@@ -27,6 +27,9 @@
     ),
   );
 
+  /** True when .git/index.lock exists — disables all git mutation buttons. */
+  let locked = $derived(gitStore.indexLocked);
+
   // ── Local state ──────────────────────────────────────────────────────────
 
   let loadingKey = $state<string | null>(null);
@@ -495,6 +498,24 @@
     </div>
   {/if}
 
+  <!-- ── Index lock banner — git operation in progress ────────────────── -->
+  {#if gitStore.indexLocked}
+    <div class="lock-banner">
+      <svg
+        class="lock-banner-icon spin"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+      >
+        <path
+          d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"
+        />
+      </svg>
+      <span class="lock-banner-text">Git operation in progress</span>
+    </div>
+  {/if}
+
   <!-- ── Merge Conflicts Section ─────────────────────────────────────── -->
   {#if conflictFiles.length > 0}
     <div class="conflict-section">
@@ -569,12 +590,12 @@
               placeholder="Commit message..."
               bind:value={commitMessage}
               onkeydown={(e) => e.key === 'Enter' && handleCommit()}
-              disabled={committing || pushing}
+              disabled={committing || pushing || locked}
             />
             <button
               class="generate-btn"
               onclick={handleGenerateMessage}
-              disabled={generating || committing || pushing}
+              disabled={generating || committing || pushing || locked}
               title="Auto-generate commit message"
             >
               {#if generating}
@@ -615,7 +636,7 @@
             <button
               class="action-btn commit-btn"
               onclick={handleCommit}
-              disabled={!commitMessage.trim() || committing || pushing}
+              disabled={!commitMessage.trim() || committing || pushing || locked}
             >
               {#if committing}
                 <svg
@@ -637,7 +658,7 @@
             <button
               class="action-btn push-btn"
               onclick={handlePush}
-              disabled={committing || pushing}
+              disabled={committing || pushing || locked}
             >
               {#if pushing}
                 <svg
@@ -659,7 +680,7 @@
             <button
               class="action-btn discard-btn"
               onclick={handleDiscard}
-              disabled={committing || pushing || discarding}
+              disabled={committing || pushing || discarding || locked}
             >
               {#if discarding}
                 <svg
@@ -898,153 +919,155 @@
       <p>No changes — working tree clean</p>
     </div>
   {:else}
-    <!-- ── Smart Staging ─────────────────────────────────────────────────── -->
-    <div class="smart-staging-section">
-      <CommitGroupPanel />
-    </div>
+    <div class="git-panel-content">
+      <!-- ── Smart Staging ─────────────────────────────────────────────────── -->
+      <div class="smart-staging-section">
+        <CommitGroupPanel />
+      </div>
 
-    <div class="file-sections">
-      <!-- ── Staged ─────────────────────────────────────────────────────── -->
-      {#if stagedFiles.length > 0}
-        <div class="section-header">
-          <span>Staged</span>
-          <div class="section-actions">
-            <button
-              class="section-action-btn"
-              onclick={unstageAll}
-              disabled={!!staging}
-              title="Unstage all"
-            >
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <line x1="5" y1="12" x2="19" y2="12" />
-              </svg>
-            </button>
-            <span class="section-count">{stagedFiles.length}</span>
-          </div>
-        </div>
-        {#each stagedFiles as file (file.path)}
-          {@const key = fileKey(file, true)}
-          {@const isLoading = loadingKey === key}
-          <div class="file-row-wrap">
-            <button
-              class="file-row"
-              onclick={() => openDiff(file, true)}
-              disabled={isLoading}
-              title={file.path}
-            >
-              <span
-                class="status-badge {statusClass(file.status)}"
-                title={statusTitle(file.status)}
+      <div class="file-sections">
+        <!-- ── Staged ─────────────────────────────────────────────────────── -->
+        {#if stagedFiles.length > 0}
+          <div class="section-header">
+            <span>Staged</span>
+            <div class="section-actions">
+              <button
+                class="section-action-btn"
+                onclick={unstageAll}
+                disabled={!!staging || locked}
+                title="Unstage all"
               >
-                {statusLabel(file.status)}
-              </span>
-              <span class="file-name">{basename(file.path)}</span>
-              {#if dirname(file.path)}
-                <span class="file-dir">{dirname(file.path)}</span>
-              {/if}
-              {#if isLoading}
-                <svg
-                  class="spinner"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="2"
-                >
-                  <path
-                    d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"
-                  />
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <line x1="5" y1="12" x2="19" y2="12" />
                 </svg>
-              {/if}
-            </button>
-            <button
-              class="stage-btn unstage"
-              onclick={(e: MouseEvent) => {
-                e.stopPropagation();
-                unstageFile(file.path);
-              }}
-              disabled={!!staging}
-              title="Unstage"
-            >
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-                <line x1="5" y1="12" x2="19" y2="12" />
-              </svg>
-            </button>
+              </button>
+              <span class="section-count">{stagedFiles.length}</span>
+            </div>
           </div>
-        {/each}
-      {/if}
+          {#each stagedFiles as file (file.path)}
+            {@const key = fileKey(file, true)}
+            {@const isLoading = loadingKey === key}
+            <div class="file-row-wrap">
+              <button
+                class="file-row"
+                onclick={() => openDiff(file, true)}
+                disabled={isLoading}
+                title={file.path}
+              >
+                <span
+                  class="status-badge {statusClass(file.status)}"
+                  title={statusTitle(file.status)}
+                >
+                  {statusLabel(file.status)}
+                </span>
+                <span class="file-name">{basename(file.path)}</span>
+                {#if dirname(file.path)}
+                  <span class="file-dir">{dirname(file.path)}</span>
+                {/if}
+                {#if isLoading}
+                  <svg
+                    class="spinner"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                  >
+                    <path
+                      d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"
+                    />
+                  </svg>
+                {/if}
+              </button>
+              <button
+                class="stage-btn unstage"
+                onclick={(e: MouseEvent) => {
+                  e.stopPropagation();
+                  unstageFile(file.path);
+                }}
+                disabled={!!staging || locked}
+                title="Unstage"
+              >
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                  <line x1="5" y1="12" x2="19" y2="12" />
+                </svg>
+              </button>
+            </div>
+          {/each}
+        {/if}
 
-      <!-- ── Unstaged ────────────────────────────────────────────────────── -->
-      {#if unstagedFiles.length > 0}
-        <div class="section-header">
-          <span>Unstaged</span>
-          <div class="section-actions">
-            <button
-              class="section-action-btn"
-              onclick={stageAll}
-              disabled={!!staging}
-              title="Stage all"
-            >
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <line x1="12" y1="5" x2="12" y2="19" />
-                <line x1="5" y1="12" x2="19" y2="12" />
-              </svg>
-            </button>
-            <span class="section-count">{unstagedFiles.length}</span>
-          </div>
-        </div>
-        {#each unstagedFiles as file (file.path)}
-          {@const key = fileKey(file, false)}
-          {@const isLoading = loadingKey === key}
-          {@const isUntracked = file.status === 'U'}
-          <div class="file-row-wrap">
-            <button
-              class="file-row"
-              class:no-diff={isUntracked}
-              onclick={() => openDiff(file, false)}
-              disabled={isLoading || isUntracked}
-              title={isUntracked ? 'Untracked — no diff available' : file.path}
-            >
-              <span
-                class="status-badge {statusClass(file.status)}"
-                title={statusTitle(file.status)}
+        <!-- ── Unstaged ────────────────────────────────────────────────────── -->
+        {#if unstagedFiles.length > 0}
+          <div class="section-header">
+            <span>Unstaged</span>
+            <div class="section-actions">
+              <button
+                class="section-action-btn"
+                onclick={stageAll}
+                disabled={!!staging || locked}
+                title="Stage all"
               >
-                {statusLabel(file.status)}
-              </span>
-              <span class="file-name">{basename(file.path)}</span>
-              {#if dirname(file.path)}
-                <span class="file-dir">{dirname(file.path)}</span>
-              {/if}
-              {#if isLoading}
-                <svg
-                  class="spinner"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="2"
-                >
-                  <path
-                    d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"
-                  />
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <line x1="12" y1="5" x2="12" y2="19" />
+                  <line x1="5" y1="12" x2="19" y2="12" />
                 </svg>
-              {/if}
-            </button>
-            <button
-              class="stage-btn stage"
-              onclick={(e: MouseEvent) => {
-                e.stopPropagation();
-                stageFile(file.path);
-              }}
-              disabled={!!staging}
-              title="Stage"
-            >
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-                <line x1="12" y1="5" x2="12" y2="19" />
-                <line x1="5" y1="12" x2="19" y2="12" />
-              </svg>
-            </button>
+              </button>
+              <span class="section-count">{unstagedFiles.length}</span>
+            </div>
           </div>
-        {/each}
-      {/if}
+          {#each unstagedFiles as file (file.path)}
+            {@const key = fileKey(file, false)}
+            {@const isLoading = loadingKey === key}
+            {@const isUntracked = file.status === 'U'}
+            <div class="file-row-wrap">
+              <button
+                class="file-row"
+                class:no-diff={isUntracked}
+                onclick={() => openDiff(file, false)}
+                disabled={isLoading || isUntracked}
+                title={isUntracked ? 'Untracked — no diff available' : file.path}
+              >
+                <span
+                  class="status-badge {statusClass(file.status)}"
+                  title={statusTitle(file.status)}
+                >
+                  {statusLabel(file.status)}
+                </span>
+                <span class="file-name">{basename(file.path)}</span>
+                {#if dirname(file.path)}
+                  <span class="file-dir">{dirname(file.path)}</span>
+                {/if}
+                {#if isLoading}
+                  <svg
+                    class="spinner"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                  >
+                    <path
+                      d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"
+                    />
+                  </svg>
+                {/if}
+              </button>
+              <button
+                class="stage-btn stage"
+                onclick={(e: MouseEvent) => {
+                  e.stopPropagation();
+                  stageFile(file.path);
+                }}
+                disabled={!!staging || locked}
+                title="Stage"
+              >
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                  <line x1="12" y1="5" x2="12" y2="19" />
+                  <line x1="5" y1="12" x2="19" y2="12" />
+                </svg>
+              </button>
+            </div>
+          {/each}
+        {/if}
+      </div>
     </div>
   {/if}
 </div>
@@ -1170,11 +1193,16 @@
     line-height: 1.5;
   }
 
-  /* ── File sections ── */
-  .file-sections {
+  /* ── Scrollable content area ── */
+  .git-panel-content {
     flex: 1;
     overflow-y: auto;
     overflow-x: hidden;
+    min-height: 0;
+  }
+
+  /* ── File sections ── */
+  .file-sections {
   }
 
   .section-header {
@@ -1726,6 +1754,31 @@
   .error-banner-dismiss:hover {
     opacity: 1;
     background: rgba(239, 68, 68, 0.15);
+  }
+
+  /* ── Lock banner ── */
+  .lock-banner {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    padding: 8px 10px;
+    background: rgba(234, 179, 8, 0.12);
+    border: none;
+    border-bottom: 1px solid rgba(234, 179, 8, 0.3);
+    color: var(--text-warning, #eab308);
+    font-size: var(--fs-sm);
+  }
+
+  .lock-banner-icon {
+    width: 14px;
+    height: 14px;
+    flex-shrink: 0;
+  }
+
+  .lock-banner-text {
+    font-weight: 600;
+    font-size: var(--fs-xs);
   }
 
   /* ── Error block (inside commit section, with detail) ── */

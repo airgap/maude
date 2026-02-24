@@ -101,6 +101,12 @@ async function request<T>(path: string, opts: RequestInit = {}): Promise<T> {
   try {
     res = await fetch(`${getBaseUrl()}${path}`, { ...opts, headers });
   } catch (err) {
+    // Distinguish page-unload / HMR aborts from genuine connectivity issues.
+    // When Vite HMR reloads the page mid-request, fetch throws an AbortError
+    // or TypeError("Failed to fetch") — not a real server outage.
+    if (err instanceof DOMException && err.name === 'AbortError') {
+      throw new Error('Request was cancelled (page may be reloading).');
+    }
     throw new Error('Cannot connect to server. Is the backend running?');
   }
 
@@ -777,6 +783,7 @@ export const api = {
         data: {
           isRepo: boolean;
           files: Array<{ path: string; status: string; staged: boolean }>;
+          indexLocked: boolean;
         };
       }>(`/git/status?path=${encodeURIComponent(path)}`),
     branch: (path: string) =>
@@ -852,10 +859,10 @@ export const api = {
           }>;
         };
       }>(`/git/blame?path=${encodeURIComponent(path)}&file=${encodeURIComponent(file)}`),
-    commit: (path: string, message: string, opts?: { noAutoStage?: boolean }) =>
+    commit: (path: string, message: string, opts?: { noAutoStage?: boolean; noVerify?: boolean }) =>
       request<{ ok: boolean; data: { sha: string } }>('/git/commit', {
         method: 'POST',
-        body: JSON.stringify({ path, message, noAutoStage: opts?.noAutoStage }),
+        body: JSON.stringify({ path, message, noAutoStage: opts?.noAutoStage, noVerify: opts?.noVerify }),
       }),
     /**
      * Streaming commit with real-time output

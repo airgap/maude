@@ -19,8 +19,19 @@ app.get('/status', async (c) => {
     });
 
     if (exitCode !== 0) {
-      return c.json({ ok: true, data: { isRepo: false, files: [] } });
+      return c.json({ ok: true, data: { isRepo: false, files: [], indexLocked: false } });
     }
+
+    // Check for index.lock — indicates a git operation is in progress.
+    // This is a cheap stat() call, safe to do on every poll.
+    const gitDirResult = await run(['git', 'rev-parse', '--git-dir'], {
+      cwd: pathCheck.resolved,
+    });
+    const gitDir = gitDirResult.stdout.trim();
+    const lockPath = gitDir.startsWith('/')
+      ? `${gitDir}/index.lock`
+      : `${pathCheck.resolved}/${gitDir}/index.lock`;
+    const indexLocked = await Bun.file(lockPath).exists();
 
     const files: Array<{ path: string; status: string; staged: boolean }> = [];
     for (const line of output.split('\n')) {
@@ -49,9 +60,9 @@ app.get('/status', async (c) => {
       }
     }
 
-    return c.json({ ok: true, data: { isRepo: true, files } });
+    return c.json({ ok: true, data: { isRepo: true, files, indexLocked } });
   } catch {
-    return c.json({ ok: true, data: { isRepo: false, files: [] } });
+    return c.json({ ok: true, data: { isRepo: false, files: [], indexLocked: false } });
   }
 });
 

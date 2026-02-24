@@ -26,6 +26,8 @@ function createGitStore() {
   let isRepo = $state(false);
   let branch = $state('');
   let fileStatuses = $state<GitFileStatus[]>([]);
+  /** True when .git/index.lock exists — a git operation is in progress. */
+  let indexLocked = $state(false);
   let pollTimer = $state<ReturnType<typeof setInterval> | null>(null);
 
   // Monotonic counter — prevents stale in-flight poll responses from
@@ -91,6 +93,7 @@ function createGitStore() {
       const prevFileCount = fileStatuses.length;
       isRepo = statusRes.data.isRepo;
       fileStatuses = statusRes.data.files;
+      indexLocked = statusRes.data.indexLocked ?? false;
       branch = branchRes.data.branch;
       // Log state transitions that affect commit UI visibility
       if (prevIsRepo && !isRepo) {
@@ -124,6 +127,7 @@ function createGitStore() {
       );
       isRepo = false;
       fileStatuses = [];
+      indexLocked = false;
       branch = '';
     }
   }
@@ -243,6 +247,10 @@ function createGitStore() {
     },
     get dirtyCount() {
       return fileStatuses.length;
+    },
+    /** True when .git/index.lock exists — another git process is running. */
+    get indexLocked() {
+      return indexLocked;
     },
     // Diagnostic state
     get diagnosticChecks() {

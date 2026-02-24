@@ -90,6 +90,7 @@
   );
   let commitMessage = $state(savedState.commitMessage);
   let gitBusy = $state(false);
+  let gitLocked = $derived(gitStore.indexLocked);
   let gitError = $state(savedState.gitError);
   let generating = $state(false);
   let commitProgress = $state<string[]>(savedState.commitProgress);
@@ -165,11 +166,12 @@
   }
 
   async function handleCommit() {
-    if (!commitMessage.trim() || gitBusy) {
+    if (!commitMessage.trim() || gitBusy || gitLocked) {
       console.warn(
-        '[StatusBar] handleCommit BLOCKED: message=%s gitBusy=%s',
+        '[StatusBar] handleCommit BLOCKED: message=%s gitBusy=%s locked=%s',
         commitMessage.trim() ? `"${commitMessage.trim().slice(0, 30)}"` : '(empty)',
         gitBusy,
+        gitLocked,
       );
       return;
     }
@@ -231,7 +233,7 @@
   }
 
   async function handleClean() {
-    if (gitBusy) return;
+    if (gitBusy || gitLocked) return;
     gitBusy = true;
     gitError = '';
     const result = await gitStore.clean(settingsStore.workspacePath);
@@ -244,7 +246,7 @@
   }
 
   async function handlePush() {
-    if (gitBusy) return;
+    if (gitBusy || gitLocked) return;
     gitBusy = true;
     gitError = '';
     pushProgress = [];
@@ -321,9 +323,11 @@
           onclick={toggleGitMenu}
           aria-haspopup="menu"
           aria-expanded={gitMenuOpen}
-          title={gitStore.isDirty
-            ? `${gitStore.branch} — ${gitStore.dirtyCount} uncommitted change${gitStore.dirtyCount === 1 ? '' : 's'}`
-            : `${gitStore.branch} — clean`}
+          title={gitLocked
+            ? `${gitStore.branch} — git operation in progress`
+            : gitStore.isDirty
+              ? `${gitStore.branch} — ${gitStore.dirtyCount} uncommitted change${gitStore.dirtyCount === 1 ? '' : 's'}`
+              : `${gitStore.branch} — clean`}
         >
           <svg
             width="12"
@@ -350,6 +354,24 @@
 
         {#if gitMenuOpen}
           <div class="git-popover" role="menu" onclick={(e) => e.stopPropagation()}>
+            {#if gitLocked}
+              <div class="git-popover-lock-notice">
+                <svg
+                  class="spin"
+                  width="12"
+                  height="12"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                >
+                  <path
+                    d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"
+                  />
+                </svg>
+                <span>Git operation in progress</span>
+              </div>
+            {/if}
             {#if !gitStore.isDirty}
               <div class="git-popover-item disabled">Working tree clean</div>
               <button
@@ -474,13 +496,13 @@
                         gitMenuMode = 'actions';
                       }
                     }}
-                    disabled={gitBusy || generating}
+                    disabled={gitBusy || generating || gitLocked}
                   />
                   <button
                     type="button"
                     class="git-generate-btn"
                     onclick={handleGenerateMessage}
-                    disabled={generating || gitBusy}
+                    disabled={generating || gitBusy || gitLocked}
                     title="Auto-generate commit message"
                   >
                     {#if generating}
@@ -548,8 +570,8 @@
                     type="button"
                     class="git-action-btn confirm"
                     onclick={handleCommit}
-                    disabled={!commitMessage.trim() || gitBusy || generating}
-                    >{gitBusy ? 'Committing...' : 'Commit'}</button
+                    disabled={!commitMessage.trim() || gitBusy || generating || gitLocked}
+                    >{gitBusy ? 'Committing...' : gitLocked ? 'Git locked…' : 'Commit'}</button
                   >
                 </div>
                 {#if commitProgress.length > 0}
@@ -591,7 +613,8 @@
                     type="button"
                     class="git-action-btn danger"
                     onclick={handleClean}
-                    disabled={gitBusy}>{gitBusy ? 'Cleaning...' : 'Discard'}</button
+                    disabled={gitBusy || gitLocked}
+                    >{gitBusy ? 'Cleaning...' : gitLocked ? 'Git locked…' : 'Discard'}</button
                   >
                 </div>
                 {#if gitError}
@@ -614,7 +637,8 @@
                     type="button"
                     class="git-action-btn confirm"
                     onclick={handlePush}
-                    disabled={gitBusy}>{gitBusy ? 'Pushing...' : 'Push'}</button
+                    disabled={gitBusy || gitLocked}
+                    >{gitBusy ? 'Pushing...' : gitLocked ? 'Git locked…' : 'Push'}</button
                   >
                 </div>
                 {#if pushProgress.length > 0}
@@ -1419,6 +1443,18 @@
   }
   .git-popover-item.disabled:hover {
     background: none;
+  }
+
+  .git-popover-lock-notice {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 10px;
+    font-size: var(--fs-xs);
+    font-weight: 600;
+    color: var(--text-warning, #eab308);
+    background: rgba(234, 179, 8, 0.08);
+    border-bottom: 1px solid rgba(234, 179, 8, 0.2);
   }
 
   .git-popover-form {
