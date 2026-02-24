@@ -74,26 +74,38 @@ export function parseCommitFailure(stderr: string, stdout: string): string {
 
   // Pre-commit hook failure
   if (combined.includes('pre-commit hook') || combined.includes('husky')) {
-    // Look for test failures
-    const testFailMatch = combined.match(/(\d+)\s+fail/i);
-    const testPassMatch = combined.match(/(\d+)\s+pass/i);
-    if (testFailMatch) {
-      const failCount = testFailMatch[1];
+    // Look for test failures — only report when the fail count is actually > 0.
+    // The previous regex matched "0 failed" from passing-test output and
+    // incorrectly reported "0 tests failed".
+    const allFailMatches = [...combined.matchAll(/(\d+)\s+fail(?:ed|ure|s|ing)?/gi)];
+    const actualFailCount = allFailMatches.map((m) => parseInt(m[1], 10)).find((n) => n > 0);
+    if (actualFailCount) {
+      const testPassMatch = combined.match(/(\d+)\s+pass/i);
       const passCount = testPassMatch?.[1] ?? '?';
-      return `Pre-commit hook failed: ${failCount} test(s) failed (${passCount} passed). Fix failing tests or commit with --no-verify.`;
+      return `Pre-commit hook failed: ${actualFailCount} test(s) failed (${passCount} passed). Fix failing tests or commit with --no-verify.`;
     }
 
-    // Look for typecheck errors
-    if (combined.includes('found') && combined.includes('error')) {
-      const errorMatch = combined.match(/found\s+(\d+)\s+error/i);
-      if (errorMatch) {
-        return `Pre-commit hook failed: ${errorMatch[1]} type error(s). Fix type errors or commit with --no-verify.`;
-      }
+    // Look for typecheck errors (only when count > 0)
+    const errorMatch = combined.match(/found\s+(\d+)\s+error/i);
+    if (errorMatch && parseInt(errorMatch[1], 10) > 0) {
+      return `Pre-commit hook failed: ${errorMatch[1]} type error(s). Fix type errors or commit with --no-verify.`;
     }
 
     // Look for lint-staged / prettier errors
     if (combined.includes('lint-staged') && combined.includes('failed')) {
       return 'Pre-commit hook failed: lint-staged reported formatting errors. Run your formatter and try again.';
+    }
+
+    // Look for nx task failures (e.g. "Failed tasks: project:check")
+    const nxFailMatch = combined.match(/Failed tasks?:\s*(.+)/i);
+    if (nxFailMatch) {
+      return `Pre-commit hook failed: ${nxFailMatch[1].trim()}. Check the output above for details.`;
+    }
+
+    // Look for non-zero exit codes from hook scripts
+    const scriptExit = combined.match(/exited with code\s+([1-9]\d*)/i);
+    if (scriptExit) {
+      return `Pre-commit hook failed (exit code ${scriptExit[1]}). Check the output above for details.`;
     }
 
     // Generic hook failure
