@@ -230,6 +230,7 @@ export const api = {
         conversationId: string;
         status: string;
         streamComplete: boolean;
+        cancelled: boolean;
         bufferedEvents: number;
       }>;
     }> => {

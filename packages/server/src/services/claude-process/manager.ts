@@ -51,6 +51,8 @@ interface ClaudeSession {
   eventBuffer: string[];
   /** Whether the stream has finished (events fully read from CLI). */
   streamComplete: boolean;
+  /** Whether the stream was cancelled by user (vs completed naturally). */
+  cancelled: boolean;
   /** Nudges queued mid-stream to be prepended to the next message turn. */
   pendingNudges: string[];
 }
@@ -107,6 +109,7 @@ export class ClaudeProcessManager {
       emitter: new EventEmitter(),
       eventBuffer: [],
       streamComplete: false,
+      cancelled: false,
       pendingNudges: [],
     };
 
@@ -509,6 +512,7 @@ export class ClaudeProcessManager {
 
           enqueueEvent(controller, `data: {"type":"message_stop","reason":"cancelled"}\n\n`);
           session.streamComplete = true;
+          session.cancelled = true;
           scheduleCleanup();
           try {
             controller.close();
@@ -1270,6 +1274,7 @@ export class ClaudeProcessManager {
     conversationId: string;
     status: string;
     streamComplete: boolean;
+    cancelled: boolean;
     bufferedEvents: number;
   }> {
     const list = Array.from(this.sessions.values()).map((s) => ({
@@ -1277,13 +1282,14 @@ export class ClaudeProcessManager {
       conversationId: s.conversationId,
       status: s.status,
       streamComplete: s.streamComplete,
+      cancelled: s.cancelled,
       bufferedEvents: s.eventBuffer.length,
     }));
     console.log(
       `[sessions] listSessions called — ${list.length} session(s):`,
       list.map(
         (s) =>
-          `${s.id.slice(0, 8)}… status=${s.status} complete=${s.streamComplete} events=${s.bufferedEvents}`,
+          `${s.id.slice(0, 8)}… status=${s.status} complete=${s.streamComplete} cancelled=${s.cancelled} events=${s.bufferedEvents}`,
       ),
     );
     return list;
@@ -1421,6 +1427,7 @@ export class ClaudeProcessManager {
       emitter: new EventEmitter(),
       eventBuffer: [],
       streamComplete: false,
+      cancelled: false,
       pendingNudges: [],
     };
     this.sessions.set(sessionId, session);

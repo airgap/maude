@@ -436,9 +436,10 @@ async function _reconnectActiveStreamImpl(): Promise<string | null> {
     // For completed sessions, prefer one that matches the user's last conversation.
     // Fall back to the most recent completed session with events — don't silently
     // discard valid sessions just because the savedConversationId doesn't match.
+    // Exclude cancelled sessions — they should not be reconnected to.
     const savedConversationId = workspaceStore.activeWorkspace?.snapshot.activeConversationId;
     const completedCandidates = sessionsRes.data.filter(
-      (s) => s.streamComplete && s.bufferedEvents > 0,
+      (s) => s.streamComplete && s.bufferedEvents > 0 && !s.cancelled,
     );
     const justCompleted =
       completedCandidates.find((s) => s.conversationId === savedConversationId) ||
@@ -652,6 +653,7 @@ async function _reconnectToConversationImpl(targetConversationId: string): Promi
     }
 
     // Find an active or recently-completed session for THIS conversation
+    // Exclude cancelled sessions from reconnection
     const target =
       sessionsRes.data.find(
         (s) =>
@@ -660,7 +662,10 @@ async function _reconnectToConversationImpl(targetConversationId: string): Promi
       ) ||
       sessionsRes.data.find(
         (s) =>
-          s.conversationId === targetConversationId && s.streamComplete && s.bufferedEvents > 0,
+          s.conversationId === targetConversationId &&
+          s.streamComplete &&
+          s.bufferedEvents > 0 &&
+          !s.cancelled,
       );
 
     if (!target) {
