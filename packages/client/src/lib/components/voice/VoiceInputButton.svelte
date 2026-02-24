@@ -1,7 +1,7 @@
 <script lang="ts">
   import { voiceStore } from '$lib/stores/voice.svelte';
   import { settingsStore } from '$lib/stores/settings.svelte';
-  import { onMount } from 'svelte';
+  import { onMount, untrack } from 'svelte';
 
   let isHoldingSpace = $state(false);
   let spaceKeyHandler: ((e: KeyboardEvent) => void) | null = null;
@@ -76,11 +76,17 @@
 
   $effect(() => {
     // Sync voice mode changes back to settings
-    if (voiceStore.enabled) {
-      settingsStore.update({ voiceMode: voiceStore.mode });
-    } else {
-      settingsStore.update({ voiceMode: 'disabled' });
-    }
+    // Read reactive deps first, then write inside untrack() to avoid
+    // a read-write loop (settingsStore.update spreads state internally).
+    const isEnabled = voiceStore.enabled;
+    const currentMode = voiceStore.mode;
+    untrack(() => {
+      if (isEnabled) {
+        settingsStore.update({ voiceMode: currentMode });
+      } else {
+        settingsStore.update({ voiceMode: 'disabled' });
+      }
+    });
   });
 </script>
 
