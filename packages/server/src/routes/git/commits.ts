@@ -276,6 +276,77 @@ app.post('/commit/stream', async (c) => {
   });
 });
 
+// Atomic group commit: unstage all → stage specific files → commit.
+// This is a single HTTP request so HMR/page reloads can't interrupt mid-group
+// (previously this was 3 separate requests from the client).
+app.post('/commit-group', async (c) => {
+  const body = await c.req.json();
+  const { path: rootPath, files, message, noVerify } = body;
+
+  if (!rootPath) return c.json({ ok: false, error: 'path required' }, 400);
+  if (!message || typeof message !== 'string' || !message.trim()) {
+    return c.json({ ok: false, error: 'commit message required' }, 400);
+  }
+  if (!files || !Array.isArray(files) || files.length === 0) {
+    return c.json({ ok: false, error: 'files array required' }, 400);
+  }
+
+  const pathCheck = validateWorkspacePath(rootPath);
+  if (!pathCheck.valid) {
+    return c.json({ ok: false, error: pathCheck.reason }, 403);
+  }
+
+  const cwd = pathCheck.resolved;
+
+  try {
+    // 1. Unstage everything
+    const resetResult = await run(['git', 'reset', 'HEAD'], { cwd });
+    if (resetResult.exitCode !== 0) {
+      return c.json({ ok: false, error: `git reset failed: ${resetResult.stderr.trim()}` }, 500);
+    }
+
+    // 2. Stage only the group's files
+    const addResult = await run(['git', 'add', '--', ...files], { cwd });
+    if (addResult.exitCode !== 0) {
+      return c.json(
+        { ok: false, error: `git add failed: ${addResult.stderr.trim()}` },
+        500,
+      );
+    }
+
+    // 3. Verify something is actually staged (catches bad file paths)
+    const stagedExit = await runExitCode(['git', 'diff', '--cached', '--quiet'], { cwd });
+    if (stagedExit === 0) {
+      return c.json(
+        { ok: false, error: 'Nothing staged after adding files — check file paths' },
+        400,
+      );
+    }
+
+    // 4. Commit
+    const commitArgs = [
+      'git', 'commit',
+      ...(noVerify ? ['--no-verify'] : []),
+      '-m', message.trim(),
+    ];
+    console.log('[git/commit-group] Running:', commitArgs.join(' '), 'files:', files.length);
+    const commitResult = await run(commitArgs, { cwd });
+    if (commitResult.exitCode !== 0) {
+      const summary = parseCommitFailure(commitResult.stderr, commitResult.stdout);
+      return c.json({ ok: false, error: summary }, 500);
+    }
+
+    // 5. Get the new HEAD sha
+    const shaResult = await run(['git', 'rev-parse', 'HEAD'], { cwd });
+    const sha = shaResult.stdout.trim();
+    console.log('[git/commit-group] Success! SHA:', sha);
+
+    return c.json({ ok: true, data: { sha } });
+  } catch (err) {
+    return c.json({ ok: false, error: String(err) }, 500);
+  }
+});
+
 // Generate a commit message from the current diff
 app.post('/generate-commit-message', async (c) => {
   const body = await c.req.json();
