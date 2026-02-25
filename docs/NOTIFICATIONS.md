@@ -88,7 +88,6 @@ If workspace preferences are not configured, notifications will be sent for all 
 #### Services
 
 - **`notification-channels.ts`** - CRUD operations for notification channels, workspace preferences, and logging
-- **`notification-service.ts`** (deprecated) - Legacy service, replaced by notification-channels
 - **`notification-event-handler.ts`** - Helper functions for sending typed notifications
 
 #### Routes
