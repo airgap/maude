@@ -26,6 +26,7 @@
   import RemoteAccessSettings from './RemoteAccessSettings.svelte';
   import NotificationChannelsSettings from './NotificationChannelsSettings.svelte';
   import DeviceSettings from './DeviceSettings.svelte';
+  import PatternDetectionSettings from './PatternDetectionSettings.svelte';
   import * as remoteAccessApi from '$lib/api/remote-access';
 
   const cliProviders: { id: CliProvider; label: string; desc: string }[] = [
@@ -56,7 +57,8 @@
     | 'profiles'
     | 'webhooks'
     | 'notifications'
-    | 'remote' {
+    | 'remote'
+    | 'learning' {
     if (typeof localStorage !== 'undefined') {
       const tab = localStorage.getItem('e-settings-tab');
       if (tab) {
@@ -83,6 +85,7 @@
     | 'notifications'
     | 'remote'
     | 'device'
+    | 'learning'
   >(getInitialTab());
 
   // --- BYOK state ---
@@ -929,7 +932,7 @@
           </button>
         {/each}
         <span class="settings-section-header">Integrations</span>
-        {#each ['mcp', 'webhooks', 'notifications', 'remote'] as tab}
+        {#each ['mcp', 'webhooks', 'notifications', 'remote', 'learning'] as tab}
           <button
             class="settings-tab"
             class:active={activeTab === tab}
@@ -939,7 +942,9 @@
               ? 'MCP'
               : tab === 'remote'
                 ? 'Remote Access'
-                : tab.charAt(0).toUpperCase() + tab.slice(1)}
+                : tab === 'learning'
+                  ? 'Pattern Learning'
+                  : tab.charAt(0).toUpperCase() + tab.slice(1)}
           </button>
         {/each}
       </nav>
@@ -3240,6 +3245,8 @@
           <NotificationChannelsSettings />
         {:else if activeTab === 'device'}
           <DeviceSettings />
+        {:else if activeTab === 'learning'}
+          <PatternDetectionSettings />
         {:else if activeTab === 'remote'}
           <RemoteAccessSettings />
         {:else}

@@ -128,6 +128,11 @@ export const SIDEBAR_TABS: TabDefinition[] = [
     label: 'Canvas',
     icon: 'M3 3h18v18H3zM8 8h8M8 12h8M8 16h5',
   },
+  {
+    id: 'learning',
+    label: 'Learning',
+    icon: 'M22 11.08V12a10 10 0 1 1-5.93-9.14M22 4L12 14.01l-3-3',
+  },
 ];
 
 export function getTabDef(id: SidebarTab): TabDefinition {

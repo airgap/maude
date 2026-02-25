@@ -370,6 +370,7 @@ export type {
   SkillProposal,
   LearningLogEntry,
   PatternLearningSettings,
+  SkillCapabilityGap,
   ApproveProposalRequest,
   ToolUsageRecord,
 } from './pattern-learning.js';

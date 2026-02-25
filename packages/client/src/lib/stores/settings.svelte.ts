@@ -9,6 +9,7 @@ import type {
   VoiceMode,
   VoiceInputProvider,
   DeviceCapabilities,
+  PatternLearningSettings,
 } from '@e/shared';
 import { convertVsCodeSnippets, type ConvertedSnippet } from '$lib/utils/vscode-snippet-converter';
 import { convertVsCodeTheme, type ConvertedTheme } from '$lib/utils/vscode-theme-converter';
@@ -140,6 +141,8 @@ interface SettingsState {
   voiceLanguage: string;
   // Device capabilities
   deviceCapabilities: DeviceCapabilities;
+  // Pattern detection / self-improving skills
+  patternDetection: PatternLearningSettings;
 }
 
 const defaults: SettingsState = {
@@ -242,6 +245,21 @@ const defaults: SettingsState = {
     locationEnabled: false,
     captureStorageDir: '.e/device-captures',
     captureStorageLimitMb: 100,
+  },
+  patternDetection: {
+    enabled: true,
+    sensitivity: 'moderate',
+    minimumOccurrences: 3,
+    confidenceThreshold: 0.7,
+    autoCreateProposals: true,
+    enabledPatternTypes: [
+      'refactoring',
+      'workflow',
+      'tool-usage',
+      'problem-solving',
+      'file-pattern',
+      'command-sequence',
+    ],
   },
 };
 
@@ -620,6 +638,9 @@ function createSettingsStore() {
     },
     get deviceCapabilities() {
       return state.deviceCapabilities;
+    },
+    get patternDetection() {
+      return state.patternDetection;
     },
     get all() {
       return state;

@@ -2596,12 +2596,22 @@ export const api = {
   // ── Pattern Learning / Self-Improving Skills ──
 
   learning: {
+    /** Trigger pattern analysis for a conversation */
+    analyze: (workspacePath: string, conversationId: string, sensitivity?: string) =>
+      request<{
+        ok: boolean;
+        data: import('@e/shared').PatternDetection[];
+      }>('/pattern-detection/analyze', {
+        method: 'POST',
+        body: JSON.stringify({ workspacePath, conversationId, sensitivity }),
+      }),
+
     /** Get detected patterns for a workspace */
     getPatterns: (workspacePath: string) =>
       request<{
         ok: boolean;
         data: import('@e/shared').PatternDetection[];
-      }>(`/learning/patterns?workspacePath=${encodeURIComponent(workspacePath)}`),
+      }>(`/pattern-detection/patterns?workspacePath=${encodeURIComponent(workspacePath)}`),
 
     /** Get skill/rule proposals for a workspace */
     getProposals: (workspacePath: string, status?: string) => {
@@ -2610,61 +2620,58 @@ export const api = {
       return request<{
         ok: boolean;
         data: import('@e/shared').SkillProposal[];
-      }>(`/learning/proposals?${params.toString()}`);
+      }>(`/pattern-detection/proposals?${params.toString()}`);
     },
 
+    /** Get a specific proposal */
+    getProposal: (proposalId: string) =>
+      request<{
+        ok: boolean;
+        data: import('@e/shared').SkillProposal;
+      }>(`/pattern-detection/proposals/${proposalId}`),
+
     /** Get learning log for a workspace */
-    getLearningLog: (workspacePath: string, limit = 50, eventType?: string) => {
+    getLearningLog: (workspacePath: string, limit = 50) => {
       const params = new URLSearchParams({ workspacePath, limit: String(limit) });
-      if (eventType) params.set('eventType', eventType);
       return request<{
         ok: boolean;
         data: import('@e/shared').LearningLogEntry[];
-      }>(`/learning/log?${params.toString()}`);
+      }>(`/pattern-detection/learning-log?${params.toString()}`);
     },
 
-    /** Get pattern detection configuration */
-    getConfig: (workspacePath: string) =>
-      request<{
-        ok: boolean;
-        data: import('@e/shared').PatternLearningSettings;
-      }>(`/learning/config?workspacePath=${encodeURIComponent(workspacePath)}`),
-
-    /** Update pattern detection configuration */
-    updateConfig: (workspacePath: string, config: import('@e/shared').PatternLearningSettings) =>
-      request<{
-        ok: boolean;
-        data: import('@e/shared').PatternLearningSettings;
-      }>('/learning/config', {
-        method: 'PUT',
-        body: JSON.stringify({ workspacePath, config }),
-      }),
-
     /** Approve a skill/rule proposal */
-    approveProposal: (proposalId: string, options?: { tier?: string; name?: string }) =>
+    approveProposal: (proposalId: string) =>
       request<{
         ok: boolean;
-        data: { proposalId: string; installedPath: string; status: string };
-      }>(`/learning/proposals/${proposalId}/approve`, {
+        data: { path: string };
+      }>(`/pattern-detection/proposals/${proposalId}/approve`, {
         method: 'POST',
-        body: JSON.stringify(options || {}),
       }),
 
     /** Reject a skill/rule proposal */
-    rejectProposal: (proposalId: string, ignorePatternType = false) =>
+    rejectProposal: (proposalId: string) =>
       request<{
         ok: boolean;
-        data: { proposalId: string; status: string };
-      }>(`/learning/proposals/${proposalId}/reject`, {
+      }>(`/pattern-detection/proposals/${proposalId}/reject`, {
         method: 'POST',
-        body: JSON.stringify({ ignorePatternType }),
       }),
 
-    /** Delete a skill/rule proposal */
-    deleteProposal: (proposalId: string) =>
-      request<{ ok: boolean }>(`/learning/proposals/${proposalId}`, {
-        method: 'DELETE',
+    /** Check patterns and auto-propose */
+    checkAndPropose: (workspacePath: string, minOccurrences?: number) =>
+      request<{
+        ok: boolean;
+        data: { proposalsMade: import('@e/shared').SkillProposal[]; count: number };
+      }>('/pattern-detection/check-and-propose', {
+        method: 'POST',
+        body: JSON.stringify({ workspacePath, minOccurrences }),
       }),
+
+    /** Search skills registry for capability gaps */
+    suggestSkills: (query: string) =>
+      request<{
+        ok: boolean;
+        data: Array<{ skillId: string; skillName: string; reason: string; confidence: number }>;
+      }>(`/skills-registry/suggest?query=${encodeURIComponent(query)}`),
   },
 
   // ── Notification Channels ──

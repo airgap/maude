@@ -23,7 +23,8 @@ export type SidebarTab =
   | 'commentary'
   | 'golems'
   | 'command-history'
-  | 'canvas';
+  | 'canvas'
+  | 'learning';
 
 /** Mobile navigation view — either a special view or any sidebar tab rendered fullscreen */
 export type MobileView = 'chat' | 'terminal' | SidebarTab;

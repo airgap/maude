@@ -92,10 +92,7 @@
     if (!workspacePath || !note.metadata?.proposalId) return;
 
     try {
-      const res = await api.fetch(`/api/learning/proposals/${note.metadata.proposalId}/approve`, {
-        method: 'POST',
-        body: JSON.stringify({ tier: 'workspace' }),
-      });
+      const res = await api.learning.approveProposal(note.metadata.proposalId as string);
 
       if (res.ok) {
         // Archive the note
@@ -106,14 +103,11 @@
     }
   }
 
-  async function rejectProposal(note: AgentNote, ignorePatternType = false) {
+  async function rejectProposal(note: AgentNote, _ignorePatternType = false) {
     if (!workspacePath || !note.metadata?.proposalId) return;
 
     try {
-      const res = await api.fetch(`/api/learning/proposals/${note.metadata.proposalId}/reject`, {
-        method: 'POST',
-        body: JSON.stringify({ ignorePatternType }),
-      });
+      const res = await api.learning.rejectProposal(note.metadata.proposalId as string);
 
       if (res.ok) {
         // Archive the note
