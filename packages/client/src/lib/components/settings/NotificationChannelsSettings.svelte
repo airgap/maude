@@ -14,6 +14,10 @@
     DiscordChannelConfig,
     TelegramChannelConfig,
     EmailChannelConfig,
+    SlackConfig,
+    DiscordConfig,
+    TelegramConfig,
+    EmailConfig,
   } from '@e/shared';
 
   let channels = $state<NotificationChannel[]>([]);
@@ -112,7 +116,7 @@
     formEmailToAddress = '';
   }
 
-  function buildConfig(): NotificationChannelConfig | null {
+  function buildConfig(): SlackConfig | DiscordConfig | TelegramConfig | EmailConfig | null {
     switch (formType) {
       case 'slack':
         if (!formSlackWebhook.trim()) {
@@ -120,9 +124,8 @@
           return null;
         }
         return {
-          type: 'slack',
           webhookUrl: formSlackWebhook.trim(),
-        } as SlackChannelConfig;
+        };
 
       case 'discord':
         if (!formDiscordWebhook.trim()) {
@@ -130,9 +133,8 @@
           return null;
         }
         return {
-          type: 'discord',
           webhookUrl: formDiscordWebhook.trim(),
-        } as DiscordChannelConfig;
+        };
 
       case 'telegram':
         if (!formTelegramBotToken.trim() || !formTelegramChatId.trim()) {
@@ -140,10 +142,9 @@
           return null;
         }
         return {
-          type: 'telegram',
           botToken: formTelegramBotToken.trim(),
           chatId: formTelegramChatId.trim(),
-        } as TelegramChannelConfig;
+        };
 
       case 'email':
         if (
@@ -157,7 +158,6 @@
           return null;
         }
         return {
-          type: 'email',
           smtpHost: formEmailSmtpHost.trim(),
           smtpPort: formEmailSmtpPort,
           smtpSecure: formEmailSmtpSecure,
@@ -165,7 +165,7 @@
           smtpPassword: formEmailSmtpPassword.trim(),
           fromEmail: formEmailFromAddress.trim(),
           toEmail: formEmailToAddress.trim(),
-        } as EmailChannelConfig;
+        };
 
       default:
         return null;
@@ -200,9 +200,15 @@
     const config = buildConfig();
     if (!config) return;
 
+    // Wrap the config with type discriminator for the test endpoint
+    const wrappedConfig: NotificationChannelConfig = {
+      type: formType,
+      config,
+    } as NotificationChannelConfig;
+
     testingSending = true;
     try {
-      const res = await api.notificationChannels.test(config);
+      const res = await api.notificationChannels.test(wrappedConfig);
       if (res.data.success) {
         uiStore.toast('Test notification sent successfully!', 'success');
       } else {

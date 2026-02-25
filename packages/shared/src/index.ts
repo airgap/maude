@@ -361,6 +361,7 @@ export { SKILL_CATEGORIES } from './skills.js';
 export type {
   PatternSensitivity,
   ProposalType,
+  PatternType,
   PatternDetection,
   PatternExample,
   SkillProposal,

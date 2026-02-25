@@ -52,6 +52,16 @@ export async function executeTool(
         return await executeCanvasPushTool(toolInput);
       case 'canvas_snapshot':
         return await executeCanvasSnapshotTool(toolInput);
+      case 'CaptureScreenshot':
+        return await executeCaptureScreenshotTool(toolInput);
+      case 'ListDisplays':
+        return await executeListDisplaysTool();
+      case 'GetLocation':
+        return await executeGetLocationTool();
+      case 'CaptureCamera':
+        return await executeCaptureCameraTool(toolInput);
+      case 'Skill':
+        return await executeSkillTool(toolInput, workspacePath);
       default:
         return {
           content: `Unknown tool: ${toolName}`,
@@ -529,4 +539,387 @@ export function getConversationCanvases(conversationId: string) {
 export function setCanvasConversation(canvasId: string, conversationId: string) {
   const db = getDb();
   db.query('UPDATE canvases SET conversation_id = ? WHERE id = ?').run(conversationId, canvasId);
+}
+
+/**
+ * Device capability tools
+ * These tools coordinate with Tauri for actual capture, but the server validates permissions
+ */
+
+async function executeCaptureScreenshotTool(input: Record<string, unknown>): Promise<ToolResult> {
+  try {
+    // Check if screenshot capability is enabled
+    const db = getDb();
+    const settingsRow = db.query('SELECT value FROM settings WHERE key = ?').get('settings') as any;
+
+    if (!settingsRow) {
+      return {
+        content: 'Settings not found. Please configure device capabilities in Settings.',
+        is_error: true,
+      };
+    }
+
+    const settings = JSON.parse(settingsRow.value);
+    const capabilities = settings.deviceCapabilities || {};
+
+    if (!capabilities.screenshotEnabled) {
+      return {
+        content:
+          'Screenshot capture is disabled. Enable it in Settings > Device Capabilities to allow agents to capture screenshots.',
+        is_error: true,
+      };
+    }
+
+    // Tool input
+    const displayIndex = input.display_index ? Number(input.display_index) : 0;
+    const saveToWorkspace = input.save_to_workspace !== false;
+
+    // Return instructions for the client/Tauri layer to execute
+    // The actual screenshot will be taken by the frontend and returned as an attachment
+    return {
+      content: JSON.stringify({
+        __device_action: 'screenshot',
+        display_index: displayIndex,
+        save_to_workspace: saveToWorkspace,
+        message: `Requesting screenshot capture from display ${displayIndex}. The screenshot will be automatically included in the conversation.`,
+      }),
+    };
+  } catch (error) {
+    return {
+      content: `Error requesting screenshot: ${error instanceof Error ? error.message : String(error)}`,
+      is_error: true,
+    };
+  }
+}
+
+async function executeListDisplaysTool(): Promise<ToolResult> {
+  try {
+    // Check if screenshot capability is enabled
+    const db = getDb();
+    const settingsRow = db.query('SELECT value FROM settings WHERE key = ?').get('settings') as any;
+
+    if (!settingsRow) {
+      return {
+        content: 'Settings not found. Please configure device capabilities in Settings.',
+        is_error: true,
+      };
+    }
+
+    const settings = JSON.parse(settingsRow.value);
+    const capabilities = settings.deviceCapabilities || {};
+
+    if (!capabilities.screenshotEnabled) {
+      return {
+        content:
+          'Screenshot capture is disabled. Enable it in Settings > Device Capabilities to list displays.',
+        is_error: true,
+      };
+    }
+
+    // Return instructions for the client/Tauri layer to execute
+    return {
+      content: JSON.stringify({
+        __device_action: 'list_displays',
+        message: 'Requesting display list from the system.',
+      }),
+    };
+  } catch (error) {
+    return {
+      content: `Error listing displays: ${error instanceof Error ? error.message : String(error)}`,
+      is_error: true,
+    };
+  }
+}
+
+async function executeGetLocationTool(): Promise<ToolResult> {
+  try {
+    // Check if location capability is enabled
+    const db = getDb();
+    const settingsRow = db.query('SELECT value FROM settings WHERE key = ?').get('settings') as any;
+
+    if (!settingsRow) {
+      return {
+        content: 'Settings not found. Please configure device capabilities in Settings.',
+        is_error: true,
+      };
+    }
+
+    const settings = JSON.parse(settingsRow.value);
+    const capabilities = settings.deviceCapabilities || {};
+
+    if (!capabilities.locationEnabled) {
+      return {
+        content:
+          'Location access is disabled. Enable it in Settings > Device Capabilities to allow location-aware features.',
+        is_error: true,
+      };
+    }
+
+    // Return instructions for the client/Tauri layer to execute
+    return {
+      content: JSON.stringify({
+        __device_action: 'get_location',
+        message:
+          'Requesting location information. This uses IP-based geolocation (privacy-friendly, no GPS).',
+      }),
+    };
+  } catch (error) {
+    return {
+      content: `Error requesting location: ${error instanceof Error ? error.message : String(error)}`,
+      is_error: true,
+    };
+  }
+}
+
+async function executeCaptureCameraTool(input: Record<string, unknown>): Promise<ToolResult> {
+  try {
+    // Check if camera capability is enabled
+    const db = getDb();
+    const settingsRow = db.query('SELECT value FROM settings WHERE key = ?').get('settings') as any;
+
+    if (!settingsRow) {
+      return {
+        content: 'Settings not found. Please configure device capabilities in Settings.',
+        is_error: true,
+      };
+    }
+
+    const settings = JSON.parse(settingsRow.value);
+    const capabilities = settings.deviceCapabilities || {};
+
+    if (!capabilities.cameraEnabled) {
+      return {
+        content:
+          'Camera access is disabled. Enable it in Settings > Device Capabilities to allow camera capture.',
+        is_error: true,
+      };
+    }
+
+    // Tool input
+    const saveToWorkspace = input.save_to_workspace !== false;
+
+    // Return instructions for the client/Tauri layer to execute
+    return {
+      content: JSON.stringify({
+        __device_action: 'capture_camera',
+        save_to_workspace: saveToWorkspace,
+        message:
+          'Requesting camera capture. The photo will be automatically included in the conversation. Note: Camera access requires OS permissions (TCC on macOS).',
+      }),
+    };
+  } catch (error) {
+    return {
+      content: `Error requesting camera capture: ${error instanceof Error ? error.message : String(error)}`,
+      is_error: true,
+    };
+  }
+}
+
+/**
+ * Execute the Skill tool for pattern detection and skill management
+ */
+async function executeSkillTool(
+  input: Record<string, unknown>,
+  workspacePath?: string,
+): Promise<ToolResult> {
+  try {
+    const action = String(input.action);
+
+    if (action === 'search') {
+      // Search skills registry for existing skills
+      const query = String(input.query || '');
+
+      if (!query) {
+        return {
+          content: 'Please provide a search query to find relevant skills.',
+          is_error: true,
+        };
+      }
+
+      // Call the skills registry API endpoint
+      const response = await fetch(
+        `http://localhost:${process.env.PORT || 3030}/api/skills-registry/suggest?query=${encodeURIComponent(query)}`,
+      );
+      const data = await response.json();
+
+      if (!data.ok) {
+        return {
+          content: `Error searching skills registry: ${data.error}`,
+          is_error: true,
+        };
+      }
+
+      const suggestions = data.data || [];
+
+      if (suggestions.length === 0) {
+        return {
+          content: `No skills found matching "${query}". Consider proposing a new skill if you detect a recurring pattern.`,
+        };
+      }
+
+      const resultText = `Found ${suggestions.length} skill(s) matching "${query}":\n\n${suggestions
+        .map(
+          (s: any, i: number) =>
+            `${i + 1}. **${s.skillName}** (ID: \`${s.skillId}\`)\n   ${s.reason}\n   Confidence: ${Math.round(s.confidence * 100)}%`,
+        )
+        .join('\n\n')}`;
+
+      return { content: resultText };
+    } else if (action === 'propose') {
+      // Propose a new skill or rule
+      const proposal = input.proposal as any;
+
+      if (!proposal) {
+        return {
+          content:
+            'Please provide proposal details (type, name, description, content, category, tags, examples).',
+          is_error: true,
+        };
+      }
+
+      if (!workspacePath) {
+        return {
+          content: 'Workspace path is required to create a proposal.',
+          is_error: true,
+        };
+      }
+
+      const { type, name, description, content, category, tags, examples } = proposal;
+
+      if (!type || !name || !description || !content) {
+        return {
+          content:
+            'Proposal must include: type ("skill" or "rule"), name, description, and content.',
+          is_error: true,
+        };
+      }
+
+      // Create an agent note with the proposal
+      const notePayload = {
+        workspacePath,
+        title: `${type === 'skill' ? '🎯 Skill' : '📋 Rule'} Proposal: ${name}`,
+        content: `## Proposed ${type === 'skill' ? 'Skill' : 'Rule'}: ${name}
+
+${description}
+
+### Content
+
+\`\`\`markdown
+${content}
+\`\`\`
+
+### Details
+- **Category**: ${category || 'workflow'}
+- **Tags**: ${tags ? tags.join(', ') : 'auto-generated'}
+
+### Examples
+${examples ? examples.map((ex: string, i: number) => `${i + 1}. ${ex}`).join('\n') : 'No examples provided'}
+
+---
+
+**To approve this proposal**, use the Agent Notes panel to mark this as read and approved. The ${type} will be automatically created in your workspace.`,
+        category: 'skill-proposal',
+        metadata: {
+          proposalType: type,
+          suggestedName: name,
+          suggestedCategory: category || 'workflow',
+          suggestedTags: tags || [],
+          generatedContent: content,
+        },
+      };
+
+      const noteResponse = await fetch(
+        `http://localhost:${process.env.PORT || 3030}/api/agent-notes`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(notePayload),
+        },
+      );
+
+      const noteData = await noteResponse.json();
+
+      if (!noteData.ok) {
+        return {
+          content: `Error creating proposal note: ${noteData.error}`,
+          is_error: true,
+        };
+      }
+
+      return {
+        content: `✅ **${type === 'skill' ? 'Skill' : 'Rule'} proposal created**: "${name}"
+
+I've detected a recurring pattern and created a proposal to automate it.
+
+The proposal has been saved as an agent note for your review. You can find it in the **Agent Notes** panel (look for the 🎯 or 📋 icon in the sidebar).
+
+**What happens next:**
+1. Review the proposal in the Agent Notes panel
+2. If you approve it, the ${type} will be automatically created in your workspace
+3. Once created, this pattern will be available for reuse in future work
+
+This is part of my self-learning system — I'm tracking patterns in your workflow to suggest helpful automations!`,
+      };
+    } else if (action === 'check-learning') {
+      // View the learning log
+      const filter = input.query ? String(input.query) : undefined;
+
+      if (!workspacePath) {
+        return {
+          content: 'Workspace path is required to check the learning log.',
+          is_error: true,
+        };
+      }
+
+      const response = await fetch(
+        `http://localhost:${process.env.PORT || 3030}/api/learning/log?workspacePath=${encodeURIComponent(workspacePath)}`,
+      );
+      const data = await response.json();
+
+      if (!data.ok) {
+        return {
+          content: `Error retrieving learning log: ${data.error}`,
+          is_error: true,
+        };
+      }
+
+      const entries = data.data || [];
+
+      if (entries.length === 0) {
+        return {
+          content:
+            'No learning log entries found yet. The system will automatically track patterns as you work.',
+        };
+      }
+
+      let filteredEntries = entries;
+      if (filter) {
+        filteredEntries = entries.filter((e: any) =>
+          e.message.toLowerCase().includes(filter.toLowerCase()),
+        );
+      }
+
+      const resultText = `**Learning Log** (${filteredEntries.length} ${filter ? 'matching ' : ''}entries):\n\n${filteredEntries
+        .slice(0, 10)
+        .map(
+          (e: any, i: number) =>
+            `${i + 1}. [${e.event_type}] ${e.message}\n   ${new Date(e.timestamp).toLocaleString()}`,
+        )
+        .join(
+          '\n\n',
+        )}${filteredEntries.length > 10 ? `\n\n_... and ${filteredEntries.length - 10} more entries_` : ''}`;
+
+      return { content: resultText };
+    } else {
+      return {
+        content: `Unknown action: ${action}. Valid actions are: "search", "propose", "check-learning".`,
+        is_error: true,
+      };
+    }
+  } catch (error) {
+    return {
+      content: `Error executing Skill tool: ${error instanceof Error ? error.message : String(error)}`,
+      is_error: true,
+    };
+  }
 }

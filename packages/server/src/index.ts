@@ -55,7 +55,6 @@ import { sessionInfoRoutes } from './routes/session-info';
 import { canvasRoutes } from './routes/canvas';
 import { notificationChannelsRoutes } from './routes/notification-channels';
 import { deviceRoutes } from './routes/device';
-import { patternLearningRoutes } from './routes/pattern-learning';
 import { authMiddleware } from './middleware/auth';
 import { csrfMiddleware, isOriginAllowed } from './middleware/csrf';
 import { websocket } from './ws';
@@ -170,7 +169,6 @@ app.route('/api/session', sessionInfoRoutes);
 app.route('/api/canvas', canvasRoutes);
 app.route('/api/notification-channels', notificationChannelsRoutes);
 app.route('/api/device', deviceRoutes);
-app.route('/api/pattern-learning', patternLearningRoutes);
 
 // Inbound webhook endpoint — bypasses auth/CSRF (uses its own token-based auth)
 app.route('/api/webhooks/inbound', webhookInboundApp);

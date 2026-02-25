@@ -1,5 +1,6 @@
 import type { PermissionMode, PermissionRule, TerminalCommandPolicy } from './tools.js';
 import type { MCPServerConfig } from './mcp.js';
+import type { PatternLearningSettings } from './pattern-learning.js';
 
 export type ThemeId =
   | 'dark'
@@ -88,6 +89,23 @@ export interface RemoteAccessConfig {
   sshTunnelCommand?: string;
 }
 
+/**
+ * Device capabilities configuration
+ * Opt-in device-level features for agents (screenshot, camera, location)
+ */
+export interface DeviceCapabilities {
+  /** Allow agents to capture screenshots for visual debugging */
+  screenshotEnabled: boolean;
+  /** Allow agents to access camera for barcode/document scanning */
+  cameraEnabled: boolean;
+  /** Allow agents to access approximate location for timezone-aware scheduling */
+  locationEnabled: boolean;
+  /** Directory where captured media is stored (relative to workspace) */
+  captureStorageDir: string;
+  /** Maximum storage for captured media in MB */
+  captureStorageLimitMb: number;
+}
+
 export interface Settings {
   theme: ThemeId;
   cliProvider: CliProvider;
@@ -130,6 +148,10 @@ export interface Settings {
   remoteAccessEnabled: boolean;
   remoteAccessMode: RemoteAccessMode;
   remoteAccessRequireAuth: boolean;
+  // Pattern detection & self-improving skills
+  patternDetection: PatternLearningSettings;
+  // Device capabilities
+  deviceCapabilities: DeviceCapabilities;
 }
 
 export interface Keybinding {
@@ -209,4 +231,26 @@ export const DEFAULT_SETTINGS: Settings = {
   remoteAccessEnabled: false,
   remoteAccessMode: 'disabled',
   remoteAccessRequireAuth: true,
+  patternDetection: {
+    enabled: true,
+    sensitivity: 'moderate',
+    minimumOccurrences: 3,
+    confidenceThreshold: 0.7,
+    autoCreateProposals: true,
+    enabledPatternTypes: [
+      'refactoring',
+      'debugging',
+      'testing',
+      'documentation',
+      'workflow',
+      'code-generation',
+    ],
+  },
+  deviceCapabilities: {
+    screenshotEnabled: false,
+    cameraEnabled: false,
+    locationEnabled: false,
+    captureStorageDir: '.e/device-captures',
+    captureStorageLimitMb: 100,
+  },
 };

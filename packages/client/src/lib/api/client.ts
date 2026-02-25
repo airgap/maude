@@ -2545,4 +2545,186 @@ export const api = {
         body: JSON.stringify({ code, filePath, functionName, language, testFramework }),
       }),
   },
+
+  // ── Pattern Learning / Self-Improving Skills ──
+
+  learning: {
+    /** Get detected patterns for a workspace */
+    getPatterns: (workspacePath: string) =>
+      request<{
+        ok: boolean;
+        data: import('@e/shared').PatternDetection[];
+      }>(`/learning/patterns?workspacePath=${encodeURIComponent(workspacePath)}`),
+
+    /** Get skill/rule proposals for a workspace */
+    getProposals: (workspacePath: string, status?: string) => {
+      const params = new URLSearchParams({ workspacePath });
+      if (status) params.set('status', status);
+      return request<{
+        ok: boolean;
+        data: import('@e/shared').SkillProposal[];
+      }>(`/learning/proposals?${params.toString()}`);
+    },
+
+    /** Get learning log for a workspace */
+    getLearningLog: (workspacePath: string, limit = 50, eventType?: string) => {
+      const params = new URLSearchParams({ workspacePath, limit: String(limit) });
+      if (eventType) params.set('eventType', eventType);
+      return request<{
+        ok: boolean;
+        data: import('@e/shared').LearningLogEntry[];
+      }>(`/learning/log?${params.toString()}`);
+    },
+
+    /** Get pattern detection configuration */
+    getConfig: (workspacePath: string) =>
+      request<{
+        ok: boolean;
+        data: import('@e/shared').PatternLearningSettings;
+      }>(`/learning/config?workspacePath=${encodeURIComponent(workspacePath)}`),
+
+    /** Update pattern detection configuration */
+    updateConfig: (workspacePath: string, config: import('@e/shared').PatternLearningSettings) =>
+      request<{
+        ok: boolean;
+        data: import('@e/shared').PatternLearningSettings;
+      }>('/learning/config', {
+        method: 'PUT',
+        body: JSON.stringify({ workspacePath, config }),
+      }),
+
+    /** Approve a skill/rule proposal */
+    approveProposal: (proposalId: string, options?: { tier?: string; name?: string }) =>
+      request<{
+        ok: boolean;
+        data: { proposalId: string; installedPath: string; status: string };
+      }>(`/learning/proposals/${proposalId}/approve`, {
+        method: 'POST',
+        body: JSON.stringify(options || {}),
+      }),
+
+    /** Reject a skill/rule proposal */
+    rejectProposal: (proposalId: string, ignorePatternType = false) =>
+      request<{
+        ok: boolean;
+        data: { proposalId: string; status: string };
+      }>(`/learning/proposals/${proposalId}/reject`, {
+        method: 'POST',
+        body: JSON.stringify({ ignorePatternType }),
+      }),
+
+    /** Delete a skill/rule proposal */
+    deleteProposal: (proposalId: string) =>
+      request<{ ok: boolean }>(`/learning/proposals/${proposalId}`, {
+        method: 'DELETE',
+      }),
+  },
+
+  // ── Notification Channels ──
+
+  notificationChannels: {
+    /** List all notification channels */
+    list: () =>
+      request<{
+        ok: boolean;
+        data: import('@e/shared').NotificationChannel[];
+      }>('/notification-channels'),
+
+    /** Get a specific notification channel */
+    get: (id: string) =>
+      request<{
+        ok: boolean;
+        data: import('@e/shared').NotificationChannel;
+      }>(`/notification-channels/${id}`),
+
+    /** Create a new notification channel */
+    create: (input: import('@e/shared').NotificationChannelCreateInput) =>
+      request<{
+        ok: boolean;
+        data: import('@e/shared').NotificationChannel;
+      }>('/notification-channels', {
+        method: 'POST',
+        body: JSON.stringify(input),
+      }),
+
+    /** Update a notification channel */
+    update: (id: string, updates: import('@e/shared').NotificationChannelUpdateInput) =>
+      request<{
+        ok: boolean;
+        data: import('@e/shared').NotificationChannel;
+      }>(`/notification-channels/${id}`, {
+        method: 'PATCH',
+        body: JSON.stringify(updates),
+      }),
+
+    /** Delete a notification channel */
+    delete: (id: string) =>
+      request<{
+        ok: boolean;
+      }>(`/notification-channels/${id}`, {
+        method: 'DELETE',
+      }),
+
+    /** Test a notification channel configuration */
+    test: (config: import('@e/shared').NotificationChannelConfig) =>
+      request<{
+        ok: boolean;
+        data: import('@e/shared').NotificationTestResult;
+      }>('/notification-channels/test', {
+        method: 'POST',
+        body: JSON.stringify({ config }),
+      }),
+
+    /** Send a notification */
+    send: (input: import('@e/shared').NotificationSendInput) =>
+      request<{
+        ok: boolean;
+      }>('/notification-channels/send', {
+        method: 'POST',
+        body: JSON.stringify(input),
+      }),
+
+    /** Get workspace notification preferences */
+    getWorkspacePreferences: (workspaceId: string) =>
+      request<{
+        ok: boolean;
+        data: import('@e/shared').WorkspaceNotificationPreferences;
+      }>(`/notification-channels/workspace/${workspaceId}/preferences`),
+
+    /** Update workspace notification preferences */
+    updateWorkspacePreferences: (
+      workspaceId: string,
+      prefs: Partial<import('@e/shared').WorkspaceNotificationPreferences>,
+    ) =>
+      request<{
+        ok: boolean;
+        data: import('@e/shared').WorkspaceNotificationPreferences;
+      }>(`/notification-channels/workspace/${workspaceId}/preferences`, {
+        method: 'PUT',
+        body: JSON.stringify(prefs),
+      }),
+
+    /** Get notification delivery logs */
+    getLogs: (limit?: number) =>
+      request<{
+        ok: boolean;
+        data: import('@e/shared').NotificationLog[];
+      }>(`/notification-channels/logs${limit ? `?limit=${limit}` : ''}`),
+  },
+
+  /**
+   * Generic fetch wrapper for direct API calls.
+   * Automatically adds auth and CSRF tokens to headers.
+   */
+  fetch: async (path: string, opts: RequestInit = {}): Promise<Response> => {
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+      ...(opts.headers as Record<string, string>),
+    };
+    const token = getAuthToken();
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+    if (_csrfToken) headers['X-CSRF-Token'] = _csrfToken;
+
+    return fetch(path, { ...opts, headers });
+  },
 };

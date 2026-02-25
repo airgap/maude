@@ -16,6 +16,7 @@ export type ToolCategory =
   | 'task' // TaskCreate, TaskUpdate, TaskList, TaskGet
   | 'planning' // EnterPlanMode, ExitPlanMode
   | 'notebook' // NotebookEdit
+  | 'device' // Screenshot, Camera, Location
   | 'mcp' // MCP-provided tools
   | 'other';
 

@@ -8,6 +8,7 @@ import type {
   ShellProfile,
   VoiceMode,
   VoiceInputProvider,
+  DeviceCapabilities,
 } from '@e/shared';
 import { convertVsCodeSnippets, type ConvertedSnippet } from '$lib/utils/vscode-snippet-converter';
 import { convertVsCodeTheme, type ConvertedTheme } from '$lib/utils/vscode-theme-converter';
@@ -133,6 +134,8 @@ interface SettingsState {
   voiceWakeWord: string;
   voiceAutoSpeak: boolean;
   voiceLanguage: string;
+  // Device capabilities
+  deviceCapabilities: DeviceCapabilities;
 }
 
 const defaults: SettingsState = {
@@ -227,6 +230,13 @@ const defaults: SettingsState = {
   voiceWakeWord: 'Hey E',
   voiceAutoSpeak: false,
   voiceLanguage: 'en-US',
+  deviceCapabilities: {
+    screenshotEnabled: false,
+    cameraEnabled: false,
+    locationEnabled: false,
+    captureStorageDir: '.e/device-captures',
+    captureStorageLimitMb: 100,
+  },
 };
 
 function loadFromStorage(): SettingsState {
@@ -593,6 +603,9 @@ function createSettingsStore() {
     },
     get voiceLanguage() {
       return state.voiceLanguage;
+    },
+    get deviceCapabilities() {
+      return state.deviceCapabilities;
     },
     get all() {
       return state;

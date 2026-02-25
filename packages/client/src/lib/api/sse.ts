@@ -5,6 +5,7 @@ import { workspaceStore } from '$lib/stores/workspace.svelte';
 import { workspaceMemoryStore } from '$lib/stores/project-memory.svelte';
 import { api } from './client';
 import { uuid } from '$lib/utils/uuid';
+import { processDeviceAction } from '$lib/device/tauri-device';
 
 /**
  * Generation counter to prevent duplicate processing from HMR or concurrent streams.
@@ -201,6 +202,50 @@ export async function sendAndStream(
 
         try {
           const event: StreamEvent = JSON.parse(data);
+
+          // Check if this is a tool_result event that might contain a device action
+          if (event.type === 'tool_result') {
+            const content =
+              typeof event.result === 'string' ? event.result : JSON.stringify(event.result);
+            const deviceActionResult = await processDeviceAction(content);
+
+            if (deviceActionResult.shouldProcess) {
+              if (deviceActionResult.error) {
+                // Replace the tool result with an error message
+                event.result = `Error: ${deviceActionResult.error}`;
+              } else if (deviceActionResult.result) {
+                // Process the device action result
+                const { type, data } = deviceActionResult.result;
+
+                if (type === 'screenshot' || type === 'camera') {
+                  // Add the captured image as an image content block
+                  const imageContent: ImageContent = {
+                    type: 'image',
+                    source: {
+                      type: 'base64',
+                      media_type: data.mimeType,
+                      data: data.data,
+                    },
+                  };
+
+                  // Update the event result to include success message + image path
+                  event.result = `${type === 'screenshot' ? 'Screenshot' : 'Photo'} captured successfully${data.path ? ` and saved to ${data.path}` : ''}.`;
+
+                  // Add the image to the conversation (this will be handled by the stream store)
+                  // We'll append it as a separate content block
+                  streamStore.contentBlocks.push(imageContent);
+                } else if (type === 'location') {
+                  // Format location data as a readable message
+                  const loc = data;
+                  event.result = `Location: ${loc.latitude.toFixed(6)}°, ${loc.longitude.toFixed(6)}°${loc.timezone ? `\nTimezone: ${loc.timezone}` : ''}${loc.locality ? `\nLocality: ${loc.locality}` : ''}\nAccuracy: ~${Math.round(loc.accuracy)}m`;
+                } else if (type === 'displays') {
+                  // Format displays list
+                  event.result = `Available displays:\n${data.join('\n')}`;
+                }
+              }
+            }
+          }
+
           streamStore.handleEvent(event);
 
           // Sync content blocks to the target conversation's assistant message

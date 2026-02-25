@@ -6,6 +6,10 @@ use tauri::WebviewWindowBuilder;
 use tauri::WebviewUrl;
 use tauri_plugin_shell::ShellExt;
 use std::time::Duration;
+use std::path::PathBuf;
+use std::fs;
+
+mod device;
 
 fn main() {
     // Find a free port BEFORE spawning anything.
@@ -19,6 +23,12 @@ fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_process::init())
+        .invoke_handler(tauri::generate_handler![
+            device::capture_screenshot,
+            device::get_location,
+            device::capture_camera,
+            device::list_displays,
+        ])
         .setup(move |app| {
             // Create the window pointing to the built frontend initially.
             // Once the sidecar is healthy, we navigate to the sidecar URL instead.

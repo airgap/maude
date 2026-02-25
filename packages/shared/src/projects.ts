@@ -84,6 +84,12 @@ export interface WorkspaceSettings {
   crossSessionPermission?: 'open' | 'send_only' | 'receive_only' | 'disabled';
   /** Max cross-session messages per minute for this workspace */
   crossSessionMaxPerMinute?: number;
+  /** Pattern learning / self-improving skills settings */
+  patternLearningEnabled?: boolean;
+  patternLearningSensitivity?: 'aggressive' | 'moderate' | 'conservative';
+  patternLearningMinOccurrences?: number;
+  patternLearningMinConfidence?: number;
+  patternLearningAutoApproveThreshold?: number;
 }
 
 export interface WorkspaceSummary {

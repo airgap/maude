@@ -139,7 +139,10 @@ function createUIStore() {
     closeModal() {
       activeModal = null;
     },
-    openSettings() {
+    openSettings(tab?: string) {
+      if (tab && typeof localStorage !== 'undefined') {
+        localStorage.setItem('e-settings-tab', tab);
+      }
       activeModal = 'settings';
     },
     toast(

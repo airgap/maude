@@ -1,193 +1,67 @@
-# Remote Access via Tailscale / SSH Tunneling - Implementation Summary
+# Self-Improving Skills / Auto-Rule Generation - Implementation Summary
 
-## Story Completion Status: ✅ COMPLETE
+## Overview
 
-All acceptance criteria have been successfully implemented and tested.
+Successfully implemented a complete self-improving skills system where agents autonomously detect recurring patterns, propose new skills/rules, and learn from their work.
 
-## Acceptance Criteria Verification
+## All Acceptance Criteria Met ✅
 
-### 1. ✅ Tailscale Integration
+### 1. ✅ Agents detect recurring patterns across conversations
 
-**Status**: Fully implemented
+- Pattern detection service analyzes tool usage and conversation patterns
+- Tracks patterns in database with occurrence counts
+- 6 pattern types: refactoring, workflow, tool-usage, problem-solving, file-pattern, command-sequence
 
-**Implementation**:
+### 2. ✅ Proposes new rules/skills when pattern detected
 
-- Service: `packages/server/src/services/remote-access.ts`
-  - `getTailscaleStatus()`: Checks if Tailscale is installed and running
-  - `configureTailscale(port, funnel)`: Auto-configures Tailscale serve/funnel
-  - `stopTailscale()`: Stops Tailscale serve/funnel
-- Routes: `packages/server/src/routes/remote-access.ts`
-  - `GET /api/remote-access/tailscale/status`
-  - `POST /api/remote-access/tailscale/configure`
-  - `POST /api/remote-access/tailscale/stop`
-- UI: `packages/client/src/lib/components/settings/RemoteAccessSettings.svelte`
-  - Shows Tailscale status (available, running, hostname, IP)
-  - Buttons to configure serve/funnel or stop
-  - Displays generated Tailscale URL
+- Auto-generates proposals when threshold reached (default: 3+ occurrences)
+- Template-based content generation with documentation
 
-**Features**:
+### 3. ✅ Proposals appear as agent notes with "skill-proposal" category
 
-- Automatic detection of Tailscale installation
-- Support for both serve (private) and funnel (public) modes
-- Real-time status updates
-- One-click configuration
+- Agent notes support skill-proposal category
+- Proposals created automatically in sidebar panel
 
-### 2. ✅ SSH Tunnel Mode
+### 4. ✅ Approved proposals written to .e/skills/ or .e/rules/
 
-**Status**: Fully implemented
+- POST /api/learning/proposals/:id/approve endpoint
+- Writes properly formatted markdown files
+- Updates proposal status and learning log
 
-**Implementation**:
+### 5. ✅ Agents search skills registry for capability gaps
 
-- Service: `packages/server/src/services/remote-access.ts`
-  - `generateSSHTunnelCommand(localPort, remoteHost)`: Generates SSH tunnel command
-- Routes: `packages/server/src/routes/remote-access.ts`
-  - `GET /api/remote-access/ssh-tunnel`
-- UI: `packages/client/src/lib/components/settings/RemoteAccessSettings.svelte`
-  - Displays generated SSH command
-  - Copy-to-clipboard button
-  - Customizable remote host
+- Skill tool with "search" action
+- GET /api/skills-registry/suggest endpoint
+- Agents can proactively find existing skills
 
-**Example Output**:
+### 6. ✅ Learning log tracks identified patterns
 
-```sh
-ssh -L 3002:localhost:3002 -N -f user@<your-server-ip>
-```
+- learning_log table with full audit trail
+- Events: pattern-detected, proposal-created, proposal-approved, proposal-rejected
+- GET /api/learning/log endpoint
 
-### 3. ✅ Remote Access Requires Authentication
+### 7. ✅ Configurable sensitivity (aggressive/moderate/conservative)
 
-**Status**: Fully implemented
+- Workspace settings: patternLearningSensitivity
+- Global settings: patternDetection config
+- Presets: aggressive (2 occurrences), moderate (3), conservative (5)
 
-**Implementation**:
+### 8. ✅ Self-generated skills include documentation and examples
 
-- Middleware: `packages/server/src/middleware/auth.ts`
-  - `authMiddleware`: Checks JWT token on all API requests
-  - **Special handling**: Remote connections ALWAYS require authentication, even in single-user mode
-  - Local connections bypass auth in single-user mode
-- Service: `packages/server/src/services/remote-access.ts`
-  - `isOriginRemote(origin)`: Determines if request is from remote origin
-  - Handles localhost, LAN IPs, and Tailscale domains
+- Comprehensive markdown with name, description, category, tags
+- Usage examples from detected patterns
+- Prompt templates and rules
+- Pattern rationale
 
-**Security Features**:
+## Build Status
 
-- JWT-based authentication
-- Remote origin detection
-- Per-request authentication check
-- Connection tracking
+✓ Server TypeScript: No errors
+✓ Shared TypeScript: No errors
 
-### 4. ✅ E_ALLOWED_ORIGINS Environment Variable
+## Key Files
 
-**Status**: Fully implemented
-
-**Implementation**:
-
-- Server: `packages/server/src/index.ts`
-  - Lines 70-75: Parses `E_ALLOWED_ORIGINS` env var
-  - Lines 96-97: Validates origins against allowlist when TLS is enabled
-- CORS middleware: Validates all request origins
-- Routes: `GET /api/remote-access/allowed-origins` returns configured origins
-- UI: RemoteAccessSettings displays allowed origins
-
-**Example**:
-
-```sh
-E_ALLOWED_ORIGINS=https://my-machine.tail1234.ts.net,https://other.example.com
-```
-
-### 5. ✅ Mobile-Friendly Responsive Layout
-
-**Status**: Fully implemented
-
-**Implementation**:
-
-- HTML: `packages/client/src/app.html`
-  - Viewport meta tag: `width=device-width, initial-scale=1, viewport-fit=cover`
-  - Mobile web app capabilities
-  - PWA support
-- CSS: `packages/client/src/app.css`
-  - Extensive `@media` queries for screen sizes
-  - `[data-mobile]` attribute for mobile-specific styles
-  - Responsive font sizes, padding, and layout
-  - Mobile navigation bar
-- Component: `packages/client/src/lib/components/layout/MobileShell.svelte`
-  - Mobile-optimized view switching (chat, terminal, panels)
-  - Touch-friendly navigation
-  - One-handed usability
-
-**Responsive Breakpoints**:
-
-- `max-width: 768px`: Tablet and phone
-- `max-width: 480px`: Small phones
-- Landscape mode optimization for phones
-
-### 6. ✅ Remote Session Visual Indicator
-
-**Status**: Fully implemented
-
-**Implementation**:
-
-- Component: `packages/client/src/lib/components/common/RemoteSessionIndicator.svelte`
-  - Fetches session info from `/api/session`
-  - Shows "Remote" badge when connection is remote
-  - Displays origin in tooltip
-  - Hides on mobile to save space
-- Integration: Displayed in `TopBar.svelte` (line 131)
-- Styling: Orange/amber badge with icon
-
-**Appearance**:
-
-- Desktop: 🌐 Remote badge with text
-- Mobile: 🌐 icon only (text hidden)
-
-### 7. ✅ Connection Status and Remote Client List
-
-**Status**: Fully implemented
-
-**Implementation**:
-
-- Service: `packages/server/src/services/remote-access.ts`
-  - `registerRemoteClient(id, origin, userAgent)`: Tracks connections
-  - `getRemoteClients()`: Returns active clients
-  - In-memory client tracking
-- Routes: `GET /api/remote-access/clients`
-- UI: RemoteAccessSettings component
-  - Active Connections section
-  - Shows total and remote client counts
-  - Table of active connections with origin, type, and connection time
-
-**Displayed Information**:
-
-- Total active connections
-- Number of remote connections
-- Per-client details:
-  - Origin (URL)
-  - Type (Local/Remote badge)
-  - Connection timestamp
-
-### 8. ✅ Remote Access Can Be Disabled
-
-**Status**: Fully implemented
-
-**Implementation**:
-
-- Settings: `remoteAccessEnabled` database setting
-- Service: `getRemoteAccessConfig()` and `updateRemoteAccessConfig()`
-- Middleware: `authMiddleware` checks setting before allowing remote connections
-- UI: RemoteAccessSettings checkbox to enable/disable
-- Routes: `PATCH /api/remote-access/config`
-
-**When Disabled**:
-
-- Remote connection attempts return 403 Forbidden
-- Local connections still work normally
-- Setting persists across restarts
-
-## Testing Results
-
-- ✅ Type checking: PASSED (0 errors)
-- ✅ Unit tests: PASSED (8/8 tests)
-- ✅ Remote access service: Verified working
-- ✅ Client/server integration: Verified working
-
-## Conclusion
-
-The Remote Access via Tailscale/SSH Tunneling feature is **fully implemented and production-ready**. All acceptance criteria have been met, comprehensive documentation has been added, and the implementation includes robust security measures and mobile optimization.
+- `packages/server/src/services/pattern-detection.ts` - Pattern detection
+- `packages/server/src/services/proposal-generator.ts` - Proposal generation
+- `packages/server/src/routes/learning.ts` - Learning API routes
+- `packages/shared/src/pattern-learning.ts` - Shared types
+- Database tables: pattern_detections, skill_proposals, learning_log, tool_usage_records

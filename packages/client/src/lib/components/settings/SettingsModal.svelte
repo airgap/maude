@@ -24,6 +24,8 @@
   import { workspaceStore } from '$lib/stores/workspace.svelte';
   import WebhookSettings from './WebhookSettings.svelte';
   import RemoteAccessSettings from './RemoteAccessSettings.svelte';
+  import NotificationChannelsSettings from './NotificationChannelsSettings.svelte';
+  import DeviceSettings from './DeviceSettings.svelte';
   import * as remoteAccessApi from '$lib/api/remote-access';
 
   const cliProviders: { id: CliProvider; label: string; desc: string }[] = [
@@ -53,6 +55,7 @@
     | 'keybindings'
     | 'profiles'
     | 'webhooks'
+    | 'notifications'
     | 'remote' {
     if (typeof localStorage !== 'undefined') {
       const tab = localStorage.getItem('e-settings-tab');
@@ -77,7 +80,9 @@
     | 'keybindings'
     | 'profiles'
     | 'webhooks'
+    | 'notifications'
     | 'remote'
+    | 'device'
   >(getInitialTab());
 
   // --- BYOK state ---
@@ -914,17 +919,17 @@
           </button>
         {/each}
         <span class="settings-section-header">Access Control</span>
-        {#each ['permissions', 'profiles', 'security', 'remote'] as tab}
+        {#each ['permissions', 'profiles', 'security', 'device'] as tab}
           <button
             class="settings-tab"
             class:active={activeTab === tab}
             onclick={() => (activeTab = tab as any)}
           >
-            {tab.charAt(0).toUpperCase() + tab.slice(1)}
+            {tab === 'device' ? 'Device Capabilities' : tab.charAt(0).toUpperCase() + tab.slice(1)}
           </button>
         {/each}
         <span class="settings-section-header">Integrations</span>
-        {#each ['mcp', 'webhooks', 'remote'] as tab}
+        {#each ['mcp', 'webhooks', 'notifications', 'remote'] as tab}
           <button
             class="settings-tab"
             class:active={activeTab === tab}
@@ -2909,6 +2914,105 @@
               </button>
             {/if}
           </div>
+
+          <!-- Device Capabilities -->
+          <div class="setting-group">
+            <label class="setting-label">Device Capabilities</label>
+            <p class="setting-desc">
+              Allow agents to access device-level features (screenshot, camera, location). All
+              features are opt-in and respect OS permissions. Only available in desktop app.
+            </p>
+            <div class="device-capabilities">
+              <div class="capability-row">
+                <label class="toggle">
+                  <input
+                    type="checkbox"
+                    checked={settingsStore.deviceCapabilities.screenshotEnabled}
+                    onchange={() => {
+                      settingsStore.update({
+                        deviceCapabilities: {
+                          ...settingsStore.deviceCapabilities,
+                          screenshotEnabled: !settingsStore.deviceCapabilities.screenshotEnabled,
+                        },
+                      });
+                    }}
+                  />
+                  <span class="toggle-slider"></span>
+                </label>
+                <div class="capability-info">
+                  <span class="capability-name">Screenshot Capture</span>
+                  <span class="capability-desc"
+                    >Allow agents to capture screenshots for visual debugging and documentation</span
+                  >
+                </div>
+              </div>
+              <div class="capability-row">
+                <label class="toggle">
+                  <input
+                    type="checkbox"
+                    checked={settingsStore.deviceCapabilities.cameraEnabled}
+                    onchange={() => {
+                      settingsStore.update({
+                        deviceCapabilities: {
+                          ...settingsStore.deviceCapabilities,
+                          cameraEnabled: !settingsStore.deviceCapabilities.cameraEnabled,
+                        },
+                      });
+                    }}
+                  />
+                  <span class="toggle-slider"></span>
+                </label>
+                <div class="capability-info">
+                  <span class="capability-name">Camera Access</span>
+                  <span class="capability-desc"
+                    >Allow agents to capture photos and scan barcodes/QR codes (requires OS camera
+                    permissions)</span
+                  >
+                </div>
+              </div>
+              <div class="capability-row">
+                <label class="toggle">
+                  <input
+                    type="checkbox"
+                    checked={settingsStore.deviceCapabilities.locationEnabled}
+                    onchange={() => {
+                      settingsStore.update({
+                        deviceCapabilities: {
+                          ...settingsStore.deviceCapabilities,
+                          locationEnabled: !settingsStore.deviceCapabilities.locationEnabled,
+                        },
+                      });
+                    }}
+                  />
+                  <span class="toggle-slider"></span>
+                </label>
+                <div class="capability-info">
+                  <span class="capability-name">Location Access</span>
+                  <span class="capability-desc"
+                    >Allow agents to access approximate location for timezone-aware scheduling (uses
+                    IP-based geolocation, no GPS)</span
+                  >
+                </div>
+              </div>
+            </div>
+            <div class="device-storage-info">
+              <label class="setting-label" style="font-size: var(--fs-sm); margin-top: 12px;"
+                >Storage</label
+              >
+              <div class="storage-row">
+                <span class="storage-label">Capture directory:</span>
+                <code class="storage-path"
+                  >{settingsStore.deviceCapabilities.captureStorageDir}</code
+                >
+              </div>
+              <div class="storage-row">
+                <span class="storage-label">Storage limit:</span>
+                <span class="storage-value"
+                  >{settingsStore.deviceCapabilities.captureStorageLimitMb} MB</span
+                >
+              </div>
+            </div>
+          </div>
         {:else if activeTab === 'mcp'}
           <div class="setting-group">
             <p class="mcp-info">
@@ -3090,6 +3194,10 @@
           </div>
         {:else if activeTab === 'webhooks'}
           <WebhookSettings />
+        {:else if activeTab === 'notifications'}
+          <NotificationChannelsSettings />
+        {:else if activeTab === 'device'}
+          <DeviceSettings />
         {:else if activeTab === 'remote'}
           <RemoteAccessSettings />
         {:else}
@@ -4999,5 +5107,68 @@
     font-size: var(--fs-xs);
     color: var(--text-tertiary);
     margin-top: 2px;
+  }
+
+  /* ── Device capabilities ── */
+  .device-capabilities {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+  .capability-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 12px;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-primary);
+    border-radius: var(--radius-md);
+  }
+  .capability-info {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    flex: 1;
+  }
+  .capability-name {
+    font-size: var(--fs-base);
+    font-weight: 500;
+    color: var(--text-primary);
+  }
+  .capability-desc {
+    font-size: var(--fs-sm);
+    color: var(--text-secondary);
+    line-height: 1.5;
+  }
+  .device-storage-info {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 12px;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-secondary);
+    border-radius: var(--radius-md);
+    margin-top: 8px;
+  }
+  .storage-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: var(--fs-sm);
+  }
+  .storage-label {
+    color: var(--text-secondary);
+    min-width: 120px;
+  }
+  .storage-path {
+    color: var(--text-primary);
+    background: var(--bg-secondary);
+    padding: 2px 6px;
+    border-radius: var(--radius-xs);
+    font-size: var(--fs-xs);
+    font-family: var(--font-mono);
+  }
+  .storage-value {
+    color: var(--text-primary);
   }
 </style>

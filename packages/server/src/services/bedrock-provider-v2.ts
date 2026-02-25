@@ -26,6 +26,7 @@ import {
 } from './tool-schemas';
 import { executeTool } from './tool-executor';
 import { loadConversationHistory, getRecommendedOptions } from './chat-compaction';
+import { recordToolUsage } from './pattern-detection';
 import type { PermissionMode, PermissionRule, TerminalCommandPolicy } from '@e/shared';
 import { extractFilePath, extractEditLineHint } from '@e/shared';
 
@@ -398,6 +399,14 @@ export function createBedrockStreamV2(opts: BedrockStreamOptions): ReadableStrea
 
               // Execute tool
               const result = await executeTool(
+                content.name,
+                content.input || {},
+                opts.workspacePath,
+              );
+
+              // Record tool usage for pattern detection
+              recordToolUsage(
+                opts.conversationId,
                 content.name,
                 content.input || {},
                 opts.workspacePath,

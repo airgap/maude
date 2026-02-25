@@ -1108,6 +1108,14 @@ export class ClaudeProcessManager {
                       enqueueEvent(controller, `data: ${errEvt}\n\n`);
                       enqueueEvent(controller, `data: {"type":"message_stop"}\n\n`);
                       session.streamComplete = true;
+
+                      // Trigger pattern analysis asynchronously (non-blocking)
+                      triggerPatternAnalysis(session.conversationId, session.workspacePath).catch(
+                        (err) => {
+                          console.error('Pattern analysis failed:', err);
+                        },
+                      );
+
                       scheduleCleanup();
                       try {
                         controller.close();
@@ -1546,5 +1554,37 @@ export class ClaudeProcessManager {
         );
       },
     });
+  }
+}
+
+/**
+ * Trigger pattern analysis asynchronously after a conversation turn completes
+ */
+async function triggerPatternAnalysis(
+  conversationId: string,
+  workspacePath?: string,
+): Promise<void> {
+  try {
+    // Lazy import to avoid circular dependencies
+    const { detectPatterns, shouldProposeSkillOrRule } = await import('../pattern-detection');
+    const { generateProposal } = await import('../proposal-generator');
+
+    // Run pattern detection
+    const patterns = await detectPatterns(workspacePath || '', conversationId, 'moderate');
+
+    // Auto-propose for patterns that meet the threshold
+    for (const pattern of patterns) {
+      if (shouldProposeSkillOrRule(pattern, 3)) {
+        try {
+          // Generate proposal (this creates an agent note automatically)
+          await generateProposal(pattern, 'skill');
+        } catch (proposalErr) {
+          console.error(`Failed to generate proposal for pattern ${pattern.id}:`, proposalErr);
+        }
+      }
+    }
+  } catch (err) {
+    // Silent fail - pattern analysis is non-critical
+    console.error('Pattern analysis error:', err);
   }
 }

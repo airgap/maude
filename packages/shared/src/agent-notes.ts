@@ -9,7 +9,13 @@
 
 export type AgentNoteStatus = 'unread' | 'read' | 'archived';
 
-export type AgentNoteCategory = 'research' | 'report' | 'recommendation' | 'status' | 'general';
+export type AgentNoteCategory =
+  | 'research'
+  | 'report'
+  | 'recommendation'
+  | 'status'
+  | 'general'
+  | 'skill-proposal';
 
 export interface AgentNote {
   id: string;

@@ -8,7 +8,11 @@ import { createGeminiStreamV2 } from '../services/gemini-provider-v2';
 import { getDb } from '../db/database';
 import { readFile, readdir } from 'fs/promises';
 import { join, basename } from 'path';
-
+import {
+  detectPatterns,
+  shouldProposeSkillOrRule,
+  logLearning,
+} from '../services/pattern-detection';
 const app = new Hono();
 
 const BASE_SYSTEM_PROMPT = `You are E, an expert AI coding assistant embedded directly inside the user's development environment.
@@ -24,6 +28,15 @@ You run inside E — a desktop IDE built around you. You have full access to the
 
 The user sees your thinking steps and tool calls in real time as you work. Be transparent — show your reasoning, don't hide uncertainty.
 
+## Self-Improving Skills System
+
+You have the ability to learn from recurring patterns and propose reusable skills or rules:
+
+- **When you notice a pattern** you've applied 3+ times (refactoring, command sequences, workflows), you can propose creating a skill or rule by leaving an agent note with category "skill-proposal"
+- **Skill proposals should include**: a clear name, rationale explaining why it's useful, and the skill/rule content
+- **Example scenarios**: repeated refactoring patterns, common command sequences, file operation workflows, debugging procedures, testing patterns
+- **Be thoughtful**: only propose skills that are genuinely reusable, not one-off fixes
+
 ## How to behave
 
 - **Be direct and precise.** Skip filler phrases. Get to the answer.
@@ -32,6 +45,7 @@ The user sees your thinking steps and tool calls in real time as you work. Be tr
 - **Think in diffs, not rewrites.** Make the smallest correct change. Don't refactor what wasn't asked.
 - **Be honest about confidence.** Say when something is uncertain, untested, or has tradeoffs.
 - **One thing at a time.** Complete the current task fully before suggesting follow-ups.
+- **Learn and adapt.** Notice patterns in your work and propose skills when you see opportunities for automation.
 
 ## Output style
 
@@ -256,6 +270,70 @@ app.post('/:conversationId', async (c) => {
     VALUES (?, ?, 'user', ?, ?)
   `,
   ).run(userMsgId, conversationId, JSON.stringify(userContentBlocks), Date.now());
+
+  // Run pattern detection in background after message is sent
+  // This happens asynchronously and won't block the response stream
+  const workspacePath = conv.workspace_path;
+  if (workspacePath) {
+    // Run pattern detection after a short delay to let the assistant response complete
+    setTimeout(async () => {
+      try {
+        // Detect patterns in the conversation
+        const patterns = await detectPatterns(workspacePath, conversationId);
+
+        // Check if any patterns should trigger a proposal
+        for (const pattern of patterns) {
+          const shouldPropose = shouldProposeSkillOrRule(pattern);
+          if (shouldPropose && !pattern.proposalCreated) {
+            // Generate a skill or rule proposal
+            const { generateProposal } = await import('../services/proposal-generator');
+            const proposalType = determineProposalType(pattern);
+            const proposal = await generateProposal(pattern, proposalType);
+
+            // Create an agent note for the proposal
+            const noteId = nanoid(12);
+            const now = Date.now();
+            db.query(
+              `INSERT INTO agent_notes (id, workspace_path, conversation_id, title, content, category, status, metadata, created_at, updated_at)
+               VALUES (?, ?, ?, ?, ?, 'skill-proposal', 'unread', ?, ?, ?)`,
+            ).run(
+              noteId,
+              workspacePath,
+              conversationId,
+              `New ${proposalType} proposal: ${proposal.name}`,
+              `## Pattern Detected\n\n${pattern.description}\n\n**Occurrences:** ${pattern.occurrences}\n**Confidence:** ${(pattern.confidence * 100).toFixed(0)}%\n\n## Proposed ${proposalType === 'skill' ? 'Skill' : 'Rule'}\n\n${proposal.content}\n\n---\n\nReview and approve this proposal in the Learning panel to automatically create the ${proposalType} file.`,
+              JSON.stringify({
+                proposalId: proposal.id,
+                patternId: pattern.id,
+                proposalType,
+                confidence: pattern.confidence,
+              }),
+              now,
+              now,
+            );
+
+            // Log the pattern detection as a learning event
+            logLearning(
+              workspacePath,
+              `Created ${proposalType} proposal: ${proposal.name}`,
+              'proposal-created',
+              proposal.id,
+            );
+          }
+        }
+      } catch (err) {
+        console.error('[pattern-detection] Failed to analyze patterns:', err);
+      }
+    }, 5000); // Wait 5 seconds for response to complete
+  }
+
+  // Helper function to determine if a pattern should be a skill or rule
+  function determineProposalType(pattern: any): 'skill' | 'rule' {
+    // Workflows, problem-solving, and tool-usage become skills
+    // Refactoring, file patterns, and command sequences become rules
+    const skillTypes = ['workflow', 'problem-solving', 'tool-usage'];
+    return skillTypes.includes(pattern.patternType) ? 'skill' : 'rule';
+  }
 
   // Get active rules context once for all provider branches
   const activeRulesCtx = await getActiveRulesContext(conv.workspace_path);

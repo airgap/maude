@@ -6,6 +6,7 @@
 
 import { getCachedMcpTools, mcpToolsToSchemas, isMcpTool } from './mcp-tool-adapter';
 import { isMcpToolDangerous } from '@e/shared';
+import { getDb } from '../db/database';
 
 export interface ToolSchema {
   name: string;
@@ -26,10 +27,29 @@ export interface ToolSchema {
 }
 
 /**
+ * Check if a device capability is enabled
+ */
+function isDeviceCapabilityEnabled(capabilityName: 'screenshot' | 'camera' | 'location'): boolean {
+  try {
+    const db = getDb();
+    const row = db
+      .query('SELECT value FROM settings WHERE key = ?')
+      .get('deviceCapabilities') as any;
+    if (!row) return false;
+
+    const capabilities = JSON.parse(row.value);
+    const capabilityKey = `${capabilityName}Enabled`;
+    return capabilities[capabilityKey] === true;
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Get all available tool definitions for Bedrock/Anthropic format
  */
 export function getToolDefinitions(): ToolSchema[] {
-  return [
+  const tools: ToolSchema[] = [
     // Filesystem tools
     {
       name: 'Read',
@@ -314,7 +334,105 @@ export function getToolDefinitions(): ToolSchema[] {
         required: ['canvas_id'],
       },
     },
+
+    // Pattern learning / self-improving skills tool
+    {
+      name: 'Skill',
+      description:
+        'Manage skills and auto-detect recurring patterns to propose new reusable capabilities. Use this to: (1) Search the skills registry for existing skills when you encounter a capability gap, (2) Propose creating a new skill or rule when you detect a recurring pattern in your work (e.g., same refactoring applied 3+ times, repeated workflow, common problem-solving approach), (3) Check the learning log to see what patterns have been previously identified.',
+      input_schema: {
+        type: 'object',
+        properties: {
+          action: {
+            type: 'string',
+            description:
+              'Action to perform: "search" to search skills registry, "propose" to propose a new skill/rule, "check-learning" to view the learning log',
+            enum: ['search', 'propose', 'check-learning'],
+          },
+          query: {
+            type: 'string',
+            description:
+              'For "search": search query for finding relevant skills. For "check-learning": optional filter for learning log entries.',
+          },
+          proposal: {
+            type: 'object',
+            description:
+              'For "propose" action: details of the proposed skill or rule. Required fields: type, name, description, content, category, tags, examples',
+          },
+        },
+        required: ['action'],
+      },
+    },
   ];
+
+  // Conditionally add device capability tools based on settings
+  if (isDeviceCapabilityEnabled('screenshot')) {
+    tools.push(
+      {
+        name: 'CaptureScreenshot',
+        description:
+          'Capture a screenshot of the screen or a specific display for visual debugging, documentation, or UI analysis. Only available in desktop app with user permission. Screenshots are automatically saved to the workspace and included as image attachments in the conversation.',
+        input_schema: {
+          type: 'object',
+          properties: {
+            display_index: {
+              type: 'integer',
+              description:
+                'Optional index of the display to capture (0 = primary display). Use ListDisplays to see available displays.',
+            },
+            save_to_workspace: {
+              type: 'boolean',
+              description: 'If true, save the screenshot to the workspace capture directory',
+            },
+          },
+          required: [],
+        },
+      },
+      {
+        name: 'ListDisplays',
+        description:
+          'List all available displays/screens for screenshot capture. Returns display information including resolution.',
+        input_schema: {
+          type: 'object',
+          properties: {},
+          required: [],
+        },
+      },
+    );
+  }
+
+  if (isDeviceCapabilityEnabled('location')) {
+    tools.push({
+      name: 'GetLocation',
+      description:
+        'Get approximate location information (latitude, longitude, timezone) using IP geolocation. Privacy-friendly: uses IP-based geolocation, not GPS. Useful for timezone-aware scheduling, localized suggestions, or context-aware development. Only available with user permission.',
+      input_schema: {
+        type: 'object',
+        properties: {},
+        required: [],
+      },
+    });
+  }
+
+  if (isDeviceCapabilityEnabled('camera')) {
+    tools.push({
+      name: 'CaptureCamera',
+      description:
+        'Access the camera to capture a photo or scan a barcode/QR code. Useful for document scanning, barcode reading, or visual input. Only available in desktop app with user permission and TCC camera access. Captured images are saved to the workspace.',
+      input_schema: {
+        type: 'object',
+        properties: {
+          save_to_workspace: {
+            type: 'boolean',
+            description: 'If true, save the captured image to the workspace capture directory',
+          },
+        },
+        required: [],
+      },
+    });
+  }
+
+  return tools;
 }
 
 /**

@@ -117,6 +117,34 @@ app.get('/', (c) => {
       requiresApproval: true,
       source: 'builtin',
     },
+    {
+      name: 'CaptureScreenshot',
+      category: 'device',
+      description: 'Capture screenshots for visual debugging',
+      requiresApproval: false,
+      source: 'builtin',
+    },
+    {
+      name: 'ListDisplays',
+      category: 'device',
+      description: 'List available displays for screenshot capture',
+      requiresApproval: false,
+      source: 'builtin',
+    },
+    {
+      name: 'CaptureCamera',
+      category: 'device',
+      description: 'Capture from camera for barcode/document scanning',
+      requiresApproval: false,
+      source: 'builtin',
+    },
+    {
+      name: 'GetLocation',
+      category: 'device',
+      description: 'Get approximate location for timezone-aware scheduling',
+      requiresApproval: false,
+      source: 'builtin',
+    },
   ];
 
   return c.json({ ok: true, data: builtinTools });

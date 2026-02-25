@@ -4,8 +4,10 @@
   import { loopStore } from '$lib/stores/loop.svelte';
   import { settingsStore } from '$lib/stores/settings.svelte';
   import { uiStore } from '$lib/stores/ui.svelte';
+  import { conversationStore } from '$lib/stores/conversation.svelte';
   import { api } from '$lib/api/client';
   import { onMount } from 'svelte';
+  import { goto } from '$app/navigation';
   import LoopPanel from './LoopPanel.svelte';
 
   let resettingStoryId = $state<string | null>(null);
@@ -14,6 +16,7 @@
   let workspacePath = $derived(settingsStore.workspacePath || '');
   let newStoryTitle = $state('');
   let estimatingStoryId = $state<string | null>(null);
+  let workingStoryId = $state<string | null>(null);
 
   // --- Drag-and-drop state ---
   let draggedStoryId = $state<string | null>(null);
@@ -212,6 +215,47 @@
     // Swap
     [pending[idx], pending[newIdx]] = [pending[newIdx], pending[idx]];
     await workStore.reorderPendingStories(pending);
+  }
+
+  /**
+   * Start working on a story interactively (pair programming mode).
+   * Creates a conversation with the story context and opens it.
+   */
+  async function workInteractively(story: UserStory) {
+    workingStoryId = story.id;
+    try {
+      // Build system prompt with story context
+      const systemPrompt = `You are assisting the user with implementing this user story:
+
+# Story: ${story.title}
+
+${story.description || '(No description provided)'}
+
+${story.acceptanceCriteria ? `## Acceptance Criteria\n${story.acceptanceCriteria}` : ''}
+
+${story.estimate ? `## Estimate\nSize: ${story.estimate.size} (${story.estimate.storyPoints} points)\nConfidence: ${story.estimate.confidence} (${story.estimate.confidenceScore}%)\n${story.estimate.reasoning || ''}` : ''}
+
+---
+
+Work with the user to implement this story. Ask clarifying questions if needed, propose implementation approaches, and write code together. The goal is to complete the story successfully by meeting all acceptance criteria.`;
+
+      // Create conversation with story context
+      const res = await api.conversations.create({
+        title: `📋 ${story.title}`,
+        systemPrompt,
+        workspacePath: workspacePath || undefined,
+      });
+
+      if (res.ok) {
+        // Navigate to the new conversation - the page will handle loading it
+        goto(`/?conversation=${res.data.id}`);
+        uiStore.toast('Started interactive session for story', 'success');
+      }
+    } catch (err: any) {
+      uiStore.toast(err.message || 'Failed to start interactive session', 'error');
+    } finally {
+      workingStoryId = null;
+    }
   }
 </script>
 
@@ -474,6 +518,36 @@
                     <span class="attempts-badge">{story.attempts}/{story.maxAttempts}</span>
                   {/if}
                   <button
+                    class="work-interactive-btn"
+                    title="Work interactively (pair programming mode)"
+                    disabled={workingStoryId === story.id}
+                    onclick={() => workInteractively(story)}
+                  >
+                    {#if workingStoryId === story.id}
+                      <span class="spinner-sm"></span>
+                    {:else}
+                      <svg
+                        width="10"
+                        height="10"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                      >
+                        <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" /><circle
+                          cx="9"
+                          cy="7"
+                          r="4"
+                        /><path d="M23 21v-2a4 4 0 0 0-3-3.87" /><path
+                          d="M16 3.13a4 4 0 0 1 0 7.75"
+                        />
+                      </svg>
+                      Pair
+                    {/if}
+                  </button>
+                  <button
                     class="reset-badge-btn"
                     title="Reset attempts and set back to pending"
                     disabled={resettingStoryId === story.id}
@@ -630,6 +704,36 @@
                     <span class="priority-badge">{priorityLabel(story.priority)}</span>
                   {/if}
                   <div class="story-actions">
+                    <button
+                      class="work-interactive-btn"
+                      title="Work interactively (pair programming mode)"
+                      disabled={workingStoryId === story.id}
+                      onclick={() => workInteractively(story)}
+                    >
+                      {#if workingStoryId === story.id}
+                        <span class="spinner-sm"></span>
+                      {:else}
+                        <svg
+                          width="12"
+                          height="12"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          stroke-width="2"
+                          stroke-linecap="round"
+                          stroke-linejoin="round"
+                        >
+                          <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" /><circle
+                            cx="9"
+                            cy="7"
+                            r="4"
+                          /><path d="M23 21v-2a4 4 0 0 0-3-3.87" /><path
+                            d="M16 3.13a4 4 0 0 1 0 7.75"
+                          />
+                        </svg>
+                        Pair
+                      {/if}
+                    </button>
                     <button
                       class="research-toggle-btn"
                       title={story.researchOnly
@@ -1247,6 +1351,33 @@
   .reset-badge-btn:disabled {
     opacity: 0.5;
     cursor: not-allowed;
+  }
+
+  .work-interactive-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: var(--fs-xxs);
+    padding: 2px 8px;
+    border-radius: 3px;
+    background: var(--accent-primary);
+    color: white;
+    border: none;
+    cursor: pointer;
+    font-weight: 600;
+    transition: all var(--transition);
+    opacity: 0.9;
+  }
+  .work-interactive-btn:hover:not(:disabled) {
+    opacity: 1;
+    background: var(--accent-primary-hover, var(--accent-primary));
+    transform: translateY(-1px);
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+  }
+  .work-interactive-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    transform: none;
   }
 
   .reset-all-btn {

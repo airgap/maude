@@ -376,54 +376,6 @@ export function initDatabase(): void {
     CREATE INDEX IF NOT EXISTS idx_cross_session_from_conv ON cross_session_messages(from_conversation_id, timestamp);
     CREATE INDEX IF NOT EXISTS idx_cross_session_timestamp ON cross_session_messages(timestamp DESC);
 
-    CREATE TABLE IF NOT EXISTS detected_patterns (
-      id TEXT PRIMARY KEY,
-      workspace_path TEXT NOT NULL,
-      type TEXT NOT NULL,
-      summary TEXT NOT NULL,
-      description TEXT NOT NULL,
-      occurrences INTEGER NOT NULL DEFAULT 1,
-      conversation_ids TEXT NOT NULL DEFAULT '[]',
-      example_message_ids TEXT NOT NULL DEFAULT '[]',
-      confidence REAL NOT NULL DEFAULT 0.5,
-      first_seen INTEGER NOT NULL,
-      last_seen INTEGER NOT NULL,
-      proposal_made INTEGER NOT NULL DEFAULT 0,
-      created_at INTEGER NOT NULL,
-      updated_at INTEGER NOT NULL
-    );
-
-    CREATE INDEX IF NOT EXISTS idx_detected_patterns_workspace ON detected_patterns(workspace_path, created_at DESC);
-    CREATE INDEX IF NOT EXISTS idx_detected_patterns_type ON detected_patterns(workspace_path, type);
-    CREATE INDEX IF NOT EXISTS idx_detected_patterns_confidence ON detected_patterns(confidence DESC);
-
-    CREATE TABLE IF NOT EXISTS skill_rule_proposals (
-      id TEXT PRIMARY KEY,
-      workspace_path TEXT NOT NULL,
-      pattern_id TEXT NOT NULL,
-      type TEXT NOT NULL,
-      status TEXT NOT NULL DEFAULT 'pending',
-      name TEXT NOT NULL,
-      description TEXT NOT NULL,
-      category TEXT NOT NULL,
-      content TEXT NOT NULL,
-      tags TEXT NOT NULL DEFAULT '[]',
-      rationale TEXT NOT NULL,
-      examples TEXT NOT NULL DEFAULT '[]',
-      installed_path TEXT,
-      note_id TEXT,
-      created_at INTEGER NOT NULL,
-      updated_at INTEGER NOT NULL,
-      approved_at INTEGER,
-      rejected_at INTEGER,
-      FOREIGN KEY (pattern_id) REFERENCES detected_patterns(id) ON DELETE CASCADE,
-      FOREIGN KEY (note_id) REFERENCES agent_notes(id) ON DELETE SET NULL
-    );
-
-    CREATE INDEX IF NOT EXISTS idx_skill_rule_proposals_workspace ON skill_rule_proposals(workspace_path, created_at DESC);
-    CREATE INDEX IF NOT EXISTS idx_skill_rule_proposals_status ON skill_rule_proposals(workspace_path, status);
-    CREATE INDEX IF NOT EXISTS idx_skill_rule_proposals_pattern ON skill_rule_proposals(pattern_id);
-
 
   `);
 

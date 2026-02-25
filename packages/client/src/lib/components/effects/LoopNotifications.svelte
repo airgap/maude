@@ -11,11 +11,38 @@
   import { loopStore } from '$lib/stores/loop.svelte';
   import { settingsStore } from '$lib/stores/settings.svelte';
   import { desktopNotifications } from '$lib/notifications/desktop-notifications';
+  import { api } from '$lib/api/client';
+  import { workspaceStore } from '$lib/stores/workspace.svelte';
+  import type { NotificationEventType } from '@e/shared';
 
   // Track previous values to detect transitions
   let prevLoopStatus = $state<string | null>(null);
   let prevCompletedCount = $state(0);
   let prevStoryStatuses = $state<Map<string, string>>(new Map());
+
+  /**
+   * Send notification to external channels (Slack, Discord, etc.)
+   */
+  async function sendExternalNotification(
+    event: NotificationEventType,
+    title: string,
+    message: string,
+    data?: { storyId?: string; loopId?: string; conversationId?: string },
+  ) {
+    try {
+      await api.notificationChannels.send({
+        event,
+        title,
+        message,
+        workspaceId: workspaceStore.activeWorkspace?.workspaceId,
+        conversationId: data?.conversationId,
+        storyId: data?.storyId,
+      });
+    } catch (error) {
+      // Silently fail — don't interrupt the user experience if notifications fail
+      console.warn('Failed to send external notification:', error);
+    }
+  }
 
   $effect(() => {
     const loop = loopStore.activeLoop;
@@ -34,6 +61,12 @@
         desktopNotifications.loopCompleted(loop.totalStoriesCompleted, {
           loopId: loop.id,
         });
+        sendExternalNotification(
+          'golem_completion',
+          'Loop Completed',
+          `All ${loop.totalStoriesCompleted} stories finished successfully.`,
+          { loopId: loop.id },
+        );
       }
     }
 
@@ -43,6 +76,12 @@
         desktopNotifications.loopFailed(undefined, {
           loopId: loop.id,
         });
+        sendExternalNotification(
+          'golem_failure',
+          'Loop Failed',
+          'The loop encountered an error and stopped.',
+          { loopId: loop.id },
+        );
       }
     }
 
@@ -64,6 +103,12 @@
             storyId: latestLog.storyId,
             loopId: loop.id,
           });
+          sendExternalNotification(
+            'story_completed',
+            'Story Completed',
+            latestLog.storyTitle || 'Story',
+            { storyId: latestLog.storyId, loopId: loop.id },
+          );
         }
       }
     }
@@ -84,6 +129,12 @@
             storyId: entry.storyId,
             loopId: loopStore.activeLoop?.id,
           });
+          sendExternalNotification(
+            'story_failed',
+            'Story Failed',
+            `${entry.storyTitle || 'Story'}${entry.detail ? ` — ${entry.detail}` : ''}`,
+            { storyId: entry.storyId, loopId: loopStore.activeLoop?.id },
+          );
         }
       }
       prevLogLength = entries.length;

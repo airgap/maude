@@ -9,6 +9,7 @@ import { nanoid } from 'nanoid';
 import { getDb } from '../db/database';
 import { getAllToolsWithMcp, toOllamaFunctions } from './tool-schemas';
 import { executeTool } from './tool-executor';
+import { recordToolUsage } from './pattern-detection';
 import { loadConversationHistory, getRecommendedOptions } from './chat-compaction';
 import { extractFilePath, extractEditLineHint } from '@e/shared';
 
@@ -232,6 +233,14 @@ export function createOllamaStreamV2(opts: OllamaStreamOptions): ReadableStream 
           const toolResults: any[] = [];
           for (const toolCall of toolCalls) {
             const result = await executeTool(
+              toolCall.function.name,
+              toolCall.function.arguments,
+              opts.workspacePath,
+            );
+
+            // Record tool usage for pattern detection
+            recordToolUsage(
+              opts.conversationId,
               toolCall.function.name,
               toolCall.function.arguments,
               opts.workspacePath,

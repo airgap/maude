@@ -9,7 +9,8 @@
   import { api } from '$lib/api/client';
   import { sendAndStream } from '$lib/api/sse';
   import { onMount } from 'svelte';
-  import type { PlanMode, LoopConfig } from '@e/shared';
+  import { goto } from '$app/navigation';
+  import type { PlanMode, LoopConfig, UserStory } from '@e/shared';
   import DependencyView from '$lib/components/planning/DependencyView.svelte';
 
   let workspacePath = $derived(settingsStore.workspacePath || '');
@@ -23,6 +24,7 @@
   let newStoryDesc = $state('');
   let newStoryCriteria = $state('');
   let logEl = $state<HTMLDivElement>();
+  let workingStoryId = $state<string | null>(null);
 
   onMount(() => {
     if (workspacePath) {
@@ -400,6 +402,47 @@
   function openEditStoryModal(storyId: string) {
     loopStore.setEditingStoryId(storyId);
     uiStore.openModal('story-create');
+  }
+
+  /**
+   * Start working on a story interactively (pair programming mode).
+   * Creates a conversation with the story context and opens it.
+   */
+  async function workInteractively(story: UserStory) {
+    workingStoryId = story.id;
+    try {
+      // Build system prompt with story context
+      const systemPrompt = `You are assisting the user with implementing this user story:
+
+# Story: ${story.title}
+
+${story.description || '(No description provided)'}
+
+${story.acceptanceCriteria ? `## Acceptance Criteria\n${story.acceptanceCriteria}` : ''}
+
+${story.estimate ? `## Estimate\nSize: ${story.estimate.size} (${story.estimate.storyPoints} points)\nConfidence: ${story.estimate.confidence} (${story.estimate.confidenceScore}%)\n${story.estimate.reasoning || ''}` : ''}
+
+---
+
+Work with the user to implement this story. Ask clarifying questions if needed, propose implementation approaches, and write code together. The goal is to complete the story successfully by meeting all acceptance criteria.`;
+
+      // Create conversation with story context
+      const res = await api.conversations.create({
+        title: `📋 ${story.title}`,
+        systemPrompt,
+        workspacePath: workspacePath || undefined,
+      });
+
+      if (res.ok) {
+        // Navigate to the new conversation - the page will handle loading it
+        goto(`/?conversation=${res.data.id}`);
+        uiStore.toast('Started interactive session for story', 'success');
+      }
+    } catch (err: any) {
+      uiStore.toast(err.message || 'Failed to start interactive session', 'error');
+    } finally {
+      workingStoryId = null;
+    }
   }
 
   let estimatingAll = $state(false);
@@ -984,6 +1027,36 @@
                     </button>
                   {/if}
                   <button
+                    class="work-interactive-btn"
+                    title="Work interactively (pair programming mode)"
+                    disabled={workingStoryId === story.id}
+                    onclick={() => workInteractively(story)}
+                  >
+                    {#if workingStoryId === story.id}
+                      <span class="spinner-sm"></span>
+                    {:else}
+                      <svg
+                        width="11"
+                        height="11"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                      >
+                        <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" /><circle
+                          cx="9"
+                          cy="7"
+                          r="4"
+                        /><path d="M23 21v-2a4 4 0 0 0-3-3.87" /><path
+                          d="M16 3.13a4 4 0 0 1 0 7.75"
+                        />
+                      </svg>
+                      Pair
+                    {/if}
+                  </button>
+                  <button
                     class="edit-story-btn"
                     title="Edit story"
                     onclick={() => openEditStoryModal(story.id)}
@@ -1497,6 +1570,36 @@
     color: var(--accent-warning, #e6a817);
     font-weight: bold;
   }
+  .work-interactive-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    font-size: var(--fs-xxs);
+    padding: 2px 6px;
+    border-radius: 3px;
+    background: var(--accent-primary);
+    color: white;
+    border: none;
+    cursor: pointer;
+    font-weight: 600;
+    transition: all var(--transition);
+    opacity: 0;
+  }
+  .story-item:hover .work-interactive-btn {
+    opacity: 0.9;
+  }
+  .work-interactive-btn:hover:not(:disabled) {
+    opacity: 1 !important;
+    background: var(--accent-primary-hover, var(--accent-primary));
+    transform: translateY(-1px);
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+  }
+  .work-interactive-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    transform: none;
+  }
+
   .edit-story-btn,
   .validate-btn,
   .refine-btn,

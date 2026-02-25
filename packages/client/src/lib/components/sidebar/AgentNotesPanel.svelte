@@ -27,6 +27,7 @@
     recommendation: 'Recommendation',
     status: 'Status',
     general: 'General',
+    'skill-proposal': 'Skill Proposal',
   };
 
   const categoryIcons: Record<AgentNoteCategory, string> = {
@@ -38,6 +39,8 @@
     status: 'M9 11l3 3L22 4 M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11',
     general:
       'M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-3l-4 4z',
+    'skill-proposal':
+      'M12 3l1.67 5.14h5.41l-4.38 3.18L16.38 17 12 13.82 7.62 17l1.68-5.68L4.92 8.14h5.41z',
   };
 
   function toggleExpand(note: AgentNote) {
@@ -84,6 +87,42 @@
     if (content.length <= maxLen) return content;
     return content.slice(0, maxLen).trimEnd() + '...';
   }
+
+  async function approveProposal(note: AgentNote) {
+    if (!workspacePath || !note.metadata?.proposalId) return;
+
+    try {
+      const res = await api.fetch(`/api/learning/proposals/${note.metadata.proposalId}/approve`, {
+        method: 'POST',
+        body: JSON.stringify({ tier: 'workspace' }),
+      });
+
+      if (res.ok) {
+        // Archive the note
+        await agentNotesStore.archive(note.id);
+      }
+    } catch (err) {
+      console.error('[agent-notes] Failed to approve proposal:', err);
+    }
+  }
+
+  async function rejectProposal(note: AgentNote, ignorePatternType = false) {
+    if (!workspacePath || !note.metadata?.proposalId) return;
+
+    try {
+      const res = await api.fetch(`/api/learning/proposals/${note.metadata.proposalId}/reject`, {
+        method: 'POST',
+        body: JSON.stringify({ ignorePatternType }),
+      });
+
+      if (res.ok) {
+        // Archive the note
+        await agentNotesStore.archive(note.id);
+      }
+    } catch (err) {
+      console.error('[agent-notes] Failed to reject proposal:', err);
+    }
+  }
 </script>
 
 <div class="notes-panel">
@@ -120,7 +159,7 @@
 
   <!-- Filter tabs -->
   <div class="filter-tabs">
-    {#each ['all', 'unread', 'report', 'research', 'recommendation', 'status', 'general'] as f}
+    {#each ['all', 'unread', 'skill-proposal', 'report', 'research', 'recommendation', 'status', 'general'] as f}
       <button
         class="filter-tab"
         class:active={agentNotesStore.filterCategory === f}
@@ -294,6 +333,58 @@
             <div class="note-content">
               <pre class="note-markdown">{note.content}</pre>
             </div>
+
+            <!-- Skill proposal actions -->
+            {#if note.category === 'skill-proposal' && note.metadata?.proposalId}
+              <div class="proposal-actions">
+                <button class="proposal-btn approve" onclick={() => approveProposal(note)}>
+                  <svg
+                    width="14"
+                    height="14"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <polyline points="20 6 9 17 4 12"></polyline>
+                  </svg>
+                  Approve & Create
+                </button>
+                <button class="proposal-btn reject" onclick={() => rejectProposal(note, false)}>
+                  <svg
+                    width="14"
+                    height="14"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                  >
+                    <path d="M18 6L6 18M6 6l12 12"></path>
+                  </svg>
+                  Reject
+                </button>
+                <button
+                  class="proposal-btn reject-ignore"
+                  onclick={() => rejectProposal(note, true)}
+                  title="Reject and ignore this pattern type"
+                >
+                  <svg
+                    width="14"
+                    height="14"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                  >
+                    <circle cx="12" cy="12" r="10"></circle>
+                    <line x1="4.93" y1="4.93" x2="19.07" y2="19.07"></line>
+                  </svg>
+                  Reject & Ignore Type
+                </button>
+              </div>
+            {/if}
           {/if}
         </div>
       {/each}
@@ -595,5 +686,57 @@
     border-radius: var(--radius-sm);
     padding: 10px;
     margin: 0;
+  }
+
+  .proposal-actions {
+    display: flex;
+    gap: 6px;
+    padding: 8px 10px;
+    border-top: 1px solid var(--border-secondary);
+  }
+
+  .proposal-btn {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 5px;
+    padding: 6px 10px;
+    font-size: var(--fs-xs);
+    font-weight: 600;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border-primary);
+    background: var(--bg-secondary);
+    color: var(--text-primary);
+    cursor: pointer;
+    transition: all var(--transition);
+  }
+
+  .proposal-btn:hover {
+    background: var(--bg-hover);
+    border-color: var(--accent-primary);
+  }
+
+  .proposal-btn.approve {
+    border-color: var(--accent-success);
+    color: var(--accent-success);
+  }
+
+  .proposal-btn.approve:hover {
+    background: color-mix(in srgb, var(--accent-success) 15%, transparent);
+    border-color: var(--accent-success);
+  }
+
+  .proposal-btn.reject,
+  .proposal-btn.reject-ignore {
+    border-color: var(--border-primary);
+    color: var(--text-secondary);
+  }
+
+  .proposal-btn.reject:hover,
+  .proposal-btn.reject-ignore:hover {
+    border-color: var(--accent-error);
+    color: var(--accent-error);
+    background: color-mix(in srgb, var(--accent-error) 8%, transparent);
   }
 </style>

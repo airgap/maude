@@ -60,6 +60,9 @@ app.patch('/', async (c) => {
     resetOllamaCache();
   }
 
+  // Note: Device capabilities don't need special cache handling here
+  // The device routes load them from settings on each request for security
+
   return c.json({ ok: true });
 });
 
