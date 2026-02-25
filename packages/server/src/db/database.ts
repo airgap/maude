@@ -376,6 +376,55 @@ export function initDatabase(): void {
     CREATE INDEX IF NOT EXISTS idx_cross_session_from_conv ON cross_session_messages(from_conversation_id, timestamp);
     CREATE INDEX IF NOT EXISTS idx_cross_session_timestamp ON cross_session_messages(timestamp DESC);
 
+    CREATE TABLE IF NOT EXISTS detected_patterns (
+      id TEXT PRIMARY KEY,
+      workspace_path TEXT NOT NULL,
+      type TEXT NOT NULL,
+      summary TEXT NOT NULL,
+      description TEXT NOT NULL,
+      occurrences INTEGER NOT NULL DEFAULT 1,
+      conversation_ids TEXT NOT NULL DEFAULT '[]',
+      example_message_ids TEXT NOT NULL DEFAULT '[]',
+      confidence REAL NOT NULL DEFAULT 0.5,
+      first_seen INTEGER NOT NULL,
+      last_seen INTEGER NOT NULL,
+      proposal_made INTEGER NOT NULL DEFAULT 0,
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_detected_patterns_workspace ON detected_patterns(workspace_path, created_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_detected_patterns_type ON detected_patterns(workspace_path, type);
+    CREATE INDEX IF NOT EXISTS idx_detected_patterns_confidence ON detected_patterns(confidence DESC);
+
+    CREATE TABLE IF NOT EXISTS skill_rule_proposals (
+      id TEXT PRIMARY KEY,
+      workspace_path TEXT NOT NULL,
+      pattern_id TEXT NOT NULL,
+      type TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'pending',
+      name TEXT NOT NULL,
+      description TEXT NOT NULL,
+      category TEXT NOT NULL,
+      content TEXT NOT NULL,
+      tags TEXT NOT NULL DEFAULT '[]',
+      rationale TEXT NOT NULL,
+      examples TEXT NOT NULL DEFAULT '[]',
+      installed_path TEXT,
+      note_id TEXT,
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL,
+      approved_at INTEGER,
+      rejected_at INTEGER,
+      FOREIGN KEY (pattern_id) REFERENCES detected_patterns(id) ON DELETE CASCADE,
+      FOREIGN KEY (note_id) REFERENCES agent_notes(id) ON DELETE SET NULL
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_skill_rule_proposals_workspace ON skill_rule_proposals(workspace_path, created_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_skill_rule_proposals_status ON skill_rule_proposals(workspace_path, status);
+    CREATE INDEX IF NOT EXISTS idx_skill_rule_proposals_pattern ON skill_rule_proposals(pattern_id);
+
+
   `);
 
   // Migrate: add new conversation columns (safe ALTER TABLE — no-ops if already exist)
@@ -502,6 +551,114 @@ export function initDatabase(): void {
     );
     CREATE INDEX IF NOT EXISTS idx_installed_skills_skill_id ON installed_skills(skill_id);
     CREATE INDEX IF NOT EXISTS idx_installed_skills_workspace ON installed_skills(workspace_path);
+  `);
+
+  // Pattern learning / self-improving skills tables
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS tool_usage_records (
+      id TEXT PRIMARY KEY,
+      conversation_id TEXT NOT NULL,
+      workspace_path TEXT,
+      tool_name TEXT NOT NULL,
+      input TEXT NOT NULL,
+      normalized_input TEXT NOT NULL,
+      context TEXT,
+      timestamp INTEGER NOT NULL,
+      created_at INTEGER NOT NULL,
+      FOREIGN KEY (conversation_id) REFERENCES conversations(id) ON DELETE CASCADE
+    );
+    CREATE INDEX IF NOT EXISTS idx_tool_usage_conversation ON tool_usage_records(conversation_id, timestamp);
+    CREATE INDEX IF NOT EXISTS idx_tool_usage_workspace ON tool_usage_records(workspace_path, timestamp DESC);
+    CREATE INDEX IF NOT EXISTS idx_tool_usage_tool ON tool_usage_records(tool_name, timestamp DESC);
+
+    CREATE TABLE IF NOT EXISTS pattern_detections (
+      id TEXT PRIMARY KEY,
+      workspace_path TEXT,
+      pattern_type TEXT NOT NULL,
+      description TEXT NOT NULL,
+      occurrences INTEGER NOT NULL DEFAULT 1,
+      tools TEXT NOT NULL DEFAULT '[]',
+      examples TEXT NOT NULL DEFAULT '[]',
+      confidence REAL NOT NULL DEFAULT 0.0,
+      first_seen INTEGER NOT NULL,
+      last_seen INTEGER NOT NULL,
+      proposal_created INTEGER NOT NULL DEFAULT 0,
+      conversation_ids TEXT NOT NULL DEFAULT '[]',
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_pattern_detections_workspace ON pattern_detections(workspace_path, last_seen DESC);
+    CREATE INDEX IF NOT EXISTS idx_pattern_detections_type ON pattern_detections(pattern_type);
+
+    CREATE TABLE IF NOT EXISTS skill_proposals (
+      id TEXT PRIMARY KEY,
+      pattern_id TEXT NOT NULL,
+      workspace_path TEXT,
+      proposal_type TEXT NOT NULL,
+      name TEXT NOT NULL,
+      description TEXT NOT NULL,
+      content TEXT NOT NULL,
+      metadata TEXT NOT NULL DEFAULT '{}',
+      status TEXT NOT NULL DEFAULT 'pending',
+      installed_path TEXT,
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL,
+      FOREIGN KEY (pattern_id) REFERENCES pattern_detections(id) ON DELETE CASCADE
+    );
+    CREATE INDEX IF NOT EXISTS idx_skill_proposals_pattern ON skill_proposals(pattern_id);
+    CREATE INDEX IF NOT EXISTS idx_skill_proposals_workspace ON skill_proposals(workspace_path, created_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_skill_proposals_status ON skill_proposals(status);
+
+    CREATE TABLE IF NOT EXISTS learning_log (
+      id TEXT PRIMARY KEY,
+      workspace_path TEXT,
+      message TEXT NOT NULL,
+      event_type TEXT NOT NULL,
+      related_id TEXT,
+      metadata TEXT NOT NULL DEFAULT '{}',
+      timestamp INTEGER NOT NULL,
+      created_at INTEGER NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_learning_log_workspace ON learning_log(workspace_path, timestamp DESC);
+    CREATE INDEX IF NOT EXISTS idx_learning_log_type ON learning_log(event_type, timestamp DESC);
+  `);
+
+  // Notification channels tables
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS notification_channels (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      type TEXT NOT NULL,
+      config TEXT NOT NULL,
+      enabled INTEGER NOT NULL DEFAULT 1,
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS workspace_notification_preferences (
+      workspace_id TEXT PRIMARY KEY,
+      enabled_events TEXT NOT NULL DEFAULT '[]',
+      enabled_channels TEXT NOT NULL DEFAULT '[]',
+      updated_at INTEGER NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS notification_logs (
+      id TEXT PRIMARY KEY,
+      channel_id TEXT NOT NULL,
+      event TEXT NOT NULL,
+      title TEXT NOT NULL,
+      message TEXT NOT NULL,
+      success INTEGER NOT NULL,
+      error_message TEXT,
+      sent_at INTEGER NOT NULL,
+      workspace_id TEXT,
+      conversation_id TEXT,
+      story_id TEXT
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_notification_logs_channel ON notification_logs(channel_id, sent_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_notification_logs_workspace ON notification_logs(workspace_id, sent_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_notification_logs_event ON notification_logs(event, sent_at DESC);
   `);
 }
 

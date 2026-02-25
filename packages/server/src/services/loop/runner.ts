@@ -3,6 +3,7 @@ import { nanoid } from 'nanoid';
 import { getDb } from '../../db/database';
 import { claudeManager } from '../claude-process';
 import { runAllQualityChecks } from '../quality-checker';
+import { sendNotification } from '../notification-channels';
 import type {
   LoopConfig,
   IterationLogEntry,
@@ -273,6 +274,20 @@ export class LoopRunner {
               current_agent_id: null,
             });
             this.emitEvent('completed', { message: 'All stories completed!' });
+
+            // Send notification for loop completion
+            sendNotification({
+              event: 'golem_completion',
+              title: 'Loop Completed',
+              message: `All ${stories.length} stories completed successfully!`,
+              workspaceId: this.workspacePath,
+            }).catch((err) => {
+              console.error(
+                `[loop:${this.loopId}] Failed to send golem_completion notification:`,
+                err,
+              );
+            });
+
             this.events.emit('loop_done', this.loopId);
             return;
           }
@@ -342,6 +357,18 @@ export class LoopRunner {
           this.emitEvent('failed', {
             message: 'No more eligible stories. Some stories could not be completed.',
           });
+
+          // Send notification for loop failure
+          const failedCount = stories.filter((s) => s.status === 'failed').length;
+          sendNotification({
+            event: 'golem_failure',
+            title: 'Loop Failed',
+            message: `Loop completed with ${failedCount} failed story(ies). No more eligible stories to process.`,
+            workspaceId: this.workspacePath,
+          }).catch((err) => {
+            console.error(`[loop:${this.loopId}] Failed to send golem_failure notification:`, err);
+          });
+
           this.events.emit('loop_done', this.loopId);
           return;
         }
@@ -701,6 +728,21 @@ export class LoopRunner {
               timestamp: Date.now(),
             });
 
+            // Send notification for story completion
+            sendNotification({
+              event: 'story_completed',
+              title: 'Story Completed',
+              message: `"${story.title}" completed successfully after ${iteration} iteration(s).`,
+              workspaceId: this.workspacePath,
+              conversationId,
+              storyId: story.id,
+            }).catch((err) => {
+              console.error(
+                `[loop:${this.loopId}] Failed to send story_completed notification:`,
+                err,
+              );
+            });
+
             // Record learnings from success
             this.recordLearning(story, 'Completed successfully', qualityResults);
 
@@ -831,6 +873,21 @@ export class LoopRunner {
 
               const loop = db.query('SELECT * FROM loops WHERE id = ?').get(this.loopId) as any;
               this.updateLoopDb({ total_stories_failed: (loop?.total_stories_failed || 0) + 1 });
+
+              // Send notification for story failure
+              sendNotification({
+                event: 'story_failed',
+                title: 'Story Failed',
+                message: `"${story.title}" failed after ${updatedStory?.attempts || 0} attempt(s). Reason: ${failReason}`,
+                workspaceId: this.workspacePath,
+                conversationId,
+                storyId: story.id,
+              }).catch((err) => {
+                console.error(
+                  `[loop:${this.loopId}] Failed to send story_failed notification:`,
+                  err,
+                );
+              });
 
               // External status writeback hook for failures
               const failedStory = this.getStory(story.id);
@@ -1503,6 +1560,18 @@ ${criteria}
         note,
       };
       this.events.emit('loop_event', evt);
+
+      // Send notification for agent note
+      sendNotification({
+        event: 'agent_note_created',
+        title: 'Agent Note Created',
+        message: `📝 ${title}\n\n${content.slice(0, 200)}${content.length > 200 ? '...' : ''}`,
+        workspaceId: this.workspacePath,
+        conversationId,
+        storyId: story.id,
+      }).catch((err) => {
+        console.error(`[loop:${this.loopId}] Failed to send agent_note_created notification:`, err);
+      });
 
       console.log(`[loop:${this.loopId}] Created agent note "${title}" (${id})`);
     } catch (err) {

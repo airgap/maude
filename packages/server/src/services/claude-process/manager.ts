@@ -27,6 +27,7 @@ import {
   summarizeWithLLM,
 } from '../chat-compaction';
 import { eventBridge } from '../event-bridge';
+import { sendNotification } from '../notification-channels';
 import type { CliProcess } from './spawner';
 import { hasScript, signalName, spawnWithScript, spawnWithPipe } from './spawner';
 import { translateCliEvent, extractAndStoreArtifacts } from './event-translator';
@@ -720,6 +721,20 @@ export class ClaudeProcessManager {
                           // Bridge approval request to commentators
                           if (session.workspacePath) {
                             eventBridge.emitRaw(session.workspacePath, approvalEvent);
+
+                            // Send notification for approval request
+                            sendNotification({
+                              event: 'approval_needed',
+                              title: 'Approval Needed',
+                              message: `Tool "${parsed.displayName}" requires approval: ${desc}`,
+                              workspaceId: session.workspacePath,
+                              conversationId: session.conversationId,
+                            }).catch((err) => {
+                              console.error(
+                                `[claude] Failed to send approval_needed notification:`,
+                                err,
+                              );
+                            });
                           }
                         }
 

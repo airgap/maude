@@ -91,12 +91,23 @@ export type {
   RemoteAccessMode,
   RemoteSession,
   RemoteAccessConfig,
+  DeviceCapabilities,
   Settings,
   Keybinding,
   ServerOnlySettings,
 } from './settings.js';
 
 export { DEFAULT_SETTINGS } from './settings.js';
+
+export type {
+  ScreenshotRequest,
+  ScreenshotResult,
+  CameraRequest,
+  CameraResult,
+  LocationRequest,
+  LocationResult,
+  DeviceCapabilityCheck,
+} from './device.js';
 
 export type {
   MemoryFile,
@@ -346,3 +357,45 @@ export type {
 } from './skills.js';
 
 export { SKILL_CATEGORIES } from './skills.js';
+
+export type {
+  PatternSensitivity,
+  ProposalType,
+  PatternDetection,
+  PatternExample,
+  SkillProposal,
+  LearningLogEntry,
+  PatternLearningSettings,
+  ApproveProposalRequest,
+  ToolUsageRecord,
+} from './pattern-learning.js';
+
+export {
+  DEFAULT_PATTERN_LEARNING_SETTINGS,
+  PATTERN_SENSITIVITY_PRESETS,
+} from './pattern-learning.js';
+
+export type {
+  NotificationChannelType,
+  NotificationEventType,
+  SlackConfig,
+  DiscordConfig,
+  TelegramConfig,
+  EmailConfig,
+  SlackChannelConfig,
+  DiscordChannelConfig,
+  TelegramChannelConfig,
+  EmailChannelConfig,
+  NotificationChannelConfig,
+  NotificationChannel,
+  WorkspaceNotificationPreferences,
+  NotificationLog,
+  SendNotificationRequest,
+  NotificationSendInput,
+  NotificationAction,
+  NotificationTestRequest,
+  NotificationTestResponse,
+  NotificationTestResult,
+  NotificationChannelCreateInput,
+  NotificationChannelUpdateInput,
+} from './notifications.js';
