@@ -52,6 +52,10 @@ interface SettingsState {
   streamingEnabled: boolean;
   compactMessages: boolean;
   autoCompaction: boolean;
+  /** Percentage of context window at which auto-compaction triggers (70-95) */
+  autoCompactionThreshold: number;
+  /** Number of recent messages to keep uncompacted (10-50) */
+  compactionRetentionCount: number;
   showBudgetDisplay: boolean;
   workspacePath: string;
   effort: string;
@@ -176,6 +180,8 @@ const defaults: SettingsState = {
   streamingEnabled: true,
   compactMessages: false,
   autoCompaction: true,
+  autoCompactionThreshold: 85,
+  compactionRetentionCount: 15,
   showBudgetDisplay: false,
   workspacePath: '.',
   effort: 'high',
@@ -284,6 +290,8 @@ function createSettingsStore() {
   const SERVER_SYNCED_KEYS: (keyof SettingsState)[] = [
     'cliProvider',
     'autoCompaction',
+    'autoCompactionThreshold',
+    'compactionRetentionCount',
     'permissionMode',
     'terminalCommandPolicy',
   ];
@@ -453,6 +461,12 @@ function createSettingsStore() {
     },
     get autoCompaction() {
       return state.autoCompaction;
+    },
+    get autoCompactionThreshold() {
+      return state.autoCompactionThreshold;
+    },
+    get compactionRetentionCount() {
+      return state.compactionRetentionCount;
     },
     get showBudgetDisplay() {
       return state.showBudgetDisplay;

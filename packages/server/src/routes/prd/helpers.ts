@@ -12,6 +12,7 @@ import type {
   StoryEstimate,
   EstimatePrdResponse,
   StoryPriority,
+  WorkflowConfig,
 } from '@e/shared';
 
 // Re-export shared imports that sub-routes need
@@ -70,11 +71,15 @@ export type {
   PriorityRecommendationResponse,
   PriorityRecommendationBulkResponse,
   StandaloneStoryCreateInput,
+  WorkflowConfig,
 } from '@e/shared';
+
+export { DEFAULT_WORKFLOW_CONFIG } from '@e/shared';
 
 // --- Row mappers ---
 
 export function prdFromRow(row: any) {
+  const rawWorkflow = row.workflow_config ? JSON.parse(row.workflow_config) : undefined;
   return {
     id: row.id,
     workspacePath: row.workspace_path,
@@ -82,6 +87,7 @@ export function prdFromRow(row: any) {
     description: row.description,
     branchName: row.branch_name,
     qualityChecks: JSON.parse(row.quality_checks || '[]'),
+    workflowConfig: rawWorkflow && Object.keys(rawWorkflow).length > 0 ? rawWorkflow : undefined,
     externalRef: row.external_ref ? JSON.parse(row.external_ref) : undefined,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
@@ -254,11 +260,35 @@ export function reorderStoriesByDependencies(db: ReturnType<typeof getDb>, prdId
   }
 }
 
+// --- Dependency helpers ---
+
+/**
+ * Returns the set of story IDs considered "done" for dependency resolution.
+ * When qaUnblocksDependents is true, 'qa' status counts as done alongside 'completed'.
+ */
+export function getDoneStoryIds(
+  stories: UserStory[],
+  workflowConfig?: WorkflowConfig,
+): Set<string> {
+  return new Set(
+    stories
+      .filter(
+        (s) =>
+          s.status === 'completed' || (workflowConfig?.qaUnblocksDependents && s.status === 'qa'),
+      )
+      .map((s) => s.id),
+  );
+}
+
 // --- Dependency Graph Builder ---
 
-export function buildDependencyGraph(stories: UserStory[], prdId: string): DependencyGraph {
+export function buildDependencyGraph(
+  stories: UserStory[],
+  prdId: string,
+  workflowConfig?: WorkflowConfig,
+): DependencyGraph {
   const storyMap = new Map(stories.map((s) => [s.id, s]));
-  const completedIds = new Set(stories.filter((s) => s.status === 'completed').map((s) => s.id));
+  const completedIds = getDoneStoryIds(stories, workflowConfig);
 
   // Build edges
   const edges: DependencyEdge[] = [];
@@ -420,9 +450,12 @@ export function detectCircularDependencies(
   return circularPairs;
 }
 
-export function validateSprintPlan(stories: UserStory[]): SprintValidation {
+export function validateSprintPlan(
+  stories: UserStory[],
+  workflowConfig?: WorkflowConfig,
+): SprintValidation {
   const storyMap = new Map(stories.map((s) => [s.id, s]));
-  const completedIds = new Set(stories.filter((s) => s.status === 'completed').map((s) => s.id));
+  const completedIds = getDoneStoryIds(stories, workflowConfig);
   const warnings: SprintValidationWarning[] = [];
 
   // Check for stories included in sprint that have unmet dependencies

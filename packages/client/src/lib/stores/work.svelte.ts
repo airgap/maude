@@ -96,6 +96,9 @@ function createWorkStore() {
     get inProgressStories() {
       return this.filteredStories.filter((s) => s.status === 'in_progress');
     },
+    get qaStories() {
+      return this.filteredStories.filter((s) => s.status === 'qa');
+    },
     get completedStories() {
       return this.filteredStories.filter((s) => s.status === 'completed');
     },

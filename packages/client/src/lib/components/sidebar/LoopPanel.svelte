@@ -44,6 +44,8 @@
     switch (status) {
       case 'completed':
         return '✓';
+      case 'qa':
+        return '◉';
       case 'in_progress':
         return '●';
       case 'failed':
@@ -61,6 +63,8 @@
     switch (status) {
       case 'completed':
         return 'var(--accent-secondary)';
+      case 'qa':
+        return 'var(--accent-warning, #f0ad4e)';
       case 'in_progress':
         return 'var(--accent-primary)';
       case 'failed':

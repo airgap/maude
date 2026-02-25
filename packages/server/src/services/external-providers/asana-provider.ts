@@ -110,7 +110,7 @@ export class AsanaProvider implements IExternalProvider {
   async pushStatus(
     config: ExternalProviderConfig,
     externalId: string,
-    status: 'completed' | 'failed',
+    status: 'completed' | 'failed' | 'in_progress',
     meta?: { commitSha?: string; prUrl?: string; comment?: string },
   ): Promise<void> {
     if (status === 'completed') {
@@ -121,11 +121,15 @@ export class AsanaProvider implements IExternalProvider {
         body: JSON.stringify({ data: { completed: true } }),
       });
     }
+    // For 'in_progress' (QA), Asana doesn't need a status change —
+    // just leave the task incomplete and add a comment.
 
     // Add a story (comment) to the task
     const commentParts: string[] = [];
     if (status === 'completed') {
       commentParts.push('✅ Implemented automatically by E.');
+    } else if (status === 'in_progress') {
+      commentParts.push('🔍 Implementation complete, moved to QA.');
     } else {
       commentParts.push('❌ Automatic implementation failed.');
     }

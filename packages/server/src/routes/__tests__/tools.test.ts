@@ -15,10 +15,10 @@ describe('Tool Routes', () => {
       expect(Array.isArray(json.data)).toBe(true);
     });
 
-    test('returns all 16 built-in tools', async () => {
+    test('returns all 20 built-in tools', async () => {
       const res = await app.request('/');
       const json = await res.json();
-      expect(json.data).toHaveLength(16);
+      expect(json.data).toHaveLength(20);
     });
 
     test('each tool has required fields', async () => {
@@ -58,11 +58,28 @@ describe('Tool Routes', () => {
         'EnterPlanMode',
         'ExitPlanMode',
         'NotebookEdit',
+        'CaptureScreenshot',
+        'ListDisplays',
+        'CaptureCamera',
+        'GetLocation',
       ];
 
       for (const name of expectedNames) {
         expect(names).toContain(name);
       }
+    });
+
+    test('contains device category tools', async () => {
+      const res = await app.request('/');
+      const json = await res.json();
+      const deviceTools = json.data.filter((t: any) => t.category === 'device');
+      const deviceNames = deviceTools.map((t: any) => t.name);
+
+      expect(deviceNames).toContain('CaptureScreenshot');
+      expect(deviceNames).toContain('ListDisplays');
+      expect(deviceNames).toContain('CaptureCamera');
+      expect(deviceNames).toContain('GetLocation');
+      expect(deviceTools).toHaveLength(4);
     });
 
     test('contains filesystem category tools', async () => {
@@ -170,6 +187,10 @@ describe('Tool Routes', () => {
       expect(noApproval).toContain('TaskGet');
       expect(noApproval).toContain('EnterPlanMode');
       expect(noApproval).toContain('ExitPlanMode');
+      expect(noApproval).toContain('CaptureScreenshot');
+      expect(noApproval).toContain('ListDisplays');
+      expect(noApproval).toContain('CaptureCamera');
+      expect(noApproval).toContain('GetLocation');
     });
 
     test('all tools have source set to builtin', async () => {

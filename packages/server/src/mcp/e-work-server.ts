@@ -38,6 +38,7 @@ function getDb(): Database {
 // ── Row Helpers ──
 
 function prdFromRow(row: any) {
+  const rawWorkflow = row.workflow_config ? JSON.parse(row.workflow_config) : undefined;
   return {
     id: row.id,
     workspacePath: row.workspace_path,
@@ -45,6 +46,7 @@ function prdFromRow(row: any) {
     description: row.description,
     branchName: row.branch_name,
     qualityChecks: JSON.parse(row.quality_checks || '[]'),
+    workflowConfig: rawWorkflow && Object.keys(rawWorkflow).length > 0 ? rawWorkflow : undefined,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -214,7 +216,8 @@ const TOOLS = [
   },
   {
     name: 'update_prd',
-    description: 'Update PRD metadata (name, description, branchName).',
+    description:
+      'Update PRD metadata (name, description, branchName, workflowConfig). Use workflowConfig to control kanban behavior like whether QA unblocks dependents.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -222,6 +225,18 @@ const TOOLS = [
         name: { type: 'string', description: 'New PRD name' },
         description: { type: 'string', description: 'New PRD description' },
         branchName: { type: 'string', description: 'New branch name' },
+        workflowConfig: {
+          type: 'object',
+          description:
+            'Kanban workflow config. Set qaUnblocksDependents: true to let stories in QA unblock dependent stories.',
+          properties: {
+            qaUnblocksDependents: {
+              type: 'boolean',
+              description:
+                'If true, stories in QA status count as "done" for dependency resolution',
+            },
+          },
+        },
       },
       required: ['prdId'],
     },
@@ -256,7 +271,7 @@ const TOOLS = [
         },
         status: {
           type: 'string',
-          enum: ['pending', 'in_progress', 'completed', 'failed', 'archived', 'paused'],
+          enum: ['pending', 'in_progress', 'qa', 'completed', 'failed', 'archived', 'paused'],
           description: 'Filter by status. Omit for all statuses.',
         },
         includeAll: {
@@ -323,7 +338,7 @@ const TOOLS = [
         description: { type: 'string', description: 'New description' },
         status: {
           type: 'string',
-          enum: ['pending', 'in_progress', 'completed', 'failed', 'archived', 'paused'],
+          enum: ['pending', 'in_progress', 'qa', 'completed', 'failed', 'archived', 'paused'],
           description: 'New status',
         },
         priority: {
@@ -403,6 +418,108 @@ const TOOLS = [
     },
   },
 
+  // ── Story Completion & Search ──
+  {
+    name: 'complete_story',
+    description:
+      'One-shot story completion: marks a story as completed (promoting from qa if applicable), optionally auto-passes all acceptance criteria, and appends learnings. Use this to approve stories that golems moved to QA, or to directly complete stories.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        storyId: { type: 'string', description: 'The story ID to complete' },
+        passAllCriteria: {
+          type: 'boolean',
+          description: 'If true (default), mark all acceptance criteria as passed',
+          default: true,
+        },
+        learnings: {
+          type: 'array',
+          items: { type: 'string' },
+          description: 'Optional learnings to append to the story',
+        },
+        summary: {
+          type: 'string',
+          description: 'Optional completion summary to prepend to learnings',
+        },
+      },
+      required: ['storyId'],
+    },
+  },
+  {
+    name: 'find_stories',
+    description:
+      'Search stories by title or description text. Returns matching stories without dumping the entire database. Much more efficient than list_stories for finding specific stories.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        workspacePath: {
+          type: 'string',
+          description: 'Absolute path to the workspace directory',
+        },
+        query: {
+          type: 'string',
+          description: 'Search text to match against title and description (case-insensitive)',
+        },
+        prdId: {
+          type: 'string',
+          description: 'Optional: restrict search to stories in this PRD',
+        },
+        status: {
+          type: 'string',
+          enum: ['pending', 'in_progress', 'qa', 'completed', 'failed', 'archived', 'paused'],
+          description: 'Optional: filter by status',
+        },
+        limit: {
+          type: 'number',
+          description: 'Maximum results to return (default: 10)',
+          default: 10,
+        },
+      },
+      required: ['workspacePath', 'query'],
+    },
+  },
+  {
+    name: 'update_acceptance_criteria',
+    description:
+      'Batch update acceptance criteria pass/fail states on a story. Allows updating multiple criteria in one call without replacing the criteria text.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        storyId: { type: 'string', description: 'The story ID' },
+        updates: {
+          type: 'array',
+          description: 'Array of criteria updates',
+          items: {
+            type: 'object',
+            properties: {
+              criteriaId: { type: 'string', description: 'The acceptance criterion ID' },
+              passed: { type: 'boolean', description: 'Whether this criterion passed' },
+            },
+            required: ['criteriaId', 'passed'],
+          },
+        },
+      },
+      required: ['storyId', 'updates'],
+    },
+  },
+  {
+    name: 'mark_criteria_passed',
+    description:
+      'Convenience method to mark acceptance criteria as passed. If no criteriaIds provided, marks ALL criteria as passed.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        storyId: { type: 'string', description: 'The story ID' },
+        criteriaIds: {
+          type: 'array',
+          items: { type: 'string' },
+          description: 'Specific criteria IDs to mark as passed. Omit to mark ALL as passed.',
+        },
+      },
+      required: ['storyId'],
+    },
+  },
+
   // ── Bulk Operations ──
   {
     name: 'batch_create_stories',
@@ -457,7 +574,7 @@ const TOOLS = [
               description: { type: 'string' },
               status: {
                 type: 'string',
-                enum: ['pending', 'in_progress', 'completed', 'failed', 'archived', 'paused'],
+                enum: ['pending', 'in_progress', 'qa', 'completed', 'failed', 'archived', 'paused'],
               },
               priority: { type: 'string', enum: ['critical', 'high', 'medium', 'low'] },
               acceptanceCriteria: { type: 'array', items: { type: 'string' } },
@@ -667,6 +784,10 @@ async function handleToolCall(
         if (args.branchName !== undefined) {
           updates.push('branch_name = ?');
           values.push(args.branchName);
+        }
+        if (args.workflowConfig !== undefined) {
+          updates.push('workflow_config = ?');
+          values.push(JSON.stringify(args.workflowConfig));
         }
         if (updates.length > 0) {
           updates.push('updated_at = ?');
@@ -895,6 +1016,181 @@ async function handleToolCall(
         }
         return {
           content: [{ type: 'text', text: JSON.stringify({ ok: true, archived: result.changes }) }],
+        };
+      }
+
+      // ── Story Completion & Search ──
+
+      case 'complete_story': {
+        const { storyId, passAllCriteria = true, learnings: newLearnings, summary } = args;
+        const existing = d.query('SELECT * FROM prd_stories WHERE id = ?').get(storyId) as any;
+        if (!existing) return error(`Story not found: ${storyId}`);
+
+        const now = Date.now();
+        const updates: string[] = ["status = 'completed'"];
+        const values: any[] = [];
+
+        // Auto-pass all acceptance criteria if requested
+        if (passAllCriteria) {
+          const criteria = JSON.parse(existing.acceptance_criteria || '[]');
+          const passedCriteria = criteria.map((c: any) => ({ ...c, passed: true }));
+          updates.push('acceptance_criteria = ?');
+          values.push(JSON.stringify(passedCriteria));
+        }
+
+        // Merge learnings: existing + optional summary + new learnings
+        const existingLearnings = JSON.parse(existing.learnings || '[]');
+        const mergedLearnings = [...existingLearnings];
+        if (summary) mergedLearnings.push(summary);
+        if (newLearnings?.length) mergedLearnings.push(...newLearnings);
+        if (mergedLearnings.length > existingLearnings.length) {
+          updates.push('learnings = ?');
+          values.push(JSON.stringify(mergedLearnings));
+        }
+
+        updates.push('updated_at = ?');
+        values.push(now);
+        values.push(storyId);
+        d.query(`UPDATE prd_stories SET ${updates.join(', ')} WHERE id = ?`).run(...values);
+
+        const updated = d.query('SELECT * FROM prd_stories WHERE id = ?').get(storyId) as any;
+        return {
+          content: [{ type: 'text', text: JSON.stringify(storyFromRow(updated), null, 2) }],
+        };
+      }
+
+      case 'find_stories': {
+        const { workspacePath, query, prdId, status, limit = 10 } = args;
+        const searchPattern = `%${query}%`;
+
+        let sql: string;
+        const params: any[] = [];
+
+        if (prdId) {
+          // Search within a specific PRD
+          sql = `SELECT * FROM prd_stories WHERE prd_id = ? AND (title LIKE ? OR description LIKE ?)`;
+          params.push(prdId, searchPattern, searchPattern);
+        } else {
+          // Search across workspace: standalone + PRD-bound
+          sql = `SELECT ps.* FROM prd_stories ps
+                 LEFT JOIN prds p ON ps.prd_id = p.id
+                 WHERE (ps.workspace_path = ? OR p.workspace_path = ?)
+                 AND (ps.title LIKE ? OR ps.description LIKE ?)`;
+          params.push(workspacePath, workspacePath, searchPattern, searchPattern);
+        }
+
+        if (status) {
+          sql += ` AND ps.status = ?`;
+          params.push(status);
+        }
+
+        sql += ` ORDER BY ps.updated_at DESC LIMIT ?`;
+        params.push(limit);
+
+        const rows = d.query(sql).all(...params) as any[];
+        const stories = rows.map(storyFromRow);
+
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify({ query, matched: stories.length, limit, stories }, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'update_acceptance_criteria': {
+        const { storyId, updates: criteriaUpdates } = args;
+        const existing = d.query('SELECT * FROM prd_stories WHERE id = ?').get(storyId) as any;
+        if (!existing) return error(`Story not found: ${storyId}`);
+
+        const criteria: Array<{ id: string; description: string; passed: boolean }> = JSON.parse(
+          existing.acceptance_criteria || '[]',
+        );
+        const criteriaMap = new Map(criteria.map((c) => [c.id, c]));
+
+        // Validate all criteria IDs exist
+        const invalidIds = criteriaUpdates
+          .filter((u: any) => !criteriaMap.has(u.criteriaId))
+          .map((u: any) => u.criteriaId);
+        if (invalidIds.length > 0) {
+          return error(`Criteria not found: ${invalidIds.join(', ')}`);
+        }
+
+        // Apply updates
+        for (const update of criteriaUpdates) {
+          const criterion = criteriaMap.get(update.criteriaId);
+          if (criterion) criterion.passed = update.passed;
+        }
+
+        const updatedCriteria = Array.from(criteriaMap.values());
+        const now = Date.now();
+        d.query('UPDATE prd_stories SET acceptance_criteria = ?, updated_at = ? WHERE id = ?').run(
+          JSON.stringify(updatedCriteria),
+          now,
+          storyId,
+        );
+
+        const updated = d.query('SELECT * FROM prd_stories WHERE id = ?').get(storyId) as any;
+        return {
+          content: [{ type: 'text', text: JSON.stringify(storyFromRow(updated), null, 2) }],
+        };
+      }
+
+      case 'mark_criteria_passed': {
+        const { storyId, criteriaIds } = args;
+        const existing = d.query('SELECT * FROM prd_stories WHERE id = ?').get(storyId) as any;
+        if (!existing) return error(`Story not found: ${storyId}`);
+
+        const criteria = JSON.parse(existing.acceptance_criteria || '[]');
+
+        if (criteriaIds?.length) {
+          // Validate specified criteria IDs exist
+          const criteriaIdSet = new Set(criteria.map((c: any) => c.id));
+          const invalidIds = criteriaIds.filter((id: string) => !criteriaIdSet.has(id));
+          if (invalidIds.length > 0) {
+            return error(`Criteria not found: ${invalidIds.join(', ')}`);
+          }
+          // Mark only specified criteria as passed
+          const targetSet = new Set(criteriaIds);
+          for (const c of criteria) {
+            if (targetSet.has(c.id)) c.passed = true;
+          }
+        } else {
+          // Mark ALL criteria as passed
+          for (const c of criteria) {
+            c.passed = true;
+          }
+        }
+
+        const now = Date.now();
+        d.query('UPDATE prd_stories SET acceptance_criteria = ?, updated_at = ? WHERE id = ?').run(
+          JSON.stringify(criteria),
+          now,
+          storyId,
+        );
+
+        const updated = d.query('SELECT * FROM prd_stories WHERE id = ?').get(storyId) as any;
+        const passedCount = JSON.parse(updated.acceptance_criteria || '[]').filter(
+          (c: any) => c.passed,
+        ).length;
+        const totalCount = JSON.parse(updated.acceptance_criteria || '[]').length;
+
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(
+                {
+                  ...storyFromRow(updated),
+                  _summary: `${passedCount}/${totalCount} criteria now passed`,
+                },
+                null,
+                2,
+              ),
+            },
+          ],
         };
       }
 

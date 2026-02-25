@@ -244,9 +244,12 @@ export type {
   MatrixQuadrant,
   MatrixStoryPosition,
   EffortValueMatrix,
+  WorkflowConfig,
   GolemPhase,
   GolemMood,
 } from './prd.js';
+
+export { DEFAULT_WORKFLOW_CONFIG } from './prd.js';
 
 export type {
   AgentNoteStatus,

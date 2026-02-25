@@ -46,6 +46,7 @@ type ModalId =
   | 'priority-recommendation'
   | 'effort-value-matrix'
   | 'external-provider-config'
+  | 'compaction-history'
   | null;
 type FocusedPane = 'chat' | 'editor';
 

@@ -3,10 +3,26 @@
 export type StoryStatus =
   | 'pending'
   | 'in_progress'
+  | 'qa'
   | 'completed'
   | 'failed'
   | 'skipped'
   | 'archived';
+
+/** Per-PRD workflow configuration controlling kanban behavior */
+export interface WorkflowConfig {
+  /**
+   * If true, stories in 'qa' status count as "done" for dependency resolution,
+   * allowing dependent stories to proceed without waiting for full completion.
+   * Default: false (conservative — QA blocks dependents).
+   */
+  qaUnblocksDependents: boolean;
+}
+
+/** Default workflow config — QA blocks dependents (conservative) */
+export const DEFAULT_WORKFLOW_CONFIG: WorkflowConfig = {
+  qaUnblocksDependents: false,
+};
 
 export type StoryPriority = 'critical' | 'high' | 'medium' | 'low';
 
@@ -129,6 +145,7 @@ export interface PRD {
   branchName?: string;
   stories: UserStory[];
   qualityChecks: QualityCheckConfig[];
+  workflowConfig?: WorkflowConfig; // kanban workflow behavior (QA unblocking, etc.)
   externalRef?: ExternalRef; // link to Jira Epic / Linear Project / Asana Project
   createdAt: number;
   updatedAt: number;

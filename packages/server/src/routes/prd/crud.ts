@@ -195,6 +195,10 @@ app.patch('/:id', async (c) => {
     updates.push('quality_checks = ?');
     values.push(JSON.stringify(body.qualityChecks));
   }
+  if (body.workflowConfig !== undefined) {
+    updates.push('workflow_config = ?');
+    values.push(JSON.stringify(body.workflowConfig));
+  }
 
   if (updates.length === 0) return c.json({ ok: false, error: 'No fields to update' }, 400);
 

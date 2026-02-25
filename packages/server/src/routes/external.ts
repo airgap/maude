@@ -306,8 +306,8 @@ app.post('/refresh/:storyId', async (c) => {
       ),
     );
 
-    // Only update local status if NOT in_progress (don't interrupt active loop work)
-    if (row.status !== 'in_progress') {
+    // Only update local status if not in a loop-managed state (don't interrupt active work or QA)
+    if (row.status !== 'in_progress' && row.status !== 'qa') {
       let status: string;
       switch (issue.statusCategory) {
         case 'in_progress':
@@ -417,7 +417,7 @@ app.post('/refresh-all', async (c) => {
 app.post('/push-status', async (c) => {
   const body = (await c.req.json()) as {
     storyId: string;
-    status: 'completed' | 'failed';
+    status: 'completed' | 'failed' | 'in_progress';
     commitSha?: string;
     prUrl?: string;
     comment?: string;

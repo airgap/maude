@@ -108,30 +108,39 @@ export class JiraProvider implements IExternalProvider {
   async pushStatus(
     config: ExternalProviderConfig,
     externalId: string,
-    status: 'completed' | 'failed',
+    status: 'completed' | 'failed' | 'in_progress',
     meta?: { commitSha?: string; prUrl?: string; comment?: string },
   ): Promise<void> {
-    if (status === 'completed') {
-      // Find the "Done" transition
-      const transRes = await fetch(
-        `${this.api(config)}/rest/api/3/issue/${externalId}/transitions`,
-        { headers: this.headers(config) },
-      );
-      if (transRes.ok) {
-        const transData = (await transRes.json()) as any;
-        const doneTransition = transData.transitions?.find(
+    // Find and apply an appropriate transition
+    const transRes = await fetch(`${this.api(config)}/rest/api/3/issue/${externalId}/transitions`, {
+      headers: this.headers(config),
+    });
+    if (transRes.ok) {
+      const transData = (await transRes.json()) as any;
+      let transition: any;
+      if (status === 'completed') {
+        transition = transData.transitions?.find(
           (t: any) =>
             t.to?.statusCategory?.key === 'done' ||
             t.name?.toLowerCase().includes('done') ||
             t.name?.toLowerCase().includes('complete'),
         );
-        if (doneTransition) {
-          await fetch(`${this.api(config)}/rest/api/3/issue/${externalId}/transitions`, {
-            method: 'POST',
-            headers: this.headers(config),
-            body: JSON.stringify({ transition: { id: doneTransition.id } }),
-          });
-        }
+      } else if (status === 'in_progress') {
+        // For QA / in-progress, try to find a "In Review" or "In Progress" transition
+        transition = transData.transitions?.find(
+          (t: any) =>
+            t.to?.statusCategory?.key === 'indeterminate' ||
+            t.name?.toLowerCase().includes('review') ||
+            t.name?.toLowerCase().includes('qa') ||
+            t.name?.toLowerCase().includes('progress'),
+        );
+      }
+      if (transition) {
+        await fetch(`${this.api(config)}/rest/api/3/issue/${externalId}/transitions`, {
+          method: 'POST',
+          headers: this.headers(config),
+          body: JSON.stringify({ transition: { id: transition.id } }),
+        });
       }
     }
 
@@ -139,6 +148,8 @@ export class JiraProvider implements IExternalProvider {
     const commentParts: string[] = [];
     if (status === 'completed') {
       commentParts.push('✅ *Implemented automatically by E.*');
+    } else if (status === 'in_progress') {
+      commentParts.push('🔍 *Implementation complete, moved to QA.*');
     } else {
       commentParts.push('❌ *Automatic implementation failed.*');
     }

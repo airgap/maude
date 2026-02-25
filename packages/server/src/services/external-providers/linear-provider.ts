@@ -113,11 +113,11 @@ export class LinearProvider implements IExternalProvider {
   async pushStatus(
     config: ExternalProviderConfig,
     externalId: string,
-    status: 'completed' | 'failed',
+    status: 'completed' | 'failed' | 'in_progress',
     meta?: { commitSha?: string; prUrl?: string; comment?: string },
   ): Promise<void> {
-    if (status === 'completed') {
-      // Find the "Done"/"Completed" state for the issue's team
+    if (status === 'completed' || status === 'in_progress') {
+      // Find the appropriate state for the issue's team
       const issueData = await this.graphql(
         config,
         `query($id: String!) {
@@ -130,14 +130,22 @@ export class LinearProvider implements IExternalProvider {
       );
 
       const states = issueData?.issue?.team?.states?.nodes || [];
-      const doneState = states.find((s: any) => s.type === 'completed');
-      if (doneState) {
+      let targetState: any;
+      if (status === 'completed') {
+        targetState = states.find((s: any) => s.type === 'completed');
+      } else {
+        // For QA/in_progress, prefer "In Review" or "Started" state
+        targetState =
+          states.find((s: any) => s.name?.toLowerCase().includes('review')) ||
+          states.find((s: any) => s.type === 'started');
+      }
+      if (targetState) {
         await this.graphql(
           config,
           `mutation($id: String!, $stateId: String!) {
             issueUpdate(id: $id, input: { stateId: $stateId }) { success }
           }`,
-          { id: externalId, stateId: doneState.id },
+          { id: externalId, stateId: targetState.id },
         );
       }
     }
@@ -146,6 +154,8 @@ export class LinearProvider implements IExternalProvider {
     const commentParts: string[] = [];
     if (status === 'completed') {
       commentParts.push('✅ Implemented automatically by E.');
+    } else if (status === 'in_progress') {
+      commentParts.push('🔍 Implementation complete, moved to QA.');
     } else {
       commentParts.push('❌ Automatic implementation failed.');
     }

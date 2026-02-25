@@ -121,6 +121,7 @@
   interface GroupedStories {
     inProgress: UserStory[];
     pending: UserStory[];
+    qa: UserStory[];
     completed: UserStory[];
     failed: UserStory[];
   }
@@ -128,6 +129,7 @@
   let grouped = $derived<GroupedStories>({
     inProgress: stories.filter((s) => s.status === 'in_progress'),
     pending: stories.filter((s) => s.status === 'pending' && !s.researchOnly),
+    qa: stories.filter((s) => s.status === 'qa'),
     completed: stories.filter((s) => s.status === 'completed'),
     failed: stories.filter((s) => s.status === 'failed'),
   });

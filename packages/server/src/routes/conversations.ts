@@ -424,6 +424,192 @@ app.post('/:id/fork', async (c) => {
   return c.json({ ok: true, data: { id: newId } }, 201);
 });
 
+// Manual compaction
+app.post('/:id/compact', async (c) => {
+  const conversationId = c.req.param('id');
+  const db = getDb();
+
+  // Get conversation
+  const conv = db.query('SELECT * FROM conversations WHERE id = ?').get(conversationId) as any;
+  if (!conv) return c.json({ ok: false, error: 'Conversation not found' }, 404);
+
+  // Get all messages
+  const rows = db
+    .query('SELECT role, content FROM messages WHERE conversation_id = ? ORDER BY timestamp ASC')
+    .all(conversationId) as any[];
+
+  if (rows.length === 0) {
+    return c.json({ ok: false, error: 'No messages to compact' }, 400);
+  }
+
+  // Parse messages
+  const history: any[] = [];
+  for (const row of rows) {
+    try {
+      const content = JSON.parse(row.content);
+      const normalized = Array.isArray(content)
+        ? content.map((block: any) => {
+            if (block.type === 'nudge') {
+              return { type: 'text', text: `[User nudge]: ${block.text}` };
+            }
+            return block;
+          })
+        : content;
+      history.push({ role: row.role, content: normalized });
+    } catch (e) {
+      console.warn(`[compact] Failed to parse message: ${e}`);
+    }
+  }
+
+  // Get retention count from settings (default 15)
+  let keepCount = 15;
+  try {
+    const settingRow = db
+      .query("SELECT value FROM settings WHERE key = 'compactionRetentionCount'")
+      .get() as any;
+    if (settingRow) {
+      keepCount = JSON.parse(settingRow.value);
+    }
+  } catch {
+    /* use default */
+  }
+
+  if (history.length <= keepCount) {
+    return c.json(
+      {
+        ok: false,
+        error: `Conversation has ${history.length} messages, need more than ${keepCount} to compact`,
+      },
+      400,
+    );
+  }
+
+  const droppedMessages = history.slice(0, -keepCount);
+  const keptMessages = history.slice(-keepCount);
+
+  // Generate LLM summary
+  const { summaryText, summaryMessage, usedLLM } = await summarizeWithLLM(
+    droppedMessages,
+    keptMessages,
+    conv.model || 'claude-sonnet-4',
+  );
+
+  // Replace messages in DB
+  db.query('DELETE FROM messages WHERE conversation_id = ?').run(conversationId);
+
+  const compactedMessages = [summaryMessage, ...keptMessages];
+  let ts = Date.now();
+  for (const msg of compactedMessages) {
+    db.query(
+      'INSERT INTO messages (id, conversation_id, role, content, timestamp) VALUES (?, ?, ?, ?, ?)',
+    ).run(nanoid(), conversationId, msg.role, JSON.stringify(msg.content), ts++);
+  }
+
+  // Clear CLI session ID so next turn starts fresh with compacted history
+  const timestamp = Date.now();
+  db.query('UPDATE conversations SET cli_session_id = NULL, updated_at = ? WHERE id = ?').run(
+    timestamp,
+    conversationId,
+  );
+
+  // Record compaction event in history
+  db.query(
+    `INSERT INTO compaction_history (id, conversation_id, trigger, original_message_count,
+     compacted_message_count, dropped_message_count, summary_text, used_llm, retention_count,
+     compacted_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+  ).run(
+    nanoid(),
+    conversationId,
+    'manual',
+    history.length,
+    compactedMessages.length,
+    droppedMessages.length,
+    summaryText,
+    usedLLM ? 1 : 0,
+    keepCount,
+    timestamp,
+  );
+
+  console.log(
+    `[compact:manual] ${conversationId}: ${history.length} → ${compactedMessages.length} messages (LLM=${usedLLM})`,
+  );
+
+  return c.json({
+    ok: true,
+    data: {
+      originalCount: history.length,
+      compactedCount: compactedMessages.length,
+      droppedCount: droppedMessages.length,
+      usedLLM,
+    },
+  });
+});
+
+// Get compaction history for a conversation
+app.get('/:id/compaction-history', (c) => {
+  const conversationId = c.req.param('id');
+  const db = getDb();
+
+  const rows = db
+    .query(
+      `SELECT id, trigger, original_message_count, compacted_message_count, dropped_message_count,
+       summary_text, used_llm, retention_count, threshold_pct, compacted_at
+       FROM compaction_history
+       WHERE conversation_id = ?
+       ORDER BY compacted_at DESC`,
+    )
+    .all(conversationId) as any[];
+
+  const history = rows.map((row) => ({
+    id: row.id,
+    trigger: row.trigger,
+    originalCount: row.original_message_count,
+    compactedCount: row.compacted_message_count,
+    droppedCount: row.dropped_message_count,
+    summaryText: row.summary_text,
+    usedLLM: row.used_llm === 1,
+    retentionCount: row.retention_count,
+    thresholdPct: row.threshold_pct || null,
+    compactedAt: row.compacted_at,
+  }));
+
+  return c.json({ ok: true, data: history });
+});
+
+// Get all recent compaction events (across all conversations)
+app.get('/compaction-history/recent', (c) => {
+  const db = getDb();
+  const limit = parseInt(c.req.query('limit') || '50');
+
+  const rows = db
+    .query(
+      `SELECT ch.*, c.title as conversation_title
+       FROM compaction_history ch
+       LEFT JOIN conversations c ON ch.conversation_id = c.id
+       ORDER BY ch.compacted_at DESC
+       LIMIT ?`,
+    )
+    .all(limit) as any[];
+
+  const history = rows.map((row) => ({
+    id: row.id,
+    conversationId: row.conversation_id,
+    conversationTitle: row.conversation_title || 'Untitled',
+    trigger: row.trigger,
+    originalCount: row.original_message_count,
+    compactedCount: row.compacted_message_count,
+    droppedCount: row.dropped_message_count,
+    summaryText: row.summary_text,
+    usedLLM: row.used_llm === 1,
+    retentionCount: row.retention_count,
+    thresholdPct: row.threshold_pct || null,
+    compactedAt: row.compacted_at,
+  }));
+
+  return c.json({ ok: true, data: history });
+});
+
 // Delete conversation
 app.delete('/:id', (c) => {
   const db = getDb();

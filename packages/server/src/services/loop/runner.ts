@@ -14,7 +14,9 @@ import type {
   StreamAgentNoteCreated,
   GolemPhase,
   GolemMood,
+  WorkflowConfig,
 } from '@e/shared';
+import { DEFAULT_WORKFLOW_CONFIG } from '@e/shared';
 import { PRIORITY_ORDER, storyFromRow } from './helpers';
 
 /**
@@ -46,6 +48,9 @@ export class LoopRunner {
   private recentOutcomes: Array<'success' | 'failure'> = [];
   private currentMood: GolemMood = 'neutral';
 
+  /** Cached workflow config for the PRD (loaded once at run start) */
+  private workflowConfig: WorkflowConfig = DEFAULT_WORKFLOW_CONFIG;
+
   constructor(
     private loopId: string,
     private prdId: string | null,
@@ -53,6 +58,39 @@ export class LoopRunner {
     private config: LoopConfig,
     private events: EventEmitter,
   ) {}
+
+  /** Load workflow config from the PRD (if any). Falls back to defaults. */
+  private loadWorkflowConfig(): void {
+    if (!this.prdId) return; // standalone loop — use defaults
+    try {
+      const db = getDb();
+      const row = db.query('SELECT workflow_config FROM prds WHERE id = ?').get(this.prdId) as any;
+      if (row?.workflow_config) {
+        const parsed = JSON.parse(row.workflow_config);
+        if (parsed && typeof parsed === 'object' && Object.keys(parsed).length > 0) {
+          this.workflowConfig = { ...DEFAULT_WORKFLOW_CONFIG, ...parsed };
+        }
+      }
+    } catch {
+      /* use defaults */
+    }
+  }
+
+  /**
+   * Returns the set of story IDs considered "done" for dependency resolution.
+   * When qaUnblocksDependents is true, 'qa' counts as done alongside 'completed'.
+   */
+  private getDoneIds(stories: UserStory[]): Set<string> {
+    return new Set(
+      stories
+        .filter(
+          (s) =>
+            s.status === 'completed' ||
+            (this.workflowConfig.qaUnblocksDependents && s.status === 'qa'),
+        )
+        .map((s) => s.id),
+    );
+  }
 
   /** Emit a golem thought event — tells the UI what the golem is thinking/doing */
   private emitThought(
@@ -129,6 +167,7 @@ export class LoopRunner {
     );
 
     this.startHeartbeat();
+    this.loadWorkflowConfig();
     this.updateMood();
     this.emitThought('Waking up... scanning the backlog', 'idle');
 
@@ -143,7 +182,8 @@ export class LoopRunner {
     // attempt plus fix-up passes). Auto-increase if the budget is too low.
     const stories = this.getAllStories();
     const nonTerminalStories = stories.filter(
-      (s) => s.status !== 'completed' && s.status !== 'skipped' && !s.researchOnly,
+      (s) =>
+        s.status !== 'completed' && s.status !== 'qa' && s.status !== 'skipped' && !s.researchOnly,
     );
     const maxAttempts = this.config.maxAttemptsPerStory || 3;
     const maxFixUps = this.config.maxFixUpAttempts ?? 2;
@@ -263,7 +303,11 @@ export class LoopRunner {
           }
 
           const allCompleted = stories.every(
-            (s) => s.status === 'completed' || s.status === 'skipped' || s.researchOnly,
+            (s) =>
+              s.status === 'completed' ||
+              s.status === 'qa' ||
+              s.status === 'skipped' ||
+              s.researchOnly,
           );
 
           if (allCompleted) {
@@ -312,14 +356,13 @@ export class LoopRunner {
           // Check if there are pending stories that SHOULD be eligible (no unmet deps,
           // attempts < maxAttempts, not researchOnly). If selectNextStory() returned
           // null but these exist, it's a transient issue — retry instead of quitting.
+          const doneIds = this.getDoneIds(stories);
           const pendingEligible = stories.filter(
             (s) =>
               s.status === 'pending' &&
               s.attempts < s.maxAttempts &&
               !s.researchOnly &&
-              (s.dependsOn || []).every((depId) =>
-                stories.some((d) => d.id === depId && d.status === 'completed'),
-              ),
+              (s.dependsOn || []).every((depId) => doneIds.has(depId)),
           );
           if (pendingEligible.length > 0) {
             noStoryNullCount++;
@@ -704,8 +747,9 @@ export class LoopRunner {
               }
             }
 
-            // Now safe to mark as completed — all changes are committed
-            this.updateStory(story.id, { status: 'completed' });
+            // Move to QA — story is implemented and committed, awaiting review.
+            // The human (or a separate approval step) promotes qa → completed.
+            this.updateStory(story.id, { status: 'qa' });
 
             // Increment completed counter
             const loop = db.query('SELECT * FROM loops WHERE id = ?').get(this.loopId) as any;
@@ -749,10 +793,11 @@ export class LoopRunner {
             // Create agent note with report for the user
             this.createAgentNote(story, conversationId, 'completed', agentResult, qualityResults);
 
-            // External status writeback hook
-            const completedStory = this.getStory(story.id);
-            if (completedStory?.externalRef) {
-              this.pushExternalStatus(completedStory, 'completed').catch((err) => {
+            // External status writeback hook — story is in QA, not fully completed yet.
+            // Push 'qa' status so external tools know it's awaiting review.
+            const qaStory = this.getStory(story.id);
+            if (qaStory?.externalRef) {
+              this.pushExternalStatus(qaStory, 'qa').catch((err) => {
                 console.error(`[loop:${this.loopId}] External status push failed:`, err);
               });
             }
@@ -1130,16 +1175,16 @@ export class LoopRunner {
 
   private selectNextStory(): UserStory | null {
     const stories = this.getAllStories();
-    const completedIds = new Set(stories.filter((s) => s.status === 'completed').map((s) => s.id));
+    const doneIds = this.getDoneIds(stories);
 
     const eligible = stories.filter((s) => {
       if (s.status !== 'pending') return false;
       if (s.attempts >= s.maxAttempts) return false;
       // Skip research-only stories — they are not picked up by the implementation loop
       if (s.researchOnly) return false;
-      // Check dependencies resolved
+      // Check dependencies resolved (respects qaUnblocksDependents config)
       const deps = s.dependsOn || [];
-      return deps.every((depId) => completedIds.has(depId));
+      return deps.every((depId) => doneIds.has(depId));
     });
 
     if (eligible.length === 0) return null;
@@ -1311,7 +1356,7 @@ ${criteria}
   /** Push status back to external provider (Jira/Linear/Asana) if story has an externalRef */
   private async pushExternalStatus(
     story: UserStory,
-    status: 'completed' | 'failed',
+    status: 'completed' | 'failed' | 'qa',
   ): Promise<void> {
     if (!story.externalRef) return;
 
@@ -1319,13 +1364,21 @@ ${criteria}
     const config = getProviderConfig(story.externalRef.provider);
     if (!config) return; // provider not configured, skip silently
 
+    // Map 'qa' → 'in_progress' for external tools (they don't have a QA concept natively).
+    // When the story is later promoted to 'completed', a separate push will mark it done.
+    const externalStatus = status === 'qa' ? 'in_progress' : status;
+
     const provider = getExternalProvider(story.externalRef.provider);
-    await provider.pushStatus(config, story.externalRef.externalId, status, {
-      commitSha: story.commitSha,
-      comment:
-        status === 'completed'
+    const comment =
+      status === 'qa'
+        ? `Implementation complete, moved to QA. Commit: ${story.commitSha || 'N/A'}`
+        : status === 'completed'
           ? `Implemented automatically by E. Commit: ${story.commitSha || 'N/A'}`
-          : `Automatic implementation failed after ${story.attempts} attempt(s).`,
+          : `Automatic implementation failed after ${story.attempts} attempt(s).`;
+
+    await provider.pushStatus(config, story.externalRef.externalId, externalStatus, {
+      commitSha: story.commitSha,
+      comment,
     });
 
     // Update syncedAt

@@ -30,7 +30,7 @@ export interface IExternalProvider {
   pushStatus(
     config: ExternalProviderConfig,
     externalId: string,
-    status: 'completed' | 'failed',
+    status: 'completed' | 'failed' | 'in_progress',
     meta?: { commitSha?: string; prUrl?: string; comment?: string },
   ): Promise<void>;
 

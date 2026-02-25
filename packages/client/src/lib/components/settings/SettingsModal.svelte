@@ -1483,9 +1483,51 @@
               <span class="toggle-slider"></span>
             </label>
             <p class="setting-desc">
-              Automatically compact conversation history when context window exceeds 95%
+              Automatically compact conversation history when context window usage exceeds threshold
             </p>
           </div>
+          {#if settingsStore.autoCompaction}
+            <div class="setting-group">
+              <label class="setting-label"
+                >Auto-compact threshold: {settingsStore.autoCompactionThreshold}%</label
+              >
+              <input
+                type="range"
+                min="70"
+                max="95"
+                step="5"
+                value={settingsStore.autoCompactionThreshold}
+                oninput={(e) =>
+                  settingsStore.update({
+                    autoCompactionThreshold: parseInt(e.currentTarget.value),
+                  })}
+                class="slider"
+              />
+              <p class="setting-desc">
+                When context usage exceeds this percentage, older messages will be summarized
+              </p>
+            </div>
+            <div class="setting-group">
+              <label class="setting-label"
+                >Keep recent messages: {settingsStore.compactionRetentionCount}</label
+              >
+              <input
+                type="range"
+                min="10"
+                max="50"
+                step="5"
+                value={settingsStore.compactionRetentionCount}
+                oninput={(e) =>
+                  settingsStore.update({
+                    compactionRetentionCount: parseInt(e.currentTarget.value),
+                  })}
+                class="slider"
+              />
+              <p class="setting-desc">
+                Number of recent messages to preserve verbatim (older messages get summarized)
+              </p>
+            </div>
+          {/if}
           <div class="setting-group">
             <label class="setting-label">Show budget in status bar</label>
             <label class="toggle">

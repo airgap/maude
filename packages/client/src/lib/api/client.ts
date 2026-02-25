@@ -204,6 +204,53 @@ export const api = {
       request<{ ok: boolean; data: { id: string; title: string; summary: string | null } }>(
         `/conversations/${id}/summary`,
       ),
+    /** Manually compact conversation history by summarizing older messages. */
+    compact: (id: string) =>
+      request<{
+        ok: boolean;
+        data: {
+          originalCount: number;
+          compactedCount: number;
+          droppedCount: number;
+          usedLLM: boolean;
+        };
+      }>(`/conversations/${id}/compact`, { method: 'POST' }),
+    /** Get compaction history for a conversation. */
+    compactionHistory: (id: string) =>
+      request<{
+        ok: boolean;
+        data: Array<{
+          id: string;
+          trigger: 'auto' | 'manual';
+          originalCount: number;
+          compactedCount: number;
+          droppedCount: number;
+          summaryText: string;
+          usedLLM: boolean;
+          retentionCount: number;
+          thresholdPct: number | null;
+          compactedAt: number;
+        }>;
+      }>(`/conversations/${id}/compaction-history`),
+    /** Get recent compaction events across all conversations. */
+    recentCompactions: (limit = 50) =>
+      request<{
+        ok: boolean;
+        data: Array<{
+          id: string;
+          conversationId: string;
+          conversationTitle: string;
+          trigger: 'auto' | 'manual';
+          originalCount: number;
+          compactedCount: number;
+          droppedCount: number;
+          summaryText: string;
+          usedLLM: boolean;
+          retentionCount: number;
+          thresholdPct: number | null;
+          compactedAt: number;
+        }>;
+      }>(`/conversations/compaction-history/recent?limit=${limit}`),
     /** Generate and store a compact summary for a conversation (idempotent). */
     summarize: (id: string) =>
       request<{ ok: boolean; data: { summary: string | null; cached: boolean } }>(

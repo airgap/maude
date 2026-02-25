@@ -899,28 +899,39 @@ export class ClaudeProcessManager {
                           console.error('[claude] Failed to persist token usage:', e);
                         }
 
-                        // Check context pressure — warn at 85%, autocompact at the Claude Code threshold
+                        // Check context pressure — warn at user threshold, autocompact at the Claude Code threshold
                         try {
                           const inputTokens = usage.input_tokens || 0;
                           const model = session.model || 'default';
                           const contextLimit = getContextLimit(model);
                           const autoCompactThreshold = getAutoCompactThreshold(model);
-                          // 85% of context window as the warning threshold
-                          const warningThreshold = Math.floor(contextLimit * 0.85);
+
+                          // Read user's auto-compaction settings
+                          let autoCompactionEnabled = true;
+                          let warningThresholdPct = 85;
+                          try {
+                            const db = getDb();
+                            const autoCompactRow = db
+                              .query("SELECT value FROM settings WHERE key = 'autoCompaction'")
+                              .get() as any;
+                            if (autoCompactRow)
+                              autoCompactionEnabled = JSON.parse(autoCompactRow.value);
+
+                            const thresholdRow = db
+                              .query(
+                                "SELECT value FROM settings WHERE key = 'autoCompactionThreshold'",
+                              )
+                              .get() as any;
+                            if (thresholdRow) warningThresholdPct = JSON.parse(thresholdRow.value);
+                          } catch {
+                            /* use defaults */
+                          }
+
+                          const warningThreshold = Math.floor(
+                            contextLimit * (warningThresholdPct / 100),
+                          );
 
                           if (inputTokens >= warningThreshold) {
-                            // Read autoCompaction setting
-                            let autoCompactionEnabled = true;
-                            try {
-                              const db = getDb();
-                              const row = db
-                                .query("SELECT value FROM settings WHERE key = 'autoCompaction'")
-                                .get() as any;
-                              if (row) autoCompactionEnabled = JSON.parse(row.value);
-                            } catch {
-                              /* use default */
-                            }
-
                             const shouldAutoCompact =
                               inputTokens >= autoCompactThreshold && autoCompactionEnabled;
 
@@ -936,7 +947,20 @@ export class ClaudeProcessManager {
                               (async () => {
                                 try {
                                   const db = getDb();
-                                  const opts = getRecommendedOptions(model);
+
+                                  // Get retention count from settings
+                                  let retentionCount = 15;
+                                  try {
+                                    const retentionRow = db
+                                      .query(
+                                        "SELECT value FROM settings WHERE key = 'compactionRetentionCount'",
+                                      )
+                                      .get() as any;
+                                    if (retentionRow)
+                                      retentionCount = JSON.parse(retentionRow.value);
+                                  } catch {
+                                    /* use default */
+                                  }
 
                                   // Load the full raw message history from DB
                                   const rawRows = db
@@ -964,10 +988,10 @@ export class ClaudeProcessManager {
 
                                   if (allMessages.length === 0) return;
 
-                                  // Determine split point: which messages to drop vs keep
-                                  // using the same smart strategy but without creating a summary
+                                  // Determine split point using sliding window with user's retention count
                                   const history = loadConversationHistory(session.conversationId, {
-                                    ...opts,
+                                    strategy: 'sliding-window',
+                                    maxMessages: retentionCount,
                                     createSummary: false,
                                   });
 
@@ -1012,12 +1036,33 @@ export class ClaudeProcessManager {
                                   // Clear CLI session ID and store the summary text so the next
                                   // turn can inject it into the fresh CLI session's first prompt.
                                   session.cliSessionId = undefined;
+                                  const compactTimestamp = Date.now();
                                   db.query(
                                     'UPDATE conversations SET cli_session_id = NULL, compact_summary = ? WHERE id = ?',
                                   ).run(summaryText, session.conversationId);
 
+                                  // Record compaction event in history
+                                  db.query(
+                                    `INSERT INTO compaction_history (id, conversation_id, trigger, original_message_count,
+                                     compacted_message_count, dropped_message_count, summary_text, used_llm, retention_count,
+                                     threshold_pct, compacted_at)
+                                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                                  ).run(
+                                    nanoid(),
+                                    session.conversationId,
+                                    'auto',
+                                    allMessages.length,
+                                    compactedMessages.length,
+                                    finalDropped.length,
+                                    summaryText,
+                                    usedLLM ? 1 : 0,
+                                    retentionCount,
+                                    warningThresholdPct,
+                                    compactTimestamp,
+                                  );
+
                                   console.log(
-                                    `[claude:${session.id}] Autocompaction complete: ${history.originalCount} → ${compactedMessages.length} messages (LLM=${usedLLM})`,
+                                    `[claude:${session.id}] Autocompaction complete: ${allMessages.length} → ${compactedMessages.length} messages (LLM=${usedLLM})`,
                                   );
                                 } catch (compactErr) {
                                   console.error('[claude] Autocompaction failed:', compactErr);

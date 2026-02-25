@@ -230,6 +230,46 @@
       },
     },
     {
+      id: 'compact-conversation',
+      label: 'Compact Conversation — Summarize Older Messages',
+      category: 'Chat',
+      action: async () => {
+        const convId = conversationStore.activeId;
+        if (!convId) {
+          uiStore.toast('No active conversation', 'error');
+          close();
+          return;
+        }
+        try {
+          uiStore.toast('Compacting conversation...', 'info');
+          const res = await api.conversations.compact(convId);
+          if (res.ok) {
+            uiStore.toast(
+              `Compacted ${res.data.droppedCount} messages into summary (${res.data.usedLLM ? 'LLM' : 'rule-based'})`,
+              'success',
+            );
+            // Reload conversation to show compacted history
+            const updated = await api.conversations.get(convId);
+            if (updated.ok) {
+              conversationStore.setActive(updated.data);
+            }
+          }
+        } catch (err: any) {
+          uiStore.toast(err.message || 'Compaction failed', 'error');
+        }
+        close();
+      },
+    },
+    {
+      id: 'view-compaction-history',
+      label: 'View Compaction History',
+      category: 'Chat',
+      action: () => {
+        uiStore.openModal('compaction-history');
+        close();
+      },
+    },
+    {
       id: 'import-external',
       label: 'Import from Jira/Linear/Asana',
       category: 'Work',

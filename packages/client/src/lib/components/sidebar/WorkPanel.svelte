@@ -54,6 +54,8 @@
     switch (status) {
       case 'completed':
         return '✓';
+      case 'qa':
+        return '◉';
       case 'in_progress':
         return '●';
       case 'failed':
@@ -71,6 +73,8 @@
     switch (status) {
       case 'completed':
         return 'status-completed';
+      case 'qa':
+        return 'status-qa';
       case 'in_progress':
         return 'status-in-progress';
       case 'failed':
@@ -1200,6 +1204,9 @@ What would you like to tackle first?`;
   }
   .status-completed {
     color: var(--accent-secondary);
+  }
+  .status-qa {
+    color: var(--accent-warning, #f0ad4e);
   }
   .status-in-progress {
     color: var(--accent-primary);

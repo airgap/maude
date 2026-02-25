@@ -451,6 +451,8 @@ export function initDatabase(): void {
     `ALTER TABLE prd_stories ADD COLUMN external_status TEXT`,
     `ALTER TABLE prds ADD COLUMN external_ref TEXT`,
     `ALTER TABLE loops ADD COLUMN last_heartbeat INTEGER`,
+    // Kanban workflow config (QA stage, dependency unblocking rules)
+    `ALTER TABLE prds ADD COLUMN workflow_config TEXT NOT NULL DEFAULT '{}'`,
   ];
   for (const sql of workPaneColumns) {
     try {
@@ -611,6 +613,24 @@ export function initDatabase(): void {
     CREATE INDEX IF NOT EXISTS idx_notification_logs_channel ON notification_logs(channel_id, sent_at DESC);
     CREATE INDEX IF NOT EXISTS idx_notification_logs_workspace ON notification_logs(workspace_id, sent_at DESC);
     CREATE INDEX IF NOT EXISTS idx_notification_logs_event ON notification_logs(event, sent_at DESC);
+
+    CREATE TABLE IF NOT EXISTS compaction_history (
+      id TEXT PRIMARY KEY,
+      conversation_id TEXT NOT NULL,
+      trigger TEXT NOT NULL,
+      original_message_count INTEGER NOT NULL,
+      compacted_message_count INTEGER NOT NULL,
+      dropped_message_count INTEGER NOT NULL,
+      summary_text TEXT NOT NULL,
+      used_llm INTEGER NOT NULL DEFAULT 0,
+      retention_count INTEGER NOT NULL,
+      threshold_pct INTEGER,
+      compacted_at INTEGER NOT NULL,
+      FOREIGN KEY (conversation_id) REFERENCES conversations(id) ON DELETE CASCADE
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_compaction_history_conversation ON compaction_history(conversation_id, compacted_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_compaction_history_timestamp ON compaction_history(compacted_at DESC);
   `);
 }
 
