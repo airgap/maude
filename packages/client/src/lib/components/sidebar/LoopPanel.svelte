@@ -434,8 +434,24 @@ Work with the user to implement this story. Ask clarifying questions if needed, 
       });
 
       if (res.ok) {
-        // Navigate to the new conversation - the page will handle loading it
-        goto(`/?conversation=${res.data.id}`);
+        const conversationId = res.data.id;
+
+        // Navigate to the conversation first
+        await goto(`/?conversation=${conversationId}`);
+
+        // Load the conversation
+        const convRes = await api.conversations.get(conversationId);
+        if (convRes.ok) {
+          conversationStore.setActive(convRes.data);
+
+          // Send initial message to kick off the collaboration
+          const initialMessage = `Let's work on implementing this story together. I'm ready to start whenever you are!
+
+What would you like to tackle first?`;
+
+          await sendAndStream(conversationId, initialMessage);
+        }
+
         uiStore.toast('Started interactive session for story', 'success');
       }
     } catch (err: any) {
