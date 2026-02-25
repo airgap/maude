@@ -404,3 +404,10 @@ export type {
   NotificationChannelCreateInput,
   NotificationChannelUpdateInput,
 } from './notifications.js';
+
+export type {
+  WorktreeInfo,
+  WorktreeCreateOptions,
+  WorktreeResult,
+  WorktreeValidation,
+} from './worktree.js';
