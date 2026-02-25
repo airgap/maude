@@ -588,7 +588,9 @@
       streamStore.isStreaming &&
       conversationStore.activeId != null &&
       streamStore.conversationId === conversationStore.activeId;
-    if ((!text && pendingAttachments.length === 0) || isStreamingHere) return;
+    if ((!text && pendingAttachments.length === 0) || isStreamingHere) {
+      return;
+    }
 
     // Audio feedback for chat send
     if (settingsStore.soundEnabled) chirpEngine.chirp('chat_send');

@@ -227,11 +227,12 @@ export function isOriginRemote(origin: string): boolean {
       return false;
     }
 
-    // Private network ranges (LAN)
+    // Private network ranges (LAN) and CGNAT (Tailscale uses 100.64.0.0/10)
     if (
       hostname.startsWith('192.168.') ||
       hostname.startsWith('10.') ||
-      hostname.match(/^172\.(1[6-9]|2[0-9]|3[0-1])\./)
+      hostname.match(/^172\.(1[6-9]|2[0-9]|3[0-1])\./) ||
+      hostname.match(/^100\.(6[4-9]|[7-9]\d|1[01]\d|12[0-7])\./)
     ) {
       return false;
     }

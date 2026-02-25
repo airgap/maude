@@ -1,7 +1,14 @@
 import { uuid } from '$lib/utils/uuid';
 import { api } from '$lib/api/client';
 
-export type PrimaryTabKind = 'chat' | 'diff' | 'file' | 'looper' | 'change-preview' | 'timeline';
+export type PrimaryTabKind =
+  | 'chat'
+  | 'diff'
+  | 'file'
+  | 'looper'
+  | 'change-preview'
+  | 'timeline'
+  | 'canvas';
 
 export interface PrimaryTab {
   id: string;
@@ -24,6 +31,8 @@ export interface PrimaryTab {
   changePreviewPlanId?: string;
   /** For kind='timeline': the conversation ID to replay */
   timelineConversationId?: string;
+  /** For kind='canvas': the canvas ID to display */
+  canvasId?: string;
 }
 
 export interface PrimaryPane {
@@ -342,6 +351,36 @@ function createPrimaryPaneStore() {
         title,
         kind: 'timeline',
         timelineConversationId: targetConversationId,
+      };
+      pane.tabs.push(tab);
+      pane.activeTabId = tab.id;
+      activePaneId = pane.id;
+      persist();
+    },
+
+    /**
+     * Open (or focus) a canvas tab for the given canvas ID.
+     */
+    openCanvasTab(canvasId: string, title = 'Canvas') {
+      const pane = panes.find((p) => p.id === activePaneId) ?? panes[0];
+      if (!pane) return;
+
+      // Reuse existing canvas tab for same canvas
+      const existing = pane.tabs.find((t) => t.kind === 'canvas' && t.canvasId === canvasId);
+      if (existing) {
+        existing.title = title;
+        pane.activeTabId = existing.id;
+        activePaneId = pane.id;
+        persist();
+        return;
+      }
+
+      const tab: PrimaryTab = {
+        id: uuid(),
+        conversationId: null,
+        title,
+        kind: 'canvas',
+        canvasId,
       };
       pane.tabs.push(tab);
       pane.activeTabId = tab.id;

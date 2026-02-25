@@ -14,6 +14,7 @@
   import LooperView from '../loop/LooperView.svelte';
   import ChangePreviewPanel from '../editor/ChangePreviewPanel.svelte';
   import TimelinePanel from '../timeline/TimelinePanel.svelte';
+  import CanvasTabView from '../canvas/CanvasTabView.svelte';
 
   let { children }: { children: Snippet } = $props();
 
@@ -41,7 +42,8 @@
       tab.kind === 'file' ||
       tab.kind === 'looper' ||
       tab.kind === 'change-preview' ||
-      tab.kind === 'timeline'
+      tab.kind === 'timeline' ||
+      tab.kind === 'canvas'
     )
       return;
 
@@ -82,9 +84,7 @@
       // Only look at chat tabs (not diff/file tabs) for blank tab matching.
       // If a blank tab already exists, switch to it. Otherwise do nothing —
       // we no longer auto-create "New chat" tabs.
-      const blankTab = pane?.tabs.find(
-        (t) => t.kind !== 'diff' && t.kind !== 'file' && t.conversationId === null,
-      );
+      const blankTab = pane?.tabs.find((t) => t.kind === 'chat' && t.conversationId === null);
       if (blankTab && pane && pane.activeTabId !== blankTab.id) {
         primaryPaneStore.setActiveTab(pane.id, blankTab.id);
         lastAppliedTabId = blankTab.id;
@@ -96,9 +96,9 @@
     if (!tabExists) {
       primaryPaneStore.openConversation(active.id, active.title ?? 'Conversation', pane?.id);
     } else {
-      // Don't override when the user has actively selected a file/diff tab
+      // Don't override when the user has actively selected a non-chat tab
       const currentTab = pane?.tabs.find((t) => t.id === pane.activeTabId);
-      if (currentTab?.kind === 'file' || currentTab?.kind === 'diff') return;
+      if (currentTab && currentTab.kind !== 'chat') return;
 
       const tab = pane?.tabs.find((t) => t.conversationId === active.id);
       if (tab && pane && pane.activeTabId !== tab.id) {
@@ -210,6 +210,10 @@
         {:else if activeTab?.kind === 'looper'}
           <div class="pane-content">
             <LooperView loopId={activeTab.loopId ?? ''} />
+          </div>
+        {:else if activeTab?.kind === 'canvas'}
+          <div class="pane-content">
+            <CanvasTabView canvasId={activeTab.canvasId ?? ''} />
           </div>
         {:else if activeTab?.kind === 'diff'}
           <div class="pane-content">

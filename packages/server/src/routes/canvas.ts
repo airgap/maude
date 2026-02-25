@@ -1,50 +1,40 @@
 import { Hono } from 'hono';
 import { nanoid } from 'nanoid';
-import {
-  getCanvas,
-  getConversationCanvases,
-  setCanvasConversation,
-} from '../services/tool-executor';
-
-/**
- * In-memory canvas store for direct API pushes.
- * Re-uses the same canvasStore from tool-executor for tool-based pushes,
- * but also supports direct creation via REST.
- */
-
-// We need our own store reference for direct pushes since tool-executor's
-// canvasStore is not exported. We'll use a parallel Map that stays in sync.
-const directCanvasStore = new Map<
-  string,
-  {
-    id: string;
-    contentType: 'html' | 'svg' | 'mermaid' | 'table';
-    content: string;
-    title?: string;
-    conversationId?: string;
-    lastUpdated: number;
-  }
->();
+import { getDb } from '../db/database';
+import { getConversationCanvases } from '../services/tool-executor';
 
 const app = new Hono();
+
+/**
+ * GET /api/canvas/item/:canvasId — fetch a single canvas by its ID
+ */
+app.get('/item/:canvasId', (c) => {
+  const canvasId = c.req.param('canvasId');
+  const db = getDb();
+  const row = db.query('SELECT * FROM canvases WHERE id = ?').get(canvasId) as any;
+  if (!row) {
+    return c.json({ ok: false, error: 'Canvas not found' }, 404);
+  }
+  return c.json({
+    ok: true,
+    data: {
+      id: row.id,
+      conversationId: row.conversation_id,
+      contentType: row.content_type,
+      content: row.content,
+      title: row.title,
+      lastUpdated: row.updated_at,
+    },
+  });
+});
 
 /**
  * GET /api/canvas/:conversationId — list all canvases for a conversation
  */
 app.get('/:conversationId', (c) => {
   const conversationId = c.req.param('conversationId');
-
-  // Merge from tool-executor's store and direct store
-  const toolCanvases = getConversationCanvases(conversationId);
-  const directCanvases = Array.from(directCanvasStore.values()).filter(
-    (cv) => cv.conversationId === conversationId,
-  );
-
-  // Deduplicate by ID (tool-executor takes precedence)
-  const seen = new Set(toolCanvases.map((cv) => cv.id));
-  const merged = [...toolCanvases, ...directCanvases.filter((cv) => !seen.has(cv.id))];
-
-  return c.json({ ok: true, data: merged });
+  const canvases = getConversationCanvases(conversationId);
+  return c.json({ ok: true, data: canvases });
 });
 
 /**
@@ -85,6 +75,19 @@ app.post('/', async (c) => {
   const id = canvasId || nanoid(12);
   const now = Date.now();
 
+  // Upsert into database
+  const db = getDb();
+  const existing = db.query('SELECT id FROM canvases WHERE id = ?').get(id) as any;
+  if (existing) {
+    db.query(
+      'UPDATE canvases SET content_type = ?, content = ?, title = ?, conversation_id = COALESCE(?, conversation_id), updated_at = ? WHERE id = ?',
+    ).run(contentType, content, title || null, conversationId || null, now, id);
+  } else {
+    db.query(
+      'INSERT INTO canvases (id, conversation_id, content_type, content, title, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
+    ).run(id, conversationId || null, contentType, content, title || null, now, now);
+  }
+
   const canvasData = {
     id,
     contentType,
@@ -93,14 +96,6 @@ app.post('/', async (c) => {
     conversationId,
     lastUpdated: now,
   };
-
-  // Store in our direct store
-  directCanvasStore.set(id, canvasData);
-
-  // Also set conversation association in tool-executor's store if it exists there
-  if (conversationId) {
-    setCanvasConversation(id, conversationId);
-  }
 
   return c.json({
     ok: true,

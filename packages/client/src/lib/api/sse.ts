@@ -114,7 +114,6 @@ export async function sendAndStream(
       abortController.signal,
       attachments,
     );
-    // console.log('[sse] Got response:', response.status, response.ok);
 
     if (!response.ok) {
       let errMsg = `HTTP ${response.status}`;

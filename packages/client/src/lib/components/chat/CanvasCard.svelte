@@ -1,7 +1,7 @@
 <script lang="ts">
   import type { CanvasState } from '$lib/stores/canvas.svelte';
   import CanvasRenderer from '../canvas/CanvasRenderer.svelte';
-  import { uiStore } from '$lib/stores/ui.svelte';
+  import { primaryPaneStore } from '$lib/stores/primaryPane.svelte';
 
   let { canvas }: { canvas: CanvasState } = $props();
 
@@ -11,9 +11,8 @@
     expanded = !expanded;
   }
 
-  function openFullscreen() {
-    // Open canvas tab in sidebar
-    uiStore.setSidebarTab('canvas');
+  function openInTab() {
+    primaryPaneStore.openCanvasTab(canvas.id, canvas.title || 'Canvas');
   }
 </script>
 
@@ -51,7 +50,7 @@
   </button>
 
   <!-- Open button -->
-  <button class="canvas-open-btn" onclick={openFullscreen} title="Open in Canvas panel">
+  <button class="canvas-open-btn" onclick={openInTab} title="Open in tab">
     <svg
       width="11"
       height="11"

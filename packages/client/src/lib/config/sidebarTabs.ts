@@ -127,7 +127,6 @@ export const SIDEBAR_TABS: TabDefinition[] = [
     id: 'canvas',
     label: 'Canvas',
     icon: 'M3 3h18v18H3zM8 8h8M8 12h8M8 16h5',
-    wip: true,
   },
 ];
 

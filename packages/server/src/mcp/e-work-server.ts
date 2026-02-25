@@ -1,10 +1,13 @@
 #!/usr/bin/env bun
 /**
- * E Work MCP Server — Exposes PRD, story, and loop management as MCP tools.
+ * E Work MCP Server — Exposes PRD, story, loop, and canvas management as MCP tools.
  *
  * This is a standalone MCP server that communicates via JSON-RPC 2.0 over stdio.
  * It connects directly to E's SQLite database so agents can manipulate the work
  * system without HTTP/CSRF overhead.
+ *
+ * Canvas data is stored directly in the same SQLite database alongside PRDs
+ * and stories — no REST callback needed.
  *
  * Usage: bun packages/server/src/mcp/e-work-server.ts
  *
@@ -67,6 +70,69 @@ function storyFromRow(row: any) {
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
+}
+
+// ── Canvas (direct DB) ──
+
+function canvasPush(body: Record<string, unknown>): { ok: boolean; data?: any; error?: string } {
+  const db = getDb();
+  const contentType = body.content_type as string;
+  const content = body.content as string;
+  const title = (body.title as string) || null;
+  const canvasId = (body.canvas_id as string) || nanoid(12);
+  const conversationId = (body.conversation_id as string) || null;
+
+  if (!contentType || !['html', 'svg', 'mermaid', 'table'].includes(contentType)) {
+    return {
+      ok: false,
+      error: `Invalid content_type: ${contentType}. Must be html, svg, mermaid, or table`,
+    };
+  }
+  if (!content) {
+    return { ok: false, error: 'content is required' };
+  }
+  if (contentType === 'table') {
+    try {
+      JSON.parse(content);
+    } catch {
+      return { ok: false, error: 'Table content must be valid JSON array' };
+    }
+  }
+
+  const now = Date.now();
+  const existing = db.query('SELECT id FROM canvases WHERE id = ?').get(canvasId) as any;
+  if (existing) {
+    db.query(
+      'UPDATE canvases SET content_type = ?, content = ?, title = ?, conversation_id = COALESCE(?, conversation_id), updated_at = ? WHERE id = ?',
+    ).run(contentType, content, title, conversationId, now, canvasId);
+  } else {
+    db.query(
+      'INSERT INTO canvases (id, conversation_id, content_type, content, title, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
+    ).run(canvasId, conversationId, contentType, content, title, now, now);
+  }
+
+  return {
+    ok: true,
+    data: { id: canvasId, contentType, content, title, conversationId, lastUpdated: now },
+  };
+}
+
+function canvasListFromDb(conversationId: string): { ok: boolean; data?: any[]; error?: string } {
+  const db = getDb();
+  const rows = db
+    .query(
+      'SELECT id, conversation_id, content_type, content, title, created_at, updated_at FROM canvases WHERE conversation_id = ? ORDER BY updated_at DESC',
+    )
+    .all(conversationId) as any[];
+  const data = rows.map((r: any) => ({
+    id: r.id,
+    conversationId: r.conversation_id,
+    contentType: r.content_type,
+    content: r.content,
+    title: r.title,
+    lastUpdated: r.updated_at,
+  }));
+  return { ok: true, data };
 }
 
 // ── Tool Definitions ──
@@ -430,6 +496,58 @@ const TOOLS = [
         loopId: { type: 'string', description: 'The loop ID' },
       },
       required: ['loopId'],
+    },
+  },
+
+  // ── Canvas Management ──
+  {
+    name: 'canvas_push',
+    description:
+      'Push visual content to the Canvas panel. Supports HTML, SVG, Mermaid diagrams, and data tables. Content appears in the Canvas sidebar tab and can be expanded or viewed fullscreen. Use canvas_id to update an existing canvas.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        content_type: {
+          type: 'string',
+          enum: ['html', 'svg', 'mermaid', 'table'],
+          description:
+            'Content type: html (rich layouts), svg (vector graphics), mermaid (diagrams/flowcharts), table (JSON array rendered as data grid)',
+        },
+        content: {
+          type: 'string',
+          description:
+            'The content to render. For html: raw HTML string. For svg: SVG markup. For mermaid: Mermaid diagram syntax. For table: JSON array of objects (each object is a row, keys are column headers).',
+        },
+        title: {
+          type: 'string',
+          description: 'Display title for the canvas item',
+        },
+        canvas_id: {
+          type: 'string',
+          description: 'Optional ID to update an existing canvas instead of creating a new one',
+        },
+        conversation_id: {
+          type: 'string',
+          description:
+            'Conversation ID to associate this canvas with. Required for the canvas to appear in the sidebar when that conversation is active.',
+        },
+      },
+      required: ['content_type', 'content'],
+    },
+  },
+  {
+    name: 'canvas_list',
+    description:
+      'List all canvases for a conversation. Returns canvas IDs, titles, content types, and timestamps.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        conversation_id: {
+          type: 'string',
+          description: 'The conversation ID to list canvases for',
+        },
+      },
+      required: ['conversation_id'],
     },
   },
 ];
@@ -915,10 +1033,10 @@ async function handleToolCall(
         let rows: any[];
         if (args.status) {
           rows = d
-            .query('SELECT * FROM loops WHERE status = ? ORDER BY created_at DESC')
+            .query('SELECT * FROM loops WHERE status = ? ORDER BY started_at DESC')
             .all(args.status) as any[];
         } else {
-          rows = d.query('SELECT * FROM loops ORDER BY created_at DESC LIMIT 20').all() as any[];
+          rows = d.query('SELECT * FROM loops ORDER BY started_at DESC LIMIT 20').all() as any[];
         }
         return { content: [{ type: 'text', text: JSON.stringify(rows, null, 2) }] };
       }
@@ -927,6 +1045,54 @@ async function handleToolCall(
         const row = d.query('SELECT * FROM loops WHERE id = ?').get(args.loopId);
         if (!row) return error(`Loop not found: ${args.loopId}`);
         return { content: [{ type: 'text', text: JSON.stringify(row, null, 2) }] };
+      }
+
+      // ── Canvas Management ──
+
+      case 'canvas_push': {
+        const res = canvasPush({
+          content_type: args.content_type,
+          content: args.content,
+          title: args.title,
+          canvas_id: args.canvas_id,
+          conversation_id: args.conversation_id,
+        });
+        if (!res.ok) {
+          return error(res.error || 'Canvas push failed');
+        }
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(
+                {
+                  canvasId: res.data.id,
+                  contentType: res.data.contentType,
+                  title: res.data.title,
+                  message: `Canvas "${res.data.title || 'Untitled'}" pushed. Open the Canvas sidebar tab to view it.`,
+                },
+                null,
+                2,
+              ),
+            },
+          ],
+        };
+      }
+
+      case 'canvas_list': {
+        const res = canvasListFromDb(args.conversation_id);
+        if (!res.ok) {
+          return error(res.error || 'Canvas list failed');
+        }
+        const summary = (res.data || []).map((c: any) => ({
+          id: c.id,
+          contentType: c.contentType,
+          title: c.title || 'Untitled',
+          lastUpdated: c.lastUpdated,
+        }));
+        return {
+          content: [{ type: 'text', text: JSON.stringify(summary, null, 2) }],
+        };
       }
 
       default:

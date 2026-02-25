@@ -172,16 +172,23 @@ app.route('/api/webhooks/inbound', webhookInboundApp);
 // Initialize database
 initDatabase();
 
-// Register the built-in e-work MCP server for PRD/story/loop management.
+// Register the built-in e-work MCP server for PRD/story/loop/canvas management.
 // Uses upsert so we never duplicate — safe across restarts and HMR.
+// Pass server port + CSRF token as env so the MCP server can call back to the REST API
+// for features that live in-memory on the main server (e.g. canvas).
 {
   const db = (await import('./db/database')).getDb();
+  const { getCsrfToken: getToken } = await import('./middleware/csrf');
   const serverPath = resolve(import.meta.dir, 'mcp/e-work-server.ts');
+  const mcpEnv = JSON.stringify({
+    E_SERVER_PORT: process.env.PORT || '3002',
+    E_CSRF_TOKEN: getToken(),
+  });
   db.query(
     `INSERT INTO mcp_servers (name, transport, command, args, env, scope, status)
-     VALUES ('e-work', 'stdio', 'bun', ?, NULL, 'local', 'disconnected')
-     ON CONFLICT(name) DO UPDATE SET command = 'bun', args = excluded.args`,
-  ).run(JSON.stringify([serverPath]));
+     VALUES ('e-work', 'stdio', 'bun', ?, ?, 'local', 'disconnected')
+     ON CONFLICT(name) DO UPDATE SET command = 'bun', args = excluded.args, env = excluded.env`,
+  ).run(JSON.stringify([serverPath]), mcpEnv);
 }
 
 // Clear stale CLI session IDs from any previous server instance —

@@ -56,7 +56,7 @@ export function getAuthToken(): string | null {
 let _csrfToken: string | null = null;
 let _csrfFetching: Promise<void> | null = null;
 
-/** Fetch and cache the CSRF token from the server. Called once at app init. */
+/** Fetch and cache the CSRF token from the server. Called at app init and on token expiry. */
 export async function initCsrfToken(): Promise<void> {
   if (_csrfToken) return;
   if (_csrfFetching) return _csrfFetching;
@@ -83,11 +83,21 @@ export async function initCsrfToken(): Promise<void> {
   return _csrfFetching;
 }
 
+/**
+ * Re-fetch the CSRF token (e.g. after a server restart invalidated it).
+ * Clears the cached token first so initCsrfToken actually fetches.
+ */
+export async function refreshCsrfToken(): Promise<void> {
+  _csrfToken = null;
+  _csrfFetching = null;
+  await initCsrfToken();
+}
+
 export function getCsrfToken(): string | null {
   return _csrfToken;
 }
 
-async function request<T>(path: string, opts: RequestInit = {}): Promise<T> {
+async function request<T>(path: string, opts: RequestInit = {}, _retried = false): Promise<T> {
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
     ...(opts.headers as Record<string, string>),
@@ -108,6 +118,16 @@ async function request<T>(path: string, opts: RequestInit = {}): Promise<T> {
       throw new Error('Request was cancelled (page may be reloading).');
     }
     throw new Error('Cannot connect to server. Is the backend running?');
+  }
+
+  // Auto-refresh CSRF token on 403 (server restart invalidates old tokens)
+  if (res.status === 403 && !_retried) {
+    const body = await res.json().catch(() => ({}));
+    if (body.error?.includes('CSRF')) {
+      console.log('[CSRF] Token expired, refreshing...');
+      await refreshCsrfToken();
+      return request<T>(path, opts, true);
+    }
   }
 
   const contentType = res.headers.get('content-type') || '';
@@ -194,7 +214,7 @@ export const api = {
 
   // --- Streaming ---
   stream: {
-    send: (
+    send: async (
       conversationId: string,
       content: string,
       sessionId?: string | null,
@@ -213,16 +233,44 @@ export const api = {
           ?.filter((a) => a.type === 'image' && a.content && a.mimeType)
           .map((a) => ({ data: a.content!, mediaType: a.mimeType! })) || [];
 
-      return fetch(`${getBaseUrl()}/stream/${conversationId}`, {
+      const body = JSON.stringify({
+        content,
+        ...(images.length > 0 ? { images } : {}),
+        ...(attachments?.length ? { attachments } : {}),
+      });
+
+      const res = await fetch(`${getBaseUrl()}/stream/${conversationId}`, {
         method: 'POST',
         headers,
-        body: JSON.stringify({
-          content,
-          ...(images.length > 0 ? { images } : {}),
-          ...(attachments?.length ? { attachments } : {}),
-        }),
+        body,
         signal,
       });
+
+      // Auto-refresh CSRF token on 403 and retry once
+      if (res.status === 403) {
+        const cloned = res.clone();
+        try {
+          const errBody = await cloned.json();
+          if (errBody.error?.includes('CSRF')) {
+            console.log('[CSRF] Stream token expired, refreshing...');
+            await refreshCsrfToken();
+            const retryHeaders: Record<string, string> = { 'Content-Type': 'application/json' };
+            if (token) retryHeaders['Authorization'] = `Bearer ${token}`;
+            if (_csrfToken) retryHeaders['X-CSRF-Token'] = _csrfToken;
+            if (sessionId) retryHeaders['X-Session-Id'] = sessionId;
+            return fetch(`${getBaseUrl()}/stream/${conversationId}`, {
+              method: 'POST',
+              headers: retryHeaders,
+              body,
+              signal,
+            });
+          }
+        } catch {
+          // Couldn't parse error body — return original response
+        }
+      }
+
+      return res;
     },
     cancel: (conversationId: string, sessionId: string) =>
       request(`/stream/${conversationId}/cancel`, {
@@ -2148,6 +2196,7 @@ export const api = {
 
   // --- Canvas ---
   canvas: {
+    get: (canvasId: string) => request<{ ok: boolean; data: any }>(`/canvas/item/${canvasId}`),
     list: (conversationId: string) =>
       request<{ ok: boolean; data: any[] }>(`/canvas/${conversationId}`),
     push: (body: {

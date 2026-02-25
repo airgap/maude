@@ -1,11 +1,10 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
   import { conversationStore } from '$lib/stores/conversation.svelte';
   import { canvasStore } from '$lib/stores/canvas.svelte';
+  import { primaryPaneStore } from '$lib/stores/primaryPane.svelte';
   import CanvasRenderer from '../canvas/CanvasRenderer.svelte';
 
   let expandedId = $state<string | null>(null);
-  let fullscreenId = $state<string | null>(null);
 
   const conversationId = $derived(conversationStore.activeId);
   const canvases = $derived(canvasStore.current);
@@ -14,12 +13,10 @@
     expandedId = expandedId === id ? null : id;
   }
 
-  function openFullscreen(id: string) {
-    fullscreenId = id;
-  }
-
-  function closeFullscreen() {
-    fullscreenId = null;
+  function openInTab(id: string) {
+    const canvas = canvasStore.getById(id);
+    if (!canvas) return;
+    primaryPaneStore.openCanvasTab(id, canvas.title || 'Canvas');
   }
 
   function formatDate(ts: number) {
@@ -56,7 +53,7 @@
         <div class="canvas-item" class:expanded={expandedId === canvas.id}>
           <!-- Header row -->
           <div class="canvas-item-header">
-            <button class="canvas-expand-btn" onclick={() => toggleExpand(canvas.id)}>
+            <button class="canvas-expand-btn" onclick={() => openInTab(canvas.id)}>
               <span class="canvas-icon">
                 <svg
                   width="13"
@@ -73,24 +70,15 @@
               </span>
               <span class="canvas-type-badge">{canvas.contentType}</span>
               <span class="canvas-name">{canvas.title || 'Untitled Canvas'}</span>
-              <span class="canvas-chevron" class:rotated={expandedId === canvas.id}>
-                <svg
-                  width="10"
-                  height="10"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="2"
-                >
-                  <polyline points="6 9 12 15 18 9"></polyline>
-                </svg>
-              </span>
             </button>
             <div class="canvas-actions">
               <button
                 class="canvas-action-btn"
-                onclick={() => openFullscreen(canvas.id)}
-                title="Open fullscreen"
+                onclick={(e) => {
+                  e.stopPropagation();
+                  toggleExpand(canvas.id);
+                }}
+                title="Preview inline"
               >
                 <svg
                   width="11"
@@ -99,10 +87,9 @@
                   fill="none"
                   stroke="currentColor"
                   stroke-width="2"
+                  class:rotated={expandedId === canvas.id}
                 >
-                  <path
-                    d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"
-                  ></path>
+                  <polyline points="6 9 12 15 18 9"></polyline>
                 </svg>
               </button>
             </div>
@@ -128,40 +115,6 @@
     {/if}
   </div>
 </div>
-
-<!-- Fullscreen modal -->
-{#if fullscreenId}
-  {@const canvas = canvases.find((c) => c.id === fullscreenId)}
-  {#if canvas}
-    <div class="canvas-fullscreen-overlay" onclick={closeFullscreen}>
-      <div class="canvas-fullscreen-modal" onclick={(e) => e.stopPropagation()}>
-        <div class="canvas-fullscreen-header">
-          <h2>{canvas.title || 'Canvas'}</h2>
-          <button class="canvas-close-btn" onclick={closeFullscreen}>
-            <svg
-              width="18"
-              height="18"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="2"
-            >
-              <line x1="18" y1="6" x2="6" y2="18"></line>
-              <line x1="6" y1="6" x2="18" y2="18"></line>
-            </svg>
-          </button>
-        </div>
-        <div class="canvas-fullscreen-content">
-          <CanvasRenderer
-            contentType={canvas.contentType}
-            content={canvas.content}
-            canvasId={canvas.id}
-          />
-        </div>
-      </div>
-    </div>
-  {/if}
-{/if}
 
 <style>
   .canvas-panel {
@@ -288,18 +241,6 @@
     min-width: 0;
   }
 
-  .canvas-chevron {
-    flex-shrink: 0;
-    color: var(--text-tertiary);
-    transition: transform var(--transition);
-    display: flex;
-    align-items: center;
-  }
-
-  .canvas-chevron.rotated {
-    transform: rotate(180deg);
-  }
-
   .canvas-actions {
     display: flex;
     align-items: center;
@@ -349,70 +290,8 @@
     margin: 0 10px 10px;
   }
 
-  /* Fullscreen modal */
-  .canvas-fullscreen-overlay {
-    position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background: rgba(0, 0, 0, 0.8);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    z-index: 1000;
-  }
-
-  .canvas-fullscreen-modal {
-    background: var(--bg-primary);
-    border-radius: var(--radius-lg);
-    width: 90%;
-    max-width: 1200px;
-    height: 85vh;
-    display: flex;
-    flex-direction: column;
-    overflow: hidden;
-    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
-  }
-
-  .canvas-fullscreen-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 16px 20px;
-    border-bottom: 1px solid var(--border-secondary);
-  }
-
-  .canvas-fullscreen-header h2 {
-    margin: 0;
-    font-size: var(--fs-lg);
-    font-weight: 600;
-    color: var(--text-primary);
-  }
-
-  .canvas-close-btn {
-    width: 32px;
-    height: 32px;
-    border-radius: var(--radius-sm);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    background: transparent;
-    border: 1px solid var(--border-secondary);
-    cursor: pointer;
-    color: var(--text-secondary);
-    transition: all var(--transition);
-  }
-
-  .canvas-close-btn:hover {
-    background: var(--bg-hover);
-    border-color: var(--border-primary);
-    color: var(--text-primary);
-  }
-
-  .canvas-fullscreen-content {
-    flex: 1;
-    overflow: auto;
-    padding: 20px;
+  /* Chevron rotation for inline preview toggle */
+  .canvas-action-btn svg.rotated {
+    transform: rotate(180deg);
   }
 </style>

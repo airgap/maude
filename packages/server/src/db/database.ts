@@ -470,6 +470,20 @@ export function initDatabase(): void {
     CREATE INDEX IF NOT EXISTS idx_prd_stories_workspace ON prd_stories(workspace_path);
   `);
 
+  // Canvas persistence table
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS canvases (
+      id TEXT PRIMARY KEY,
+      conversation_id TEXT,
+      content_type TEXT NOT NULL,
+      content TEXT NOT NULL,
+      title TEXT,
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_canvases_conversation ON canvases(conversation_id, updated_at DESC);
+  `);
+
   // Skills marketplace table
   db.exec(`
     CREATE TABLE IF NOT EXISTS installed_skills (

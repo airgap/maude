@@ -470,11 +470,11 @@
   :global([data-mobile]) .golem-badge .golem-label {
     display: none;
   }
-  /* Topbar left: truncate workspace tabs */
+  /* Topbar left: let workspace tabs shrink but don't clip dropdown */
   :global([data-mobile]) .topbar-left {
     flex: 1;
     min-width: 0;
-    overflow: hidden;
+    overflow: visible;
   }
   :global([data-mobile]) .topbar-right {
     flex-shrink: 0;

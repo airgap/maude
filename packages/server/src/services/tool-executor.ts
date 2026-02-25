@@ -372,20 +372,30 @@ async function executeNotebookEditTool(input: Record<string, unknown>): Promise<
 }
 
 /**
- * In-memory canvas state storage.
- * Maps canvasId -> canvas data.
+ * Canvas persistence — backed by SQLite canvases table.
  */
-const canvasStore = new Map<
-  string,
-  {
-    id: string;
-    contentType: 'html' | 'svg' | 'mermaid' | 'table';
-    content: string;
-    title?: string;
-    conversationId?: string;
-    lastUpdated: number;
-  }
->();
+import { getDb } from '../db/database';
+
+interface CanvasRow {
+  id: string;
+  conversation_id: string | null;
+  content_type: string;
+  content: string;
+  title: string | null;
+  created_at: number;
+  updated_at: number;
+}
+
+function canvasFromRow(row: CanvasRow) {
+  return {
+    id: row.id,
+    contentType: row.content_type as 'html' | 'svg' | 'mermaid' | 'table',
+    content: row.content,
+    title: row.title || undefined,
+    conversationId: row.conversation_id || undefined,
+    lastUpdated: row.updated_at,
+  };
+}
 
 async function executeCanvasPushTool(
   input: Record<string, unknown>,
@@ -422,14 +432,18 @@ async function executeCanvasPushTool(
     const id = canvasId || nanoid(12);
     const now = Date.now();
 
-    // Store canvas state in memory
-    canvasStore.set(id, {
-      id,
-      contentType,
-      content,
-      title,
-      lastUpdated: now,
-    });
+    // Upsert into database
+    const db = getDb();
+    const existing = db.query('SELECT id FROM canvases WHERE id = ?').get(id) as any;
+    if (existing) {
+      db.query(
+        'UPDATE canvases SET content_type = ?, content = ?, title = ?, updated_at = ? WHERE id = ?',
+      ).run(contentType, content, title || null, now, id);
+    } else {
+      db.query(
+        'INSERT INTO canvases (id, conversation_id, content_type, content, title, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
+      ).run(id, null, contentType, content, title || null, now, now);
+    }
 
     // Return success with canvas ID and metadata for event emission
     // The streaming layer will pick up __canvas_update metadata and emit SSE event
@@ -461,15 +475,17 @@ async function executeCanvasSnapshotTool(input: Record<string, unknown>): Promis
   const canvasId = String(input.canvas_id);
 
   try {
-    const canvas = canvasStore.get(canvasId);
+    const db = getDb();
+    const row = db.query('SELECT * FROM canvases WHERE id = ?').get(canvasId) as CanvasRow | null;
 
-    if (!canvas) {
+    if (!row) {
       return {
         content: `Canvas not found: ${canvasId}`,
         is_error: true,
       };
     }
 
+    const canvas = canvasFromRow(row);
     return {
       content: JSON.stringify({
         canvasId: canvas.id,
@@ -491,22 +507,26 @@ async function executeCanvasSnapshotTool(input: Record<string, unknown>): Promis
  * Get canvas by ID (used by streaming layer to emit canvas updates)
  */
 export function getCanvas(canvasId: string) {
-  return canvasStore.get(canvasId);
+  const db = getDb();
+  const row = db.query('SELECT * FROM canvases WHERE id = ?').get(canvasId) as CanvasRow | null;
+  return row ? canvasFromRow(row) : undefined;
 }
 
 /**
- * Get all canvases for a conversation (used by streaming layer)
+ * Get all canvases for a conversation
  */
 export function getConversationCanvases(conversationId: string) {
-  return Array.from(canvasStore.values()).filter((c) => c.conversationId === conversationId);
+  const db = getDb();
+  const rows = db
+    .query('SELECT * FROM canvases WHERE conversation_id = ? ORDER BY updated_at DESC')
+    .all(conversationId) as CanvasRow[];
+  return rows.map(canvasFromRow);
 }
 
 /**
- * Set conversation ID for a canvas (used by streaming layer)
+ * Set conversation ID for a canvas
  */
 export function setCanvasConversation(canvasId: string, conversationId: string) {
-  const canvas = canvasStore.get(canvasId);
-  if (canvas) {
-    canvas.conversationId = conversationId;
-  }
+  const db = getDb();
+  db.query('UPDATE canvases SET conversation_id = ? WHERE id = ?').run(conversationId, canvasId);
 }

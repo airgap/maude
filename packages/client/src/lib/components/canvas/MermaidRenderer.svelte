@@ -12,6 +12,9 @@
 
   onMount(async () => {
     try {
+      // Skip render if content is empty (can happen during reactive flush)
+      if (!content?.trim()) return;
+
       // Dynamically import mermaid
       const mermaid = await import('mermaid');
 
@@ -30,7 +33,8 @@
       });
 
       // Render the diagram
-      const { svg } = await mermaid.default.render(`mermaid-${canvasId}`, content);
+      const id = (canvasId ?? '') || Math.random().toString(36).slice(2, 10);
+      const { svg } = await mermaid.default.render(`mermaid-${id}`, content);
       if (container) {
         container.innerHTML = svg;
       }

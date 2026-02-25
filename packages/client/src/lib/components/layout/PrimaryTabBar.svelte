@@ -6,6 +6,7 @@
   } from '$lib/stores/primaryPane.svelte';
   import { editorStore } from '$lib/stores/editor.svelte';
   import { streamStore } from '$lib/stores/stream.svelte';
+  import { conversationStore } from '$lib/stores/conversation.svelte';
   import ContextMenu from '$lib/components/ui/ContextMenu.svelte';
   import type { ContextMenuItem } from '$lib/components/ui/ContextMenu.svelte';
   import Tooltip from '$lib/components/ui/Tooltip.svelte';
@@ -25,24 +26,41 @@
     ctxY = e.clientY;
   }
 
+  /**
+   * If the active conversation no longer has a tab in the primary pane,
+   * clear it so the conversation→tab sync doesn't auto-recreate the tab.
+   */
+  function cleanupConversation() {
+    // Only relevant for the primary pane (index 0) which has conversation sync
+    if (pane.id !== primaryPaneStore.panes[0]?.id) return;
+    const activeConvId = conversationStore.activeId;
+    if (activeConvId && !pane.tabs.some((t) => t.conversationId === activeConvId)) {
+      conversationStore.setActive(null);
+    }
+  }
+
   function closeTab(tabId: string) {
     primaryPaneStore.closeTab(pane.id, tabId);
+    cleanupConversation();
   }
 
   function closeOthers(tabId: string) {
     pane.tabs
       .filter((t) => t.id !== tabId)
       .forEach((t) => primaryPaneStore.closeTab(pane.id, t.id));
+    cleanupConversation();
   }
 
   function closeToRight(tabId: string) {
     const idx = pane.tabs.findIndex((t) => t.id === tabId);
     pane.tabs.slice(idx + 1).forEach((t) => primaryPaneStore.closeTab(pane.id, t.id));
+    cleanupConversation();
   }
 
   function closeAll() {
     // Close from end to avoid shifting index issues
     [...pane.tabs].reverse().forEach((t) => primaryPaneStore.closeTab(pane.id, t.id));
+    cleanupConversation();
   }
 
   function copyPath(tab: PrimaryTab) {
@@ -137,6 +155,7 @@
   function tabTooltip(tab: PrimaryTab): string {
     const parts: string[] = [];
     if (tab.kind === 'looper') return 'Loop Dashboard';
+    if (tab.kind === 'canvas') return `Canvas: ${tab.title}`;
     if (tab.filePath) parts.push(tab.filePath);
     else if (tab.kind === 'chat') parts.push('Conversation');
     if (tab.language) parts.push(tab.language);
@@ -209,6 +228,18 @@
               <circle cx="6" cy="6" r="3" />
               <circle cx="18" cy="18" r="3" />
               <path d="M6 9v3a6 6 0 0 0 6 6h2M18 15V9" />
+            </svg>
+          {:else if tab.kind === 'canvas'}
+            <svg
+              class="tab-icon canvas-icon"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.8"
+            >
+              <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+              <line x1="3" y1="9" x2="21" y2="9" />
+              <line x1="9" y1="21" x2="9" y2="9" />
             </svg>
           {:else if tab.kind === 'file'}
             <svg
@@ -428,6 +459,10 @@
 
   .looper-icon {
     color: var(--accent-primary);
+  }
+
+  .canvas-icon {
+    color: var(--accent-secondary, var(--accent-primary));
   }
 
   .tab-title {
