@@ -304,7 +304,7 @@ function loadFromStorage(): SettingsState {
 function createSettingsStore() {
   let state = $state<SettingsState>(loadFromStorage());
 
-  // Settings the server needs to know about (used for CLI process spawning)
+  // Settings the server needs to know about (used for CLI process spawning & tool gating)
   const SERVER_SYNCED_KEYS: (keyof SettingsState)[] = [
     'cliProvider',
     'autoCompaction',
@@ -312,6 +312,7 @@ function createSettingsStore() {
     'compactionRetentionCount',
     'permissionMode',
     'terminalCommandPolicy',
+    'deviceCapabilities',
   ];
 
   function persist() {
