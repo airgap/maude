@@ -2,6 +2,7 @@ import { Hono } from 'hono';
 import { getDb } from '../db/database';
 import { claudeManager } from '../services/claude-process';
 import { loopOrchestrator } from '../services/loop';
+import { prdEvents, type PrdEvent } from './prd/events';
 
 const app = new Hono();
 
@@ -259,6 +260,10 @@ app.get('/events', (c) => {
         send('loop_done', { loopId });
       };
 
+      const onPrdChange = (event: PrdEvent) => {
+        send('prd_change', event as unknown as Record<string, unknown>);
+      };
+
       loopOrchestrator.events.on('loop_event', onLoopEvent);
       loopOrchestrator.events.on('story_completed', onStoryUpdate);
       loopOrchestrator.events.on('story_failed', onStoryUpdate);
@@ -266,6 +271,7 @@ app.get('/events', (c) => {
       loopOrchestrator.events.on('completed', onLoopDone);
       loopOrchestrator.events.on('cancelled', onLoopDone);
       loopOrchestrator.events.on('failed', onLoopDone);
+      prdEvents.on('prd_change', onPrdChange);
 
       // Keep-alive ping every 20s
       const pingInterval = setInterval(() => {
@@ -282,6 +288,7 @@ app.get('/events', (c) => {
         loopOrchestrator.events.off('completed', onLoopDone);
         loopOrchestrator.events.off('cancelled', onLoopDone);
         loopOrchestrator.events.off('failed', onLoopDone);
+        prdEvents.off('prd_change', onPrdChange);
       };
 
       // Handle client disconnect

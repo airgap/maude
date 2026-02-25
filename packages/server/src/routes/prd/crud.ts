@@ -1,8 +1,18 @@
 import { Hono } from 'hono';
 import { nanoid, getDb, prdFromRow, storyFromRow, reorderStoriesByDependencies } from './helpers';
 import type { PRDCreateInput, StoryPriority } from './helpers';
+import { prdEvents, type PrdEvent } from './events';
 
 const app = new Hono();
+
+/** Fire-and-forget PRD event emission. */
+function emitPrdEvent(event: PrdEvent): void {
+  try {
+    prdEvents.emit('prd_change', event);
+  } catch {
+    /* never block the request */
+  }
+}
 
 // List PRDs (optionally filtered by workspacePath)
 app.get('/', (c) => {
@@ -21,6 +31,62 @@ app.get('/', (c) => {
   return c.json({
     ok: true,
     data: rows.map(prdFromRow),
+  });
+});
+
+// SSE endpoint for real-time PRD change notifications
+// Must be registered before /:id to avoid being caught by the parameter route
+app.get('/events', (c) => {
+  const workspacePath = c.req.query('workspacePath');
+  const encoder = new TextEncoder();
+
+  const stream = new ReadableStream({
+    start(controller) {
+      const send = (data: PrdEvent | { type: string; ts: number }) => {
+        try {
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify(data)}\n\n`));
+        } catch {
+          /* client disconnected */
+        }
+      };
+
+      // Initial ping
+      send({ type: 'ping', ts: Date.now() });
+
+      const handler = (event: PrdEvent) => {
+        // If client specified a workspace filter, only send matching events
+        if (workspacePath && event.workspacePath && event.workspacePath !== workspacePath) {
+          return;
+        }
+        send(event);
+      };
+
+      prdEvents.on('prd_change', handler);
+
+      // Keep-alive ping every 20s
+      const pingInterval = setInterval(() => {
+        send({ type: 'ping', ts: Date.now() });
+      }, 20000);
+
+      // Cleanup on client disconnect
+      c.req.raw.signal?.addEventListener('abort', () => {
+        prdEvents.off('prd_change', handler);
+        clearInterval(pingInterval);
+        try {
+          controller.close();
+        } catch {
+          /* already closed */
+        }
+      });
+    },
+  });
+
+  return new Response(stream, {
+    headers: {
+      'Content-Type': 'text/event-stream',
+      'Cache-Control': 'no-cache',
+      Connection: 'keep-alive',
+    },
   });
 });
 
@@ -101,6 +167,8 @@ app.post('/', async (c) => {
     reorderStoriesByDependencies(db, prdId);
   }
 
+  emitPrdEvent({ type: 'prd_created', prdId, workspacePath: body.workspacePath, ts: now });
+
   return c.json({ ok: true, data: { id: prdId, storyIds } }, 201);
 });
 
@@ -136,6 +204,8 @@ app.patch('/:id', async (c) => {
 
   db.query(`UPDATE prds SET ${updates.join(', ')} WHERE id = ?`).run(...values);
 
+  emitPrdEvent({ type: 'prd_updated', prdId: id, ts: Date.now() });
+
   return c.json({ ok: true });
 });
 
@@ -145,6 +215,9 @@ app.delete('/:id', (c) => {
   const id = c.req.param('id');
   const result = db.query('DELETE FROM prds WHERE id = ?').run(id);
   if (result.changes === 0) return c.json({ ok: false, error: 'Not found' }, 404);
+
+  emitPrdEvent({ type: 'prd_deleted', prdId: id, ts: Date.now() });
+
   return c.json({ ok: true });
 });
 
@@ -195,6 +268,8 @@ app.post('/:id/stories', async (c) => {
 
   // Touch PRD updated_at
   db.query('UPDATE prds SET updated_at = ? WHERE id = ?').run(now, prdId);
+
+  emitPrdEvent({ type: 'story_added', prdId, storyId, ts: now });
 
   return c.json({ ok: true, data: { id: storyId } }, 201);
 });
@@ -321,6 +396,9 @@ app.patch('/:prdId/stories/:storyId', async (c) => {
   }
 
   const updated = db.query('SELECT * FROM prd_stories WHERE id = ?').get(storyId);
+
+  emitPrdEvent({ type: 'story_updated', prdId, storyId, ts: now });
+
   return c.json({ ok: true, data: storyFromRow(updated as any) });
 });
 
@@ -333,7 +411,10 @@ app.delete('/:prdId/stories/:storyId', (c) => {
 
   // Touch PRD updated_at
   const prdId = c.req.param('prdId');
-  db.query('UPDATE prds SET updated_at = ? WHERE id = ?').run(Date.now(), prdId);
+  const now = Date.now();
+  db.query('UPDATE prds SET updated_at = ? WHERE id = ?').run(now, prdId);
+
+  emitPrdEvent({ type: 'story_deleted', prdId, storyId, ts: now });
 
   return c.json({ ok: true });
 });
@@ -352,6 +433,10 @@ app.post('/:prdId/stories/archive-completed', async (c) => {
 
   // Touch PRD updated_at
   db.query('UPDATE prds SET updated_at = ? WHERE id = ?').run(now, prdId);
+
+  if (result.changes > 0) {
+    emitPrdEvent({ type: 'stories_archived', prdId, ts: now });
+  }
 
   return c.json({ ok: true, data: { archived: result.changes } });
 });
@@ -437,6 +522,8 @@ app.post('/import', async (c) => {
       now,
     );
   }
+
+  emitPrdEvent({ type: 'prd_created', prdId, workspacePath, ts: now });
 
   return c.json({ ok: true, data: { id: prdId, storyIds, imported: ralphStories.length } }, 201);
 });

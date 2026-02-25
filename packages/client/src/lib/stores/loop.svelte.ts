@@ -114,6 +114,8 @@ function createLoopStore() {
   let log = $state<IterationLogEntry[]>([]);
   let eventReader = $state<ReadableStreamDefaultReader | null>(null);
   let eventAbort = $state<AbortController | null>(null);
+  let prdEventAbort = $state<AbortController | null>(null);
+  let prdEventsWorkspacePath = $state<string | null>(null);
   let standaloneStoryCount = $state(0); // Tracks total stories for standalone loops
   let activeLoopChecked = $state(false); // True once loadActiveLoop() has completed at least once
 
@@ -733,6 +735,83 @@ function createLoopStore() {
       eventReader = null;
     },
 
+    /**
+     * Subscribe to PRD change events via SSE.
+     * Auto-refreshes the PRD list when mutations happen (create, update, delete).
+     */
+    connectPrdEvents(workspacePath: string) {
+      // Skip if already connected for this workspace
+      if (prdEventAbort && prdEventsWorkspacePath === workspacePath) return;
+      this.disconnectPrdEvents();
+
+      prdEventsWorkspacePath = workspacePath;
+      const abort = new AbortController();
+      prdEventAbort = abort;
+
+      const connect = async () => {
+        try {
+          const headers: Record<string, string> = { Accept: 'text/event-stream' };
+          const token = getAuthToken();
+          if (token) headers['Authorization'] = `Bearer ${token}`;
+
+          const url = `${getBaseUrl()}/prds/events?workspacePath=${encodeURIComponent(workspacePath)}`;
+          const res = await fetch(url, { headers, signal: abort.signal });
+
+          if (!res.ok || !res.body) return;
+
+          const reader = res.body.getReader();
+          const decoder = new TextDecoder();
+          let buffer = '';
+
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+
+            buffer += decoder.decode(value, { stream: true });
+            const lines = buffer.split('\n');
+            buffer = lines.pop() || '';
+
+            for (const line of lines) {
+              if (!line.startsWith('data: ')) continue;
+              try {
+                const event = JSON.parse(line.slice(6));
+                if (event.type === 'ping') continue;
+
+                // A PRD mutation happened — reload the list
+                console.log('[loop] PRD change event:', event.type, event.prdId);
+                if (prdEventsWorkspacePath) {
+                  await this.loadPrds(prdEventsWorkspacePath);
+                }
+              } catch {
+                /* malformed event — skip */
+              }
+            }
+          }
+        } catch (err) {
+          if ((err as Error).name !== 'AbortError') {
+            console.warn('[loop] PRD events stream error, reconnecting in 5s:', err);
+            // Reconnect after delay
+            if (!abort.signal.aborted) {
+              await new Promise((r) => setTimeout(r, 5000));
+              if (!abort.signal.aborted) {
+                await connect();
+              }
+            }
+          }
+        }
+      };
+
+      connect();
+    },
+
+    disconnectPrdEvents() {
+      if (prdEventAbort) {
+        prdEventAbort.abort();
+        prdEventAbort = null;
+      }
+      prdEventsWorkspacePath = null;
+    },
+
     // --- API helpers ---
 
     async loadPrds(workspacePath: string) {
@@ -777,6 +856,9 @@ function createLoopStore() {
       } finally {
         loading = false;
       }
+
+      // Start listening for real-time PRD mutations (idempotent — won't reconnect if already connected)
+      this.connectPrdEvents(workspacePath);
     },
 
     async loadPrd(id: string) {
@@ -1958,6 +2040,7 @@ if (import.meta.hot) {
   import.meta.hot.dispose((data: Record<string, unknown>) => {
     // Disconnect SSE before module is replaced to avoid orphaned streams
     loopStore.disconnectEvents();
+    loopStore.disconnectPrdEvents();
 
     try {
       data.activeLoop = loopStore.activeLoop
