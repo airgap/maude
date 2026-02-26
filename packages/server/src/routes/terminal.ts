@@ -88,6 +88,7 @@ app.get('/shells', async (c) => {
  *   - cwd: Working directory (only used if no sessionId — creates a legacy session)
  *   - cols: Initial columns (default 80)
  *   - rows: Initial rows (default 24)
+ *   - storyId: Story ID — when provided, terminal CWD resolves to the story's worktree path
  *
  * Protocol:
  *   - Raw text: forwarded as PTY input
@@ -102,6 +103,7 @@ app.get(
     const cwd = c.req.query('cwd') || process.env.HOME || '/';
     const cols = parseInt(c.req.query('cols') || '80');
     const rows = parseInt(c.req.query('rows') || '24');
+    const storyId = c.req.query('storyId') || undefined;
 
     return {
       onOpen(_evt, ws) {
@@ -116,7 +118,7 @@ app.get(
         // If no sessionId provided, create a new session (backward-compatible with old client)
         if (!sessionId) {
           try {
-            const result = sessionManager.create({ cwd, cols, rows });
+            const result = sessionManager.create({ cwd, cols, rows, storyId });
             sessionId = result.sessionId;
           } catch (err) {
             rawWs.send(`\r\n[Failed to create terminal session: ${(err as Error).message}]\r\n`);

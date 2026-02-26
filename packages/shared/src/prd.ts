@@ -188,6 +188,8 @@ export interface QualityCheckResult {
   output: string;
   duration: number;
   exitCode: number;
+  /** Story ID if this check was run in a worktree context */
+  storyId?: string;
 }
 
 // --- Loop Orchestrator Types ---

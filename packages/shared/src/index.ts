@@ -412,6 +412,9 @@ export type {
   WorktreeValidation,
   WorktreeStatus,
   WorktreeRecord,
+  MergeResult,
+  MergeOptions,
+  MergeOperationLogEntry,
 } from './worktree.js';
 
 export { WORKTREE_STATUSES } from './worktree.js';

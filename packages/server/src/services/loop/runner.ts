@@ -2,7 +2,8 @@ import { EventEmitter } from 'events';
 import { nanoid } from 'nanoid';
 import { getDb } from '../../db/database';
 import { claudeManager } from '../claude-process';
-import { runAllQualityChecks } from '../quality-checker';
+import { runAllQualityChecks, ensureDependencies } from '../quality-checker';
+import { resolveWorkspacePath } from '../worktree-service';
 import { sendNotification } from '../notification-channels';
 import type {
   LoopConfig,
@@ -58,6 +59,14 @@ export class LoopRunner {
     private config: LoopConfig,
     private events: EventEmitter,
   ) {}
+
+  /**
+   * Resolve the effective CWD for a story — returns the worktree path
+   * if the story has an active worktree, otherwise falls back to workspacePath.
+   */
+  private resolveStoryCwd(storyId: string): string {
+    return resolveWorkspacePath(this.workspacePath, storyId);
+  }
 
   /** Load workflow config from the PRD (if any). Falls back to defaults. */
   private loadWorkflowConfig(): void {
@@ -522,7 +531,9 @@ export class LoopRunner {
               storyId: story.id,
               storyTitle: story.title,
             });
-            const preCheckResults = await runAllQualityChecks(checksToRun, this.workspacePath);
+            const preCheckResults = await runAllQualityChecks(checksToRun, this.workspacePath, {
+              storyId: story.id,
+            });
             const preBuildBroken = preCheckResults.some((qr) => {
               const cfg = checksToRun.find((c) => c.id === qr.checkId);
               return cfg?.required && !qr.passed;
@@ -540,7 +551,7 @@ export class LoopRunner {
                 timestamp: Date.now(),
                 qualityResults: preCheckResults,
               });
-              await this.revertUncommittedChanges();
+              await this.revertUncommittedChanges(story.id);
             }
           } else if (isFixUpPass) {
             console.log(
@@ -595,9 +606,16 @@ export class LoopRunner {
           let agentError: string | null = null;
           const AGENT_TIMEOUT_MS = 10 * 60 * 1000; // 10 minutes per story
           try {
+            const storyCwd = this.resolveStoryCwd(story.id);
+
+            // Ensure dependencies are installed if working in a worktree
+            if (storyCwd !== this.workspacePath) {
+              await ensureDependencies(storyCwd);
+            }
+
             const sessionId = await claudeManager.createSession(conversationId, {
               model: this.config.model,
-              workspacePath: this.workspacePath,
+              workspacePath: storyCwd,
               effort: this.config.effort,
               systemPrompt: this.buildSystemPrompt(),
             });
@@ -655,7 +673,9 @@ export class LoopRunner {
               storyId: story.id,
               storyTitle: story.title,
             });
-            qualityResults = await runAllQualityChecks(checksToRun, this.workspacePath);
+            qualityResults = await runAllQualityChecks(checksToRun, this.workspacePath, {
+              storyId: story.id,
+            });
 
             for (const qr of qualityResults) {
               this.emitEvent('quality_check', {
@@ -726,7 +746,7 @@ export class LoopRunner {
                   detail: `Git commit failed: ${commitErrMsg}`,
                   timestamp: Date.now(),
                 });
-                await this.revertUncommittedChanges();
+                await this.revertUncommittedChanges(story.id);
                 this.updateStory(story.id, { status: 'pending' });
                 this.emitEvent('story_failed', {
                   storyId: story.id,
@@ -857,7 +877,7 @@ export class LoopRunner {
                 detail: `Post-failure rollback: agent error — reverting to clean state`,
                 timestamp: Date.now(),
               });
-              await this.revertUncommittedChanges();
+              await this.revertUncommittedChanges(story.id);
               didRevert = true;
             } else if (requiredChecksFailed && fixUpsExhausted) {
               // All fix-up sub-attempts exhausted — revert and let the next fresh attempt start clean
@@ -878,7 +898,7 @@ export class LoopRunner {
                 detail: `Post-failure rollback: fix-up attempts exhausted (${fixUpSubAttempts}/${maxFixUps}), reverting for fresh attempt`,
                 timestamp: Date.now(),
               });
-              await this.revertUncommittedChanges();
+              await this.revertUncommittedChanges(story.id);
               didRevert = true;
             } else if (requiredChecksFailed) {
               // Fix-up sub-attempts remaining — keep the code, store/update errors for next fix-up
@@ -1645,11 +1665,12 @@ ${criteria}
    *   2. git checkout . — revert tracked file modifications
    *   3. git clean -fd  — remove untracked files and directories
    */
-  private async revertUncommittedChanges(): Promise<void> {
+  private async revertUncommittedChanges(storyId?: string): Promise<void> {
     const tag = `[loop:${this.loopId}]`;
+    const cwd = storyId ? this.resolveStoryCwd(storyId) : this.workspacePath;
     try {
       const checkProc = Bun.spawn(['git', 'rev-parse', '--is-inside-work-tree'], {
-        cwd: this.workspacePath,
+        cwd,
         stdout: 'pipe',
         stderr: 'pipe',
       });
@@ -1658,7 +1679,7 @@ ${criteria}
 
       // Log status BEFORE reverting — helpful for diagnosing what the failed story changed
       const beforeStatusProc = Bun.spawn(['git', 'status', '--porcelain'], {
-        cwd: this.workspacePath,
+        cwd,
         stdout: 'pipe',
         stderr: 'pipe',
       });
@@ -1673,7 +1694,7 @@ ${criteria}
       // Step 1: Unstage everything — handles new files left in the index after
       // a failed `git commit` (git checkout alone won't touch staged new files)
       const resetProc = Bun.spawn(['git', 'reset', 'HEAD'], {
-        cwd: this.workspacePath,
+        cwd,
         stdout: 'pipe',
         stderr: 'pipe',
       });
@@ -1685,7 +1706,7 @@ ${criteria}
 
       // Step 2: Revert tracked file modifications
       const checkoutProc = Bun.spawn(['git', 'checkout', '.'], {
-        cwd: this.workspacePath,
+        cwd,
         stdout: 'pipe',
         stderr: 'pipe',
       });
@@ -1700,7 +1721,7 @@ ${criteria}
 
       // Step 3: Remove untracked files and directories added by the failed story
       const cleanProc = Bun.spawn(['git', 'clean', '-fd'], {
-        cwd: this.workspacePath,
+        cwd,
         stdout: 'pipe',
         stderr: 'pipe',
       });
@@ -1712,7 +1733,7 @@ ${criteria}
 
       // Log status AFTER reverting — should be clean
       const afterStatusProc = Bun.spawn(['git', 'status', '--porcelain'], {
-        cwd: this.workspacePath,
+        cwd,
         stdout: 'pipe',
         stderr: 'pipe',
       });
@@ -1736,9 +1757,10 @@ ${criteria}
   }
 
   private async createGitSnapshot(storyId: string, messageId?: string): Promise<void> {
+    const snapshotCwd = this.resolveStoryCwd(storyId);
     try {
       const checkProc = Bun.spawn(['git', 'rev-parse', '--is-inside-work-tree'], {
-        cwd: this.workspacePath,
+        cwd: snapshotCwd,
         stdout: 'pipe',
         stderr: 'pipe',
       });
@@ -1746,7 +1768,7 @@ ${criteria}
       if (!isRepo) return;
 
       const headProc = Bun.spawn(['git', 'rev-parse', 'HEAD'], {
-        cwd: this.workspacePath,
+        cwd: snapshotCwd,
         stdout: 'pipe',
         stderr: 'pipe',
       });
@@ -1754,7 +1776,7 @@ ${criteria}
       if ((await headProc.exited) !== 0) return;
 
       const statusProc = Bun.spawn(['git', 'status', '--porcelain'], {
-        cwd: this.workspacePath,
+        cwd: snapshotCwd,
         stdout: 'pipe',
         stderr: 'pipe',
       });
@@ -1764,7 +1786,7 @@ ${criteria}
       let stashSha: string | null = null;
       if (hasChanges) {
         const stashProc = Bun.spawn(['git', 'stash', 'create'], {
-          cwd: this.workspacePath,
+          cwd: snapshotCwd,
           stdout: 'pipe',
           stderr: 'pipe',
         });
@@ -1792,12 +1814,13 @@ ${criteria}
 
   private async gitCommit(story: UserStory): Promise<string | null> {
     const tag = `[loop:${this.loopId}]`;
+    const commitCwd = this.resolveStoryCwd(story.id);
     // Git commits should have a very long timeout to accommodate slow pre-commit hooks
     const GIT_COMMIT_TIMEOUT_MS = 30 * 60 * 1000; // 30 minutes
 
     // Check status BEFORE staging
     const beforeStatusProc = Bun.spawn(['git', 'status', '--porcelain'], {
-      cwd: this.workspacePath,
+      cwd: commitCwd,
       stdout: 'pipe',
       stderr: 'pipe',
     });

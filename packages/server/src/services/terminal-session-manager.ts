@@ -11,6 +11,7 @@ import { parseTestOutput } from './test-output-parser.js';
 import { existsSync, mkdirSync, appendFileSync, writeFileSync, realpathSync } from 'fs';
 import { basename, resolve, dirname, join } from 'path';
 import { homedir } from 'os';
+import { getForStory as getWorktreeForStory } from './worktree-service';
 
 // --- Shell Integration Script Paths ---
 
@@ -300,6 +301,8 @@ interface TerminalSession {
   commandInProgress: boolean;
   /** The current command's text (for context-aware analysis) */
   currentCommandText: string | null;
+  /** Story ID this session is scoped to (undefined if not story-scoped) */
+  storyId?: string;
 }
 
 /** Maximum scrollback buffer size in bytes per session */
@@ -371,7 +374,22 @@ class TerminalSessionManager {
     const id = `term_${nanoid(10)}`;
     const shell = opts.shell || process.env.SHELL || '/bin/bash';
     const args = opts.args || [];
-    const cwd = opts.cwd || opts.workspacePath || process.env.HOME || '/';
+    let cwd = opts.cwd || opts.workspacePath || process.env.HOME || '/';
+    let resolvedStoryId: string | undefined;
+
+    // Resolve worktree CWD when story context is active
+    if (opts.storyId) {
+      try {
+        const worktreeRecord = getWorktreeForStory(opts.storyId);
+        if (worktreeRecord && existsSync(worktreeRecord.worktree_path)) {
+          cwd = worktreeRecord.worktree_path;
+          resolvedStoryId = opts.storyId;
+        }
+      } catch {
+        // DB not available or other error — fall through to default CWD
+      }
+    }
+
     const cols = opts.cols || 80;
     const rows = opts.rows || 24;
     const enableIntegration = opts.enableShellIntegration !== false;
@@ -481,6 +499,7 @@ class TerminalSessionManager {
       commandOutputBuffer: '',
       commandInProgress: false,
       currentCommandText: null,
+      storyId: resolvedStoryId,
     };
 
     // Update PID when the worker reports it
@@ -589,6 +608,7 @@ class TerminalSessionManager {
       shell,
       pid: 0,
       cwd,
+      storyId: resolvedStoryId,
     };
   }
 
@@ -612,6 +632,7 @@ class TerminalSessionManager {
       attached: s.attachedWs.size > 0,
       logging: s.logging,
       logFilePath: s.logFilePath,
+      storyId: s.storyId ?? null,
     }));
   }
 

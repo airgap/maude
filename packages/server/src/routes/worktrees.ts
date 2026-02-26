@@ -8,6 +8,8 @@
 import { Hono } from 'hono';
 import { resolve } from 'path';
 import * as worktreeService from '../services/worktree-service';
+import * as mergeService from '../services/worktree-merge';
+import { lspManager } from '../services/lsp-instance-manager';
 import { getDb } from '../db/database';
 import type { WorktreeInfo, WorktreeRecord } from '@e/shared';
 
@@ -244,20 +246,48 @@ app.post('/:storyId/merge', async (c) => {
     return c.json({ ok: false, error: `No worktree found for story '${storyId}'` }, 404);
   }
 
-  if (record.status === 'merging') {
-    return c.json({ ok: false, error: `Worktree for story '${storyId}' is already merging` }, 409);
-  }
   if (record.status === 'merged') {
     return c.json({ ok: false, error: `Worktree for story '${storyId}' is already merged` }, 409);
   }
 
-  // Transition status to 'merging' — actual merge is handled asynchronously
-  const updateResult = worktreeService.updateStatus(storyId, 'merging');
-  if (!updateResult.ok) {
-    return c.json({ ok: false, error: updateResult.error }, 400);
+  let body: any;
+  try {
+    body = await c.req.json();
+  } catch {
+    body = {};
   }
 
-  return c.json({ ok: true, data: { storyId, status: 'merging' } }, 202);
+  const isRetry = record.status === 'conflict' || body.retry === true;
+  const skipQualityCheck = body.skipQualityCheck ?? false;
+
+  // Delegate to merge service — runs synchronously (rebase + merge + cleanup)
+  const result = isRetry
+    ? await mergeService.retry({ storyId, skipQualityCheck })
+    : await mergeService.merge({ storyId, skipQualityCheck });
+
+  if (!result.ok) {
+    const statusCode = result.status === 'conflict' ? 409 : 400;
+    return c.json(
+      {
+        ok: false,
+        error: result.error,
+        conflictingFiles: result.conflictingFiles,
+        status: result.status,
+        operationLog: result.operationLog,
+      },
+      statusCode,
+    );
+  }
+
+  return c.json({
+    ok: true,
+    data: {
+      storyId,
+      status: result.status,
+      commitSha: result.commitSha,
+      operationLog: result.operationLog,
+    },
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -273,12 +303,17 @@ app.delete('/:storyId', async (c) => {
     return c.json({ ok: false, error: `No worktree found for story '${storyId}'` }, 404);
   }
 
+  // Capture the worktree path before removal for LSP cleanup
+  const worktreePath = record.worktree_path;
+
   if (force) {
     // Force remove via removeRecord (uses git worktree remove --force)
     const result = await worktreeService.removeRecord(record.workspace_path, storyId);
     if (!result.ok) {
       return c.json({ ok: false, error: result.error }, 400);
     }
+    // Shutdown any LSP instances scoped to this worktree
+    lspManager.shutdownForRoot(worktreePath);
     return c.json({ ok: true, data: { storyId } });
   }
 
@@ -301,6 +336,9 @@ app.delete('/:storyId', async (c) => {
   // Git removal succeeded — delete DB record
   const db = getDb();
   db.query('DELETE FROM worktrees WHERE story_id = ?').run(storyId);
+
+  // Shutdown any LSP instances scoped to this worktree
+  lspManager.shutdownForRoot(worktreePath);
 
   return c.json({ ok: true, data: { storyId } });
 });

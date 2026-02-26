@@ -36,6 +36,8 @@ export interface TerminalSessionMeta {
   logging: boolean;
   /** Path to the log file (if logging is or was active) */
   logFilePath: string | null;
+  /** Story ID this session is scoped to (null if not story-scoped) */
+  storyId: string | null;
 }
 
 /** Request to create a new terminal session */
@@ -48,6 +50,8 @@ export interface TerminalCreateRequest {
   rows?: number;
   /** Whether to enable shell integration (CWD tracking, command boundaries). Default: true */
   enableShellIntegration?: boolean;
+  /** Story ID — when provided, terminal CWD resolves to the story's worktree path */
+  storyId?: string;
 }
 
 /** Response from creating a terminal session */
@@ -56,6 +60,8 @@ export interface TerminalCreateResponse {
   shell: string;
   pid: number;
   cwd: string;
+  /** Story ID if the session was created with worktree scoping */
+  storyId?: string;
 }
 
 // --- WebSocket Control Messages (0x02 prefix) ---

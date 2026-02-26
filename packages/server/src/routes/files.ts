@@ -3,7 +3,9 @@ import { readFile, readdir, stat, writeFile, mkdir, unlink, rename } from 'fs/pr
 import { join, relative, dirname, resolve } from 'path';
 import { homedir } from 'os';
 import editorconfig from 'editorconfig';
+import type { Context } from 'hono';
 import type { EditorConfigProps } from '@e/shared';
+import { resolveWorkspacePath, getForStory } from '../services/worktree-service';
 
 const app = new Hono();
 
@@ -13,7 +15,6 @@ const app = new Hono();
  */
 function isSafePath(filePath: string): { safe: boolean; reason?: string } {
   const resolved = resolve(filePath);
-  const home = homedir();
 
   // Block access to sensitive system directories
   const blockedPrefixes = ['/etc/shadow', '/proc/', '/sys/'];
@@ -39,23 +40,126 @@ function isSafePath(filePath: string): { safe: boolean; reason?: string } {
   return { safe: true };
 }
 
+// ---------------------------------------------------------------------------
+// Worktree-scoped file operations — path resolution helpers
+// ---------------------------------------------------------------------------
+
+/** Context for worktree-scoped file operations. */
+interface WorktreeFileContext {
+  /** Absolute path to the worktree directory (effective root for file ops). */
+  effectivePath: string;
+  /** Absolute path to the original workspace root (for path translation). */
+  workspacePath: string;
+}
+
+/**
+ * Extract story context from request and resolve worktree context.
+ *
+ * Story context is provided via:
+ * - `X-Story-Context` header (preferred)
+ * - `storyId` query parameter (alternative)
+ *
+ * Returns null when no story context is active (backward compatible).
+ */
+function getWorktreeContext(c: Context): WorktreeFileContext | null {
+  const storyId = c.req.header('X-Story-Context') || c.req.query('storyId') || null;
+  if (!storyId) return null;
+
+  const record = getForStory(storyId);
+  if (!record) {
+    console.warn(`[worktree-files] No worktree record for story ${storyId}, using path as-is`);
+    return null;
+  }
+
+  const wsPath = resolve(record.workspace_path);
+  const effectivePath = resolveWorkspacePath(wsPath, storyId);
+
+  if (effectivePath === wsPath) {
+    console.warn(`[worktree-files] Worktree for story ${storyId} not active, using workspace path`);
+    return null;
+  }
+
+  return { effectivePath, workspacePath: wsPath };
+}
+
+/** Translate a file path from workspace space to worktree space. */
+function translateToWorktree(filePath: string, ctx: WorktreeFileContext): string {
+  const resolved = resolve(filePath);
+  if (resolved === ctx.workspacePath) return ctx.effectivePath;
+  if (resolved.startsWith(ctx.workspacePath + '/')) {
+    return join(ctx.effectivePath, relative(ctx.workspacePath, resolved));
+  }
+  return resolved;
+}
+
+/** Translate a file path from worktree space back to workspace space. */
+function translateToWorkspace(filePath: string, ctx: WorktreeFileContext): string {
+  const resolved = resolve(filePath);
+  if (resolved === ctx.effectivePath) return ctx.workspacePath;
+  if (resolved.startsWith(ctx.effectivePath + '/')) {
+    return join(ctx.workspacePath, relative(ctx.effectivePath, resolved));
+  }
+  return resolved;
+}
+
+/** Check that a resolved path is within the allowed root directory. */
+function isWithinRoot(filePath: string, root: string): boolean {
+  const resolved = resolve(filePath);
+  const resolvedRoot = resolve(root);
+  return resolved === resolvedRoot || resolved.startsWith(resolvedRoot + '/');
+}
+
+/** Result of resolving a file path through worktree context. */
+type ResolveResult = { ok: true; actualPath: string } | { ok: false; error: string };
+
+/** Resolve the actual filesystem path, applying worktree translation and traversal checks. */
+function resolveFilePath(filePath: string, ctx: WorktreeFileContext | null): ResolveResult {
+  if (!ctx) return { ok: true, actualPath: resolve(filePath) };
+  const actualPath = translateToWorktree(filePath, ctx);
+  if (!isWithinRoot(actualPath, ctx.effectivePath)) {
+    return { ok: false, error: 'Path outside worktree root is not allowed' };
+  }
+  return { ok: true, actualPath };
+}
+
+/** Convert a path for response output, translating worktree paths to workspace paths. */
+function toResponsePath(filePath: string, ctx: WorktreeFileContext | null): string {
+  if (!ctx) return filePath;
+  return translateToWorkspace(filePath, ctx);
+}
+
+/** Recursively translate paths in tree nodes from worktree to workspace space. */
+function translateTreePaths(nodes: any[], ctx: WorktreeFileContext): any[] {
+  return nodes.map((node) => {
+    const translated: any = { ...node, path: translateToWorkspace(node.path, ctx) };
+    if (node.children) translated.children = translateTreePaths(node.children, ctx);
+    return translated;
+  });
+}
+
+// ---------------------------------------------------------------------------
+// File operation endpoints — all support optional story context
+// ---------------------------------------------------------------------------
+
 // Read file
 app.get('/read', async (c) => {
   const filePath = c.req.query('path');
   if (!filePath) return c.json({ ok: false, error: 'path required' }, 400);
 
-  const pathCheck = isSafePath(filePath);
-  if (!pathCheck.safe) {
-    return c.json({ ok: false, error: pathCheck.reason }, 403);
-  }
+  const ctx = getWorktreeContext(c);
+  const resolved = resolveFilePath(filePath, ctx);
+  if (!resolved.ok) return c.json({ ok: false, error: resolved.error }, 403);
+
+  const pathCheck = isSafePath(resolved.actualPath);
+  if (!pathCheck.safe) return c.json({ ok: false, error: pathCheck.reason }, 403);
 
   try {
-    const content = await readFile(filePath, 'utf-8');
-    const s = await stat(filePath);
+    const content = await readFile(resolved.actualPath, 'utf-8');
+    const s = await stat(resolved.actualPath);
     return c.json({
       ok: true,
       data: {
-        path: filePath,
+        path: toResponsePath(resolved.actualPath, ctx),
         content,
         size: s.size,
         lastModified: s.mtimeMs,
@@ -68,8 +172,20 @@ app.get('/read', async (c) => {
 
 // Directory tree (for file explorer)
 app.get('/tree', async (c) => {
-  const rootPath = c.req.query('path') || process.cwd();
+  const requestedPath = c.req.query('path');
   const depth = parseInt(c.req.query('depth') || '2');
+  const ctx = getWorktreeContext(c);
+
+  let rootPath: string;
+  if (ctx && requestedPath) {
+    const resolved = resolveFilePath(requestedPath, ctx);
+    if (!resolved.ok) return c.json({ ok: false, error: resolved.error }, 403);
+    rootPath = resolved.actualPath;
+  } else if (ctx) {
+    rootPath = ctx.effectivePath;
+  } else {
+    rootPath = requestedPath || process.cwd();
+  }
 
   async function buildTree(dir: string, currentDepth: number): Promise<any[]> {
     if (currentDepth > depth) return [];
@@ -79,7 +195,6 @@ app.get('/tree', async (c) => {
       const items = [];
 
       for (const entry of entries) {
-        // Skip hidden files and common non-essential dirs
         if (entry.name.startsWith('.') && entry.name !== '.claude') continue;
         if (['node_modules', '__pycache__', '.git', 'dist', 'build'].includes(entry.name)) continue;
 
@@ -115,12 +230,25 @@ app.get('/tree', async (c) => {
   }
 
   const tree = await buildTree(rootPath, 0);
-  return c.json({ ok: true, data: tree });
+  const responseTree = ctx ? translateTreePaths(tree, ctx) : tree;
+  return c.json({ ok: true, data: responseTree });
 });
 
 // List subdirectories for directory picker
 app.get('/directories', async (c) => {
-  const dirPath = c.req.query('path') || homedir();
+  const requestedPath = c.req.query('path');
+  const ctx = getWorktreeContext(c);
+
+  let dirPath: string;
+  if (ctx && requestedPath) {
+    const resolved = resolveFilePath(requestedPath, ctx);
+    if (!resolved.ok) return c.json({ ok: false, error: resolved.error }, 403);
+    dirPath = resolved.actualPath;
+  } else if (ctx) {
+    dirPath = ctx.effectivePath;
+  } else {
+    dirPath = requestedPath || homedir();
+  }
 
   try {
     const entries = await readdir(dirPath, { withFileTypes: true });
@@ -128,11 +256,14 @@ app.get('/directories', async (c) => {
       .filter((e) => e.isDirectory() && !e.name.startsWith('.'))
       .map((e) => ({
         name: e.name,
-        path: join(dirPath, e.name),
+        path: toResponsePath(join(dirPath, e.name), ctx),
       }))
       .sort((a, b) => a.name.localeCompare(b.name));
 
-    return c.json({ ok: true, data: { parent: dirPath, directories: dirs } });
+    return c.json({
+      ok: true,
+      data: { parent: toResponsePath(dirPath, ctx), directories: dirs },
+    });
   } catch (err) {
     return c.json({ ok: false, error: String(err) }, 400);
   }
@@ -145,15 +276,16 @@ app.put('/write', async (c) => {
   if (!filePath) return c.json({ ok: false, error: 'path required' }, 400);
   if (typeof content !== 'string') return c.json({ ok: false, error: 'content required' }, 400);
 
-  const pathCheck = isSafePath(filePath);
-  if (!pathCheck.safe) {
-    return c.json({ ok: false, error: pathCheck.reason }, 403);
-  }
+  const ctx = getWorktreeContext(c);
+  const resolved = resolveFilePath(filePath, ctx);
+  if (!resolved.ok) return c.json({ ok: false, error: resolved.error }, 403);
+
+  const pathCheck = isSafePath(resolved.actualPath);
+  if (!pathCheck.safe) return c.json({ ok: false, error: pathCheck.reason }, 403);
 
   try {
-    // Ensure parent directory exists
-    await mkdir(dirname(filePath), { recursive: true });
-    await writeFile(filePath, content, 'utf-8');
+    await mkdir(dirname(resolved.actualPath), { recursive: true });
+    await writeFile(resolved.actualPath, content, 'utf-8');
     return c.json({ ok: true });
   } catch (err) {
     return c.json({ ok: false, error: String(err) }, 500);
@@ -166,21 +298,22 @@ app.post('/create', async (c) => {
   const { path: filePath, content = '' } = body;
   if (!filePath) return c.json({ ok: false, error: 'path required' }, 400);
 
-  const pathCheck = isSafePath(filePath);
-  if (!pathCheck.safe) {
-    return c.json({ ok: false, error: pathCheck.reason }, 403);
-  }
+  const ctx = getWorktreeContext(c);
+  const resolved = resolveFilePath(filePath, ctx);
+  if (!resolved.ok) return c.json({ ok: false, error: resolved.error }, 403);
+
+  const pathCheck = isSafePath(resolved.actualPath);
+  if (!pathCheck.safe) return c.json({ ok: false, error: pathCheck.reason }, 403);
 
   try {
-    // Check if file already exists
     try {
-      await stat(filePath);
+      await stat(resolved.actualPath);
       return c.json({ ok: false, error: 'File already exists' }, 409);
     } catch {
       // File doesn't exist, good
     }
-    await mkdir(dirname(filePath), { recursive: true });
-    await writeFile(filePath, content, 'utf-8');
+    await mkdir(dirname(resolved.actualPath), { recursive: true });
+    await writeFile(resolved.actualPath, content, 'utf-8');
     return c.json({ ok: true });
   } catch (err) {
     return c.json({ ok: false, error: String(err) }, 500);
@@ -192,13 +325,15 @@ app.delete('/delete', async (c) => {
   const filePath = c.req.query('path');
   if (!filePath) return c.json({ ok: false, error: 'path required' }, 400);
 
-  const pathCheck = isSafePath(filePath);
-  if (!pathCheck.safe) {
-    return c.json({ ok: false, error: pathCheck.reason }, 403);
-  }
+  const ctx = getWorktreeContext(c);
+  const resolved = resolveFilePath(filePath, ctx);
+  if (!resolved.ok) return c.json({ ok: false, error: resolved.error }, 403);
+
+  const pathCheck = isSafePath(resolved.actualPath);
+  if (!pathCheck.safe) return c.json({ ok: false, error: pathCheck.reason }, 403);
 
   try {
-    await unlink(filePath);
+    await unlink(resolved.actualPath);
     return c.json({ ok: true });
   } catch (err) {
     return c.json({ ok: false, error: String(err) }, 500);
@@ -212,18 +347,22 @@ app.post('/rename', async (c) => {
   if (!oldPath || !newPath)
     return c.json({ ok: false, error: 'oldPath and newPath required' }, 400);
 
-  const oldCheck = isSafePath(oldPath);
-  if (!oldCheck.safe) {
-    return c.json({ ok: false, error: oldCheck.reason }, 403);
-  }
-  const newCheck = isSafePath(newPath);
-  if (!newCheck.safe) {
-    return c.json({ ok: false, error: newCheck.reason }, 403);
-  }
+  const ctx = getWorktreeContext(c);
+
+  const oldResolved = resolveFilePath(oldPath, ctx);
+  if (!oldResolved.ok) return c.json({ ok: false, error: oldResolved.error }, 403);
+
+  const newResolved = resolveFilePath(newPath, ctx);
+  if (!newResolved.ok) return c.json({ ok: false, error: newResolved.error }, 403);
+
+  const oldCheck = isSafePath(oldResolved.actualPath);
+  if (!oldCheck.safe) return c.json({ ok: false, error: oldCheck.reason }, 403);
+  const newCheck = isSafePath(newResolved.actualPath);
+  if (!newCheck.safe) return c.json({ ok: false, error: newCheck.reason }, 403);
 
   try {
-    await mkdir(dirname(newPath), { recursive: true });
-    await rename(oldPath, newPath);
+    await mkdir(dirname(newResolved.actualPath), { recursive: true });
+    await rename(oldResolved.actualPath, newResolved.actualPath);
     return c.json({ ok: true });
   } catch (err) {
     return c.json({ ok: false, error: String(err) }, 500);
@@ -235,8 +374,12 @@ app.get('/editorconfig', async (c) => {
   const filePath = c.req.query('path');
   if (!filePath) return c.json({ ok: false, error: 'path required' }, 400);
 
+  const ctx = getWorktreeContext(c);
+  const resolved = resolveFilePath(filePath, ctx);
+  if (!resolved.ok) return c.json({ ok: false, error: resolved.error }, 403);
+
   try {
-    const raw = await editorconfig.parse(filePath);
+    const raw = await editorconfig.parse(resolved.actualPath);
     const config: EditorConfigProps = {};
 
     if (raw.indent_style === 'tab' || raw.indent_style === 'space') {
@@ -276,13 +419,31 @@ app.post('/verify', async (c) => {
 
   if (!filePath) return c.json({ ok: false, error: 'path required' }, 400);
 
+  const ctx = getWorktreeContext(c);
+  const resolved = resolveFilePath(filePath, ctx);
+  if (!resolved.ok) return c.json({ ok: false, error: resolved.error }, 403);
+
+  const effectiveWorkspace = ctx ? ctx.effectivePath : workspacePath || process.cwd();
+
   try {
     const { verifyFile } = await import('../services/code-verifier');
-    const result = await verifyFile(filePath, workspacePath || process.cwd());
-    return c.json({ ok: true, data: result });
+    const verifyResult = await verifyFile(resolved.actualPath, effectiveWorkspace);
+    return c.json({ ok: true, data: verifyResult });
   } catch (err) {
     return c.json({ ok: false, error: String(err) }, 500);
   }
 });
+
+/** @internal — exposed for unit tests to directly test helper functions. */
+export const _testHelpers = {
+  isSafePath,
+  getWorktreeContext,
+  translateToWorktree,
+  translateToWorkspace,
+  isWithinRoot,
+  resolveFilePath,
+  toResponsePath,
+  translateTreePaths,
+};
 
 export { app as fileRoutes };

@@ -54,7 +54,17 @@ run_group "conversations + project-memory (isolated)" \
   src/routes/__tests__/conversations.test.ts \
   src/routes/__tests__/project-memory.test.ts
 
-# Group 6: everything else (no contamination issues among these)
+# Group 6a: worktree tests (use require() cache clearing + in-memory SQLite — must be isolated)
+run_group "worktree merge + db (isolated)" \
+  src/services/__tests__/worktree-merge.test.ts \
+  src/services/__tests__/worktree-db.test.ts
+
+# Group 6b: worktree route + service tests (different mock patterns)
+run_group "worktree routes + service (isolated)" \
+  src/routes/__tests__/worktrees.test.ts \
+  src/services/__tests__/worktree-service.test.ts
+
+# Group 7: everything else (no contamination issues among these)
 run_group "routes + remaining services" \
   src/routes/__tests__/git.test.ts \
   src/routes/__tests__/git-commit-stream.test.ts \
@@ -75,6 +85,7 @@ run_group "routes + remaining services" \
   src/services/__tests__/mcp-config.test.ts \
   src/services/__tests__/mcp-discovery.test.ts \
   src/services/__tests__/mcp-tool-adapter.test.ts \
+  src/services/__tests__/lsp-instance-manager.test.ts \
   src/services/__tests__/permission-rules.test.ts \
   src/services/__tests__/tool-executor.test.ts
 

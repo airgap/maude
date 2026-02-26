@@ -77,6 +77,50 @@ export const WORKTREE_STATUSES: readonly WorktreeStatus[] = [
   'cleanup_pending',
 ] as const;
 
+// ---------------------------------------------------------------------------
+// Merge types — used by the worktree merge service
+// ---------------------------------------------------------------------------
+
+/** Result of a merge operation. */
+export interface MergeResult {
+  /** Whether the merge succeeded. */
+  ok: boolean;
+  /** Merge commit SHA on success. */
+  commitSha?: string;
+  /** Error message on failure. */
+  error?: string;
+  /** List of files with conflicts (on conflict). */
+  conflictingFiles?: string[];
+  /** Current worktree status after the operation. */
+  status?: WorktreeStatus | string;
+  /** Detailed operation log with timestamps. */
+  operationLog: MergeOperationLogEntry[];
+}
+
+/** Options for a merge operation. */
+export interface MergeOptions {
+  /** Story ID to merge. */
+  storyId: string;
+  /** If true, skip quality checks (e.g. for retry after manual resolution). */
+  skipQualityCheck?: boolean;
+}
+
+/** A single log entry for a merge operation step. */
+export interface MergeOperationLogEntry {
+  /** ISO 8601 timestamp of when the step occurred. */
+  timestamp: string;
+  /** Name of the operation step (e.g. 'pre-check:clean', 'rebase', 'merge:ff-only'). */
+  operation: string;
+  /** Whether the step succeeded. */
+  success: boolean;
+  /** Optional detail message. */
+  detail?: string;
+}
+
+// ---------------------------------------------------------------------------
+// Worktree database record types (cont.)
+// ---------------------------------------------------------------------------
+
 /** Persistent database record for a worktree-to-story assignment. */
 export interface WorktreeRecord {
   /** Unique ID (nanoid(12)). */
