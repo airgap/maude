@@ -464,3 +464,34 @@ export type {
 } from './golem-headless.js';
 
 export { GolemExitCode, GOLEM_DEFAULTS } from './golem-headless.js';
+
+export type {
+  CloudProviderType,
+  CloudBackendType,
+  CloudInstanceStatus,
+  CloudInstance,
+  CloudInstanceCreateOptions,
+  CloudInitConfig,
+  CloudCostRecord,
+  RegionSelectionStrategy,
+  RegionSelectionConfig,
+  RegionCandidate,
+  EphemeralSSHKeyPair,
+  TeardownReason,
+  TeardownEvent,
+  ZombieInstance,
+  ZombieDetectorConfig,
+  CloudErrorCode,
+  CloudProviderError,
+  CostEstimateRequest,
+  CostEstimateResult,
+  CloudProvider,
+  CloudExecutorConfig,
+} from './cloud-provider.js';
+
+export {
+  DEFAULT_ZOMBIE_DETECTOR_CONFIG,
+  DEFAULT_CLOUD_EXECUTOR_CONFIG,
+  generateInstanceName,
+  generateInstanceTags,
+} from './cloud-provider.js';
