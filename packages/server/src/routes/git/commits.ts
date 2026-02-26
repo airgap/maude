@@ -348,7 +348,7 @@ app.post('/commit-group', async (c) => {
       '-m',
       message.trim(),
     ];
-    console.log('[git/commit-group] Running:', commitArgs.join(' '), 'files:', files.length);
+    console.log('[git/commit-group] Running: git commit -m "%s" (%d files, noVerify=%s)', message.trim(), files.length, !!noVerify);
     const commitResult = await run(commitArgs, { cwd });
     if (commitResult.exitCode !== 0) {
       const summary = parseCommitFailure(commitResult.stderr, commitResult.stdout);
