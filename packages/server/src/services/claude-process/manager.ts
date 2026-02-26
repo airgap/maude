@@ -31,6 +31,7 @@ import { sendNotification } from '../notification-channels';
 import type { CliProcess } from './spawner';
 import { hasScript, signalName, spawnWithScript, spawnWithPipe } from './spawner';
 import { translateCliEvent, extractAndStoreArtifacts } from './event-translator';
+import { prelinkToolCallId } from '../ask-user-bridge';
 
 interface ClaudeSession {
   id: string;
@@ -56,6 +57,8 @@ interface ClaudeSession {
   cancelled: boolean;
   /** Nudges queued mid-stream to be prepended to the next message turn. */
   pendingNudges: string[];
+  /** Active stream controller — set during SSE streaming for event injection. */
+  streamController?: ReadableStreamDefaultController;
 }
 
 export class ClaudeProcessManager {
@@ -153,6 +156,12 @@ export class ClaudeProcessManager {
     }
 
     const mcpConfigPath = generateMcpConfig();
+    // Disable CLI's built-in AskUserQuestion — E handles user questions
+    // through its own SSE-based question dialog instead.
+    const disallowed = [...(session.disallowedTools || [])];
+    if (!disallowed.includes('AskUserQuestion')) {
+      disallowed.push('AskUserQuestion');
+    }
     const { binary, args } = buildCliCommand(provider, {
       content,
       resumeSessionId: session.cliSessionId,
@@ -162,7 +171,7 @@ export class ClaudeProcessManager {
       maxBudgetUsd: session.maxBudgetUsd,
       maxTurns: session.maxTurns,
       allowedTools: session.allowedTools,
-      disallowedTools: session.disallowedTools,
+      disallowedTools: disallowed,
       mcpConfigPath: mcpConfigPath || undefined,
     });
 
@@ -376,6 +385,9 @@ export class ClaudeProcessManager {
 
     return new ReadableStream({
       start(controller) {
+        // Store controller on session for event injection from external sources
+        session.streamController = controller;
+
         // Ping to keep connection alive
         const pingInterval = setInterval(() => {
           try {
@@ -739,11 +751,24 @@ export class ClaudeProcessManager {
                         }
 
                         // Emit user_question_request for AskUserQuestion tool
-                        if (block.name === 'AskUserQuestion') {
+                        // Match both the built-in name and the MCP server name format
+                        if (
+                          block.name === 'AskUserQuestion' ||
+                          block.name === 'mcp__e-ask-user__AskUserQuestion'
+                        ) {
+                          const toolCallId = block.id || nanoid();
+                          const questions = block.input?.questions || [];
+
+                          // Pre-link this toolCallId so when the MCP server POSTs
+                          // to /internal/ask-user (which happens after this), the
+                          // bridge auto-links the token to this block.id.
+                          prelinkToolCallId(toolCallId, questions);
+
+                          // Always emit — this is the single emission point.
                           const questionEvent = JSON.stringify({
                             type: 'user_question_request',
-                            toolCallId: block.id || nanoid(),
-                            questions: block.input?.questions || [],
+                            toolCallId,
+                            questions,
                           });
                           enqueueEvent(controller, `data: ${questionEvent}\n\n`);
                         }
@@ -1337,6 +1362,32 @@ export class ClaudeProcessManager {
     return true;
   }
 
+  /**
+   * Inject an SSE event into all active (running) sessions.
+   * Used by the ask-user bridge to push user_question_request events
+   * before the CLI's assistant event arrives (avoiding deadlock).
+   */
+  injectEvent(sseData: string): void {
+    const encoder = new TextEncoder();
+    let injected = 0;
+    for (const session of this.sessions.values()) {
+      console.log(`[injectEvent] Session ${session.id}: status=${session.status}, hasController=${!!session.streamController}`);
+      if (session.status === 'running' && session.streamController) {
+        session.eventBuffer.push(sseData);
+        try {
+          session.streamController.enqueue(encoder.encode(sseData));
+          injected++;
+          console.log(`[injectEvent] Enqueued to session ${session.id}`);
+        } catch (e) {
+          console.error(`[injectEvent] Failed to enqueue to session ${session.id}:`, e);
+        }
+      }
+    }
+    if (injected === 0) {
+      console.warn(`[injectEvent] No active sessions found — event not delivered. Total sessions: ${this.sessions.size}`);
+    }
+  }
+
   cancelGeneration(sessionId: string): void {
     const session = this.sessions.get(sessionId);
     if (session) {
@@ -1356,6 +1407,10 @@ export class ClaudeProcessManager {
         this.cleanupTimers.delete(sessionId);
       }
     }
+  }
+
+  getSessionCount(): number {
+    return this.sessions.size;
   }
 
   getSession(sessionId: string): ClaudeSession | undefined {

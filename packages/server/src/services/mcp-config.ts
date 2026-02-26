@@ -1,13 +1,19 @@
 import { getDb } from '../db/database';
-import { join } from 'path';
+import { join, resolve } from 'path';
 import { homedir } from 'os';
 import { writeFileSync, mkdirSync } from 'node:fs';
 
 const MCP_CONFIG_PATH = join(homedir(), '.e', 'mcp-config.json');
 
+/** Absolute path to the ask-user MCP server script. */
+const ASK_USER_SERVER_PATH = resolve(import.meta.dir, 'ask-user-mcp-server.ts');
+
 /**
  * Reads MCP servers from the database and generates a config file
  * in the format expected by Claude CLI's --mcp-config flag.
+ *
+ * Always includes E's built-in ask-user MCP server so the CLI's
+ * AskUserQuestion tool routes through E's UI instead of auto-resolving.
  *
  * CLI expects:
  * {
@@ -20,11 +26,9 @@ const MCP_CONFIG_PATH = join(homedir(), '.e', 'mcp-config.json');
  *   }
  * }
  */
-export function generateMcpConfig(): string | null {
+export function generateMcpConfig(): string {
   const db = getDb();
   const servers = db.query('SELECT * FROM mcp_servers').all() as any[];
-
-  if (servers.length === 0) return null;
 
   const mcpServers: Record<string, any> = {};
 
@@ -53,6 +57,16 @@ export function generateMcpConfig(): string | null {
 
     mcpServers[server.name] = config;
   }
+
+  // Always include E's ask-user MCP server — replaces the CLI's built-in
+  // AskUserQuestion which auto-resolves under --dangerously-skip-permissions.
+  mcpServers['e-ask-user'] = {
+    command: 'bun',
+    args: [ASK_USER_SERVER_PATH],
+    env: {
+      E_PORT: process.env.PORT || '3002',
+    },
+  };
 
   const configContent = JSON.stringify({ mcpServers }, null, 2);
 

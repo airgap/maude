@@ -58,6 +58,7 @@ import { deviceRoutes } from './routes/device';
 import { patternDetectionRoutes } from './routes/pattern-detection';
 import { worktreeRoutes } from './routes/worktrees';
 import { storyCoordinationRoutes } from './routes/story-coordination';
+import { internalRoutes } from './routes/internal';
 import { authMiddleware } from './middleware/auth';
 import { csrfMiddleware, isOriginAllowed } from './middleware/csrf';
 import { websocket } from './ws';
@@ -178,6 +179,10 @@ app.route('/api/story-coordination', storyCoordinationRoutes);
 
 // Inbound webhook endpoint — bypasses auth/CSRF (uses its own token-based auth)
 app.route('/api/webhooks/inbound', webhookInboundApp);
+
+// Internal routes — used by MCP child processes (e.g. ask-user MCP server).
+// Mounted outside /api/* to bypass auth/CSRF since these are localhost-only.
+app.route('/internal', internalRoutes);
 
 // Initialize database
 initDatabase();

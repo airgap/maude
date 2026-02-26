@@ -16,6 +16,12 @@ import { ClaudeProcessManager } from './manager';
 
 // Persist across Bun --hot reloads: store the singleton on globalThis so
 // a module re-evaluation doesn't orphan running CLI processes.
+// Also refresh the prototype so new methods (like injectEvent) are available
+// on existing instances after HMR updates the class definition.
 const GLOBAL_KEY = '__e_claudeManager';
+const existing = (globalThis as any)[GLOBAL_KEY] as ClaudeProcessManager | undefined;
+if (existing) {
+  Object.setPrototypeOf(existing, ClaudeProcessManager.prototype);
+}
 export const claudeManager: ClaudeProcessManager =
-  (globalThis as any)[GLOBAL_KEY] ?? ((globalThis as any)[GLOBAL_KEY] = new ClaudeProcessManager());
+  existing ?? ((globalThis as any)[GLOBAL_KEY] = new ClaudeProcessManager());

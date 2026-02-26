@@ -6,7 +6,7 @@
   import ThinkingBlock from './ThinkingBlock.svelte';
   import ToolCallBlock from './ToolCallBlock.svelte';
   import ToolApprovalDialog from './ToolApprovalDialog.svelte';
-  import UserQuestionDialog from './UserQuestionDialog.svelte';
+
   import AgentGroup from './AgentGroup.svelte';
   import StreamingText from './StreamingText.svelte';
   import MessageAnimation from './MessageAnimation.svelte';
@@ -151,6 +151,7 @@
             <ToolCallBlock
               toolName={entry.block.name}
               input={entry.block.input}
+              toolCallId={entry.block.id}
               result={toolResult
                 ? {
                     content: toolResult.result,
@@ -172,9 +173,8 @@
           />
         {/each}
 
-        {#each streamStore.pendingQuestions as pq}
-          <UserQuestionDialog question={pq} />
-        {/each}
+        <!-- UserQuestionDialog is rendered in the chat-bottom-overlay (+page.svelte)
+             so it sits above the message list and is always clickable -->
       </div>
 
       {#if throbberStore.visible}

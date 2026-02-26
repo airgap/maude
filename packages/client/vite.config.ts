@@ -35,14 +35,18 @@ export default defineConfig({
       },
       // SSE streaming endpoints — disable proxy timeout and buffering
       // so the connection stays open for the full duration of the response.
+      // Only flush headers for GET requests (actual SSE streams); POST
+      // requests (e.g., /answer) need normal header forwarding.
       '/api/stream': {
         target: 'http://localhost:3002',
         changeOrigin: true,
         timeout: 0,
         proxyTimeout: 0,
         configure: (proxy) => {
-          proxy.on('proxyRes', (_proxyRes, _req, res) => {
-            (res as any).flushHeaders?.();
+          proxy.on('proxyRes', (_proxyRes, req, res) => {
+            if (req.method === 'GET') {
+              (res as any).flushHeaders?.();
+            }
           });
         },
       },

@@ -140,7 +140,11 @@ export function shouldRequireApproval(
     return ruleDecision;
   }
 
-  // 2. Terminal command policy (independent of general permission mode)
+  // 2. AskUserQuestion is always allowed — it's a user interaction tool, not a mutation
+  if (toolName === 'AskUserQuestion' || toolName === 'mcp__e-ask-user__AskUserQuestion')
+    return 'allow';
+
+  // 3. Terminal command policy (independent of general permission mode)
   if (toolName === 'Bash') {
     switch (terminalPolicy) {
       case 'off':

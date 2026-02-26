@@ -13,6 +13,7 @@ import {
   shouldProposeSkillOrRule,
   logLearning,
 } from '../services/pattern-detection';
+import { resolveByToolCallId } from '../services/ask-user-bridge';
 const app = new Hono();
 
 const BASE_SYSTEM_PROMPT = `You are E, an expert AI coding assistant embedded directly inside the user's development environment.
@@ -605,7 +606,13 @@ app.post('/:conversationId/answer', async (c) => {
     return c.json({ ok: false, error: 'Missing toolCallId or answers' }, 400);
   }
 
-  // Format as JSON that the CLI can read as a tool result on stdin
+  // Try resolving via the ask-user bridge first (MCP server path).
+  // The MCP server is long-polling for the answer — resolving unblocks it.
+  if (resolveByToolCallId(toolCallId, answers)) {
+    return c.json({ ok: true });
+  }
+
+  // Fall back to writing directly to CLI stdin (legacy/direct path)
   const answerPayload = JSON.stringify({ answers }) + '\n';
   const written = claudeManager.writeStdin(sessionId, answerPayload);
   if (!written) {

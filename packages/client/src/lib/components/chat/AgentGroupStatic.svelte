@@ -87,7 +87,7 @@
         {:else if block.type === 'text' && block.text}
           <div class="prose">{@html renderMarkdownPartial(block.text)}</div>
         {:else if block.type === 'tool_use'}
-          <ToolCallBlock toolName={block.name} input={block.input} result={findResult(block.id)} />
+          <ToolCallBlock toolName={block.name} input={block.input} toolCallId={block.id} result={findResult(block.id)} />
         {/if}
       {/each}
     </div>

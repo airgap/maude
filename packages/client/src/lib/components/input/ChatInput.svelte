@@ -1425,17 +1425,25 @@
 <style>
   .chat-input-container {
     position: relative;
-    padding: 12px 28px 20px;
-    background: var(--bg-primary);
+    margin: 12px 28px 20px;
+    border: var(--ht-input-border-width) var(--ht-input-border-style) var(--border-primary);
+    border-radius: var(--radius);
     z-index: 1;
   }
-  /* Let stars show through in canvas-based hyperthemes */
-  :global([data-hypertheme='arcane']) .chat-input-container,
-  :global([data-hypertheme='ethereal']) .chat-input-container,
-  :global([data-hypertheme='astral']) .chat-input-container,
-  :global([data-hypertheme='astral-midnight']) .chat-input-container,
-  :global([data-hypertheme='study']) .chat-input-container {
-    background: transparent;
+
+  /* Backdrop blur on a pseudo-element so that absolutely-positioned children
+     (slash menu, mention picker, mode selector, etc.) aren't trapped inside
+     the compositing layer that backdrop-filter creates. */
+  .chat-input-container::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: color-mix(in srgb, var(--bg-primary) 50%, transparent);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border-radius: inherit;
+    z-index: -1;
+    pointer-events: none;
   }
 
   .dir-scope {
@@ -1564,7 +1572,7 @@
     display: flex;
     align-items: center;
     gap: 10px;
-    background: var(--bg-input);
+    background: transparent;
     border: none;
     border-radius: var(--radius);
     padding: var(--ht-input-padding);
@@ -1597,22 +1605,18 @@
 
   /* Arcane */
   :global([data-hypertheme='arcane']) .input-wrapper {
-    background-image: linear-gradient(0deg, rgba(139, 92, 246, 0.03), transparent 30%);
+    background: transparent;
   }
 
-  /* Astral — don't stack another opaque layer on top of the glass parent */
+  /* Astral */
   :global([data-hypertheme='astral']) .input-wrapper,
   :global([data-hypertheme='astral-midnight']) .input-wrapper {
     background: transparent;
   }
 
-  /* Study — warm inner glow, no ruled-paper lines */
+  /* Study */
   :global([data-hypertheme='study']) .input-wrapper {
-    background-image: radial-gradient(
-      ellipse 80% 60% at 50% 100%,
-      rgba(228, 160, 60, 0.03) 0%,
-      transparent 70%
-    );
+    background: transparent;
   }
 
   textarea {

@@ -62,6 +62,15 @@ export async function executeTool(
         return await executeCaptureCameraTool(toolInput);
       case 'Skill':
         return await executeSkillTool(toolInput, workspacePath);
+      case 'AskUserQuestion':
+        // AskUserQuestion is handled by the streaming layer (SSE user_question_request event).
+        // For non-CLI providers, return a pending marker so the provider loop can wait.
+        return {
+          content: JSON.stringify({
+            __ask_user: true,
+            questions: toolInput.questions || [],
+          }),
+        };
       default:
         return {
           content: `Unknown tool: ${toolName}`,

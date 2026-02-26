@@ -99,6 +99,7 @@
           <ToolCallBlock
             toolName={block.name}
             input={block.input}
+            toolCallId={block.id}
             result={hasResult
               ? {
                   content: streamStore.toolResults.get(block.id)!.result,

@@ -3,6 +3,9 @@
   import { parseMcpToolName } from '@e/shared';
   import { chirpEngine } from '$lib/audio/chirp-engine';
   import { settingsStore } from '$lib/stores/settings.svelte';
+  import { streamStore } from '$lib/stores/stream.svelte';
+  import { conversationStore } from '$lib/stores/conversation.svelte';
+  import { api } from '$lib/api/client';
 
   function uiClick() {
     if (settingsStore.soundEnabled) chirpEngine.uiClick();
@@ -14,6 +17,7 @@
     result,
     running = false,
     compact = false,
+    toolCallId,
   } = $props<{
     toolName: string;
     input: Record<string, unknown>;
@@ -21,6 +25,8 @@
     running?: boolean;
     /** When true, suppress large error styling (used during streaming) */
     compact?: boolean;
+    /** Tool call ID for interactive features (e.g. answering AskUserQuestion) */
+    toolCallId?: string;
   }>();
 
   // ── MCP Tool Name Resolution ──
@@ -277,6 +283,67 @@
       }
     }
     return labels;
+  }
+
+  // ── Interactive AskUserQuestion state ──
+  // When the question has no result yet (pending), allow the user to answer
+  // directly from the ToolCallBlock — this handles reload/reconnect cases
+  // where the UserQuestionDialog overlay may not appear.
+  // BUT: if the overlay (UserQuestionDialog) is already showing this question,
+  // don't render a second interactive form here — defer to the overlay.
+  const overlayHasThis = $derived(
+    toolCallId ? streamStore.pendingQuestions.some((q) => q.toolCallId === toolCallId) : false,
+  );
+  const isPendingAskUser = $derived(isAskUser && !result && !overlayHasThis);
+  let askSelections = $state<Record<number, string>>({});
+  let askSubmitting = $state(false);
+  let askSubmitted = $state(false);
+
+  function selectAskOption(questionIndex: number, label: string, multiSelect?: boolean) {
+    if (askSubmitting || askSubmitted) return;
+    if (multiSelect) {
+      const current = askSelections[questionIndex];
+      if (current === label) {
+        const next = { ...askSelections };
+        delete next[questionIndex];
+        askSelections = next;
+      } else {
+        askSelections = { ...askSelections, [questionIndex]: label };
+      }
+    } else {
+      askSelections = { ...askSelections, [questionIndex]: label };
+    }
+  }
+
+  const askAllAnswered = $derived(
+    isPendingAskUser && parseQuestions().every((_q: any, i: number) => askSelections[i] !== undefined),
+  );
+
+  async function submitAskAnswer() {
+    if (askSubmitting || !askAllAnswered || !toolCallId) return;
+    askSubmitting = true;
+
+    const questions = parseQuestions();
+    const answers: Record<string, string> = {};
+    for (let i = 0; i < questions.length; i++) {
+      const key = questions[i].header || `q${i}`;
+      answers[key] = askSelections[i];
+    }
+
+    const convId = conversationStore.active?.id;
+    const sessionId = streamStore.sessionId;
+    if (convId && sessionId) {
+      try {
+        await api.stream.answerQuestion(convId, sessionId, toolCallId, answers);
+        askSubmitted = true;
+        // Also resolve the pending question in the stream store if it exists
+        streamStore.resolveQuestion(toolCallId);
+      } catch (err) {
+        console.error('[ToolCallBlock] Failed to submit AskUserQuestion answer:', err);
+        askSubmitting = false;
+        return;
+      }
+    }
   }
 
   // ── Async syntax highlighting state ──
@@ -542,59 +609,108 @@
         {@const questions = parseQuestions()}
         {@const selected = getSelectedLabels()}
         {@const hasResult = !!result}
-        {@const isWaiting = running && !hasResult}
-        {#each questions as q}
-          <div class="detail-section ask-question-section">
-            {#if q.header}
-              <span class="ask-header">{q.header}</span>
-            {/if}
-            <p class="ask-question-text">{q.question}</p>
-            {#if q.options && q.options.length > 0}
-              <div class="ask-options">
-                {#each q.options as opt}
-                  {@const isSelected = selected.has(opt.label)}
-                  <div
-                    class="ask-option"
-                    class:ask-option-selected={isSelected}
-                    class:ask-option-waiting={isWaiting}
-                  >
-                    <span class="ask-option-indicator">
-                      {#if isSelected}
-                        <svg
-                          width="14"
-                          height="14"
-                          viewBox="0 0 24 24"
-                          fill="none"
-                          stroke="currentColor"
-                          stroke-width="2.5"><path d="M20 6L9 17l-5-5" /></svg
-                        >
-                      {:else if isWaiting}
-                        ○
-                      {:else}
-                        ·
-                      {/if}
-                    </span>
-                    <div class="ask-option-content">
-                      <span class="ask-option-label">{opt.label}</span>
-                      {#if opt.description}
-                        <span class="ask-option-desc">{opt.description}</span>
-                      {/if}
-                    </div>
-                  </div>
-                {/each}
-              </div>
-            {/if}
-            {#if isWaiting}
-              <span class="ask-waiting">Waiting for response...</span>
-            {/if}
-          </div>
-        {/each}
-        {#if hasResult && selected.size === 0}
-          <!-- Result didn't match any option — show raw answer -->
+        {#if overlayHasThis && !hasResult && !askSubmitted}
+          <!-- Overlay dialog is handling this question — don't duplicate -->
           <div class="detail-section">
-            <span class="detail-label">Answer</span>
-            <pre class="detail-content" class:error-output={result.is_error}>{result.content}</pre>
+            <span class="ask-waiting-label">Waiting for your answer…</span>
           </div>
+        {:else}
+          {#each questions as q, qi}
+            <div class="detail-section ask-question-section">
+              {#if q.header}
+                <span class="ask-header">{q.header}</span>
+              {/if}
+              <p class="ask-question-text">{q.question}</p>
+              {#if q.options && q.options.length > 0}
+                <div class="ask-options">
+                  {#each q.options as opt}
+                    {@const isAnswered = selected.has(opt.label)}
+                    {@const isInteractiveSelected = askSelections[qi] === opt.label}
+                    {#if isPendingAskUser && toolCallId && !askSubmitted}
+                      <!-- Interactive mode: render as clickable buttons -->
+                      <button
+                        class="ask-option ask-option-interactive"
+                        class:ask-option-selected={isInteractiveSelected}
+                        onclick={() => selectAskOption(qi, opt.label, q.multiSelect)}
+                        disabled={askSubmitting}
+                      >
+                        <span class="ask-option-indicator">
+                          {#if isInteractiveSelected}
+                            <svg
+                              width="14"
+                              height="14"
+                              viewBox="0 0 24 24"
+                              fill="none"
+                              stroke="currentColor"
+                              stroke-width="2.5"><path d="M20 6L9 17l-5-5" /></svg
+                            >
+                          {:else}
+                            ○
+                          {/if}
+                        </span>
+                        <div class="ask-option-content">
+                          <span class="ask-option-label">{opt.label}</span>
+                          {#if opt.description}
+                            <span class="ask-option-desc">{opt.description}</span>
+                          {/if}
+                        </div>
+                      </button>
+                    {:else}
+                      <!-- Static mode: display-only (answered or no toolCallId) -->
+                      <div
+                        class="ask-option"
+                        class:ask-option-selected={isAnswered || (askSubmitted && isInteractiveSelected)}
+                      >
+                        <span class="ask-option-indicator">
+                          {#if isAnswered || (askSubmitted && isInteractiveSelected)}
+                            <svg
+                              width="14"
+                              height="14"
+                              viewBox="0 0 24 24"
+                              fill="none"
+                              stroke="currentColor"
+                              stroke-width="2.5"><path d="M20 6L9 17l-5-5" /></svg
+                            >
+                          {:else}
+                            ·
+                          {/if}
+                        </span>
+                        <div class="ask-option-content">
+                          <span class="ask-option-label">{opt.label}</span>
+                          {#if opt.description}
+                            <span class="ask-option-desc">{opt.description}</span>
+                          {/if}
+                        </div>
+                      </div>
+                    {/if}
+                  {/each}
+                </div>
+              {/if}
+            </div>
+          {/each}
+          {#if isPendingAskUser && toolCallId && !askSubmitted}
+            <!-- Submit button for interactive mode -->
+            <div class="ask-actions">
+              <button
+                class="ask-submit-btn"
+                onclick={submitAskAnswer}
+                disabled={askSubmitting || !askAllAnswered}
+              >
+                {askSubmitting ? 'Submitting...' : 'Submit'}
+              </button>
+            </div>
+          {:else if askSubmitted}
+            <div class="detail-section">
+              <span class="ask-submitted-label">Answer submitted</span>
+            </div>
+          {/if}
+          {#if hasResult && selected.size === 0}
+            <!-- Result didn't match any option — show raw answer -->
+            <div class="detail-section">
+              <span class="detail-label">Answer</span>
+              <pre class="detail-content" class:error-output={result.is_error}>{result.content}</pre>
+            </div>
+          {/if}
         {/if}
       {:else}
         <!-- Fallback: generic JSON display for unknown tools -->
@@ -1019,6 +1135,51 @@
     font-size: var(--fs-xs);
     line-height: 1.4;
     color: var(--text-tertiary);
+  }
+  /* Interactive button mode for pending questions */
+  button.ask-option-interactive {
+    cursor: pointer;
+    text-align: left;
+    width: 100%;
+  }
+  button.ask-option-interactive:hover:not(:disabled) {
+    border-color: var(--accent-primary);
+    background: color-mix(in srgb, var(--accent-primary) 5%, var(--bg-tertiary));
+  }
+  button.ask-option-interactive:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+  .ask-actions {
+    display: flex;
+    gap: 8px;
+    padding: 8px 10px;
+    justify-content: flex-end;
+    border-top: 1px solid var(--border-secondary);
+  }
+  .ask-submit-btn {
+    padding: 6px 20px;
+    border-radius: var(--radius-sm);
+    font-size: var(--fs-base);
+    font-weight: 600;
+    transition: all var(--transition);
+    background: var(--accent-primary);
+    color: var(--text-on-accent);
+    cursor: pointer;
+  }
+  .ask-submit-btn:hover:not(:disabled) {
+    filter: brightness(1.1);
+  }
+  .ask-submit-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+  .ask-submitted-label,
+  .ask-waiting-label {
+    font-size: var(--fs-xs);
+    color: var(--accent-secondary);
+    font-weight: 600;
+    font-style: italic;
   }
   .ask-waiting {
     display: block;

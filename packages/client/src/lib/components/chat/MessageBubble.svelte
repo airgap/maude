@@ -632,6 +632,7 @@
                   <ToolCallBlock
                     toolName={toolBlock.name}
                     input={toolBlock.input}
+                    toolCallId={toolBlock.id}
                     result={getToolResults(message.content).find(
                       (r: any) => r.tool_use_id === toolBlock.id,
                     )}
@@ -699,8 +700,7 @@
 <style>
   .message {
     padding: var(--ht-msg-padding);
-    max-width: 900px;
-    margin: 0 auto;
+    margin: 0;
     animation: fadeIn 0.2s linear;
     border-radius: var(--radius-sm);
     transition: all var(--transition);

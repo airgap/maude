@@ -261,9 +261,10 @@
 
 <style>
   .message-list {
-    flex: 1;
+    height: 100%;
     overflow-y: auto;
     padding: 20px 0;
+    padding-bottom: var(--input-overlay-h, 80px);
     position: relative;
   }
 

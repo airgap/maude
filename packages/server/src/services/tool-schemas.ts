@@ -335,6 +335,27 @@ export function getToolDefinitions(): ToolSchema[] {
       },
     },
 
+    // User interaction tools
+    {
+      name: 'AskUserQuestion',
+      description:
+        'Ask the user one or more questions to gather preferences, clarify requirements, or get decisions on implementation choices. Each question can have predefined options for the user to select from. Use this when you need user input before proceeding.',
+      input_schema: {
+        type: 'object',
+        properties: {
+          questions: {
+            type: 'array',
+            description:
+              'Array of questions to ask the user (1-4 questions). Each question has a question string, a short header label, an array of 2-4 options with label and description, and an optional multiSelect boolean.',
+            items: {
+              type: 'object',
+            },
+          },
+        },
+        required: ['questions'],
+      },
+    },
+
     // Pattern learning / self-improving skills tool
     {
       name: 'Skill',
