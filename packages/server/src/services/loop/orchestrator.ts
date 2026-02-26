@@ -122,7 +122,8 @@ class LoopOrchestrator {
   private static HEARTBEAT_STALE_MS = 45 * 60 * 1000; // 45 minutes
 
   /** Find loops marked running/paused in DB that have no in-memory runner
-   *  (or whose heartbeat is stale) and mark them failed. */
+   *  (or whose heartbeat is stale) and auto-resume them if possible.
+   *  Falls back to marking as failed/completed if no pending work remains. */
   private recoverZombieLoops(): void {
     try {
       const db = getDb();
@@ -147,47 +148,95 @@ class LoopOrchestrator {
       });
 
       for (const z of zombieLoops) {
-        db.query('UPDATE loops SET status = ?, completed_at = ? WHERE id = ?').run(
-          'failed',
-          now,
-          z.id,
-        );
-        console.log(`[loop] Recovered zombie loop ${z.id} → failed`);
-        // Notify any connected SSE clients so UI updates immediately
-        this.emitEvent(z.id, 'failed', {
-          message: 'Loop runner lost (process may have crashed). Please start a new loop.',
-        });
-        this.events.emit('loop_done', z.id);
-      }
+        // Load full loop row for auto-resume attempt
+        const row = db.query('SELECT * FROM loops WHERE id = ?').get(z.id) as any;
+        if (!row) continue;
 
-      // Reset in_progress stories belonging to zombie loops back to 'pending'
-      // so they can be retried when a new loop starts.
-      // IMPORTANT: Only reset stories for zombie loops — a global reset would
-      // interfere with actively-running loops' current stories.
-      for (const z of zombieLoops) {
-        const zombieLoop = db
-          .query('SELECT prd_id, workspace_path FROM loops WHERE id = ?')
-          .get(z.id) as any;
-        if (!zombieLoop) continue;
-
-        let reset;
-        if (zombieLoop.prd_id) {
-          reset = db
+        // Check if there's still pending work
+        let hasPendingWork = false;
+        if (row.prd_id) {
+          const count = db
             .query(
-              "UPDATE prd_stories SET status = 'pending', updated_at = ? WHERE prd_id = ? AND status = 'in_progress'",
+              "SELECT COUNT(*) as c FROM prd_stories WHERE prd_id = ? AND status IN ('pending', 'in_progress', 'failed_timeout') AND (research_only = 0 OR research_only IS NULL)",
             )
-            .run(now, zombieLoop.prd_id);
+            .get(row.prd_id) as any;
+          hasPendingWork = count && count.c > 0;
         } else {
-          reset = db
+          const count = db
             .query(
-              "UPDATE prd_stories SET status = 'pending', updated_at = ? WHERE prd_id IS NULL AND workspace_path = ? AND status = 'in_progress'",
+              "SELECT COUNT(*) as c FROM prd_stories WHERE prd_id IS NULL AND workspace_path = ? AND status IN ('pending', 'in_progress', 'failed_timeout') AND (research_only = 0 OR research_only IS NULL)",
             )
-            .run(now, zombieLoop.workspace_path);
+            .get(row.workspace_path) as any;
+          hasPendingWork = count && count.c > 0;
         }
-        if (reset.changes > 0) {
-          console.log(
-            `[loop] Reset ${reset.changes} in_progress stories → pending for zombie loop ${z.id}`,
+
+        if (hasPendingWork && row.status === 'running') {
+          // Auto-resume: create a new runner instead of marking as failed.
+          // This makes loops resilient to hot reloads and transient crashes.
+          console.log(`[loop] Auto-resuming zombie loop ${z.id} (periodic recovery)`);
+
+          // Reset any in_progress stories back to pending
+          const prdId = row.prd_id;
+          if (prdId) {
+            db.query(
+              "UPDATE prd_stories SET status = 'pending', updated_at = ? WHERE prd_id = ? AND status = 'in_progress'",
+            ).run(now, prdId);
+          } else {
+            db.query(
+              "UPDATE prd_stories SET status = 'pending', updated_at = ? WHERE prd_id IS NULL AND workspace_path = ? AND status = 'in_progress'",
+            ).run(now, row.workspace_path);
+          }
+
+          const config: LoopConfig = JSON.parse(row.config || '{}');
+          const runner = new LoopRunner(
+            row.id,
+            row.prd_id || null,
+            row.workspace_path,
+            config,
+            this.events,
           );
+          this.runners.set(row.id, runner);
+
+          runner.run().catch((err) => {
+            console.error(`[loop:${row.id}] Resumed runner error:`, err);
+            this.updateStatus(row.id, 'failed');
+            this.emitEvent(row.id, 'failed', {
+              message: `Loop failed after resume: ${String(err)}`,
+            });
+            this.events.emit('loop_done', row.id);
+          });
+        } else {
+          // No pending work or paused — mark as failed/completed
+          const newStatus = hasPendingWork ? 'failed' : 'completed';
+          db.query('UPDATE loops SET status = ?, completed_at = ? WHERE id = ?').run(
+            newStatus,
+            now,
+            z.id,
+          );
+          console.log(`[loop] Recovered zombie loop ${z.id} → ${newStatus}`);
+          this.emitEvent(z.id, newStatus as StreamLoopEvent['event'], {
+            message:
+              newStatus === 'completed'
+                ? 'All stories completed!'
+                : 'Loop runner lost. Please start a new loop.',
+          });
+          this.events.emit('loop_done', z.id);
+
+          // Reset in_progress stories back to pending
+          const zombieLoop = db
+            .query('SELECT prd_id, workspace_path FROM loops WHERE id = ?')
+            .get(z.id) as any;
+          if (zombieLoop) {
+            if (zombieLoop.prd_id) {
+              db.query(
+                "UPDATE prd_stories SET status = 'pending', updated_at = ? WHERE prd_id = ? AND status = 'in_progress'",
+              ).run(now, zombieLoop.prd_id);
+            } else {
+              db.query(
+                "UPDATE prd_stories SET status = 'pending', updated_at = ? WHERE prd_id IS NULL AND workspace_path = ? AND status = 'in_progress'",
+              ).run(now, zombieLoop.workspace_path);
+            }
+          }
         }
       }
     } catch (err) {
