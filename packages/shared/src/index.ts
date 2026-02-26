@@ -418,3 +418,18 @@ export type {
 } from './worktree.js';
 
 export { WORKTREE_STATUSES } from './worktree.js';
+
+export type {
+  ExecutorLLMConfig,
+  ExecutorResourceConstraints,
+  ExecutionContext,
+  ExecutionStatus,
+  ExecutionCostMetadata,
+  ExecutionResult,
+  ExecutorStatusType,
+  ExecutorStatus,
+  ExecutorCapabilities,
+  ExecutorInfo,
+  GolemExecutor,
+  DispatchStrategy,
+} from './golem-executor.js';

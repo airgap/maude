@@ -1,8 +1,7 @@
 import { EventEmitter } from 'events';
 import { nanoid } from 'nanoid';
 import { getDb } from '../../db/database';
-import { claudeManager } from '../claude-process';
-import { runAllQualityChecks, ensureDependencies, validateQualityChecks } from '../quality-checker';
+import { runAllQualityChecks, validateQualityChecks } from '../quality-checker';
 import { resolveWorkspacePath } from '../worktree-service';
 import { sendNotification } from '../notification-channels';
 import type {
@@ -17,9 +16,12 @@ import type {
   GolemPhase,
   GolemMood,
   WorkflowConfig,
+  ExecutionContext,
+  ExecutionResult,
 } from '@e/shared';
 import { DEFAULT_WORKFLOW_CONFIG } from '@e/shared';
 import { PRIORITY_ORDER, storyFromRow } from './helpers';
+import { GolemDispatcher } from './dispatcher';
 
 /**
  * Drives a single loop execution. Manages the iteration cycle, story selection,
@@ -68,13 +70,19 @@ export class LoopRunner {
    */
   private baselineErrors = new Map<string, Set<string>>();
 
+  /** Golem dispatcher — selects and delegates to the appropriate executor. */
+  private dispatcher: GolemDispatcher;
+
   constructor(
     private loopId: string,
     private prdId: string | null,
     private workspacePath: string,
     private config: LoopConfig,
     private events: EventEmitter,
-  ) {}
+    dispatcher?: GolemDispatcher,
+  ) {
+    this.dispatcher = dispatcher ?? new GolemDispatcher();
+  }
 
   /**
    * Resolve the effective CWD for a story — returns the worktree path
@@ -784,25 +792,57 @@ export class LoopRunner {
             );
           }
 
-          // Create an E conversation for this story
-          const conversationId = nanoid();
-          const now = Date.now();
-          db.query(
-            `INSERT INTO conversations (id, title, model, system_prompt, workspace_path, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?)`,
-          ).run(
-            conversationId,
-            `[Loop] ${story.title}`,
-            this.config.model,
-            this.config.systemPromptOverride || null,
-            this.workspacePath,
-            now,
-            now,
-          );
+          // Build the prompt and execution context
+          const prompt = this.buildStoryPrompt(story);
+          const AGENT_TIMEOUT_MS = 10 * 60 * 1000; // 10 minutes per story
 
+          const executionContext: ExecutionContext = {
+            executionId: nanoid(),
+            repoUrl: this.workspacePath,
+            branch: 'HEAD',
+            workspacePath: this.workspacePath,
+            storyId: story.id,
+            storyTitle: story.title,
+            prdId: this.prdId,
+            prompt,
+            systemPrompt: this.buildSystemPrompt(),
+            llmConfig: {
+              model: this.config.model,
+              effort: this.config.effort,
+            },
+            secretsRefs: {},
+            resourceConstraints: {
+              maxDurationMs: AGENT_TIMEOUT_MS,
+            },
+            qualityChecks: checksToRun,
+            autoCommit: this.config.autoCommit,
+            timeout: AGENT_TIMEOUT_MS,
+          };
+
+          // Dispatch execution to the appropriate executor via the Golem Dispatcher.
+          // The executor handles: conversation creation, agent spawning, stream reading,
+          // and quality check execution. The runner handles: result evaluation, fix-up
+          // state, commit/revert, status updates, and notifications.
+          this.emitThought(`Summoning agent to work on "${story.title}"...`, 'spawning_agent', {
+            storyId: story.id,
+            storyTitle: story.title,
+          });
+
+          const executionResult: ExecutionResult = await this.dispatcher.execute(executionContext);
+
+          // Extract results from the execution
+          const conversationId = executionResult.conversationId ?? nanoid();
+          const agentResult = executionResult.agentOutput;
+          const agentError = executionResult.agentError;
+
+          // Update story with conversation and agent references
           this.updateStory(story.id, { conversationId });
+          if (executionResult.agentId) {
+            this.updateStory(story.id, { agentId: executionResult.agentId });
+            this.updateLoopDb({ current_agent_id: executionResult.agentId });
+          }
 
-          // Emit story_started AFTER conversation creation so the client can navigate to it
+          // Emit story_started after execution setup so the client can navigate to the conversation
           this.emitEvent('story_started', {
             storyId: story.id,
             storyTitle: story.title,
@@ -810,96 +850,20 @@ export class LoopRunner {
             conversationId,
           });
 
-          // NOTE: Task creation side-effect removed — the story itself is now the
-          // canonical work item. Previously created a `tasks` table entry here.
-
-          // Build the prompt
-          const prompt = this.buildStoryPrompt(story);
-
-          // Add user message to conversation
-          db.query(
-            `INSERT INTO messages (id, conversation_id, role, content, timestamp)
-         VALUES (?, ?, 'user', ?, ?)`,
-          ).run(nanoid(), conversationId, JSON.stringify([{ type: 'text', text: prompt }]), now);
-
-          // Spawn Claude session
-          this.emitThought(`Summoning agent to work on "${story.title}"...`, 'spawning_agent', {
+          this.emitThought(`Agent is implementing "${story.title}"...`, 'implementing', {
             storyId: story.id,
             storyTitle: story.title,
           });
-          let agentResult = '';
-          let agentError: string | null = null;
-          const AGENT_TIMEOUT_MS = 10 * 60 * 1000; // 10 minutes per story
-          try {
-            const storyCwd = this.resolveStoryCwd(story.id);
 
-            // Ensure dependencies are installed if working in a worktree
-            if (storyCwd !== this.workspacePath) {
-              await ensureDependencies(storyCwd);
-            }
+          if (this.cancelled || executionResult.status === 'cancelled') break;
 
-            const sessionId = await claudeManager.createSession(conversationId, {
-              model: this.config.model,
-              workspacePath: storyCwd,
-              effort: this.config.effort,
-              systemPrompt: this.buildSystemPrompt(),
-            });
+          // Process quality check results — apply baseline diff and emit events
+          let qualityResults: QualityCheckResult[] = executionResult.qualityResults;
 
-            this.updateStory(story.id, { agentId: sessionId });
-            this.updateLoopDb({ current_agent_id: sessionId });
-
-            // Read the stream to completion with timeout
-            this.emitThought(`Agent is implementing "${story.title}"...`, 'implementing', {
-              storyId: story.id,
-              storyTitle: story.title,
-            });
-            const stream = await claudeManager.sendMessage(sessionId, prompt);
-            const reader = stream.getReader();
-
-            const timeoutPromise = new Promise<{ done: true; value: undefined }>((resolve) =>
-              setTimeout(() => resolve({ done: true, value: undefined }), AGENT_TIMEOUT_MS),
-            );
-            let timedOut = false;
-
-            while (true) {
-              const result = await Promise.race([reader.read(), timeoutPromise]);
-              if (result.done) {
-                if (!result.value && agentResult.length === 0) {
-                  // Timeout likely hit before any data
-                  timedOut = true;
-                }
-                break;
-              }
-              agentResult += new TextDecoder().decode(result.value);
-              // Reset timeout awareness — we got data
-            }
-
-            if (timedOut) {
-              agentError = `Agent timed out after ${AGENT_TIMEOUT_MS / 1000}s with no output`;
-              console.error(`[loop:${this.loopId}] Agent timeout for story ${story.id}`);
-              try {
-                reader.cancel();
-              } catch {
-                /* best effort */
-              }
-            }
-          } catch (err) {
-            agentError = String(err);
-            console.error(`[loop:${this.loopId}] Agent error for story ${story.id}:`, err);
-          }
-
-          if (this.cancelled) break;
-
-          // Run quality checks
-          let qualityResults: QualityCheckResult[] = [];
-
-          if (checksToRun.length > 0) {
+          if (qualityResults.length > 0) {
             this.emitThought('Agent done. Running quality checks...', 'quality_checking', {
               storyId: story.id,
               storyTitle: story.title,
-            });
-            qualityResults = await runAllQualityChecks(checksToRun, this.workspacePath, {
-              storyId: story.id,
             });
 
             // Diff against baseline to filter out pre-existing errors
