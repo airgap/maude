@@ -504,6 +504,7 @@ export class LoopRunner {
               s.status === 'completed' ||
               s.status === 'qa' ||
               s.status === 'skipped' ||
+              s.status === 'archived' ||
               s.researchOnly,
           );
 
@@ -588,14 +589,22 @@ export class LoopRunner {
           }
 
           // No eligible stories left (all failed/maxed out or blocked by deps).
-          // Distinguish "partial success" from total failure — if at least one story
-          // completed, report as completed_with_failures rather than outright failure.
+          // Distinguish full success / partial success / total failure.
           const completedCount = stories.filter(
-            (s) => s.status === 'completed' || s.status === 'qa',
+            (s) =>
+              s.status === 'completed' ||
+              s.status === 'qa' ||
+              s.status === 'skipped' ||
+              s.status === 'archived' ||
+              s.researchOnly,
           ).length;
           const failedStoryCount = stories.filter((s) => s.status === 'failed').length;
           const endStatus =
-            completedCount > 0 && failedStoryCount > 0 ? 'completed_with_failures' : 'failed';
+            failedStoryCount === 0 && completedCount === stories.length
+              ? 'completed'
+              : completedCount > 0
+                ? 'completed_with_failures'
+                : 'failed';
 
           this.updateLoopDb({
             status: endStatus,
@@ -603,23 +612,39 @@ export class LoopRunner {
             current_story_id: null,
             current_agent_id: null,
           });
-          this.emitEvent(endStatus === 'completed_with_failures' ? 'completed' : 'failed', {
+          this.emitEvent(endStatus === 'failed' ? 'failed' : 'completed', {
             message:
-              endStatus === 'completed_with_failures'
-                ? `Finished with partial success: ${completedCount} completed, ${failedStoryCount} failed.`
-                : 'No more eligible stories. Some stories could not be completed.',
+              endStatus === 'completed'
+                ? 'All stories completed!'
+                : endStatus === 'completed_with_failures'
+                  ? `Finished with partial success: ${completedCount} completed, ${failedStoryCount} failed.`
+                  : 'No more eligible stories. Some stories could not be completed.',
           });
 
-          // Send notification for loop failure
-          const failedCount = stories.filter((s) => s.status === 'failed').length;
-          sendNotification({
-            event: 'golem_failure',
-            title: 'Loop Failed',
-            message: `Loop completed with ${failedCount} failed story(ies). No more eligible stories to process.`,
-            workspaceId: this.workspacePath,
-          }).catch((err) => {
-            console.error(`[loop:${this.loopId}] Failed to send golem_failure notification:`, err);
-          });
+          // Send appropriate notification
+          if (endStatus === 'completed') {
+            sendNotification({
+              event: 'golem_completion',
+              title: 'Loop Completed',
+              message: `All ${stories.length} stories completed successfully!`,
+              workspaceId: this.workspacePath,
+            }).catch((err) => {
+              console.error(`[loop:${this.loopId}] Failed to send golem_completion notification:`, err);
+            });
+          } else {
+            const failedCount = stories.filter((s) => s.status === 'failed').length;
+            sendNotification({
+              event: 'golem_failure',
+              title: endStatus === 'completed_with_failures' ? 'Loop Partially Completed' : 'Loop Failed',
+              message:
+                endStatus === 'completed_with_failures'
+                  ? `Loop finished: ${completedCount} completed, ${failedCount} failed.`
+                  : `Loop completed with ${failedCount} failed story(ies). No more eligible stories to process.`,
+              workspaceId: this.workspacePath,
+            }).catch((err) => {
+              console.error(`[loop:${this.loopId}] Failed to send golem_failure notification:`, err);
+            });
+          }
 
           this.events.emit('loop_done', this.loopId);
           return;
@@ -1327,7 +1352,12 @@ export class LoopRunner {
       const allDone =
         finalStories.length > 0 &&
         finalStories.every(
-          (s) => s.status === 'completed' || s.status === 'skipped' || s.researchOnly,
+          (s) =>
+            s.status === 'completed' ||
+            s.status === 'qa' ||
+            s.status === 'skipped' ||
+            s.status === 'archived' ||
+            s.researchOnly,
         );
 
       if (allDone) {
@@ -1340,13 +1370,23 @@ export class LoopRunner {
         });
         this.emitEvent('completed', { message: 'All stories completed!' });
       } else {
-        // Distinguish partial success from total failure at max iterations
+        // Distinguish full success / partial success / total failure at max iterations
         const doneCount = finalStories.filter(
-          (s) => s.status === 'completed' || s.status === 'qa',
+          (s) =>
+            s.status === 'completed' ||
+            s.status === 'qa' ||
+            s.status === 'skipped' ||
+            s.status === 'archived' ||
+            s.researchOnly,
         ).length;
         const failedCount = finalStories.filter((s) => s.status === 'failed').length;
+        const pendingCount = finalStories.length - doneCount - failedCount;
         const maxIterStatus =
-          doneCount > 0 && failedCount > 0 ? 'completed_with_failures' : 'failed';
+          failedCount === 0 && pendingCount === 0
+            ? 'completed'
+            : doneCount > 0
+              ? 'completed_with_failures'
+              : 'failed';
 
         this.updateLoopDb({
           status: maxIterStatus,
@@ -1354,11 +1394,13 @@ export class LoopRunner {
           current_story_id: null,
           current_agent_id: null,
         });
-        this.emitEvent(maxIterStatus === 'completed_with_failures' ? 'completed' : 'failed', {
+        this.emitEvent(maxIterStatus === 'failed' ? 'failed' : 'completed', {
           message:
-            maxIterStatus === 'completed_with_failures'
-              ? `Max iterations reached. Partial success: ${doneCount} completed, ${failedCount} failed.`
-              : `Max iterations (${this.config.maxIterations}) reached. Some stories remain incomplete.`,
+            maxIterStatus === 'completed'
+              ? 'All stories completed!'
+              : maxIterStatus === 'completed_with_failures'
+                ? `Max iterations reached. Partial success: ${doneCount} completed, ${failedCount} failed, ${pendingCount} pending.`
+                : `Max iterations (${this.config.maxIterations}) reached. Some stories remain incomplete.`,
         });
       }
 
@@ -2200,10 +2242,14 @@ ${criteria}
       ? `[golem] ${story.title}\n\nImplemented by E Golem.\nPRD: ${this.prdId}\nStory: ${story.id}`
       : `[golem] ${story.title}\n\nImplemented by E Golem.\nStory: ${story.id}`;
 
+    // Use --no-verify to skip the pre-commit hook — the loop has already run
+    // its own quality checks (typecheck, lint, test). Re-running them in the
+    // hook is redundant and frequently causes spurious commit failures (e.g.
+    // lint-staged conflicts, NX cache mismatches) that burn through attempts.
     console.log(
       `${tag} [gitCommit] Starting commit (timeout: ${GIT_COMMIT_TIMEOUT_MS / 1000}s)...`,
     );
-    const commitProc = Bun.spawn(['git', 'commit', '-m', msg], {
+    const commitProc = Bun.spawn(['git', 'commit', '--no-verify', '-m', msg], {
       cwd: commitCwd,
       stdout: 'pipe',
       stderr: 'pipe',
