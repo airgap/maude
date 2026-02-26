@@ -450,3 +450,17 @@ export type {
 } from './story-coordination.js';
 
 export { DEFAULT_COORDINATION_CONFIG } from './story-coordination.js';
+
+export type {
+  GolemExitCodeValue,
+  GolemLLMConfig,
+  GolemStorySpec,
+  GolemSpec,
+  GolemLogLevel,
+  GolemPhaseType,
+  GolemLogEntry,
+  GolemRunPhase,
+  GolemRunStatus,
+} from './golem-headless.js';
+
+export { GolemExitCode, GOLEM_DEFAULTS } from './golem-headless.js';
