@@ -190,6 +190,8 @@ export interface QualityCheckResult {
   exitCode: number;
   /** Story ID if this check was run in a worktree context */
   storyId?: string;
+  /** True if the check was killed due to timeout (exitCode is unreliable in this case) */
+  timedOut?: boolean;
 }
 
 // --- Loop Orchestrator Types ---

@@ -123,9 +123,11 @@ export async function ensureDependencies(cwd: string): Promise<boolean> {
       env: { ...process.env, FORCE_COLOR: '0', CI: '1' },
     });
 
-    const stdout = await new Response(proc.stdout).text();
-    const stderr = await new Response(proc.stderr).text();
-    const exitCode = await proc.exited;
+    const [stdout, stderr, exitCode] = await Promise.all([
+      new Response(proc.stdout).text(),
+      new Response(proc.stderr).text(),
+      proc.exited,
+    ]);
 
     if (exitCode === 0) {
       console.log(`[quality-checker] bun install succeeded in ${cwd}`);
@@ -181,27 +183,55 @@ export async function runQualityCheck(
       env: { ...process.env, FORCE_COLOR: '0', CI: '1' },
     });
 
-    // Apply timeout
-    const timeoutId = setTimeout(() => proc.kill(), check.timeout);
+    // Track whether we killed the process due to timeout
+    let timedOut = false;
+    const timeoutId = setTimeout(() => {
+      timedOut = true;
+      console.warn(
+        `[quality-checker] Killing "${check.name}" (${check.command}) after ${check.timeout}ms timeout`,
+      );
+      proc.kill();
+    }, check.timeout);
 
-    const stdout = await new Response(proc.stdout).text();
-    const stderr = await new Response(proc.stderr).text();
-    const exitCode = await proc.exited;
+    // Read stdout and stderr concurrently to prevent pipe buffer deadlocks.
+    // Sequential reads can deadlock when one pipe fills its OS buffer (~64KB)
+    // while the parent is blocked reading the other pipe.
+    const [stdout, stderr, exitCode] = await Promise.all([
+      new Response(proc.stdout).text(),
+      new Response(proc.stderr).text(),
+      proc.exited,
+    ]);
     clearTimeout(timeoutId);
 
     const rawOutput = (stdout + '\n' + stderr).trim();
+    const passed = exitCode === 0;
+
+    if (!passed) {
+      console.warn(
+        `[quality-checker] "${check.name}" failed: exitCode=${exitCode}, timedOut=${timedOut}, duration=${Date.now() - start}ms, cwd=${cwd}`,
+      );
+    }
+
     const result: QualityCheckResult = {
       checkId: check.id,
       checkName: check.name,
       checkType: check.type,
-      passed: exitCode === 0,
-      output: exitCode === 0 ? rawOutput.slice(0, 15000) : parseCheckOutput(rawOutput, check.type),
+      passed,
+      output: passed
+        ? rawOutput.slice(0, 15000)
+        : timedOut
+          ? `[TIMEOUT] Check killed after ${check.timeout}ms. Partial output:\n${parseCheckOutput(rawOutput, check.type)}`
+          : parseCheckOutput(rawOutput, check.type),
       duration: Date.now() - start,
       exitCode,
+      timedOut,
     };
     if (storyId) result.storyId = storyId;
     return result;
   } catch (err) {
+    console.error(
+      `[quality-checker] "${check.name}" threw exception: ${String(err).slice(0, 500)}`,
+    );
     const result: QualityCheckResult = {
       checkId: check.id,
       checkName: check.name,
@@ -247,9 +277,11 @@ export async function validateQualityChecks(
 
       // Give it 15s max — we just need to see if the command starts
       const timeoutId = setTimeout(() => proc.kill(), 15_000);
-      const stdout = await new Response(proc.stdout).text();
-      const stderr = await new Response(proc.stderr).text();
-      const exitCode = await proc.exited;
+      const [stdout, stderr, exitCode] = await Promise.all([
+        new Response(proc.stdout).text(),
+        new Response(proc.stderr).text(),
+        proc.exited,
+      ]);
       clearTimeout(timeoutId);
 
       const combinedOutput = (stdout + '\n' + stderr).toLowerCase();
