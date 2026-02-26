@@ -109,10 +109,12 @@
   });
 
   // Only show the throbber phrase in the statusbar when the streaming
-  // conversation is NOT the focused chat (i.e. the user switched away).
+  // conversation is NOT the focused chat (i.e. the user switched away)
+  // AND the throbber has kicked in (after the initial delay).
   // When focused, the phrase appears inline in StreamingMessage instead.
   let showGutterPhrase = $derived(
     streamStore.isStreaming &&
+      throbberStore.visible &&
       streamStore.conversationId !== null &&
       streamStore.conversationId !== conversationStore.activeId,
   );

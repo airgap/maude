@@ -177,7 +177,9 @@
         {/each}
       </div>
 
-      <span class="throbber-phrase">{throbberStore.phrase}</span>
+      {#if throbberStore.visible}
+        <span class="throbber-phrase">{throbberStore.phrase}</span>
+      {/if}
 
       {#if settingsStore.streamingProgressBar !== 'none'}
         <div class="progress-bar {settingsStore.streamingProgressBar}" aria-hidden="true"></div>
@@ -233,7 +235,22 @@
   }
 
   .throbber-phrase {
-    color: var(--text-tertiary);
+    color: var(--text-secondary);
+    font-style: italic;
+    font-size: var(--fs-sm);
+    opacity: 0.85;
+    animation: phraseFadeIn 0.6s ease-out;
+  }
+
+  @keyframes phraseFadeIn {
+    0% {
+      opacity: 0;
+      transform: translateY(3px);
+    }
+    100% {
+      opacity: 0.85;
+      transform: translateY(0);
+    }
   }
 
   .streaming-indicator {
