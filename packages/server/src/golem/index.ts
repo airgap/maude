@@ -49,7 +49,7 @@ SPEC FILE:
       "acceptanceCriteria": ["criterion 1", "criterion 2"]
     },
     "llm": {
-      "model": "claude-sonnet-4-20250514",
+      "model": "claude-sonnet-4-6",
       "apiKey": "sk-..."
     },
     "coordinatorUrl": "https://e-server.example.com/api/story-coordination",
@@ -72,6 +72,7 @@ ENVIRONMENT VARIABLES:
   GOLEM_HEALTH_PORT       Health check port (default: ${GOLEM_DEFAULTS.healthPort}, 0 to disable)
   GOLEM_LOG_STREAM_URL    WebSocket URL for log streaming
   GOLEM_WORK_DIR          Working directory override
+  GOLEM_MAX_TURNS         Max agent turns before stopping (default: 50)
   ANTHROPIC_API_KEY       Anthropic API key
 
 EXIT CODES:

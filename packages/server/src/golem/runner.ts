@@ -4,10 +4,11 @@
 // Orchestrates the full lifecycle: clone → install → agent → checks → commit → push → report
 // ---------------------------------------------------------------------------
 
-import { mkdtemp, rm } from 'fs/promises';
+import { mkdtemp, rm, readdir } from 'fs/promises';
 import { tmpdir } from 'os';
-import { join } from 'path';
+import { join, resolve } from 'path';
 import { existsSync } from 'fs';
+import Anthropic from '@anthropic-ai/sdk';
 import type {
   GolemSpec,
   GolemRunStatus,
@@ -428,31 +429,34 @@ export class GolemRunner {
   }
 
   /**
-   * Run the Claude agent to implement the story.
+   * Run the agent to implement the story using a proper tool-use agentic loop.
+   * The agent can read/write files, run bash commands, and search the codebase.
    */
   private async runAgent(timeoutMs: number): Promise<{ output: string; error: string | null; timedOut: boolean }> {
     const prompt = this.buildPrompt();
+    const model = this.spec.llm.model || GOLEM_DEFAULTS.model;
+    const systemPrompt = this.spec.llm.systemPrompt || this.buildSystemPrompt();
+
     this.logger.info('agent', 'Starting agent execution', {
-      model: this.spec.llm.model,
+      model,
       timeoutMs,
       promptLength: prompt.length,
     });
 
-    // Resolve API key
-    const apiKey = this.spec.llm.apiKey || process.env.ANTHROPIC_API_KEY;
+    // Resolve API key — spec > env var > Claude Code OAuth credentials file
+    let apiKey = this.spec.llm.apiKey || process.env.ANTHROPIC_API_KEY;
+    let authToken: string | undefined;
+
     if (!apiKey) {
-      // Try Claude Code OAuth credentials
       try {
         const { readFileSync } = await import('fs');
         const { join: pathJoin } = await import('path');
         const { homedir: getHome } = await import('os');
         const credPath = pathJoin(getHome(), '.claude', '.credentials.json');
         const creds = JSON.parse(readFileSync(credPath, 'utf-8'));
-        const oauthToken = creds?.claudeAiOauth?.accessToken;
-        if (!oauthToken) {
-          throw new Error('No API key or OAuth token found');
-        }
-        return this.runClaudeAgent(prompt, oauthToken, 'oauth', timeoutMs);
+        authToken = creds?.claudeAiOauth?.accessToken;
+        if (!authToken) throw new Error('no token in credentials file');
+        this.logger.info('agent', 'Using Claude Code OAuth credentials');
       } catch {
         throw new Error(
           'No Anthropic API key found. Set ANTHROPIC_API_KEY env var or provide llm.apiKey in spec.',
@@ -460,113 +464,501 @@ export class GolemRunner {
       }
     }
 
-    return this.runClaudeAgent(prompt, apiKey, 'api-key', timeoutMs);
-  }
+    // Build Anthropic client
+    const clientOpts: ConstructorParameters<typeof Anthropic>[0] = {};
+    if (apiKey) clientOpts.apiKey = apiKey;
+    if (authToken) clientOpts.authToken = authToken;
+    if (process.env.ANTHROPIC_API_URL) clientOpts.baseURL = process.env.ANTHROPIC_API_URL;
+    const client = new Anthropic(clientOpts);
 
-  /**
-   * Execute the agent via the Anthropic Messages API (streaming).
-   */
-  private async runClaudeAgent(
-    prompt: string,
-    token: string,
-    tokenType: 'api-key' | 'oauth',
-    timeoutMs: number,
-  ): Promise<{ output: string; error: string | null; timedOut: boolean }> {
-    const model = this.spec.llm.model || GOLEM_DEFAULTS.model;
-    const systemPrompt = this.spec.llm.systemPrompt || this.buildSystemPrompt();
+    // Conversation history
+    const messages: Anthropic.MessageParam[] = [
+      { role: 'user', content: prompt },
+    ];
 
-    const headers: Record<string, string> = {
-      'Content-Type': 'application/json',
-      'anthropic-version': '2023-06-01',
-    };
-
-    if (tokenType === 'api-key') {
-      headers['x-api-key'] = token;
-    } else {
-      headers['Authorization'] = `Bearer ${token}`;
-    }
-
-    const body = {
-      model,
-      max_tokens: 16384,
-      system: systemPrompt,
-      messages: [{ role: 'user', content: prompt }],
-      stream: true,
-    };
-
+    let output = '';
+    let timedOut = false;
+    const startTime = Date.now();
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), timeoutMs);
+    const timeoutId = setTimeout(() => {
+      timedOut = true;
+      controller.abort();
+    }, timeoutMs);
 
     try {
-      const apiUrl = process.env.ANTHROPIC_API_URL || 'https://api.anthropic.com/v1/messages';
-      const resp = await fetch(apiUrl, {
-        method: 'POST',
-        headers,
-        body: JSON.stringify(body),
-        signal: controller.signal,
-      });
+      const maxTurns = Number(process.env.GOLEM_MAX_TURNS || '50');
+      let turnCount = 0;
 
-      if (!resp.ok) {
-        const text = await resp.text();
-        return {
-          output: '',
-          error: `Anthropic API error (${resp.status}): ${text.slice(0, 1000)}`,
-          timedOut: false,
-        };
-      }
-
-      // Read SSE stream
-      let output = '';
-      const reader = resp.body?.getReader();
-      if (!reader) {
-        return { output: '', error: 'No response body', timedOut: false };
-      }
-
-      const decoder = new TextDecoder();
-      let buffer = '';
-
-      while (true) {
-        if (this.cancelled) {
-          reader.cancel();
-          return { output, error: 'Execution cancelled', timedOut: false };
+      while (turnCount < maxTurns) {
+        if (this.cancelled) break;
+        if (Date.now() - startTime > timeoutMs) {
+          timedOut = true;
+          break;
         }
 
-        const { done, value } = await reader.read();
-        if (done) break;
+        turnCount++;
+        this.logger.debug('agent', `Agent turn ${turnCount}/${maxTurns}`);
 
-        buffer += decoder.decode(value, { stream: true });
+        const response = await client.messages.create(
+          {
+            model,
+            max_tokens: 8192,
+            system: systemPrompt,
+            tools: this.buildAgentTools(),
+            messages,
+          },
+          { signal: controller.signal },
+        );
 
-        // Parse SSE events
-        const lines = buffer.split('\n');
-        buffer = lines.pop() || '';
+        // Append assistant response to history
+        messages.push({ role: 'assistant', content: response.content });
 
-        for (const line of lines) {
-          if (line.startsWith('data: ')) {
-            const data = line.slice(6).trim();
-            if (data === '[DONE]') continue;
+        // Collect text output from this turn
+        const textBlocks = response.content
+          .filter((b): b is Anthropic.TextBlock => b.type === 'text')
+          .map((b) => b.text)
+          .join('\n')
+          .trim();
+        if (textBlocks) {
+          output = textBlocks; // keep last assistant text as the final output
+          this.logger.debug('agent', textBlocks.slice(0, 500));
+        }
 
-            try {
-              const event = JSON.parse(data);
-              if (event.type === 'content_block_delta' && event.delta?.type === 'text_delta') {
-                output += event.delta.text;
-              }
-            } catch {
-              // Ignore malformed SSE lines
-            }
+        // Done when the model stops calling tools
+        if (response.stop_reason === 'end_turn') break;
+
+        // Execute tool calls
+        const toolUseBlocks = response.content.filter(
+          (b): b is Anthropic.ToolUseBlock => b.type === 'tool_use',
+        );
+        if (toolUseBlocks.length === 0) break;
+
+        const toolResults: Anthropic.ToolResultBlockParam[] = [];
+        for (const toolBlock of toolUseBlocks) {
+          this.logger.info('agent', `Tool: ${toolBlock.name}`, {
+            input: JSON.stringify(toolBlock.input).slice(0, 200),
+          });
+
+          try {
+            const result = await this.executeAgentTool(
+              toolBlock.name,
+              toolBlock.input as Record<string, unknown>,
+            );
+            toolResults.push({
+              type: 'tool_result',
+              tool_use_id: toolBlock.id,
+              content: result,
+            });
+          } catch (err) {
+            this.logger.warn('agent', `Tool error (${toolBlock.name}): ${String(err)}`);
+            toolResults.push({
+              type: 'tool_result',
+              tool_use_id: toolBlock.id,
+              content: `Error: ${String(err)}`,
+              is_error: true,
+            });
           }
         }
+
+        messages.push({ role: 'user', content: toolResults });
+      }
+
+      if (timedOut) {
+        return { output, error: `Agent timed out after ${timeoutMs}ms`, timedOut: true };
+      }
+      if (this.cancelled) {
+        return { output, error: 'Execution cancelled', timedOut: false };
       }
 
       this.agentOutput = output;
-      this.logger.info('agent', 'Agent execution completed', { outputLength: output.length });
+      this.logger.info('agent', 'Agent execution completed', {
+        outputLength: output.length,
+        turns: turnCount,
+      });
       return { output, error: null, timedOut: false };
     } catch (err) {
-      if (err instanceof DOMException && err.name === 'AbortError') {
+      if (timedOut || (err instanceof Error && err.name === 'AbortError')) {
         return { output: this.agentOutput, error: `Agent timed out after ${timeoutMs}ms`, timedOut: true };
       }
       return { output: '', error: String(err), timedOut: false };
     } finally {
-      clearTimeout(timeout);
+      clearTimeout(timeoutId);
+    }
+  }
+
+  /**
+   * Build the tool definitions for the agent's tool-use loop.
+   * These give the agent file read/write, bash execution, and search capabilities.
+   */
+  private buildAgentTools(): Anthropic.Tool[] {
+    return [
+      {
+        name: 'view_file',
+        description:
+          'Read the contents of a file. Use this to understand existing code before making changes. Returns content with line numbers.',
+        input_schema: {
+          type: 'object' as const,
+          properties: {
+            path: { type: 'string', description: 'File path relative to the repo root' },
+            start_line: {
+              type: 'number',
+              description: 'Starting line number (1-indexed, optional)',
+            },
+            end_line: { type: 'number', description: 'Ending line number (optional)' },
+          },
+          required: ['path'],
+        },
+      },
+      {
+        name: 'write_file',
+        description:
+          'Create a new file or completely overwrite an existing file with new content.',
+        input_schema: {
+          type: 'object' as const,
+          properties: {
+            path: { type: 'string', description: 'File path relative to the repo root' },
+            content: { type: 'string', description: 'Full content to write to the file' },
+          },
+          required: ['path', 'content'],
+        },
+      },
+      {
+        name: 'edit_file',
+        description:
+          'Make a targeted replacement in an existing file. The old_text must match exactly (including whitespace and indentation). Use view_file first to see the exact text.',
+        input_schema: {
+          type: 'object' as const,
+          properties: {
+            path: { type: 'string', description: 'File path relative to the repo root' },
+            old_text: {
+              type: 'string',
+              description: 'Exact text to replace (must appear exactly once in the file)',
+            },
+            new_text: { type: 'string', description: 'Replacement text' },
+          },
+          required: ['path', 'old_text', 'new_text'],
+        },
+      },
+      {
+        name: 'run_bash',
+        description:
+          'Execute a shell command in the repo root directory. Use for running builds, tests, git commands, installing packages, etc. Returns stdout + stderr and exit code.',
+        input_schema: {
+          type: 'object' as const,
+          properties: {
+            command: { type: 'string', description: 'Shell command to execute' },
+            timeout_ms: {
+              type: 'number',
+              description: 'Timeout in milliseconds (default: 60000)',
+            },
+          },
+          required: ['command'],
+        },
+      },
+      {
+        name: 'list_directory',
+        description: 'List files and directories at a given path.',
+        input_schema: {
+          type: 'object' as const,
+          properties: {
+            path: {
+              type: 'string',
+              description: 'Directory path relative to repo root (default: ".")',
+            },
+          },
+          required: [],
+        },
+      },
+      {
+        name: 'search_text',
+        description:
+          'Search for a text pattern in files (like grep -r). Returns matching lines with file paths and line numbers.',
+        input_schema: {
+          type: 'object' as const,
+          properties: {
+            pattern: { type: 'string', description: 'Text or regex pattern to search for' },
+            path: {
+              type: 'string',
+              description: 'File or directory to search in (default: repo root)',
+            },
+            case_insensitive: {
+              type: 'boolean',
+              description: 'Case-insensitive search (default: false)',
+            },
+          },
+          required: ['pattern'],
+        },
+      },
+      {
+        name: 'find_files',
+        description:
+          'Find files matching a glob pattern. Skips node_modules, .git, and dist by default.',
+        input_schema: {
+          type: 'object' as const,
+          properties: {
+            pattern: {
+              type: 'string',
+              description: 'Glob pattern (e.g. "**/*.ts", "src/**/*.svelte", "*.json")',
+            },
+            directory: {
+              type: 'string',
+              description: 'Base directory relative to repo root (default: ".")',
+            },
+          },
+          required: ['pattern'],
+        },
+      },
+      {
+        name: 'ask_human',
+        description:
+          'Ask the human user for clarification or guidance when you are genuinely blocked and cannot make reasonable progress without their input. Use sparingly — only when truly necessary. Execution pauses until the user responds (up to 30 minutes). Do NOT use this for minor ambiguity; make a reasonable decision instead.',
+        input_schema: {
+          type: 'object' as const,
+          properties: {
+            question: {
+              type: 'string',
+              description: 'The specific question to ask. Be precise and concise.',
+            },
+            context: {
+              type: 'string',
+              description:
+                'Optional background context to help the user understand the situation and answer effectively.',
+            },
+          },
+          required: ['question'],
+        },
+      },
+    ];
+  }
+
+  /**
+   * Execute a single agent tool call.
+   * All file paths are resolved relative to workDir and validated for traversal.
+   */
+  private async executeAgentTool(
+    name: string,
+    input: Record<string, unknown>,
+  ): Promise<string> {
+    // Resolve a path relative to workDir, blocking traversal outside it
+    const resolveSafe = (p: string): string => {
+      const abs = resolve(this.workDir, p);
+      if (!abs.startsWith(this.workDir + '/') && abs !== this.workDir) {
+        throw new Error(`Path traversal blocked: '${p}' resolves outside repo root`);
+      }
+      return abs;
+    };
+
+    switch (name) {
+      // ------------------------------------------------------------------
+      // view_file — read a file with optional line range
+      // ------------------------------------------------------------------
+      case 'view_file': {
+        const filePath = resolveSafe(String(input.path));
+        const raw = await Bun.file(filePath).text();
+        const lines = raw.split('\n');
+        const start = input.start_line ? Number(input.start_line) - 1 : 0;
+        const end = input.end_line ? Number(input.end_line) : lines.length;
+        return lines
+          .slice(start, end)
+          .map((l, i) => `${start + i + 1}\t${l}`)
+          .join('\n');
+      }
+
+      // ------------------------------------------------------------------
+      // write_file — create/overwrite a file
+      // ------------------------------------------------------------------
+      case 'write_file': {
+        const filePath = resolveSafe(String(input.path));
+        const content = String(input.content ?? '');
+        await Bun.write(filePath, content);
+        return `Written: ${input.path} (${content.length} bytes)`;
+      }
+
+      // ------------------------------------------------------------------
+      // edit_file — targeted string replacement
+      // ------------------------------------------------------------------
+      case 'edit_file': {
+        const filePath = resolveSafe(String(input.path));
+        const original = await Bun.file(filePath).text();
+        const oldText = String(input.old_text ?? '');
+        const newText = String(input.new_text ?? '');
+
+        if (!original.includes(oldText)) {
+          throw new Error(
+            `old_text not found in ${input.path}. ` +
+              `Use view_file to see the exact current content, then retry with the exact text.`,
+          );
+        }
+
+        // Replace only the first occurrence (safest for precise edits)
+        const updated = original.replace(oldText, newText);
+        await Bun.write(filePath, updated);
+        return `Edited: ${input.path}`;
+      }
+
+      // ------------------------------------------------------------------
+      // run_bash — execute a shell command
+      // ------------------------------------------------------------------
+      case 'run_bash': {
+        const command = String(input.command ?? '');
+        const timeout = Number(input.timeout_ms ?? 60_000);
+
+        const proc = Bun.spawn(['bash', '-c', command], {
+          cwd: this.workDir,
+          stdout: 'pipe',
+          stderr: 'pipe',
+          env: { ...process.env, FORCE_COLOR: '0', CI: '1' },
+        });
+
+        let procTimedOut = false;
+        const procTimeoutId = setTimeout(() => {
+          procTimedOut = true;
+          proc.kill();
+        }, timeout);
+
+        const [stdout, stderr, exitCode] = await Promise.all([
+          new Response(proc.stdout).text(),
+          new Response(proc.stderr).text(),
+          proc.exited,
+        ]);
+        clearTimeout(procTimeoutId);
+
+        const combined = [stdout, stderr ? `[stderr]\n${stderr}` : '']
+          .filter(Boolean)
+          .join('\n')
+          .trim()
+          .slice(0, 15_000);
+
+        return [
+          `exit_code: ${exitCode}`,
+          procTimedOut ? '[TIMED OUT]' : null,
+          combined || '(no output)',
+        ]
+          .filter(Boolean)
+          .join('\n');
+      }
+
+      // ------------------------------------------------------------------
+      // list_directory — list directory entries
+      // ------------------------------------------------------------------
+      case 'list_directory': {
+        const dirPath = input.path ? resolveSafe(String(input.path)) : this.workDir;
+        const entries = await readdir(dirPath, { withFileTypes: true });
+        if (entries.length === 0) return '(empty directory)';
+        return entries
+          .map((e) => `${e.isDirectory() ? '[DIR] ' : '[FILE]'} ${e.name}`)
+          .join('\n');
+      }
+
+      // ------------------------------------------------------------------
+      // search_text — recursive grep
+      // ------------------------------------------------------------------
+      case 'search_text': {
+        const pattern = String(input.pattern ?? '');
+        const searchPath = input.path ? resolveSafe(String(input.path)) : this.workDir;
+        const args = ['grep', '-r', '-n', '--include=*'];
+        if (input.case_insensitive) args.push('-i');
+        args.push(pattern, searchPath);
+
+        const proc = Bun.spawn(args, {
+          cwd: this.workDir,
+          stdout: 'pipe',
+          stderr: 'pipe',
+        });
+        const [stdout, , exitCode] = await Promise.all([
+          new Response(proc.stdout).text(),
+          new Response(proc.stderr).text(),
+          proc.exited,
+        ]);
+        // exitCode 1 = no matches (not an error)
+        if (exitCode > 1) throw new Error(`grep failed with exit ${exitCode}`);
+        return stdout.slice(0, 15_000) || '(no matches)';
+      }
+
+      // ------------------------------------------------------------------
+      // find_files — glob file search
+      // ------------------------------------------------------------------
+      case 'find_files': {
+        const pattern = String(input.pattern ?? '*');
+        const baseDir = input.directory
+          ? resolveSafe(String(input.directory))
+          : this.workDir;
+
+        const glob = new Bun.Glob(pattern);
+        const files: string[] = [];
+        for await (const file of glob.scan({
+          cwd: baseDir,
+          onlyFiles: true,
+          followSymlinks: false,
+        })) {
+          // Skip node_modules, .git, dist
+          if (
+            file.includes('node_modules/') ||
+            file.includes('.git/') ||
+            file.includes('/dist/')
+          )
+            continue;
+          files.push(file);
+          if (files.length >= 200) break;
+        }
+        return files.length > 0 ? files.join('\n') : '(no matches)';
+      }
+
+      // ------------------------------------------------------------------
+      // ask_human — request human input and pause until answered
+      // ------------------------------------------------------------------
+      case 'ask_human': {
+        if (!this.coordinator) {
+          return (
+            'No coordinator connected — cannot request human assistance. ' +
+            'Make your best decision and proceed.'
+          );
+        }
+
+        const question = String(input.question ?? '').trim();
+        const context = input.context ? String(input.context).trim() : undefined;
+
+        if (!question) {
+          return 'Error: question text is required.';
+        }
+
+        this.logger.info('agent', `Requesting human assistance: ${question.slice(0, 300)}`, {
+          context: context?.slice(0, 200),
+        });
+
+        const prevPhase = this.phase;
+        this.setPhase('waiting_for_human');
+
+        try {
+          const questionId = await this.coordinator.askQuestion(
+            this.spec.story.storyId,
+            this.spec.executorId!,
+            question,
+            context,
+          );
+
+          this.logger.info(
+            'agent',
+            `Question submitted (id=${questionId}), waiting for human response…`,
+          );
+
+          // Wait up to 30 minutes for the user to answer
+          const answer = await this.coordinator.waitForAnswer(
+            this.spec.story.storyId,
+            questionId,
+            30 * 60 * 1000,
+          );
+
+          this.logger.info('agent', `Human responded to question ${questionId}`);
+          return `Human response: ${answer}`;
+        } finally {
+          // Always restore the previous phase even if waiting throws
+          this.setPhase(prevPhase);
+        }
+      }
+
+      default:
+        throw new Error(`Unknown tool: ${name}`);
     }
   }
 
@@ -698,7 +1090,7 @@ ${criteria}
 3. Ensure every acceptance criterion is met
 4. Follow existing project conventions and patterns
 5. Write clean, well-structured code
-6. Do NOT ask questions — make reasonable decisions and document them
+6. Do NOT ask questions for minor ambiguity — make reasonable decisions and document them. Only use ask_human if you are truly blocked and cannot proceed without user input
 7. After implementation, the system will automatically run quality checks
 8. IMPORTANT: Before declaring you are done, run the project's typecheck/build commands yourself to catch errors early
 9. If this is a monorepo, ensure your changes maintain type compatibility across packages (especially shared types)`;

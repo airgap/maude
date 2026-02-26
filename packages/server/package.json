@@ -19,6 +19,7 @@
     "test:coverage": "bun test --coverage"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.78.0",
     "@aws-sdk/client-bedrock-runtime": "^3.991.0",
     "@e/shared": "workspace:*",
     "editorconfig": "^3.0.1",

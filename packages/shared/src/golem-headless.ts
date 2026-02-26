@@ -34,7 +34,7 @@ export type GolemExitCodeValue = (typeof GolemExitCode)[keyof typeof GolemExitCo
 export interface GolemLLMConfig {
   /** Anthropic API key (can also be set via ANTHROPIC_API_KEY env var). */
   apiKey?: string;
-  /** Model identifier (e.g. "claude-sonnet-4-20250514"). */
+  /** Model identifier (e.g. "claude-sonnet-4-6"). */
   model: string;
   /** Effort/quality level. */
   effort?: string;
@@ -147,6 +147,7 @@ export type GolemRunPhase =
   | 'cloning'
   | 'installing'
   | 'running_agent'
+  | 'waiting_for_human'
   | 'running_checks'
   | 'committing'
   | 'pushing'
@@ -190,7 +191,7 @@ export const GOLEM_DEFAULTS = {
   /** Default health check port. */
   healthPort: 8080,
   /** Default LLM model. */
-  model: 'claude-sonnet-4-20250514',
+  model: 'claude-sonnet-4-6',
   /** Default effort level. */
   effort: 'high',
   /** Default heartbeat interval: 30 seconds. */
