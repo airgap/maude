@@ -740,7 +740,7 @@ describe('Worktree Routes', () => {
       expect(json.error).toContain('already merged');
     });
 
-    test('returns 200 on successful merge', async () => {
+    test('returns 202 on successful merge', async () => {
       mockState.getForStory = { ...defaultRecord, status: 'active' };
       mockMergeResult = {
         ok: true,
@@ -750,7 +750,7 @@ describe('Worktree Routes', () => {
       };
 
       const res = await app.request('/test-story/merge', { method: 'POST' });
-      expect(res.status).toBe(200);
+      expect(res.status).toBe(202);
       const json = await res.json();
       expect(json.ok).toBe(true);
       expect(json.data.storyId).toBe('test-story');
@@ -799,7 +799,7 @@ describe('Worktree Routes', () => {
       };
 
       const res = await app.request('/test-story/merge', { method: 'POST' });
-      expect(res.status).toBe(200);
+      expect(res.status).toBe(202);
       const json = await res.json();
       expect(json.ok).toBe(true);
       expect(json.data.commitSha).toBe('def456');
@@ -1030,12 +1030,12 @@ describe('Worktree Routes', () => {
       expect(res.status).toBe(409);
     });
 
-    test('POST /:storyId/merge returns 200 on success', async () => {
+    test('POST /:storyId/merge returns 202 on success', async () => {
       mockState.getForStory = { ...defaultRecord, status: 'active' };
       mockMergeResult = { ok: true, status: 'merged', commitSha: 'abc', operationLog: [] };
 
       const res = await app.request('/test-story/merge', { method: 'POST' });
-      expect(res.status).toBe(200);
+      expect(res.status).toBe(202);
     });
 
     test('POST /:storyId/merge returns 409 for conflict', async () => {

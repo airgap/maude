@@ -279,15 +279,18 @@ app.post('/:storyId/merge', async (c) => {
     );
   }
 
-  return c.json({
-    ok: true,
-    data: {
-      storyId,
-      status: result.status,
-      commitSha: result.commitSha,
-      operationLog: result.operationLog,
+  return c.json(
+    {
+      ok: true,
+      data: {
+        storyId,
+        status: result.status,
+        commitSha: result.commitSha,
+        operationLog: result.operationLog,
+      },
     },
-  });
+    202,
+  );
 });
 
 // ---------------------------------------------------------------------------
