@@ -420,6 +420,45 @@ export async function prune(workspacePath: string): Promise<WorktreeResult<numbe
 }
 
 // ---------------------------------------------------------------------------
+// Path resolution — maps workspace paths to worktree paths for file ops
+// ---------------------------------------------------------------------------
+
+/**
+ * Resolve the effective workspace path for file operations.
+ *
+ * - If storyId is null/undefined, returns workspacePath as-is.
+ * - If storyId has an active worktree (status: active/merging/conflict),
+ *   returns the worktree path.
+ * - If storyId has no worktree or a non-usable status, logs a warning and
+ *   returns workspacePath as fallback.
+ */
+export function resolveWorkspacePath(workspacePath: string, storyId?: string | null): string {
+  const resolved = resolve(workspacePath);
+
+  if (!storyId) {
+    return resolved;
+  }
+
+  const record = getForStory(storyId);
+  if (!record) {
+    console.warn(
+      `[worktree] resolveWorkspacePath: no worktree record for story ${storyId}, using workspace path`,
+    );
+    return resolved;
+  }
+
+  const activeStatuses: string[] = ['active', 'merging', 'conflict'];
+  if (!activeStatuses.includes(record.status)) {
+    console.warn(
+      `[worktree] resolveWorkspacePath: worktree for story ${storyId} has status '${record.status}', using workspace path`,
+    );
+    return resolved;
+  }
+
+  return resolve(record.worktree_path);
+}
+
+// ---------------------------------------------------------------------------
 // Database layer — persistent worktree-to-story tracking
 // ---------------------------------------------------------------------------
 
