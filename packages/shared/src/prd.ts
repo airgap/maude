@@ -14,14 +14,14 @@ export interface WorkflowConfig {
   /**
    * If true, stories in 'qa' status count as "done" for dependency resolution,
    * allowing dependent stories to proceed without waiting for full completion.
-   * Default: false (conservative — QA blocks dependents).
+   * Default: true (QA unblocks dependents so golems can keep working).
    */
   qaUnblocksDependents: boolean;
 }
 
-/** Default workflow config — QA blocks dependents (conservative) */
+/** Default workflow config — QA unblocks dependents so golems keep working */
 export const DEFAULT_WORKFLOW_CONFIG: WorkflowConfig = {
-  qaUnblocksDependents: false,
+  qaUnblocksDependents: true,
 };
 
 export type StoryPriority = 'critical' | 'high' | 'medium' | 'low';
