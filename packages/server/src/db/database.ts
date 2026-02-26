@@ -632,6 +632,27 @@ export function initDatabase(): void {
     CREATE INDEX IF NOT EXISTS idx_compaction_history_conversation ON compaction_history(conversation_id, compacted_at DESC);
     CREATE INDEX IF NOT EXISTS idx_compaction_history_timestamp ON compaction_history(compacted_at DESC);
   `);
+
+  // Worktree-to-story assignment tracking
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS worktrees (
+      id TEXT PRIMARY KEY,
+      story_id TEXT NOT NULL UNIQUE,
+      prd_id TEXT,
+      workspace_path TEXT NOT NULL,
+      worktree_path TEXT NOT NULL UNIQUE,
+      branch_name TEXT NOT NULL UNIQUE,
+      base_branch TEXT,
+      base_commit TEXT,
+      status TEXT NOT NULL DEFAULT 'active',
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_worktrees_workspace ON worktrees(workspace_path, status);
+    CREATE INDEX IF NOT EXISTS idx_worktrees_status ON worktrees(status);
+    CREATE INDEX IF NOT EXISTS idx_worktrees_story ON worktrees(story_id);
+  `);
 }
 
 /**

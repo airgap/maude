@@ -211,5 +211,26 @@ export function createTestDb(): Database {
   db.exec('CREATE INDEX IF NOT EXISTS idx_loops_prd ON loops(prd_id)');
   db.exec('CREATE INDEX IF NOT EXISTS idx_loops_status ON loops(status)');
 
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS worktrees (
+      id TEXT PRIMARY KEY,
+      story_id TEXT NOT NULL UNIQUE,
+      prd_id TEXT,
+      workspace_path TEXT NOT NULL,
+      worktree_path TEXT NOT NULL UNIQUE,
+      branch_name TEXT NOT NULL UNIQUE,
+      base_branch TEXT,
+      base_commit TEXT,
+      status TEXT NOT NULL DEFAULT 'active',
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL
+    )
+  `);
+  db.exec(
+    'CREATE INDEX IF NOT EXISTS idx_worktrees_workspace ON worktrees(workspace_path, status)',
+  );
+  db.exec('CREATE INDEX IF NOT EXISTS idx_worktrees_status ON worktrees(status)');
+  db.exec('CREATE INDEX IF NOT EXISTS idx_worktrees_story ON worktrees(story_id)');
+
   return db;
 }

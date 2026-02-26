@@ -53,3 +53,52 @@ export interface WorktreeValidation {
   /** Whether the branch is intact. */
   branchIntact: boolean;
 }
+
+// ---------------------------------------------------------------------------
+// Worktree database record types
+// ---------------------------------------------------------------------------
+
+/** Valid status values for a worktree database record. */
+export type WorktreeStatus =
+  | 'active'
+  | 'merging'
+  | 'merged'
+  | 'conflict'
+  | 'abandoned'
+  | 'cleanup_pending';
+
+/** All valid worktree statuses as a readonly array for runtime validation. */
+export const WORKTREE_STATUSES: readonly WorktreeStatus[] = [
+  'active',
+  'merging',
+  'merged',
+  'conflict',
+  'abandoned',
+  'cleanup_pending',
+] as const;
+
+/** Persistent database record for a worktree-to-story assignment. */
+export interface WorktreeRecord {
+  /** Unique ID (nanoid(12)). */
+  id: string;
+  /** Story ID this worktree is assigned to (unique). */
+  story_id: string;
+  /** Optional PRD ID the story belongs to. */
+  prd_id: string | null;
+  /** Absolute path to the workspace/repo root. */
+  workspace_path: string;
+  /** Absolute path to the worktree directory (unique). */
+  worktree_path: string;
+  /** Git branch name (unique), e.g. "story/abc123". */
+  branch_name: string;
+  /** Base branch the worktree was created from, if any. */
+  base_branch: string | null;
+  /** Commit SHA of HEAD at the time the worktree was created. */
+  base_commit: string | null;
+  /** Current status of the worktree. */
+  status: WorktreeStatus;
+  /** Unix timestamp (ms) when the record was created. */
+  created_at: number;
+  /** Unix timestamp (ms) when the record was last updated. */
+  updated_at: number;
+}

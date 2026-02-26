@@ -410,4 +410,8 @@ export type {
   WorktreeCreateOptions,
   WorktreeResult,
   WorktreeValidation,
+  WorktreeStatus,
+  WorktreeRecord,
 } from './worktree.js';
+
+export { WORKTREE_STATUSES } from './worktree.js';

@@ -9,12 +9,17 @@
 
 import { resolve, join } from 'path';
 import { existsSync } from 'fs';
+import { nanoid } from 'nanoid';
 import type {
   WorktreeInfo,
   WorktreeCreateOptions,
   WorktreeResult,
   WorktreeValidation,
+  WorktreeRecord,
+  WorktreeStatus,
 } from '@e/shared';
+import { WORKTREE_STATUSES } from '@e/shared';
+import { getDb } from '../db/database';
 
 // ---------------------------------------------------------------------------
 // Helpers — safe Bun.spawn (same pattern as routes/git/helpers.ts)
@@ -409,6 +414,311 @@ export async function prune(workspacePath: string): Promise<WorktreeResult<numbe
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       console.error(`[worktree] prune error: ${msg}`);
+      return { ok: false, error: msg };
+    }
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Database layer — persistent worktree-to-story tracking
+// ---------------------------------------------------------------------------
+
+/**
+ * Insert a worktree record into the database.
+ *
+ * Generates a nanoid(12) for the record ID and captures the current HEAD
+ * commit as base_commit via `git rev-parse HEAD`.
+ */
+export async function createRecord(
+  options: WorktreeCreateOptions & { prdId?: string | null; worktreePath: string },
+): Promise<WorktreeResult<WorktreeRecord>> {
+  try {
+    const db = getDb();
+    const id = nanoid(12);
+    const now = Date.now();
+    const branchName = `${BRANCH_PREFIX}${options.storyId}`;
+    const resolvedPath = resolve(options.worktreePath);
+
+    // Get base commit from HEAD
+    let baseCommit: string | null = null;
+    try {
+      const headResult = await run(['git', 'rev-parse', 'HEAD'], { cwd: options.workspacePath });
+      if (headResult.exitCode === 0) {
+        baseCommit = headResult.stdout.trim();
+      }
+    } catch {
+      // If we can't get HEAD, leave base_commit null
+    }
+
+    const record: WorktreeRecord = {
+      id,
+      story_id: options.storyId,
+      prd_id: options.prdId ?? null,
+      workspace_path: resolve(options.workspacePath),
+      worktree_path: resolvedPath,
+      branch_name: branchName,
+      base_branch: options.baseBranch ?? null,
+      base_commit: baseCommit,
+      status: 'active',
+      created_at: now,
+      updated_at: now,
+    };
+
+    db.query(
+      `INSERT INTO worktrees (id, story_id, prd_id, workspace_path, worktree_path, branch_name, base_branch, base_commit, status, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    ).run(
+      record.id,
+      record.story_id,
+      record.prd_id,
+      record.workspace_path,
+      record.worktree_path,
+      record.branch_name,
+      record.base_branch,
+      record.base_commit,
+      record.status,
+      record.created_at,
+      record.updated_at,
+    );
+
+    console.log(`[worktree-db] Created record for story ${options.storyId} (id: ${id})`);
+    return { ok: true, data: record };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error(`[worktree-db] createRecord error: ${msg}`);
+    return { ok: false, error: msg };
+  }
+}
+
+/**
+ * Remove a worktree record.
+ *
+ * First sets status to 'cleanup_pending', then attempts git worktree removal.
+ * If git removal succeeds, deletes the DB row. If it fails, the row remains
+ * with status='cleanup_pending' for later cleanup.
+ */
+export async function removeRecord(
+  workspacePath: string,
+  storyId: string,
+): Promise<WorktreeResult<void>> {
+  return withLock(workspacePath, async () => {
+    try {
+      const db = getDb();
+
+      // Set status to cleanup_pending before attempting removal
+      const existing = db
+        .query('SELECT id, worktree_path FROM worktrees WHERE story_id = ?')
+        .get(storyId) as { id: string; worktree_path: string } | null;
+
+      if (!existing) {
+        return { ok: false, error: `No worktree record found for story ${storyId}` };
+      }
+
+      db.query('UPDATE worktrees SET status = ?, updated_at = ? WHERE id = ?').run(
+        'cleanup_pending',
+        Date.now(),
+        existing.id,
+      );
+
+      console.log(`[worktree-db] Set story ${storyId} to cleanup_pending`);
+
+      // Attempt git worktree removal
+      const resolved = resolve(existing.worktree_path);
+      if (existsSync(resolved)) {
+        const result = await run(['git', 'worktree', 'remove', resolved, '--force'], {
+          cwd: workspacePath,
+        });
+
+        if (result.exitCode !== 0) {
+          const msg = result.stderr.trim() || result.stdout.trim() || 'Unknown git error';
+          console.error(
+            `[worktree-db] Git removal failed for ${storyId}, row remains cleanup_pending: ${msg}`,
+          );
+          return { ok: false, error: `Git removal failed: ${msg}` };
+        }
+      }
+
+      // Git removal succeeded (or directory already gone) — delete the DB row
+      db.query('DELETE FROM worktrees WHERE id = ?').run(existing.id);
+      console.log(`[worktree-db] Removed record for story ${storyId}`);
+      return { ok: true };
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error(`[worktree-db] removeRecord error: ${msg}`);
+      return { ok: false, error: msg };
+    }
+  });
+}
+
+/**
+ * Get the worktree record for a story, or null if none exists.
+ */
+export function getForStory(storyId: string): WorktreeRecord | null {
+  const db = getDb();
+  const row = db
+    .query('SELECT * FROM worktrees WHERE story_id = ?')
+    .get(storyId) as WorktreeRecord | null;
+  return row ?? null;
+}
+
+/**
+ * List all worktree records with status='active' for a workspace.
+ */
+export function listActive(workspacePath: string): WorktreeRecord[] {
+  const db = getDb();
+  const resolved = resolve(workspacePath);
+  return db
+    .query('SELECT * FROM worktrees WHERE workspace_path = ? AND status = ?')
+    .all(resolved, 'active') as WorktreeRecord[];
+}
+
+/**
+ * List all worktree records for a workspace, regardless of status.
+ */
+export function listAll(workspacePath: string): WorktreeRecord[] {
+  const db = getDb();
+  const resolved = resolve(workspacePath);
+  return db
+    .query('SELECT * FROM worktrees WHERE workspace_path = ?')
+    .all(resolved) as WorktreeRecord[];
+}
+
+/**
+ * Update the status of a worktree record.
+ *
+ * Validates that the status is one of the allowed values.
+ * Automatically updates updated_at.
+ */
+export function updateStatus(
+  storyId: string,
+  status: WorktreeStatus,
+): WorktreeResult<WorktreeRecord> {
+  try {
+    if (!WORKTREE_STATUSES.includes(status)) {
+      return {
+        ok: false,
+        error: `Invalid status '${status}'. Must be one of: ${WORKTREE_STATUSES.join(', ')}`,
+      };
+    }
+
+    const db = getDb();
+    const now = Date.now();
+
+    db.query('UPDATE worktrees SET status = ?, updated_at = ? WHERE story_id = ?').run(
+      status,
+      now,
+      storyId,
+    );
+
+    const updated = db
+      .query('SELECT * FROM worktrees WHERE story_id = ?')
+      .get(storyId) as WorktreeRecord | null;
+
+    if (!updated) {
+      return { ok: false, error: `No worktree record found for story ${storyId}` };
+    }
+
+    return { ok: true, data: updated };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error(`[worktree-db] updateStatus error: ${msg}`);
+    return { ok: false, error: msg };
+  }
+}
+
+/**
+ * Reconcile database records with actual on-disk worktrees.
+ *
+ * 1. DB-only records (no matching directory on disk) → marked as 'abandoned'
+ * 2. Disk-only worktrees matching story/* pattern → added to DB
+ *
+ * This is idempotent — running it multiple times produces the same result.
+ */
+export async function reconcile(workspacePath: string): Promise<
+  WorktreeResult<{
+    abandoned: number;
+    discovered: number;
+  }>
+> {
+  return withLock(workspacePath, async () => {
+    try {
+      const db = getDb();
+      const resolved = resolve(workspacePath);
+      let abandoned = 0;
+      let discovered = 0;
+
+      // 1. Mark DB-only records as abandoned
+      const dbRecords = db
+        .query(
+          "SELECT * FROM worktrees WHERE workspace_path = ? AND status NOT IN ('abandoned', 'merged')",
+        )
+        .all(resolved) as WorktreeRecord[];
+
+      for (const record of dbRecords) {
+        if (!existsSync(record.worktree_path)) {
+          db.query('UPDATE worktrees SET status = ?, updated_at = ? WHERE id = ?').run(
+            'abandoned',
+            Date.now(),
+            record.id,
+          );
+          console.log(
+            `[worktree-db] Marked worktree ${record.story_id} as abandoned (directory missing)`,
+          );
+          abandoned++;
+        }
+      }
+
+      // 2. Discover disk-only worktrees matching story/* pattern
+      const listResult = await run(['git', 'worktree', 'list', '--porcelain'], {
+        cwd: resolved,
+      });
+
+      if (listResult.exitCode === 0) {
+        const entries = parsePorcelain(listResult.stdout);
+
+        for (const entry of entries) {
+          if (!entry.storyId || entry.isMain) continue;
+
+          // Check if we already have a DB record for this story
+          const existing = db
+            .query('SELECT id FROM worktrees WHERE story_id = ?')
+            .get(entry.storyId) as { id: string } | null;
+
+          if (!existing) {
+            // Discover and add to DB
+            const id = nanoid(12);
+            const now = Date.now();
+
+            db.query(
+              `INSERT INTO worktrees (id, story_id, prd_id, workspace_path, worktree_path, branch_name, base_branch, base_commit, status, created_at, updated_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            ).run(
+              id,
+              entry.storyId,
+              null, // prd_id unknown for discovered worktrees
+              resolved,
+              entry.path,
+              entry.branch ?? `${BRANCH_PREFIX}${entry.storyId}`,
+              null, // base_branch unknown
+              entry.head, // use current HEAD as base_commit
+              'active',
+              now,
+              now,
+            );
+
+            console.log(`[worktree-db] Discovered disk-only worktree for story ${entry.storyId}`);
+            discovered++;
+          }
+        }
+      }
+
+      console.log(
+        `[worktree-db] Reconciliation complete: ${abandoned} abandoned, ${discovered} discovered`,
+      );
+      return { ok: true, data: { abandoned, discovered } };
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error(`[worktree-db] reconcile error: ${msg}`);
       return { ok: false, error: msg };
     }
   });
