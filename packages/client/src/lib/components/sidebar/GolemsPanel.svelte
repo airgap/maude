@@ -1,9 +1,15 @@
 <script lang="ts">
-  import { golemsStore, type GolemStatus, type GolemActivity } from '$lib/stores/golems.svelte';
+  import {
+    golemsStore,
+    type GolemStatus,
+    type GolemActivity,
+    type GolemQualityCheck,
+    type GolemStoryOutcome,
+  } from '$lib/stores/golems.svelte';
   import { loopStore } from '$lib/stores/loop.svelte';
   import { uiStore } from '$lib/stores/ui.svelte';
   import { onMount } from 'svelte';
-  import type { GolemMood, GolemPhase } from '@e/shared';
+  import type { GolemMood, GolemPhase, QualityCheckType } from '@e/shared';
 
   // Ensure the golems store gets synced from the loop store on mount.
   // Always attempt to load from server — this handles initial page load,
@@ -232,6 +238,113 @@
     return Math.round((g.storiesCompleted / g.totalStories) * 100);
   }
 
+  // --- Phase pipeline ---
+  // Simplified pipeline stages that group related phases
+  const PIPELINE_STAGES = [
+    { id: 'select', label: 'Select', phases: ['selecting_story'] as GolemPhase[] },
+    { id: 'prepare', label: 'Prep', phases: ['preparing', 'snapshot', 'pre_check'] as GolemPhase[] },
+    { id: 'implement', label: 'Build', phases: ['spawning_agent', 'implementing'] as GolemPhase[] },
+    { id: 'quality', label: 'QA', phases: ['quality_checking'] as GolemPhase[] },
+    { id: 'commit', label: 'Ship', phases: ['committing', 'recording_learnings'] as GolemPhase[] },
+  ] as const;
+
+  function getPipelineStageIndex(phase: GolemPhase): number {
+    for (let i = 0; i < PIPELINE_STAGES.length; i++) {
+      if ((PIPELINE_STAGES[i].phases as readonly GolemPhase[]).includes(phase)) return i;
+    }
+    return -1; // idle, fixing_up, reverting, celebrating, resting
+  }
+
+  function getStageState(
+    stageIdx: number,
+    currentPhase: GolemPhase,
+    golemStatus: GolemStatus['status'],
+  ): 'done' | 'active' | 'pending' | 'idle' {
+    if (golemStatus !== 'running') return 'idle';
+    const currentIdx = getPipelineStageIndex(currentPhase);
+    if (currentIdx < 0) return 'idle'; // special phases
+    if (stageIdx < currentIdx) return 'done';
+    if (stageIdx === currentIdx) return 'active';
+    return 'pending';
+  }
+
+  // --- Quality check icons ---
+  function getCheckTypeIcon(checkType: QualityCheckType): string {
+    switch (checkType) {
+      case 'typecheck':
+        return 'TS';
+      case 'lint':
+        return 'LN';
+      case 'test':
+        return 'TX';
+      case 'build':
+        return 'BL';
+      case 'custom':
+        return 'CK';
+      default:
+        return '??';
+    }
+  }
+
+  // --- Story outcome trail ---
+  function getOutcomeColor(result: GolemStoryOutcome['result']): string {
+    switch (result) {
+      case 'success':
+        return 'var(--accent-secondary)';
+      case 'failed':
+        return 'var(--accent-error)';
+      case 'retrying':
+        return 'var(--accent-warning)';
+      default:
+        return 'var(--text-tertiary)';
+    }
+  }
+
+  // --- Sub-status line ---
+  function getSubStatus(g: GolemStatus): string {
+    if (g.status !== 'running') return '';
+    switch (g.phase) {
+      case 'selecting_story':
+        return 'Scanning backlog for next story...';
+      case 'preparing':
+        return 'Setting up workspace...';
+      case 'snapshot':
+        return 'Creating git snapshot...';
+      case 'pre_check':
+        return 'Running pre-flight checks...';
+      case 'spawning_agent':
+        return 'Spawning AI agent...';
+      case 'implementing':
+        if (g.fixUpAttempt > 0) {
+          return `Fix-up pass ${g.fixUpAttempt}/${g.maxFixUpAttempts}`;
+        }
+        if (g.currentAttempt > 1) {
+          return `Attempt ${g.currentAttempt}/${g.maxAttempts}`;
+        }
+        return 'Agent implementing changes...';
+      case 'quality_checking': {
+        const total = g.qualityChecks.length;
+        const passed = g.qualityChecks.filter((c) => c.passed).length;
+        if (total === 0) return 'Running quality checks...';
+        return `Checks: ${passed}/${total} passing`;
+      }
+      case 'committing':
+        return 'Committing changes...';
+      case 'recording_learnings':
+        return 'Recording learnings...';
+      case 'fixing_up':
+        return `Fix-up ${g.fixUpAttempt}/${g.maxFixUpAttempts}`;
+      case 'reverting':
+        return 'Reverting changes...';
+      case 'celebrating':
+        return 'Story completed!';
+      case 'resting':
+        return 'Cooldown between stories...';
+      default:
+        return '';
+    }
+  }
+
   function handlePause() {
     loopStore.pauseLoop();
   }
@@ -340,11 +453,30 @@
                 >
                 <span class="golem-phase">{getPhaseLabel(golem.phase)}</span>
               </div>
+              {#if getSubStatus(golem)}
+                <div class="golem-sub-status">{getSubStatus(golem)}</div>
+              {/if}
             </div>
             <div class="golem-mood-label" title="Mood: {getMoodLabel(golem.mood)}">
               {getMoodLabel(golem.mood)}
             </div>
           </div>
+
+          <!-- Phase pipeline -->
+          {#if golem.status === 'running' || golem.status === 'paused'}
+            <div class="phase-pipeline">
+              {#each PIPELINE_STAGES as stage, idx (stage.id)}
+                {@const state = getStageState(idx, golem.phase, golem.status)}
+                <div class="pipeline-stage {state}" title="{stage.label}: {state}">
+                  <div class="pipeline-dot"></div>
+                  <span class="pipeline-label">{stage.label}</span>
+                </div>
+                {#if idx < PIPELINE_STAGES.length - 1}
+                  <div class="pipeline-connector {state === 'done' ? 'done' : ''}"></div>
+                {/if}
+              {/each}
+            </div>
+          {/if}
 
           <!-- Thought bubble -->
           <div class="thought-bubble" class:thinking={golem.status === 'running'}>
@@ -375,6 +507,26 @@
             </div>
           {/if}
 
+          <!-- Quality check indicators -->
+          {#if golem.qualityChecks.length > 0}
+            <div class="quality-checks">
+              <span class="qc-label">Checks</span>
+              <div class="qc-indicators">
+                {#each golem.qualityChecks as check (check.checkName)}
+                  <div
+                    class="qc-chip"
+                    class:passed={check.passed}
+                    class:failed={!check.passed}
+                    title="{check.checkName}: {check.passed ? 'PASSED' : 'FAILED'} ({Math.round(check.duration / 1000)}s)"
+                  >
+                    <span class="qc-icon">{getCheckTypeIcon(check.checkType)}</span>
+                    <span class="qc-result">{check.passed ? '✓' : '✗'}</span>
+                  </div>
+                {/each}
+              </div>
+            </div>
+          {/if}
+
           <!-- Progress bar -->
           <div class="progress-section">
             <div class="progress-bar-container">
@@ -391,9 +543,20 @@
             </div>
           </div>
 
-          <!-- Iteration info -->
-          <div class="iteration-info">
-            <span class="iteration-label">Iteration {golem.currentIteration}</span>
+          <!-- Story outcome trail + Iteration info -->
+          <div class="outcome-row">
+            {#if golem.storyOutcomes.length > 0}
+              <div class="story-trail" title="Recent story outcomes">
+                {#each golem.storyOutcomes.slice(0, 12) as outcome (outcome.timestamp)}
+                  <div
+                    class="trail-dot outcome-{outcome.result}"
+                    title="{outcome.storyTitle}: {outcome.result}"
+                    style="background: {getOutcomeColor(outcome.result)}"
+                  ></div>
+                {/each}
+              </div>
+            {/if}
+            <span class="iteration-label">Iter {golem.currentIteration}</span>
           </div>
 
           <!-- Controls -->
@@ -757,6 +920,105 @@
     flex-shrink: 0;
   }
 
+  .golem-sub-status {
+    font-size: var(--fs-xxs);
+    color: var(--accent-primary);
+    margin-top: 1px;
+    opacity: 0.85;
+    font-weight: 500;
+  }
+
+  /* ── Phase pipeline ── */
+  .phase-pipeline {
+    display: flex;
+    align-items: center;
+    gap: 0;
+    padding: 4px 6px;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-primary);
+  }
+
+  .pipeline-stage {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+    flex-shrink: 0;
+  }
+
+  .pipeline-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    border: 1.5px solid var(--border-secondary);
+    background: var(--bg-tertiary);
+    transition: all 300ms ease;
+  }
+
+  .pipeline-stage.done .pipeline-dot {
+    background: var(--accent-secondary);
+    border-color: var(--accent-secondary);
+  }
+
+  .pipeline-stage.active .pipeline-dot {
+    background: var(--accent-primary);
+    border-color: var(--accent-primary);
+    box-shadow: 0 0 6px color-mix(in srgb, var(--accent-primary) 50%, transparent);
+    animation: pipelinePulse 1.5s ease-in-out infinite;
+  }
+
+  .pipeline-stage.pending .pipeline-dot {
+    background: var(--bg-tertiary);
+    border-color: var(--border-secondary);
+  }
+
+  .pipeline-stage.idle .pipeline-dot {
+    background: var(--bg-tertiary);
+    border-color: var(--border-primary);
+    opacity: 0.5;
+  }
+
+  @keyframes pipelinePulse {
+    0%,
+    100% {
+      box-shadow: 0 0 4px color-mix(in srgb, var(--accent-primary) 30%, transparent);
+    }
+    50% {
+      box-shadow: 0 0 8px color-mix(in srgb, var(--accent-primary) 60%, transparent);
+    }
+  }
+
+  .pipeline-label {
+    font-size: 9px;
+    color: var(--text-tertiary);
+    text-transform: var(--ht-label-transform);
+    letter-spacing: var(--ht-label-spacing);
+    line-height: 1;
+    white-space: nowrap;
+  }
+
+  .pipeline-stage.active .pipeline-label {
+    color: var(--accent-primary);
+    font-weight: 700;
+  }
+
+  .pipeline-stage.done .pipeline-label {
+    color: var(--accent-secondary);
+  }
+
+  .pipeline-connector {
+    flex: 1;
+    height: 1.5px;
+    background: var(--border-secondary);
+    margin: 0 2px;
+    margin-bottom: 12px;
+    transition: background 300ms ease;
+  }
+
+  .pipeline-connector.done {
+    background: var(--accent-secondary);
+  }
+
   /* ── Thought bubble ── */
   .thought-bubble {
     position: relative;
@@ -869,6 +1131,103 @@
     color: var(--text-tertiary);
   }
 
+  /* ── Quality check indicators ── */
+  .quality-checks {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 6px;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-primary);
+  }
+
+  .qc-label {
+    font-size: 9px;
+    color: var(--text-tertiary);
+    text-transform: var(--ht-label-transform);
+    letter-spacing: var(--ht-label-spacing);
+    font-weight: 600;
+    flex-shrink: 0;
+  }
+
+  .qc-indicators {
+    display: flex;
+    gap: 4px;
+    flex-wrap: wrap;
+  }
+
+  .qc-chip {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    padding: 1px 5px;
+    font-size: 9px;
+    font-weight: 700;
+    border: 1px solid;
+    font-family: var(--font-mono, monospace);
+    line-height: 1.3;
+  }
+
+  .qc-chip.passed {
+    color: var(--accent-secondary);
+    border-color: color-mix(in srgb, var(--accent-secondary) 40%, transparent);
+    background: color-mix(in srgb, var(--accent-secondary) 8%, transparent);
+  }
+
+  .qc-chip.failed {
+    color: var(--accent-error);
+    border-color: color-mix(in srgb, var(--accent-error) 40%, transparent);
+    background: color-mix(in srgb, var(--accent-error) 8%, transparent);
+  }
+
+  .qc-icon {
+    opacity: 0.7;
+  }
+
+  .qc-result {
+    font-size: 10px;
+  }
+
+  /* ── Story outcome trail ── */
+  .outcome-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .story-trail {
+    display: flex;
+    align-items: center;
+    gap: 3px;
+    flex: 1;
+    min-width: 0;
+  }
+
+  .trail-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    flex-shrink: 0;
+    transition: transform 150ms ease;
+    cursor: default;
+  }
+
+  .trail-dot:hover {
+    transform: scale(1.5);
+  }
+
+  .trail-dot.outcome-success {
+    box-shadow: 0 0 3px color-mix(in srgb, var(--accent-secondary) 40%, transparent);
+  }
+
+  .trail-dot.outcome-failed {
+    box-shadow: 0 0 3px color-mix(in srgb, var(--accent-error) 40%, transparent);
+  }
+
+  .trail-dot.outcome-retrying {
+    box-shadow: 0 0 3px color-mix(in srgb, var(--accent-warning) 40%, transparent);
+  }
+
   /* ── Progress bar ── */
   .progress-section {
     display: flex;
@@ -918,19 +1277,14 @@
     font-size: var(--fs-xxs);
   }
 
-  /* ── Iteration info ── */
-  .iteration-info {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-  }
-
   .iteration-label {
     font-size: var(--fs-xxs);
     color: var(--text-tertiary);
     font-weight: 600;
     text-transform: var(--ht-label-transform);
     letter-spacing: var(--ht-label-spacing);
+    flex-shrink: 0;
+    margin-left: auto;
   }
 
   /* ── Controls ── */

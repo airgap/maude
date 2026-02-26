@@ -1,4 +1,10 @@
-import type { GolemPhase, GolemMood, StreamLoopEvent, IterationLogEntry } from '@e/shared';
+import type {
+  GolemPhase,
+  GolemMood,
+  StreamLoopEvent,
+  IterationLogEntry,
+  QualityCheckType,
+} from '@e/shared';
 
 /** A single activity entry in a golem's recent timeline */
 export interface GolemActivity {
@@ -8,6 +14,22 @@ export interface GolemActivity {
   detail: string;
   storyTitle?: string;
   type: 'info' | 'success' | 'error' | 'warning' | 'thought';
+}
+
+/** Result of a single quality check for the current story */
+export interface GolemQualityCheck {
+  checkName: string;
+  checkType: QualityCheckType;
+  passed: boolean;
+  duration: number;
+}
+
+/** Outcome of a completed story */
+export interface GolemStoryOutcome {
+  storyId: string;
+  storyTitle: string;
+  result: 'success' | 'failed' | 'retrying';
+  timestamp: number;
 }
 
 /** Full status of a single golem (mapped 1:1 from a loop) */
@@ -46,11 +68,18 @@ export interface GolemStatus {
   startedAt: number;
   elapsedMs: number;
 
+  // Quality checks for the current story
+  qualityChecks: GolemQualityCheck[];
+
+  // Recent story outcomes (most recent first, max 20)
+  storyOutcomes: GolemStoryOutcome[];
+
   // Recent activity feed
   activities: GolemActivity[];
 }
 
 const MAX_ACTIVITIES = 50;
+const MAX_STORY_OUTCOMES = 20;
 let activityIdCounter = 0;
 
 function createGolemsStore() {
@@ -100,6 +129,8 @@ function createGolemsStore() {
         maxFixUpAttempts: 0,
         startedAt: Date.now(),
         elapsedMs: 0,
+        qualityChecks: [],
+        storyOutcomes: [],
         activities: [],
       };
       golems = [...golems, g];
@@ -150,6 +181,8 @@ function createGolemsStore() {
       g.elapsedMs = Date.now() - startedAt;
       g.storiesCompleted = 0;
       g.storiesFailed = 0;
+      g.qualityChecks = [];
+      g.storyOutcomes = [];
       g.activities = [];
       addActivity(g, 'started', `Golem activated: ${label}`, 'info');
       ensureElapsedTimer();
@@ -204,6 +237,7 @@ function createGolemsStore() {
           g.currentStoryId = event.data.storyId ?? null;
           g.currentStoryTitle = event.data.storyTitle ?? null;
           g.phase = 'implementing';
+          g.qualityChecks = []; // Reset quality checks for new story
           addActivity(
             g,
             'story_started',
@@ -219,6 +253,15 @@ function createGolemsStore() {
           g.mood = 'proud';
           g.thought = `Completed "${event.data.storyTitle}"!`;
           g.thoughtTimestamp = Date.now();
+          g.storyOutcomes = [
+            {
+              storyId: event.data.storyId || '',
+              storyTitle: event.data.storyTitle || '',
+              result: 'success' as const,
+              timestamp: Date.now(),
+            },
+            ...g.storyOutcomes,
+          ].slice(0, MAX_STORY_OUTCOMES);
           addActivity(
             g,
             'story_completed',
@@ -236,6 +279,15 @@ function createGolemsStore() {
             ? `"${event.data.storyTitle}" stumbled — will try again`
             : `"${event.data.storyTitle}" failed after all attempts`;
           g.thoughtTimestamp = Date.now();
+          g.storyOutcomes = [
+            {
+              storyId: event.data.storyId || '',
+              storyTitle: event.data.storyTitle || '',
+              result: (event.data.willRetry ? 'retrying' : 'failed') as GolemStoryOutcome['result'],
+              timestamp: Date.now(),
+            },
+            ...g.storyOutcomes,
+          ].slice(0, MAX_STORY_OUTCOMES);
           addActivity(
             g,
             'story_failed',
@@ -248,6 +300,21 @@ function createGolemsStore() {
         case 'quality_check':
           if (event.data.qualityResult) {
             const qr = event.data.qualityResult;
+            // Track quality check result for the visual indicators
+            const existingIdx = g.qualityChecks.findIndex(
+              (c) => c.checkName === qr.checkName,
+            );
+            const checkEntry: GolemQualityCheck = {
+              checkName: qr.checkName,
+              checkType: qr.checkType,
+              passed: qr.passed,
+              duration: qr.duration,
+            };
+            if (existingIdx >= 0) {
+              g.qualityChecks[existingIdx] = checkEntry;
+            } else {
+              g.qualityChecks = [...g.qualityChecks, checkEntry];
+            }
             addActivity(
               g,
               'quality_check',
@@ -406,6 +473,40 @@ function createGolemsStore() {
               ? ('error' as const)
               : ('info' as const),
       }));
+
+      // Build story outcomes from iteration log
+      const outcomeEntries = iterationLog.filter(
+        (e) => e.action === 'passed' || e.action === 'failed',
+      );
+      g.storyOutcomes = outcomeEntries
+        .slice(-MAX_STORY_OUTCOMES)
+        .reverse()
+        .map((entry): GolemStoryOutcome => ({
+          storyId: '',
+          storyTitle: entry.storyTitle || entry.detail,
+          result: entry.action === 'passed' ? 'success' : 'failed',
+          timestamp: entry.timestamp,
+        }));
+
+      // Build quality checks from the most recent story's quality_check entries
+      const qualityEntries = iterationLog.filter(
+        (e) => e.action === 'quality_check' && e.qualityResults?.length,
+      );
+      if (qualityEntries.length > 0) {
+        // Get the latest story's checks
+        const latestStory = qualityEntries[qualityEntries.length - 1].storyTitle;
+        const latestChecks = qualityEntries
+          .filter((e) => e.storyTitle === latestStory)
+          .flatMap((e) => e.qualityResults || []);
+        g.qualityChecks = latestChecks.map((qr) => ({
+          checkName: qr.checkName,
+          checkType: qr.checkType,
+          passed: qr.passed,
+          duration: qr.duration,
+        }));
+      } else {
+        g.qualityChecks = [];
+      }
 
       if (status === 'running') {
         ensureElapsedTimer();
