@@ -58,6 +58,9 @@
     prd_name: string | null;
     attempts?: number | null;
     max_attempts?: number | null;
+    executor_id?: string | null;
+    executor_type?: string | null;
+    machine_id?: string | null;
   }
 
   interface OverviewData {
@@ -696,6 +699,9 @@
                   · {story.prd_name}
                 {/if}
                 · attempt {story.attempts ?? '?'}
+                {#if story.executor_type && story.machine_id}
+                  · <span class="executor-chip" title="{story.executor_type}: {story.machine_id}">{story.executor_type === 'local-worktree' ? 'local' : story.machine_id}</span>
+                {/if}
               </div>
             </div>
           {/each}
@@ -1615,6 +1621,11 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+  }
+  .executor-chip {
+    font-size: var(--fs-xxs);
+    color: var(--accent-primary);
+    opacity: 0.85;
   }
   .story-title {
     font-size: var(--fs-sm);

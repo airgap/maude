@@ -495,3 +495,17 @@ export {
   generateInstanceName,
   generateInstanceTags,
 } from './cloud-provider.js';
+
+export type {
+  SSHAuthMethod,
+  RemoteHostConfig,
+  RemoteHostHealthStatus,
+  RemoteHostHealth,
+  RemoteExecution,
+  SSHRemoteExecutorConfig,
+} from './ssh-remote-executor.js';
+
+export {
+  DEFAULT_REMOTE_HOST_CONFIG,
+  DEFAULT_SSH_REMOTE_EXECUTOR_CONFIG,
+} from './ssh-remote-executor.js';

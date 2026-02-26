@@ -21,3 +21,5 @@ export {
   wrapProviderError,
 } from './cloud';
 export type { CostSummary, RegionSelectionResult } from './cloud';
+export { SSHRemoteExecutor, SSHClient, HostHealthMonitor } from './ssh-remote';
+export type { SSHCommandResult } from './ssh-remote';

@@ -137,10 +137,12 @@ app.get('/overview', (c) => {
     .all(since) as any[];
 
   // --- In-progress stories ---
+  // Include executor metadata so Manager View shows which host is executing each story
   const inProgressStories = db
     .query(
       `SELECT ps.id, ps.title, ps.status, ps.workspace_path, ps.updated_at, ps.prd_id,
               ps.conversation_id, ps.attempts, ps.max_attempts,
+              ps.executor_id, ps.executor_type, ps.machine_id,
               p.name as prd_name
        FROM prd_stories ps
        LEFT JOIN prds p ON ps.prd_id = p.id
