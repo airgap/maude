@@ -8,22 +8,51 @@ import { resolve } from 'path';
  * Run a command and return { stdout, stderr, exitCode }.
  * Reads both stdout and stderr concurrently so the process never blocks
  * waiting on a full pipe buffer (classic deadlock with Bun.spawn 'pipe' mode).
+ *
+ * @param opts.timeoutMs — kill the process after this many ms (default: 120 000 = 2 min).
+ *   Pass 0 to disable the timeout entirely.
  */
 export async function run(
   args: string[],
-  opts: { cwd: string },
+  opts: { cwd: string; timeoutMs?: number },
 ): Promise<{ stdout: string; stderr: string; exitCode: number }> {
+  const timeout = opts.timeoutMs ?? 120_000;
   const proc = Bun.spawn(args, {
     cwd: opts.cwd,
     stdout: 'pipe',
     stderr: 'pipe',
   });
+
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  let killed = false;
+
+  if (timeout > 0) {
+    timer = setTimeout(() => {
+      killed = true;
+      proc.kill('SIGTERM');
+      // Force-kill if SIGTERM is ignored after 5s
+      setTimeout(() => {
+        try { proc.kill('SIGKILL'); } catch { /* already dead */ }
+      }, 5_000);
+    }, timeout);
+  }
+
   // Read both streams concurrently to avoid deadlock
   const [stdout, stderr] = await Promise.all([
     new Response(proc.stdout).text(),
     new Response(proc.stderr).text(),
   ]);
   const exitCode = await proc.exited;
+  if (timer) clearTimeout(timer);
+
+  if (killed) {
+    return {
+      stdout,
+      stderr: `${stderr}\nProcess timed out after ${Math.round(timeout / 1000)}s and was killed.`,
+      exitCode: exitCode || 124, // 124 = timeout (like GNU timeout)
+    };
+  }
+
   return { stdout, stderr, exitCode };
 }
 

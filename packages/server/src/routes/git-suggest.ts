@@ -6,8 +6,10 @@
  */
 
 import { Hono } from 'hono';
+import { streamSSE } from 'hono/streaming';
 import { resolve } from 'path';
 import { callLlm } from '../services/llm-oneshot';
+import { parseCommitFailure } from './git/helpers';
 
 const app = new Hono();
 
@@ -270,10 +272,25 @@ REQUIRED OUTPUT FORMAT (exact keys, double quotes, valid JSON):
     // suffix so a response like "commits.ts" still maps to
     // "packages/server/src/routes/git/commits.ts".
     const changedSet = new Set(changedFiles);
+    // Pre-build basename→path index for fast basename matching
+    const basenameIndex = new Map<string, string[]>();
+    for (const cf of changedFiles) {
+      const bn = cf.split('/').pop() || cf;
+      const list = basenameIndex.get(bn) || [];
+      list.push(cf);
+      basenameIndex.set(bn, list);
+    }
+
     for (const g of groups) {
       g.files = g.files
         .map((f: string) => {
-          const trimmed = f.trim().replace(/^\/+/, '');
+          // Clean common LLM noise: backticks, leading ./, leading /
+          const trimmed = f
+            .trim()
+            .replace(/^`+|`+$/g, '')
+            .replace(/^\.\//, '')
+            .replace(/^\/+/, '')
+            .replace(/:\d+.*$/, ''); // strip :linenum suffix
           // Exact match
           if (changedSet.has(trimmed)) return trimmed;
           // Suffix match — LLM dropped a leading directory segment
@@ -281,6 +298,10 @@ REQUIRED OUTPUT FORMAT (exact keys, double quotes, valid JSON):
             (cf) => cf.endsWith(trimmed) || trimmed.endsWith(cf),
           );
           if (suffixMatch) return suffixMatch;
+          // Basename match — LLM returned just the filename
+          const bn = trimmed.split('/').pop() || trimmed;
+          const bnMatches = basenameIndex.get(bn);
+          if (bnMatches?.length === 1) return bnMatches[0];
           // No match — drop this path
           console.warn('[git/suggest] Dropping unrecognised path from LLM:', f);
           return null;
@@ -541,13 +562,47 @@ app.post('/suggest-commit-groups', async (c) => {
     }
 
     if (!groups.length) {
-      // Ultimate fallback: single group with all files
+      // Ultimate fallback: single group with all files.
+      // Still try to generate a meaningful commit message — the simpler
+      // "just give me a message" call usually succeeds even when structured
+      // grouping output doesn't.
+      let fallbackMessage = 'chore: update files';
+      try {
+        const diffResult = await run(['git', 'diff', 'HEAD'], { cwd: pathCheck.resolved });
+        let diffText = diffResult.stdout.trim();
+        if (diffText.length > 12_000) {
+          diffText = diffText.slice(0, 12_000) + '\n... [truncated]';
+        }
+        const untrackedResult = await run(['git', 'ls-files', '--others', '--exclude-standard'], {
+          cwd: pathCheck.resolved,
+        });
+        const untrackedFiles = untrackedResult.stdout.trim();
+
+        let msgPrompt = '';
+        if (diffText) msgPrompt += `Git diff:\n\`\`\`\n${diffText}\n\`\`\`\n`;
+        if (untrackedFiles) msgPrompt += `\nNew untracked files:\n${untrackedFiles}\n`;
+
+        if (msgPrompt) {
+          const msg = await callLlm({
+            system:
+              'You generate concise git commit messages. Output ONLY the commit message, nothing else. ' +
+              'Use the imperative mood. Keep it to one line, under 72 characters.',
+            user: msgPrompt,
+            timeoutMs: 30_000,
+            forceCliProvider: true,
+          });
+          if (msg.trim()) fallbackMessage = msg.trim();
+        }
+      } catch (err) {
+        console.warn('[git/suggest-commit-groups] Fallback message generation failed:', err);
+      }
+
       groups = [
         {
           name: 'All changes',
-          message: 'chore: update files',
+          message: fallbackMessage,
           files: changedFiles,
-          reason: 'Could not auto-group — all files grouped together',
+          reason: 'All changed files grouped together',
         },
       ];
     }
@@ -557,6 +612,318 @@ app.post('/suggest-commit-groups', async (c) => {
     console.error('[git/suggest-commit-groups] Error:', err);
     return c.json({ ok: false, error: String(err) }, 500);
   }
+});
+
+// ---------------------------------------------------------------------------
+// POST /smart-commit — one-click: analyze → group → stage → commit (streamed)
+//
+// Unlike suggest-commit-groups, this endpoint streams progress at every step
+// and ALWAYS commits — if grouping fails it falls back to a single commit
+// with a generated message. It never leaves the user with nothing.
+// ---------------------------------------------------------------------------
+
+/**
+ * Generate a commit message from a diff (simple, non-structured LLM call).
+ * This almost always succeeds even when structured-output grouping doesn't.
+ */
+async function generateCommitMessage(
+  cwd: string,
+  opts?: { forceCliProvider?: boolean },
+): Promise<string> {
+  const diffResult = await run(['git', 'diff', 'HEAD'], { cwd });
+  let diffText = diffResult.stdout.trim();
+  if (diffText.length > 12_000) {
+    diffText = diffText.slice(0, 12_000) + '\n... [truncated]';
+  }
+
+  const untrackedResult = await run(['git', 'ls-files', '--others', '--exclude-standard'], { cwd });
+  const untrackedFiles = untrackedResult.stdout.trim();
+
+  let prompt = '';
+  if (diffText) prompt += `Git diff:\n\`\`\`\n${diffText}\n\`\`\`\n`;
+  if (untrackedFiles) prompt += `\nNew untracked files:\n${untrackedFiles}\n`;
+  if (!prompt) prompt = 'No diff available.';
+
+  const msg = await callLlm({
+    system:
+      'You generate concise git commit messages. Output ONLY the commit message, nothing else. ' +
+      'Use the imperative mood. Keep it to one line, under 72 characters.',
+    user: prompt,
+    timeoutMs: 30_000,
+    forceCliProvider: opts?.forceCliProvider,
+  });
+
+  return msg.trim() || 'chore: update files';
+}
+
+app.post('/smart-commit', async (c) => {
+  const body = await c.req.json();
+  const { path: rootPath } = body;
+
+  if (!rootPath) return c.json({ ok: false, error: 'path required' }, 400);
+
+  const pathCheck = validateWorkspacePath(rootPath);
+  if (!pathCheck.valid) {
+    return c.json({ ok: false, error: pathCheck.reason }, 403);
+  }
+
+  const cwd = pathCheck.resolved;
+
+  return streamSSE(c, async (stream) => {
+    const status = (message: string) =>
+      stream.writeSSE({ data: JSON.stringify({ type: 'status', message }) });
+
+    try {
+      // ── 1. Discover changed files ──────────────────────────────────────
+      await status('Scanning for changes…');
+
+      const statusResult = await run(['git', 'status', '--porcelain', '-uall'], { cwd });
+      if (!statusResult.stdout.trim()) {
+        await stream.writeSSE({
+          data: JSON.stringify({ type: 'error', message: 'No changes to commit' }),
+        });
+        return;
+      }
+
+      const changedFiles: string[] = [];
+      for (const line of statusResult.stdout.split('\n')) {
+        if (line.length < 4) continue;
+        const file = line.slice(3).split(' -> ').pop()?.trim();
+        if (file) changedFiles.push(file);
+      }
+
+      if (changedFiles.length === 0) {
+        await stream.writeSSE({
+          data: JSON.stringify({ type: 'error', message: 'No changed files found' }),
+        });
+        return;
+      }
+
+      await status(
+        `Analyzing ${changedFiles.length} changed file${changedFiles.length === 1 ? '' : 's'}…`,
+      );
+
+      // ── 2. Gather diffs & determine groups ─────────────────────────────
+      let groups: CommitGroup[] = [];
+
+      if (changedFiles.length <= 2) {
+        // Small changeset — skip grouping, just generate a message
+        await status('Generating commit message…');
+        const message = await generateCommitMessage(cwd);
+        groups = [
+          {
+            name: 'All changes',
+            message,
+            files: changedFiles,
+            reason: 'All changed files grouped together',
+          },
+        ];
+      } else {
+        // Multiple files — gather per-file diffs and attempt grouping
+        const fileDiffs: string[] = [];
+        let totalDiffLen = 0;
+        const MAX_TOTAL_DIFF = 16_000;
+        const MAX_PER_FILE = 2_000;
+
+        for (const file of changedFiles) {
+          if (totalDiffLen > MAX_TOTAL_DIFF) {
+            fileDiffs.push(`--- ${file}\n[diff omitted due to length]`);
+            continue;
+          }
+          let diffResult = await run(['git', 'diff', '--cached', '--', file], { cwd });
+          if (!diffResult.stdout.trim()) {
+            diffResult = await run(['git', 'diff', '--', file], { cwd });
+          }
+          if (!diffResult.stdout.trim()) {
+            fileDiffs.push(`--- ${file}\n[new untracked file]`);
+            continue;
+          }
+          let diff = diffResult.stdout;
+          if (diff.length > MAX_PER_FILE) {
+            diff = diff.slice(0, MAX_PER_FILE) + '\n... [truncated]';
+          }
+          fileDiffs.push(`--- ${file}\n${diff}`);
+          totalDiffLen += diff.length;
+        }
+
+        const prompt = fileDiffs.join('\n\n');
+
+        // Escalating grouping strategies with transparent status updates.
+        // Each strategy catches its own errors — we stream the failure reason
+        // instead of silently returning [].
+        const strategies: Array<{
+          label: string;
+          fn: () => Promise<CommitGroup[]>;
+        }> = [
+          {
+            label: 'Grouping changes…',
+            fn: () => tryJsonGrouping(changedFiles, prompt),
+          },
+          {
+            label: 'Trying alternative grouping…',
+            fn: () => tryTextGrouping(changedFiles, prompt),
+          },
+          {
+            label: 'Escalating to CLI provider…',
+            fn: () => tryJsonGrouping(changedFiles, prompt, { forceCliProvider: true }),
+          },
+        ];
+
+        for (const { label, fn } of strategies) {
+          if (groups.length > 0) break;
+          await status(label);
+          try {
+            groups = await fn();
+          } catch (err) {
+            console.warn('[git/smart-commit] Strategy "%s" threw:', label, (err as Error).message);
+          }
+        }
+
+        // All grouping failed — fall back to single group with a generated message
+        if (!groups.length) {
+          await status('Generating commit message…');
+          let message = 'chore: update files';
+          try {
+            message = await generateCommitMessage(cwd, { forceCliProvider: true });
+          } catch (err) {
+            console.warn('[git/smart-commit] Message generation also failed:', err);
+          }
+          groups = [
+            {
+              name: 'All changes',
+              message,
+              files: changedFiles,
+              reason: 'All changed files committed together',
+            },
+          ];
+        }
+      }
+
+      // ── 3. Send groups to client ───────────────────────────────────────
+      await stream.writeSSE({
+        data: JSON.stringify({
+          type: 'groups',
+          groups: groups.map((g, i) => ({
+            index: i,
+            name: g.name,
+            message: g.message,
+            files: g.files,
+            reason: g.reason,
+          })),
+        }),
+      });
+
+      // ── 4. Commit each group atomically ────────────────────────────────
+      const shas: string[] = [];
+      const total = groups.length;
+
+      for (let i = 0; i < groups.length; i++) {
+        const g = groups[i];
+        const isLast = i === groups.length - 1;
+
+        await stream.writeSSE({
+          data: JSON.stringify({
+            type: 'committing',
+            index: i,
+            total,
+            name: g.name,
+            message: g.message,
+            fileCount: g.files.length,
+          }),
+        });
+
+        try {
+          // Unstage everything
+          const resetResult = await run(['git', 'reset', 'HEAD'], { cwd });
+          if (resetResult.exitCode !== 0) {
+            throw new Error(`git reset failed: ${resetResult.stderr.trim()}`);
+          }
+
+          // Stage only this group's files
+          const addResult = await run(['git', 'add', '--ignore-errors', '--', ...g.files], { cwd });
+          if (addResult.stderr.trim()) {
+            console.warn('[git/smart-commit] git add warnings:', addResult.stderr.trim());
+          }
+
+          // Verify something staged
+          const stagedExit = await run(['git', 'diff', '--cached', '--quiet'], { cwd });
+          if (stagedExit.exitCode === 0) {
+            // Nothing staged — try adding all files in the group explicitly
+            // (handles untracked files that diff --cached doesn't see)
+            await run(['git', 'add', '--', ...g.files], { cwd });
+            const recheckExit = await run(['git', 'diff', '--cached', '--quiet'], { cwd });
+            if (recheckExit.exitCode === 0) {
+              await stream.writeSSE({
+                data: JSON.stringify({
+                  type: 'group-error',
+                  index: i,
+                  message: `Nothing staged for group "${g.name}" — files may already be committed or paths are wrong`,
+                }),
+              });
+              continue;
+            }
+          }
+
+          // Smart commit skips hooks on ALL groups — the whole point is
+          // "just do it". Running lint-staged + nx typecheck + tests (98s+)
+          // on every commit defeats the purpose of a one-click flow.
+          const commitArgs = ['git', 'commit', '--no-verify', '-m', g.message];
+          const commitResult = await run(commitArgs, { cwd });
+          if (commitResult.exitCode !== 0) {
+            const summary = parseCommitFailure(commitResult.stderr, commitResult.stdout);
+            await stream.writeSSE({
+              data: JSON.stringify({
+                type: 'group-error',
+                index: i,
+                message: summary,
+              }),
+            });
+            // If the last group's hooks failed, stop
+            if (isLast) break;
+            continue;
+          }
+
+          // Get SHA
+          const shaResult = await run(['git', 'rev-parse', 'HEAD'], { cwd });
+          const sha = shaResult.stdout.trim();
+          shas.push(sha);
+
+          await stream.writeSSE({
+            data: JSON.stringify({
+              type: 'committed',
+              index: i,
+              sha,
+              name: g.name,
+              message: g.message,
+            }),
+          });
+        } catch (err) {
+          await stream.writeSSE({
+            data: JSON.stringify({
+              type: 'group-error',
+              index: i,
+              message: String(err),
+            }),
+          });
+        }
+      }
+
+      // ── 5. Done ────────────────────────────────────────────────────────
+      await stream.writeSSE({
+        data: JSON.stringify({
+          type: 'complete',
+          committed: shas.length,
+          total,
+          shas,
+        }),
+      });
+    } catch (err) {
+      console.error('[git/smart-commit] Unexpected error:', err);
+      await stream.writeSSE({
+        data: JSON.stringify({ type: 'error', message: String(err) }),
+      });
+    }
+  });
 });
 
 export const gitSuggestRoutes = app;
