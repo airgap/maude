@@ -99,6 +99,63 @@ export class CoordinatorClient {
   }
 
   /**
+   * Submit a question to the coordinator and request human assistance.
+   * Returns a questionId that can be used to poll for the answer.
+   */
+  async askQuestion(
+    storyId: string,
+    executorId: string,
+    question: string,
+    context?: string,
+  ): Promise<string> {
+    const resp = await this.post<{ ok: boolean; data: { questionId: string }; error?: string }>(
+      `/${storyId}/question`,
+      { executorId, question, context },
+    );
+
+    if (!resp.ok || !resp.data?.questionId) {
+      throw new Error(`Failed to submit question: ${resp.error ?? 'unknown error'}`);
+    }
+
+    return resp.data.questionId;
+  }
+
+  /**
+   * Wait for a human to answer a question.
+   * Polls every 5 seconds until the answer arrives or the timeout expires.
+   * Rejects if the question is not answered within timeoutMs.
+   */
+  async waitForAnswer(
+    storyId: string,
+    questionId: string,
+    timeoutMs: number = 30 * 60 * 1000,
+  ): Promise<string> {
+    const deadline = Date.now() + timeoutMs;
+    const pollInterval = 5_000;
+
+    while (Date.now() < deadline) {
+      const resp = await this.get<{
+        ok: boolean;
+        data: { answered: boolean; answer?: string; answeredAt?: number };
+        error?: string;
+      }>(`/${storyId}/question/${questionId}`);
+
+      if (!resp.ok) {
+        throw new Error(`Failed to poll for answer: ${resp.error ?? 'unknown error'}`);
+      }
+
+      if (resp.data.answered && resp.data.answer !== undefined) {
+        return resp.data.answer;
+      }
+
+      // Wait before next poll
+      await new Promise<void>((resolve) => setTimeout(resolve, pollInterval));
+    }
+
+    throw new Error(`Timed out waiting for human response after ${timeoutMs}ms`);
+  }
+
+  /**
    * Start periodic heartbeat sending for a claimed story.
    */
   startHeartbeat(storyId: string, executorId: string, intervalMs: number): void {

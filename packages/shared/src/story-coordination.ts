@@ -203,7 +203,9 @@ export type CoordinationEventType =
   | 'story_failed'
   | 'story_timeout'
   | 'story_released'
-  | 'merge_triggered';
+  | 'merge_triggered'
+  | 'story_question'
+  | 'story_answered';
 
 /** A coordination event payload. */
 export interface CoordinationEvent {
@@ -214,4 +216,28 @@ export interface CoordinationEvent {
   machineId?: string;
   timestamp: number;
   data?: Record<string, unknown>;
+}
+
+// ---------------------------------------------------------------------------
+// Human assistance protocol — golems can request user input when blocked
+// ---------------------------------------------------------------------------
+
+/** A question submitted by a golem that needs a human response. */
+export interface GolemQuestion {
+  /** Unique question ID. */
+  questionId: string;
+  /** Story being worked on. */
+  storyId: string;
+  /** Executor that asked the question. */
+  executorId: string;
+  /** The question text. */
+  question: string;
+  /** Optional context/background to help the user answer. */
+  context?: string;
+  /** When the question was asked (Unix ms). */
+  askedAt: number;
+  /** When the question was answered (Unix ms), if answered. */
+  answeredAt?: number;
+  /** The answer, if answered. */
+  answer?: string;
 }

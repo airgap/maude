@@ -447,6 +447,7 @@ export type {
   AvailableStory,
   CoordinationEventType,
   CoordinationEvent,
+  GolemQuestion,
 } from './story-coordination.js';
 
 export { DEFAULT_COORDINATION_CONFIG } from './story-coordination.js';

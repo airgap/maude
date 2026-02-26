@@ -125,6 +125,20 @@
   let scheduledTasks = $state<Map<string, ScheduledTaskWithStats[]>>(new Map());
   let showScheduledTasks = $state(false);
 
+  // ---- Golem Questions ----
+  interface GolemQuestionEntry {
+    questionId: string;
+    storyId: string;
+    executorId: string;
+    question: string;
+    context?: string;
+    askedAt: number;
+  }
+  let golemQuestions = $state<GolemQuestionEntry[]>([]);
+  let golemAnswers = $state<Record<string, string>>({});
+  let golemQuestionPoll: ReturnType<typeof setInterval> | null = null;
+  let coordinationEvtSource: EventSource | null = null;
+
   // Derived: expanded workspace from the manager commentary store
   let expandedWsId = $derived(managerCommentaryStore.expandedWorkspaceId);
 
@@ -481,18 +495,77 @@
     return crossSessionFlow.filter((m) => m.senderContext.workspaceId === wsId).slice(0, 5);
   }
 
+  // ---- Golem Question helpers ----
+
+  async function loadGolemQuestions() {
+    try {
+      const res = await fetch('/api/story-coordination/pending-questions');
+      const json = await res.json();
+      if (json.ok) golemQuestions = json.data ?? [];
+    } catch {
+      /* silently ignore — questions are best-effort */
+    }
+  }
+
+  async function answerGolemQuestion(questionId: string, storyId: string) {
+    const answer = golemAnswers[questionId]?.trim();
+    if (!answer) return;
+    try {
+      const res = await fetch(
+        `/api/story-coordination/${storyId}/question/${questionId}/answer`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ answer }),
+        },
+      );
+      if (res.ok) {
+        golemQuestions = golemQuestions.filter((q) => q.questionId !== questionId);
+        const copy = { ...golemAnswers };
+        delete copy[questionId];
+        golemAnswers = copy;
+        uiStore.toast('Answer sent to golem', 'success');
+      } else {
+        uiStore.toast('Failed to send answer', 'error');
+      }
+    } catch {
+      uiStore.toast('Failed to send answer', 'error');
+    }
+  }
+
+  function connectCoordinationSSE() {
+    if (typeof EventSource === 'undefined') return;
+    coordinationEvtSource?.close();
+    coordinationEvtSource = new EventSource('/api/story-coordination/events');
+    coordinationEvtSource.onmessage = (e) => {
+      try {
+        const evt = JSON.parse(e.data);
+        if (evt.type === 'story_question' || evt.type === 'story_answered') {
+          loadGolemQuestions();
+        }
+      } catch {}
+    };
+    coordinationEvtSource.onerror = () => {};
+  }
+
   // ---- Lifecycle ----
   onMount(() => {
     load();
     connectSSE();
     crossSessionStore.subscribeFlow();
     refreshInterval = setInterval(load, 30_000);
+    // Golem questions: load once + SSE for immediate updates + poll as fallback
+    loadGolemQuestions();
+    connectCoordinationSSE();
+    golemQuestionPoll = setInterval(loadGolemQuestions, 10_000);
   });
 
   onDestroy(() => {
     evtSource?.close();
+    coordinationEvtSource?.close();
     crossSessionStore.unsubscribeFlow();
     if (refreshInterval) clearInterval(refreshInterval);
+    if (golemQuestionPoll) clearInterval(golemQuestionPoll);
     managerCommentaryStore.stopAll();
   });
 </script>
@@ -631,6 +704,50 @@
         </button>
       {/if}
     </div>
+
+    <!-- Golem Questions: remote golem needs human input to continue -->
+    {#if golemQuestions.length > 0}
+      <div class="section">
+        <div class="section-header">
+          <span class="section-title">
+            <span class="dot pulse-dot" style:background="var(--accent-error, #ef4444)"></span>
+            Golem Needs Help
+            <span class="badge warn">{golemQuestions.length}</span>
+          </span>
+        </div>
+        <div class="item-list">
+          {#each golemQuestions as q (q.questionId)}
+            <div class="inbox-item golem-question-card">
+              <div class="inbox-item-top">
+                <span class="tool-badge">ask_human</span>
+                <span class="ws-chip" title="executor: {q.executorId}">{q.executorId.slice(0, 12)}</span>
+                <span class="inbox-item-sub" style:margin-left="auto">{formatTime(q.askedAt)}</span>
+              </div>
+              <div class="golem-q-text">{q.question}</div>
+              {#if q.context}
+                <div class="golem-q-context">{q.context}</div>
+              {/if}
+              <div class="golem-q-row">
+                <input
+                  class="golem-q-input"
+                  type="text"
+                  placeholder="Type your answer and press Enter…"
+                  bind:value={golemAnswers[q.questionId]}
+                  onkeydown={(e) => {
+                    if (e.key === 'Enter') answerGolemQuestion(q.questionId, q.storyId);
+                  }}
+                />
+                <button
+                  class="golem-q-send"
+                  onclick={() => answerGolemQuestion(q.questionId, q.storyId)}
+                  disabled={!golemAnswers[q.questionId]?.trim()}
+                >Reply</button>
+              </div>
+            </div>
+          {/each}
+        </div>
+      </div>
+    {/if}
 
     <!-- Inbox: Pending Approvals -->
     {#if data.pendingApprovals.length > 0}
@@ -1607,6 +1724,75 @@
     padding: 1px 5px;
     border-radius: 3px;
   }
+  /* Golem question cards */
+  .golem-question-card {
+    border-left: 2px solid var(--accent-error, #ef4444);
+  }
+  .golem-q-text {
+    font-size: var(--fs-xs);
+    color: var(--text-primary);
+    line-height: 1.5;
+    white-space: pre-wrap;
+    word-break: break-word;
+    margin: 4px 0 2px;
+  }
+  .golem-q-context {
+    font-size: var(--fs-xxs);
+    color: var(--text-secondary);
+    line-height: 1.4;
+    white-space: pre-wrap;
+    word-break: break-word;
+    padding: 4px 6px;
+    background: var(--bg-tertiary);
+    border-radius: 3px;
+    margin-bottom: 6px;
+  }
+  .golem-q-row {
+    display: flex;
+    gap: 4px;
+    margin-top: 6px;
+  }
+  .golem-q-input {
+    flex: 1;
+    font-size: var(--fs-xs);
+    padding: 4px 7px;
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    outline: none;
+    min-width: 0;
+  }
+  .golem-q-input:focus {
+    border-color: var(--accent-primary);
+  }
+  .golem-q-send {
+    font-size: var(--fs-xs);
+    padding: 4px 10px;
+    border: none;
+    border-radius: 4px;
+    background: var(--accent-primary);
+    color: white;
+    cursor: pointer;
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+  .golem-q-send:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+  }
+  .golem-q-send:not(:disabled):hover {
+    filter: brightness(1.15);
+  }
+  /* Pulsing dot for attention */
+  .pulse-dot {
+    animation: dot-pulse 1.5s ease-in-out infinite;
+  }
+  @keyframes dot-pulse {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.5; transform: scale(0.7); }
+  }
+
   .inbox-item-desc {
     font-size: var(--fs-xs);
     color: var(--text-primary);
