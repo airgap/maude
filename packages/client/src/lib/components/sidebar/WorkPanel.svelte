@@ -60,6 +60,8 @@
         return '●';
       case 'failed':
         return '✗';
+      case 'failed_timeout':
+        return '⏱';
       case 'skipped':
         return '⊘';
       case 'archived':
@@ -78,6 +80,7 @@
       case 'in_progress':
         return 'status-in-progress';
       case 'failed':
+      case 'failed_timeout':
         return 'status-failed';
       case 'archived':
         return 'status-archived';

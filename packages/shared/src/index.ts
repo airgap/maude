@@ -433,3 +433,20 @@ export type {
   GolemExecutor,
   DispatchStrategy,
 } from './golem-executor.js';
+
+export type {
+  StoryExecutorMetadata,
+  CoordinationConfig,
+  StoryClaimRequest,
+  StoryClaimResponse,
+  StoryHeartbeatRequest,
+  StoryHeartbeatResponse,
+  StoryResultReport,
+  StoryResultResponse,
+  AvailableStoriesRequest,
+  AvailableStory,
+  CoordinationEventType,
+  CoordinationEvent,
+} from './story-coordination.js';
+
+export { DEFAULT_COORDINATION_CONFIG } from './story-coordination.js';

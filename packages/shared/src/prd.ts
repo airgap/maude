@@ -6,6 +6,7 @@ export type StoryStatus =
   | 'qa'
   | 'completed'
   | 'failed'
+  | 'failed_timeout'
   | 'skipped'
   | 'archived';
 
@@ -121,6 +122,14 @@ export interface UserStory {
   researchOnly: boolean; // if true, story is research/discovery — excluded from implementation loops
   externalRef?: ExternalRef; // link to Jira/Linear/Asana issue
   externalStatus?: string; // raw status string from external tool
+  // --- Executor metadata (distributed coordination) ---
+  executorId?: string; // ID of the executor currently working on this story
+  executorType?: string; // type of executor (e.g. "local-worktree", "remote-ssh")
+  machineId?: string; // machine/VM identifier where the executor is running
+  startedAt?: number; // timestamp when execution started
+  lastHeartbeat?: number; // timestamp of last heartbeat from executor
+  assignedBranch?: string; // git branch assigned for this story's work
+  leaseExpiresAt?: number; // timestamp when the lease expires without heartbeat renewal
   sortOrder: number;
   createdAt: number;
   updatedAt: number;

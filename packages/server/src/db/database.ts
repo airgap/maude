@@ -659,6 +659,44 @@ export function initDatabase(): void {
     /* fall back to created_at-based indexes if compacted_at still missing */
   }
 
+  // Distributed story coordination — executor metadata columns on prd_stories
+  const coordinationColumns = [
+    `ALTER TABLE prd_stories ADD COLUMN executor_id TEXT`,
+    `ALTER TABLE prd_stories ADD COLUMN executor_type TEXT`,
+    `ALTER TABLE prd_stories ADD COLUMN machine_id TEXT`,
+    `ALTER TABLE prd_stories ADD COLUMN started_at INTEGER`,
+    `ALTER TABLE prd_stories ADD COLUMN last_heartbeat INTEGER`,
+    `ALTER TABLE prd_stories ADD COLUMN assigned_branch TEXT`,
+    `ALTER TABLE prd_stories ADD COLUMN lease_expires_at INTEGER`,
+  ];
+  for (const sql of coordinationColumns) {
+    try {
+      db.exec(sql);
+    } catch {
+      /* column already exists */
+    }
+  }
+
+  // Story leases table — atomic lease tracking for distributed coordination.
+  // Used for compare-and-swap (CAS) operations on story claims.
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS story_leases (
+      story_id TEXT PRIMARY KEY,
+      executor_id TEXT NOT NULL,
+      executor_type TEXT NOT NULL,
+      machine_id TEXT NOT NULL,
+      assigned_branch TEXT NOT NULL,
+      started_at INTEGER NOT NULL,
+      last_heartbeat INTEGER NOT NULL,
+      lease_expires_at INTEGER NOT NULL,
+      created_at INTEGER NOT NULL,
+      FOREIGN KEY (story_id) REFERENCES prd_stories(id) ON DELETE CASCADE
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_story_leases_executor ON story_leases(executor_id);
+    CREATE INDEX IF NOT EXISTS idx_story_leases_expiry ON story_leases(lease_expires_at);
+  `);
+
   // Worktree-to-story assignment tracking
   db.exec(`
     CREATE TABLE IF NOT EXISTS worktrees (

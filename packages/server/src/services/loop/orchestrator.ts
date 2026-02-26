@@ -46,14 +46,14 @@ class LoopOrchestrator {
         if (row.prd_id) {
           const count = db
             .query(
-              "SELECT COUNT(*) as c FROM prd_stories WHERE prd_id = ? AND status IN ('pending', 'in_progress') AND (research_only = 0 OR research_only IS NULL)",
+              "SELECT COUNT(*) as c FROM prd_stories WHERE prd_id = ? AND status IN ('pending', 'in_progress', 'failed_timeout') AND (research_only = 0 OR research_only IS NULL)",
             )
             .get(row.prd_id) as any;
           hasPendingWork = count && count.c > 0;
         } else {
           const count = db
             .query(
-              "SELECT COUNT(*) as c FROM prd_stories WHERE prd_id IS NULL AND workspace_path = ? AND status IN ('pending', 'in_progress') AND (research_only = 0 OR research_only IS NULL)",
+              "SELECT COUNT(*) as c FROM prd_stories WHERE prd_id IS NULL AND workspace_path = ? AND status IN ('pending', 'in_progress', 'failed_timeout') AND (research_only = 0 OR research_only IS NULL)",
             )
             .get(row.workspace_path) as any;
           hasPendingWork = count && count.c > 0;
@@ -210,7 +210,7 @@ class LoopOrchestrator {
 
       const storyCount = db
         .query(
-          "SELECT COUNT(*) as count FROM prd_stories WHERE prd_id = ? AND status IN ('pending', 'in_progress') AND (research_only = 0 OR research_only IS NULL)",
+          "SELECT COUNT(*) as count FROM prd_stories WHERE prd_id = ? AND status IN ('pending', 'in_progress', 'failed_timeout') AND (research_only = 0 OR research_only IS NULL)",
         )
         .get(prdId) as any;
       if (!storyCount || storyCount.count === 0) {
@@ -223,7 +223,7 @@ class LoopOrchestrator {
       // Standalone mode: validate standalone stories exist in this workspace
       const storyCount = db
         .query(
-          "SELECT COUNT(*) as count FROM prd_stories WHERE prd_id IS NULL AND workspace_path = ? AND status IN ('pending', 'in_progress') AND (research_only = 0 OR research_only IS NULL)",
+          "SELECT COUNT(*) as count FROM prd_stories WHERE prd_id IS NULL AND workspace_path = ? AND status IN ('pending', 'in_progress', 'failed_timeout') AND (research_only = 0 OR research_only IS NULL)",
         )
         .get(workspacePath) as any;
       if (!storyCount || storyCount.count === 0) {

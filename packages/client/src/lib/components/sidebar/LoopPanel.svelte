@@ -50,6 +50,8 @@
         return '●';
       case 'failed':
         return '✗';
+      case 'failed_timeout':
+        return '⏱';
       case 'skipped':
         return '⊘';
       case 'archived':
@@ -68,6 +70,7 @@
       case 'in_progress':
         return 'var(--accent-primary)';
       case 'failed':
+      case 'failed_timeout':
         return 'var(--accent-error)';
       case 'archived':
         return 'var(--text-tertiary)';

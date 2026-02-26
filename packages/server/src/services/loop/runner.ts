@@ -565,7 +565,7 @@ export class LoopRunner {
           const doneIds = this.getDoneIds(stories);
           const pendingEligible = stories.filter(
             (s) =>
-              s.status === 'pending' &&
+              (s.status === 'pending' || s.status === 'failed_timeout') &&
               s.attempts < s.maxAttempts &&
               !s.researchOnly &&
               (s.dependsOn || []).every((depId) => doneIds.has(depId)),
@@ -1464,7 +1464,8 @@ export class LoopRunner {
     const doneIds = this.getDoneIds(stories);
 
     const eligible = stories.filter((s) => {
-      if (s.status !== 'pending') return false;
+      // Allow pending and failed_timeout (timed-out stories eligible for retry)
+      if (s.status !== 'pending' && s.status !== 'failed_timeout') return false;
       if (s.attempts >= s.maxAttempts) return false;
       // Skip research-only stories — they are not picked up by the implementation loop
       if (s.researchOnly) return false;
