@@ -99,7 +99,7 @@ app.post('/', async (c) => {
   ).run(
     id,
     body.title || 'New Conversation',
-    body.model || 'claude-sonnet-4-5-20250929',
+    body.model || 'claude-sonnet-4-6',
     body.systemPrompt || null,
     body.workspacePath || process.cwd(),
     body.planMode ? 1 : 0,
@@ -235,7 +235,7 @@ app.post('/:id/summarize', async (c) => {
   }
 
   // Generate LLM summary (falls back to rule-based)
-  const result = await summarizeWithLLM(messages, [], conv.model || 'claude-sonnet-4-5-20250929');
+  const result = await summarizeWithLLM(messages, [], conv.model || 'claude-sonnet-4-6');
   const summaryText = result.summaryText;
 
   // Persist the summary

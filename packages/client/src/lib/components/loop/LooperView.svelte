@@ -36,6 +36,7 @@
     running: 'var(--accent-primary)',
     paused: 'var(--accent-warning)',
     completed: 'var(--accent-secondary)',
+    completed_with_failures: 'var(--accent-warning)',
     failed: 'var(--accent-error)',
     cancelled: 'var(--text-tertiary)',
   };
@@ -44,6 +45,7 @@
     running: 'Running',
     paused: 'Paused',
     completed: 'Completed',
+    completed_with_failures: 'Partial Success',
     failed: 'Failed',
     cancelled: 'Cancelled',
   };

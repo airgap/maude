@@ -17,7 +17,7 @@ export function getDb(): Database {
     }
     db = new Database(DB_PATH);
     db.exec('PRAGMA journal_mode=WAL');
-    db.exec('PRAGMA busy_timeout=5000');
+    db.exec('PRAGMA busy_timeout=30000');
     db.exec('PRAGMA foreign_keys=ON');
   }
   return db;
@@ -30,7 +30,7 @@ export function initDatabase(): void {
     CREATE TABLE IF NOT EXISTS conversations (
       id TEXT PRIMARY KEY,
       title TEXT NOT NULL DEFAULT 'New Conversation',
-      model TEXT NOT NULL DEFAULT 'claude-sonnet-4-5-20250929',
+      model TEXT NOT NULL DEFAULT 'claude-sonnet-4-6',
       system_prompt TEXT,
       workspace_path TEXT,
       plan_mode INTEGER NOT NULL DEFAULT 0,
@@ -613,25 +613,51 @@ export function initDatabase(): void {
     CREATE INDEX IF NOT EXISTS idx_notification_logs_channel ON notification_logs(channel_id, sent_at DESC);
     CREATE INDEX IF NOT EXISTS idx_notification_logs_workspace ON notification_logs(workspace_id, sent_at DESC);
     CREATE INDEX IF NOT EXISTS idx_notification_logs_event ON notification_logs(event, sent_at DESC);
+  `);
 
+  // Compaction history table
+  db.exec(`
     CREATE TABLE IF NOT EXISTS compaction_history (
       id TEXT PRIMARY KEY,
       conversation_id TEXT NOT NULL,
       trigger TEXT NOT NULL,
       original_message_count INTEGER NOT NULL,
       compacted_message_count INTEGER NOT NULL,
-      dropped_message_count INTEGER NOT NULL,
+      dropped_message_count INTEGER NOT NULL DEFAULT 0,
       summary_text TEXT NOT NULL,
       used_llm INTEGER NOT NULL DEFAULT 0,
-      retention_count INTEGER NOT NULL,
+      retention_count INTEGER NOT NULL DEFAULT 0,
       threshold_pct INTEGER,
-      compacted_at INTEGER NOT NULL,
+      compacted_at INTEGER NOT NULL DEFAULT 0,
       FOREIGN KEY (conversation_id) REFERENCES conversations(id) ON DELETE CASCADE
     );
-
-    CREATE INDEX IF NOT EXISTS idx_compaction_history_conversation ON compaction_history(conversation_id, compacted_at DESC);
-    CREATE INDEX IF NOT EXISTS idx_compaction_history_timestamp ON compaction_history(compacted_at DESC);
   `);
+
+  // Migrate old compaction_history schema to new schema
+  const compactionMigrations = [
+    `ALTER TABLE compaction_history ADD COLUMN dropped_message_count INTEGER NOT NULL DEFAULT 0`,
+    `ALTER TABLE compaction_history ADD COLUMN retention_count INTEGER NOT NULL DEFAULT 0`,
+    `ALTER TABLE compaction_history ADD COLUMN threshold_pct INTEGER`,
+    `ALTER TABLE compaction_history ADD COLUMN compacted_at INTEGER NOT NULL DEFAULT 0`,
+    `UPDATE compaction_history SET compacted_at = created_at WHERE compacted_at = 0`,
+  ];
+  for (const sql of compactionMigrations) {
+    try {
+      db.exec(sql);
+    } catch {
+      /* column already exists or created_at doesn't exist */
+    }
+  }
+
+  // Now create indexes that reference compacted_at
+  try {
+    db.exec(`
+      CREATE INDEX IF NOT EXISTS idx_compaction_history_conversation ON compaction_history(conversation_id, compacted_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_compaction_history_timestamp ON compaction_history(compacted_at DESC);
+    `);
+  } catch {
+    /* fall back to created_at-based indexes if compacted_at still missing */
+  }
 
   // Worktree-to-story assignment tracking
   db.exec(`

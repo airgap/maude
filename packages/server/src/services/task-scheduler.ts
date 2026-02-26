@@ -225,7 +225,7 @@ class TaskScheduler {
 
       // Create conversation
       conversationId = nanoid();
-      const model = 'claude-sonnet-4-5-20250929';
+      const model = 'claude-sonnet-4-6';
 
       db.query(
         `INSERT INTO conversations (id, title, model, workspace_path, workspace_id, created_at, updated_at)

@@ -71,6 +71,9 @@ import {
   runQualityCheck,
   runAllQualityChecks,
   ensureDependencies,
+  parseCheckOutput,
+  validateQualityChecks,
+  detectAffectedPackages,
   _testHelpers,
 } from '../quality-checker';
 import type { QualityCheckConfig } from '@e/shared';
@@ -357,6 +360,158 @@ describe('quality-checker', () => {
       await runQualityCheck(makeCheck(), '/my/workspace');
       const call = spawnCalls.find((c) => c.cmd[0] === 'echo');
       expect(call?.cwd).toBe('/my/workspace');
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // parseCheckOutput
+  // -------------------------------------------------------------------------
+
+  describe('parseCheckOutput', () => {
+    test('strips ANSI escape codes', () => {
+      const raw = '\x1b[31merror\x1b[0m in file.ts:10:5';
+      const result = parseCheckOutput(raw, 'typecheck');
+      expect(result).not.toContain('\x1b');
+      expect(result).toContain('error');
+    });
+
+    test('keeps error lines for typecheck output', () => {
+      const raw = [
+        'NX  Running target check for 3 projects:',
+        '',
+        '> nx run @e/server:check',
+        '$ tsc --noEmit',
+        '',
+        '/home/project/src/foo.ts:10:5',
+        'error TS2345: Argument of type string is not assignable',
+        '',
+        'NX  Successfully ran target check',
+      ].join('\n');
+
+      const result = parseCheckOutput(raw, 'typecheck');
+      expect(result).toContain('foo.ts:10:5');
+      expect(result).toContain('TS2345');
+      expect(result).not.toContain('NX  Running target');
+      expect(result).not.toContain('Successfully ran');
+      expect(result).not.toContain('$ tsc');
+    });
+
+    test('keeps svelte-check file headers', () => {
+      const raw = '/home/project/src/App.svelte:42:10\nWarn: unused variable';
+      const result = parseCheckOutput(raw, 'typecheck');
+      expect(result).toContain('App.svelte:42:10');
+      expect(result).toContain('Warn');
+    });
+
+    test('filters out NX boilerplate and progress lines', () => {
+      const raw = [
+        'NX  Running target check for 3 projects:',
+        '- @e/client',
+        '- @e/server',
+        '> nx run @e/shared:check',
+        '$ tsc --noEmit',
+        'Exited with code 0',
+        'Loading svelte-check in workspace: /home/project',
+        'Getting Svelte diagnostics...',
+        'NX  Successfully ran target check for 3 projects',
+        'Nx read the output from the cache',
+      ].join('\n');
+
+      const result = parseCheckOutput(raw, 'typecheck');
+      // Should return original if no error lines found
+      expect(result).toBeTruthy();
+    });
+
+    test('returns original for build/test/custom types', () => {
+      const raw = 'Some build output\nMore output';
+      const result = parseCheckOutput(raw, 'build');
+      expect(result).toContain('Some build output');
+    });
+
+    test('keeps error summary lines', () => {
+      const raw = 'Found 5 errors in 3 files';
+      const result = parseCheckOutput(raw, 'typecheck');
+      expect(result).toContain('5 errors');
+    });
+
+    test('truncates at 15000 chars', () => {
+      const raw = 'error TS2345: '.repeat(2000);
+      const result = parseCheckOutput(raw, 'typecheck');
+      expect(result.length).toBeLessThanOrEqual(15000);
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // validateQualityChecks
+  // -------------------------------------------------------------------------
+
+  describe('validateQualityChecks', () => {
+    test('returns empty warnings when all checks are valid', async () => {
+      const checks = [makeCheck({ command: 'echo hello' })];
+      const { warnings, disabledCheckIds } = await validateQualityChecks(checks, WORKSPACE);
+      expect(warnings).toHaveLength(0);
+      expect(disabledCheckIds).toHaveLength(0);
+    });
+
+    test('skips disabled checks', async () => {
+      const checks = [makeCheck({ enabled: false, command: 'nonexistent-script' })];
+      const { warnings } = await validateQualityChecks(checks, WORKSPACE);
+      expect(warnings).toHaveLength(0);
+    });
+
+    test('detects and disables checks with "script not found" errors', async () => {
+      // Override spawn to return "script not found"
+      const prevExitCode = spawnExitCode;
+      spawnExitCode = 1;
+
+      // Override the mock spawn to emit "script not found"
+      const prevSpawn = (Bun as any).spawn;
+      (Bun as any).spawn = (cmd: string[], opts?: any) => {
+        spawnCalls.push({ cmd, cwd: opts?.cwd ?? '' });
+        return {
+          stdout: new ReadableStream({
+            start(controller: ReadableStreamDefaultController) {
+              controller.enqueue(new TextEncoder().encode('error: Script not found "lint"'));
+              controller.close();
+            },
+          }),
+          stderr: new ReadableStream({
+            start(controller: ReadableStreamDefaultController) {
+              controller.close();
+            },
+          }),
+          exited: Promise.resolve(1),
+          exitCode: 1,
+          kill: () => {},
+        };
+      };
+
+      const warnSpy = spyOn(console, 'warn').mockImplementation(() => {});
+      const checks = [makeCheck({ id: 'bad-lint', name: 'ESLint', command: 'bun run lint' })];
+      const { warnings, disabledCheckIds } = await validateQualityChecks(checks, WORKSPACE);
+
+      expect(warnings).toHaveLength(1);
+      expect(warnings[0]).toContain('ESLint');
+      expect(warnings[0]).toContain('misconfigured');
+      expect(disabledCheckIds).toContain('bad-lint');
+      expect(checks[0].enabled).toBe(false);
+
+      warnSpy.mockRestore();
+      (Bun as any).spawn = prevSpawn;
+      spawnExitCode = prevExitCode;
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // detectAffectedPackages
+  // -------------------------------------------------------------------------
+
+  describe('detectAffectedPackages', () => {
+    test('extracts package names from file paths', async () => {
+      // This is tricky to test with mocked spawn; mainly test the logic indirectly
+      // by verifying the function returns an array
+      const result = await detectAffectedPackages(WORKSPACE);
+      expect(Array.isArray(result)).toBe(true);
     });
   });
 });

@@ -175,7 +175,7 @@ export interface ServerOnlySettings {
 export const DEFAULT_SETTINGS: Settings = {
   theme: 'dark',
   cliProvider: 'claude',
-  model: 'claude-sonnet-4-5-20250929',
+  model: 'claude-sonnet-4-6',
   permissionMode: 'safe',
   permissionRules: [],
   terminalCommandPolicy: 'auto',

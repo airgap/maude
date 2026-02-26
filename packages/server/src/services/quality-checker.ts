@@ -4,6 +4,69 @@ import type { QualityCheckConfig, QualityCheckResult } from '@e/shared';
 import { resolveWorkspacePath } from './worktree-service';
 
 /**
+ * Strip ANSI escape codes from a string.
+ */
+function stripAnsi(str: string): string {
+  // eslint-disable-next-line no-control-regex
+  return str.replace(/\x1b\[[0-9;]*[a-zA-Z]/g, '');
+}
+
+/**
+ * Parse raw typecheck / lint / build output and extract only meaningful
+ * error and warning lines. Strips ANSI codes, NX boilerplate, progress
+ * lines, and empty filler so the agent sees only actionable diagnostics.
+ *
+ * Returns filtered output (or the original if no filtering was productive).
+ */
+export function parseCheckOutput(raw: string, checkType: string): string {
+  const clean = stripAnsi(raw);
+  const lines = clean.split('\n');
+
+  if (checkType === 'typecheck' || checkType === 'lint') {
+    // Keep lines that contain error indicators or file paths with diagnostics
+    const errorLines = lines.filter((line) => {
+      const trimmed = line.trim();
+      if (!trimmed) return false;
+
+      // Keep actual error/warning lines (file:line:col patterns, Error/error, TS errors)
+      if (/\.(ts|js|svelte|tsx|jsx)[:()]\d+/.test(trimmed)) return true;
+      if (/\b(Error|error|ERR!|TS\d{4,5})\b/.test(trimmed)) return true;
+      if (/\b(Warn|warn|Warning|warning)\b/.test(trimmed)) return true;
+      if (trimmed.startsWith('×') || trimmed.startsWith('✖')) return true;
+
+      // Keep Svelte diagnostic context (indented code snippets after error lines)
+      if (/^\s{2,}/.test(line) && /[|>]/.test(trimmed)) return true;
+
+      // Keep "X error(s) found" summary lines
+      if (/\d+\s+(error|warning|problem)/.test(trimmed)) return true;
+
+      // Keep file headers from svelte-check
+      if (trimmed.startsWith('/') && /\.(ts|js|svelte|tsx|jsx)/.test(trimmed)) return true;
+
+      // Filter out: NX runner lines, "Running target", "Successfully ran", timing, dashes
+      if (/^\s*NX\s/.test(trimmed)) return false;
+      if (/Running target|Successfully ran|read the output|Nx read/.test(trimmed)) return false;
+      if (/^[-=]+$/.test(trimmed)) return false;
+      if (/^\$\s/.test(trimmed)) return false; // command echoes like "$ tsc --noEmit"
+      if (/^>\s*nx run/.test(trimmed)) return false;
+      if (/Exited with code \d/.test(trimmed)) return false;
+      if (/Getting Svelte diagnostics/.test(trimmed)) return false;
+      if (/Loading svelte-check/.test(trimmed)) return false;
+
+      return false;
+    });
+
+    // If we filtered too aggressively (no error lines found), return the original
+    if (errorLines.length === 0) return clean.slice(0, 15000);
+
+    return errorLines.join('\n').slice(0, 15000);
+  }
+
+  // For build/test/custom checks, just strip ANSI codes
+  return clean.slice(0, 15000);
+}
+
+/**
  * Options for running quality checks, optionally scoped to a story's worktree.
  */
 export interface QualityCheckOptions {
@@ -126,12 +189,13 @@ export async function runQualityCheck(
     const exitCode = await proc.exited;
     clearTimeout(timeoutId);
 
+    const rawOutput = (stdout + '\n' + stderr).trim();
     const result: QualityCheckResult = {
       checkId: check.id,
       checkName: check.name,
       checkType: check.type,
       passed: exitCode === 0,
-      output: (stdout + '\n' + stderr).trim().slice(0, 5000),
+      output: exitCode === 0 ? rawOutput.slice(0, 15000) : parseCheckOutput(rawOutput, check.type),
       duration: Date.now() - start,
       exitCode,
     };
@@ -143,13 +207,130 @@ export async function runQualityCheck(
       checkName: check.name,
       checkType: check.type,
       passed: false,
-      output: String(err).slice(0, 2000),
+      output: String(err).slice(0, 5000),
       duration: Date.now() - start,
       exitCode: -1,
     };
     if (storyId) result.storyId = storyId;
     return result;
   }
+}
+
+/**
+ * Validate that all enabled quality check commands are executable.
+ * Catches misconfigured checks (e.g. "Script not found") before the loop
+ * wastes attempts on them. Returns an array of warnings for checks that
+ * appear broken; these checks are auto-disabled so the loop can proceed.
+ */
+export async function validateQualityChecks(
+  checks: QualityCheckConfig[],
+  workspacePath: string,
+): Promise<{ warnings: string[]; disabledCheckIds: string[] }> {
+  const warnings: string[] = [];
+  const disabledCheckIds: string[] = [];
+
+  for (const check of checks) {
+    if (!check.enabled) continue;
+
+    // Quick validation: run the command with a very short timeout to detect
+    // "Script not found", "command not found", etc.
+    try {
+      const parts = check.command.match(/(?:[^\s"']+|"[^"]*"|'[^']*')+/g) || [check.command];
+      const cleanParts = parts.map((p) => p.replace(/^["']|["']$/g, ''));
+
+      const proc = Bun.spawn(cleanParts, {
+        cwd: workspacePath,
+        stdout: 'pipe',
+        stderr: 'pipe',
+        env: { ...process.env, FORCE_COLOR: '0', CI: '1' },
+      });
+
+      // Give it 15s max — we just need to see if the command starts
+      const timeoutId = setTimeout(() => proc.kill(), 15_000);
+      const stdout = await new Response(proc.stdout).text();
+      const stderr = await new Response(proc.stderr).text();
+      const exitCode = await proc.exited;
+      clearTimeout(timeoutId);
+
+      const combinedOutput = (stdout + '\n' + stderr).toLowerCase();
+
+      // Detect "Script not found" style failures — these will never succeed
+      const isScriptNotFound =
+        combinedOutput.includes('script not found') ||
+        combinedOutput.includes('command not found') ||
+        (combinedOutput.includes('not found') &&
+          exitCode !== 0 &&
+          combinedOutput.includes('error'));
+
+      if (isScriptNotFound) {
+        const msg = `Quality check "${check.name}" (${check.command}) appears misconfigured: ${(stdout + '\n' + stderr).trim().slice(0, 200)}. Auto-disabling this check.`;
+        warnings.push(msg);
+        disabledCheckIds.push(check.id);
+        check.enabled = false;
+        console.warn(`[quality-checker] ${msg}`);
+      }
+    } catch (err) {
+      const msg = `Quality check "${check.name}" (${check.command}) failed to execute: ${String(err).slice(0, 200)}. Auto-disabling this check.`;
+      warnings.push(msg);
+      disabledCheckIds.push(check.id);
+      check.enabled = false;
+      console.warn(`[quality-checker] ${msg}`);
+    }
+  }
+
+  return { warnings, disabledCheckIds };
+}
+
+/**
+ * Detect which monorepo packages were modified by looking at git status.
+ * Returns an array of affected package directory names (e.g. ['client', 'shared']).
+ * Falls back to empty array (run all checks) if detection fails.
+ */
+export async function detectAffectedPackages(workspacePath: string): Promise<string[]> {
+  try {
+    const proc = Bun.spawn(['git', 'diff', '--name-only', 'HEAD'], {
+      cwd: workspacePath,
+      stdout: 'pipe',
+      stderr: 'pipe',
+    });
+    const output = (await new Response(proc.stdout).text()).trim();
+    await proc.exited;
+
+    if (!output) {
+      // Also check untracked files
+      const statusProc = Bun.spawn(['git', 'status', '--porcelain'], {
+        cwd: workspacePath,
+        stdout: 'pipe',
+        stderr: 'pipe',
+      });
+      const statusOutput = (await new Response(statusProc.stdout).text()).trim();
+      await statusProc.exited;
+      if (!statusOutput) return [];
+
+      const files = statusOutput.split('\n').map((l) => l.trim().slice(3));
+      return extractPackageNames(files);
+    }
+
+    return extractPackageNames(output.split('\n'));
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Extract unique package directory names from file paths.
+ * Handles patterns like "packages/client/src/..." → "client"
+ */
+function extractPackageNames(files: string[]): string[] {
+  const packages = new Set<string>();
+  for (const file of files) {
+    // Match "packages/<name>/..." pattern
+    const match = file.match(/^packages\/([^/]+)\//);
+    if (match) {
+      packages.add(match[1]);
+    }
+  }
+  return Array.from(packages);
 }
 
 /**

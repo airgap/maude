@@ -192,7 +192,7 @@ class WebhookExecutor {
 
       // Create conversation
       conversationId = nanoid();
-      const model = 'claude-sonnet-4-5-20250929';
+      const model = 'claude-sonnet-4-6';
       const now = Date.now();
 
       db.query(

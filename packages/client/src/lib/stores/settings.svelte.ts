@@ -148,7 +148,7 @@ interface SettingsState {
 const defaults: SettingsState = {
   theme: 'dark',
   cliProvider: 'claude',
-  model: 'claude-sonnet-4-5-20250929',
+  model: 'claude-sonnet-4-6',
   permissionMode: 'safe',
   terminalCommandPolicy: 'auto',
   permissionRules: [],

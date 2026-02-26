@@ -63,7 +63,7 @@ class ClaudeApiClient {
     this.sessions.set(sessionId, {
       id: sessionId,
       conversationId,
-      model: opts.model || 'claude-sonnet-4-5-20250929',
+      model: opts.model || 'claude-sonnet-4-6',
       systemPrompt: opts.systemPrompt,
     });
     return sessionId;

@@ -392,7 +392,12 @@ class LoopOrchestrator {
       updates.push('paused_at = ?');
       values.push(Date.now());
     }
-    if (status === 'completed' || status === 'failed' || status === 'cancelled') {
+    if (
+      status === 'completed' ||
+      status === 'completed_with_failures' ||
+      status === 'failed' ||
+      status === 'cancelled'
+    ) {
       updates.push('completed_at = ?');
       values.push(Date.now());
     }

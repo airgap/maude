@@ -158,6 +158,8 @@
         return 'status-paused';
       case 'completed':
         return 'status-completed';
+      case 'completed_with_failures':
+        return 'status-warning';
       case 'failed':
         return 'status-failed';
       case 'cancelled':
@@ -175,6 +177,8 @@
         return 'Paused';
       case 'completed':
         return 'Complete';
+      case 'completed_with_failures':
+        return 'Partial';
       case 'failed':
         return 'Failed';
       case 'cancelled':
@@ -713,6 +717,12 @@
     color: var(--accent-secondary);
     border-color: var(--accent-secondary);
     background: color-mix(in srgb, var(--accent-secondary) 10%, transparent);
+  }
+
+  .status-warning {
+    color: var(--accent-warning);
+    border-color: var(--accent-warning);
+    background: color-mix(in srgb, var(--accent-warning) 10%, transparent);
   }
 
   .status-failed {

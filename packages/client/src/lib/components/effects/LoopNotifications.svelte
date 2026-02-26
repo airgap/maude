@@ -55,8 +55,11 @@
 
     const status = loop.status;
 
-    // --- Loop completed ---
-    if (status === 'completed' && prevLoopStatus === 'running') {
+    // --- Loop completed (fully or with partial success) ---
+    if (
+      (status === 'completed' || status === 'completed_with_failures') &&
+      prevLoopStatus === 'running'
+    ) {
       if (settingsStore.notifyOnCompletion) {
         desktopNotifications.loopCompleted(loop.totalStoriesCompleted, {
           loopId: loop.id,

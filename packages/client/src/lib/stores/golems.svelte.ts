@@ -14,7 +14,14 @@ export interface GolemActivity {
 export interface GolemStatus {
   id: string; // loop ID
   label: string; // PRD name or "Standalone Stories"
-  status: 'running' | 'paused' | 'completed' | 'failed' | 'cancelled' | 'idle';
+  status:
+    | 'running'
+    | 'paused'
+    | 'completed'
+    | 'completed_with_failures'
+    | 'failed'
+    | 'cancelled'
+    | 'idle';
   phase: GolemPhase;
   mood: GolemMood;
   thought: string;
@@ -268,14 +275,31 @@ function createGolemsStore() {
           ensureElapsedTimer();
           break;
 
-        case 'completed':
-          g.status = 'completed';
-          g.phase = 'celebrating';
-          g.mood = 'excited';
-          g.thought = 'All done! Every story is complete.';
+        case 'completed': {
+          // Check if the message indicates partial success (completed_with_failures)
+          const isPartialSuccess =
+            event.data.message?.includes('Partial success') ||
+            event.data.message?.includes('partial success');
+          if (isPartialSuccess) {
+            g.status = 'completed_with_failures';
+            g.phase = 'idle';
+            g.mood = 'relieved';
+            g.thought = event.data.message || 'Finished with some failures.';
+          } else {
+            g.status = 'completed';
+            g.phase = 'celebrating';
+            g.mood = 'excited';
+            g.thought = 'All done! Every story is complete.';
+          }
           g.thoughtTimestamp = Date.now();
-          addActivity(g, 'completed', event.data.message || 'All stories completed!', 'success');
+          addActivity(
+            g,
+            'completed',
+            event.data.message || 'All stories completed!',
+            isPartialSuccess ? 'warning' : 'success',
+          );
           break;
+        }
 
         case 'failed':
           g.status = 'failed';
@@ -356,6 +380,10 @@ function createGolemsStore() {
         g.mood = 'excited';
         g.phase = 'celebrating';
         g.thought = 'All done!';
+      } else if (status === 'completed_with_failures') {
+        g.mood = 'relieved';
+        g.phase = 'idle';
+        g.thought = 'Finished, but some stories had issues';
       } else if (status === 'failed') {
         g.mood = 'frustrated';
         g.phase = 'idle';

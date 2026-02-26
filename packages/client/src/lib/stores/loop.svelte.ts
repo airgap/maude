@@ -551,6 +551,7 @@ function createLoopStore() {
             completedAt: Date.now(),
             currentStoryId: null,
           };
+          // Check DB-level status on next poll — might be 'completed_with_failures'
           this.disconnectEvents();
           break;
       }
@@ -683,6 +684,7 @@ function createLoopStore() {
                   const serverLoop = loopRes.data;
                   if (
                     serverLoop.status === 'completed' ||
+                    serverLoop.status === 'completed_with_failures' ||
                     serverLoop.status === 'cancelled' ||
                     serverLoop.status === 'failed'
                   ) {

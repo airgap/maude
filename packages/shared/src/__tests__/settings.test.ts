@@ -11,7 +11,7 @@ describe('DEFAULT_SETTINGS', () => {
   });
 
   test('has correct model default', () => {
-    expect(DEFAULT_SETTINGS.model).toBe('claude-sonnet-4-5-20250929');
+    expect(DEFAULT_SETTINGS.model).toBe('claude-sonnet-4-6');
   });
 
   test('has correct permission mode default', () => {

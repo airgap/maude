@@ -12,7 +12,7 @@ export function createTestDb(): Database {
     CREATE TABLE IF NOT EXISTS conversations (
       id TEXT PRIMARY KEY,
       title TEXT NOT NULL DEFAULT 'New Conversation',
-      model TEXT NOT NULL DEFAULT 'claude-sonnet-4-5-20250929',
+      model TEXT NOT NULL DEFAULT 'claude-sonnet-4-6',
       system_prompt TEXT,
       workspace_path TEXT,
       workspace_id TEXT,

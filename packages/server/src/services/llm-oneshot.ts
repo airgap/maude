@@ -358,7 +358,7 @@ async function callViaBedrock(opts: CallLlmOptions, timeoutMs: number): Promise<
     }
   }
   if (model?.startsWith('bedrock:')) model = model.slice(8);
-  if (!model) model = 'anthropic.claude-sonnet-4-5-20250929-v1:0';
+  if (!model) model = 'anthropic.claude-sonnet-4-6-v1:0';
 
   const body = JSON.stringify({
     anthropic_version: 'bedrock-2023-05-31',
@@ -410,7 +410,7 @@ async function callViaKiroFallback(opts: CallLlmOptions, timeoutMs: number): Pro
       'x-api-key': apiKey,
     },
     body: JSON.stringify({
-      model: opts.model || 'claude-sonnet-4-5-20250929',
+      model: opts.model || 'claude-sonnet-4-6',
       max_tokens: 4096,
       system: opts.system,
       messages: [{ role: 'user', content: opts.user }],

@@ -2,12 +2,13 @@ import { EventEmitter } from 'events';
 import { nanoid } from 'nanoid';
 import { getDb } from '../../db/database';
 import { claudeManager } from '../claude-process';
-import { runAllQualityChecks, ensureDependencies } from '../quality-checker';
+import { runAllQualityChecks, ensureDependencies, validateQualityChecks } from '../quality-checker';
 import { resolveWorkspacePath } from '../worktree-service';
 import { sendNotification } from '../notification-channels';
 import type {
   LoopConfig,
   IterationLogEntry,
+  QualityCheckConfig,
   QualityCheckResult,
   UserStory,
   StreamLoopEvent,
@@ -52,6 +53,21 @@ export class LoopRunner {
   /** Cached workflow config for the PRD (loaded once at run start) */
   private workflowConfig: WorkflowConfig = DEFAULT_WORKFLOW_CONFIG;
 
+  /**
+   * Tracks failure signatures per story to detect identical repeated failures.
+   * Key: storyId, Value: array of failure signature hashes.
+   * When the same signature appears 3+ times, the story is auto-skipped.
+   */
+  private failureSignatures = new Map<string, string[]>();
+
+  /**
+   * Baseline quality check error fingerprints, captured once at loop start.
+   * Used to diff post-story check results and only surface NEW errors
+   * the agent introduced — pre-existing errors are filtered out.
+   * Key: checkId, Value: set of error line fingerprints.
+   */
+  private baselineErrors = new Map<string, Set<string>>();
+
   constructor(
     private loopId: string,
     private prdId: string | null,
@@ -66,6 +82,138 @@ export class LoopRunner {
    */
   private resolveStoryCwd(storyId: string): string {
     return resolveWorkspacePath(this.workspacePath, storyId);
+  }
+
+  /**
+   * Extract error fingerprints from quality check output.
+   * Each fingerprint is a normalized error line (file:line:message pattern).
+   */
+  private extractErrorFingerprints(output: string): Set<string> {
+    const fingerprints = new Set<string>();
+    // Strip ANSI for consistent comparison
+    // eslint-disable-next-line no-control-regex
+    const clean = output.replace(/\x1b\[[0-9;]*[a-zA-Z]/g, '');
+    for (const line of clean.split('\n')) {
+      const trimmed = line.trim();
+      if (!trimmed) continue;
+      // Match common error patterns: file:line:col, TS errors, etc.
+      if (/\.(ts|js|svelte|tsx|jsx)[:()]\d+/.test(trimmed) || /\bTS\d{4,5}\b/.test(trimmed)) {
+        fingerprints.add(trimmed);
+      }
+    }
+    return fingerprints;
+  }
+
+  /**
+   * Capture baseline error fingerprints from current quality check state.
+   * Called once at loop start before any stories are modified.
+   */
+  private async captureBaseline(checks: QualityCheckConfig[]): Promise<void> {
+    const enabledChecks = checks.filter((c) => c.enabled);
+    if (enabledChecks.length === 0) return;
+
+    console.log(`[loop:${this.loopId}] Capturing baseline quality check state...`);
+    const results = await runAllQualityChecks(enabledChecks, this.workspacePath);
+    for (const result of results) {
+      if (!result.passed) {
+        const fingerprints = this.extractErrorFingerprints(result.output);
+        if (fingerprints.size > 0) {
+          this.baselineErrors.set(result.checkId, fingerprints);
+          console.log(
+            `[loop:${this.loopId}] Baseline: ${result.checkName} has ${fingerprints.size} pre-existing error(s)`,
+          );
+        }
+      }
+    }
+  }
+
+  /**
+   * Filter quality check results to only show errors the agent introduced.
+   * Pre-existing errors (from the baseline) are stripped from the output
+   * and the result is re-evaluated — if all remaining errors were pre-existing,
+   * the check is marked as passed.
+   */
+  private diffAgainstBaseline(results: QualityCheckResult[]): QualityCheckResult[] {
+    return results.map((result) => {
+      if (result.passed) return result;
+
+      const baselineFingerprints = this.baselineErrors.get(result.checkId);
+      if (!baselineFingerprints || baselineFingerprints.size === 0) return result;
+
+      // Extract current error fingerprints
+      const currentFingerprints = this.extractErrorFingerprints(result.output);
+
+      // Find genuinely new errors (not in baseline)
+      const newErrors = new Set<string>();
+      for (const fp of currentFingerprints) {
+        if (!baselineFingerprints.has(fp)) {
+          newErrors.add(fp);
+        }
+      }
+
+      if (newErrors.size === 0 && currentFingerprints.size > 0) {
+        // All errors were pre-existing — treat as passed
+        console.log(
+          `[loop:${this.loopId}] Baseline diff: ${result.checkName} — all ${currentFingerprints.size} error(s) are pre-existing, treating as passed`,
+        );
+        return {
+          ...result,
+          passed: true,
+          output:
+            result.output + '\n\n[baseline-diff] All errors were pre-existing, treating as passed.',
+        };
+      }
+
+      if (newErrors.size < currentFingerprints.size) {
+        // Some errors are new, some pre-existing — filter output to only show new ones
+        const filteredLines = result.output.split('\n').filter((line) => {
+          const trimmed = line.trim();
+          // Keep the line if it's a new error or non-error context
+          if (baselineFingerprints.has(trimmed)) return false;
+          return true;
+        });
+
+        console.log(
+          `[loop:${this.loopId}] Baseline diff: ${result.checkName} — ${newErrors.size} new error(s) out of ${currentFingerprints.size} total`,
+        );
+        return {
+          ...result,
+          output:
+            `[baseline-diff] ${newErrors.size} new error(s), ${currentFingerprints.size - newErrors.size} pre-existing (filtered out):\n` +
+            filteredLines.join('\n'),
+        };
+      }
+
+      return result;
+    });
+  }
+
+  /**
+   * Compute a simple hash of quality check failure output to detect identical
+   * repeated failures. Uses the check names and first 500 chars of each error.
+   */
+  private computeFailureSignature(qualityResults: QualityCheckResult[]): string {
+    const failed = qualityResults.filter((qr) => !qr.passed);
+    const parts = failed.map((qr) => `${qr.checkName}:${qr.output.trim().slice(0, 500)}`);
+    // Simple string-based hash for comparison
+    return parts.sort().join('|||');
+  }
+
+  /**
+   * Track a failure signature for a story. Returns true if the story has
+   * failed with an identical signature 3+ times and should be auto-skipped.
+   */
+  private trackFailureSignature(storyId: string, qualityResults: QualityCheckResult[]): boolean {
+    const signature = this.computeFailureSignature(qualityResults);
+    if (!signature) return false;
+
+    const existing = this.failureSignatures.get(storyId) || [];
+    existing.push(signature);
+    this.failureSignatures.set(storyId, existing);
+
+    // Count how many times this exact signature has appeared
+    const identicalCount = existing.filter((s) => s === signature).length;
+    return identicalCount >= 3;
   }
 
   /** Load workflow config from the PRD (if any). Falls back to defaults. */
@@ -184,6 +332,46 @@ export class LoopRunner {
     // Stories have their own max_attempts (default 3), but the loop config
     // should override this so the user's setting actually takes effect.
     this.applyMaxAttemptsConfig();
+
+    // Pre-flight: validate quality check commands exist before burning attempts.
+    // This catches misconfigured checks (e.g. "Script not found") and auto-disables them.
+    if (this.config.qualityChecks.length > 0) {
+      this.emitThought('Validating quality check commands...', 'pre_check');
+      try {
+        const { warnings, disabledCheckIds } = await validateQualityChecks(
+          this.config.qualityChecks,
+          this.workspacePath,
+        );
+        if (warnings.length > 0) {
+          for (const w of warnings) {
+            this.addLogEntry({
+              iteration: 0,
+              storyId: '',
+              storyTitle: '',
+              action: 'quality_check',
+              detail: `Pre-flight validation: ${w}`,
+              timestamp: Date.now(),
+            });
+          }
+          console.log(
+            `[loop:${this.loopId}] Pre-flight: disabled ${disabledCheckIds.length} misconfigured quality check(s)`,
+          );
+        }
+      } catch (err) {
+        console.warn(`[loop:${this.loopId}] Quality check validation failed (non-fatal):`, err);
+      }
+    }
+
+    // Capture baseline quality check state BEFORE any stories are modified.
+    // Used to diff post-story results and only surface new errors.
+    if (this.config.qualityChecks.some((c) => c.enabled)) {
+      this.emitThought('Capturing baseline quality check state...', 'pre_check');
+      try {
+        await this.captureBaseline(this.config.qualityChecks);
+      } catch (err) {
+        console.warn(`[loop:${this.loopId}] Baseline capture failed (non-fatal):`, err);
+      }
+    }
 
     // Ensure maxIterations is large enough to actually complete all stories.
     // Each story may need up to maxAttemptsPerStory fresh starts, and each
@@ -399,15 +587,27 @@ export class LoopRunner {
             );
           }
 
-          // No eligible stories left (all failed/maxed out or blocked by deps)
+          // No eligible stories left (all failed/maxed out or blocked by deps).
+          // Distinguish "partial success" from total failure — if at least one story
+          // completed, report as completed_with_failures rather than outright failure.
+          const completedCount = stories.filter(
+            (s) => s.status === 'completed' || s.status === 'qa',
+          ).length;
+          const failedStoryCount = stories.filter((s) => s.status === 'failed').length;
+          const endStatus =
+            completedCount > 0 && failedStoryCount > 0 ? 'completed_with_failures' : 'failed';
+
           this.updateLoopDb({
-            status: 'failed',
+            status: endStatus,
             completed_at: Date.now(),
             current_story_id: null,
             current_agent_id: null,
           });
-          this.emitEvent('failed', {
-            message: 'No more eligible stories. Some stories could not be completed.',
+          this.emitEvent(endStatus === 'completed_with_failures' ? 'completed' : 'failed', {
+            message:
+              endStatus === 'completed_with_failures'
+                ? `Finished with partial success: ${completedCount} completed, ${failedStoryCount} failed.`
+                : 'No more eligible stories. Some stories could not be completed.',
           });
 
           // Send notification for loop failure
@@ -677,6 +877,9 @@ export class LoopRunner {
               storyId: story.id,
             });
 
+            // Diff against baseline to filter out pre-existing errors
+            qualityResults = this.diffAgainstBaseline(qualityResults);
+
             for (const qr of qualityResults) {
               this.emitEvent('quality_check', {
                 storyId: story.id,
@@ -843,6 +1046,52 @@ export class LoopRunner {
               qualityResults,
               failReason,
             );
+
+            // --- Auto-skip detection ---
+            // If the story has failed with the exact same error signature 3+ times,
+            // it's stuck in a loop and further attempts won't help. Auto-skip it
+            // to avoid wasting more iterations.
+            if (requiredChecksFailed && !hasAgentError) {
+              const shouldAutoSkip = this.trackFailureSignature(story.id, qualityResults);
+              if (shouldAutoSkip) {
+                console.log(
+                  `[loop:${this.loopId}] Auto-skipping "${story.title}" — identical failure 3+ times`,
+                );
+                this.fixUpState.delete(story.id);
+                await this.revertUncommittedChanges(story.id);
+                this.updateStory(story.id, { status: 'failed' });
+
+                const loop = db.query('SELECT * FROM loops WHERE id = ?').get(this.loopId) as any;
+                this.updateLoopDb({ total_stories_failed: (loop?.total_stories_failed || 0) + 1 });
+
+                this.addLogEntry({
+                  iteration,
+                  storyId: story.id,
+                  storyTitle: story.title,
+                  action: 'failed',
+                  detail: `Auto-skipped: identical failure detected 3+ times. Error: ${failReason}`,
+                  timestamp: Date.now(),
+                  qualityResults,
+                });
+                this.emitEvent('story_failed', {
+                  storyId: story.id,
+                  storyTitle: story.title,
+                  iteration,
+                  conversationId,
+                  message: `Auto-skipped after 3+ identical failures: ${failReason}`,
+                  willRetry: false,
+                });
+
+                // Clear current story/agent and continue to next iteration
+                this.updateLoopDb({ current_story_id: null, current_agent_id: null });
+                this.emitEvent('iteration_end', {
+                  storyId: story.id,
+                  storyTitle: story.title,
+                  iteration,
+                });
+                continue;
+              }
+            }
 
             // --- Fix-up pass logic ---
             // When quality checks fail, instead of immediately reverting all work,
@@ -1091,14 +1340,25 @@ export class LoopRunner {
         });
         this.emitEvent('completed', { message: 'All stories completed!' });
       } else {
+        // Distinguish partial success from total failure at max iterations
+        const doneCount = finalStories.filter(
+          (s) => s.status === 'completed' || s.status === 'qa',
+        ).length;
+        const failedCount = finalStories.filter((s) => s.status === 'failed').length;
+        const maxIterStatus =
+          doneCount > 0 && failedCount > 0 ? 'completed_with_failures' : 'failed';
+
         this.updateLoopDb({
-          status: 'failed',
+          status: maxIterStatus,
           completed_at: Date.now(),
           current_story_id: null,
           current_agent_id: null,
         });
-        this.emitEvent('failed', {
-          message: `Max iterations (${this.config.maxIterations}) reached. Some stories remain incomplete.`,
+        this.emitEvent(maxIterStatus === 'completed_with_failures' ? 'completed' : 'failed', {
+          message:
+            maxIterStatus === 'completed_with_failures'
+              ? `Max iterations reached. Partial success: ${doneCount} completed, ${failedCount} failed.`
+              : `Max iterations (${this.config.maxIterations}) reached. Some stories remain incomplete.`,
         });
       }
 
@@ -1232,7 +1492,9 @@ export class LoopRunner {
 4. Follow existing project conventions and patterns
 5. Write clean, well-structured code
 6. Do NOT ask questions — make reasonable decisions and document them
-7. After implementation, the system will automatically run quality checks`;
+7. After implementation, the system will automatically run quality checks
+8. IMPORTANT: Before declaring you are done, run the project's typecheck/build commands yourself to catch errors early
+9. If this is a monorepo, ensure your changes maintain type compatibility across packages (especially shared types)`;
 
     // Add project memory context
     try {
@@ -1306,15 +1568,34 @@ ${criteria}
 
       for (const qr of fixUpInfo.lastResults) {
         prompt += `\n### Failed: ${qr.checkName} (exit code ${qr.exitCode})`;
-        // Include up to 3000 chars of actual error output so the agent can
+        // Include up to 8000 chars of actual error output so the agent can
         // see exactly what line/file/message caused each failure.
         const output = qr.output.trim();
         if (output) {
-          prompt += `\n\`\`\`\n${output.slice(0, 3000)}\n\`\`\`\n`;
+          prompt += `\n\`\`\`\n${output.slice(0, 8000)}\n\`\`\`\n`;
         }
       }
 
+      // Include the git diff of uncommitted changes so the agent knows exactly
+      // what code it wrote that needs fixing. This is critical context for
+      // surgical error fixes.
+      try {
+        const storyCwd = this.resolveStoryCwd(story.id);
+        const diffProc = Bun.spawnSync(['git', 'diff', '--stat'], {
+          cwd: storyCwd,
+          stdout: 'pipe',
+          stderr: 'pipe',
+        });
+        const diffStat = diffProc.stdout.toString().trim();
+        if (diffStat) {
+          prompt += `\n### Your Changes (git diff --stat)\n\`\`\`\n${diffStat.slice(0, 2000)}\n\`\`\`\n`;
+        }
+      } catch {
+        /* non-critical */
+      }
+
       prompt += `\nFix these errors. Keep all working code intact. Do not restructure or rewrite unchanged files.`;
+      prompt += `\nTIP: Run the project's typecheck command yourself before declaring you're done, to verify your fixes.`;
     }
 
     // Add learnings from previous attempts (always useful context, even on fix-up)
@@ -1332,6 +1613,17 @@ ${criteria}
     const stories = this.getAllStories();
     const completed = stories.filter((s) => s.status === 'completed');
     const remaining = stories.filter((s) => s.status === 'pending' || s.status === 'in_progress');
+
+    // If the story description mentions specific packages or file paths, hint which
+    // packages the agent should verify typechecking for
+    const qualityChecks = this.config.qualityChecks.filter((c) => c.enabled);
+    if (qualityChecks.length > 0) {
+      prompt += '\n\n## Quality Checks That Will Run';
+      for (const qc of qualityChecks) {
+        prompt += `\n- **${qc.name}** (${qc.type}${qc.required ? ', required' : ''}): \`${qc.command}\``;
+      }
+      prompt += '\n\nMake sure your changes pass these checks before completion.';
+    }
 
     prompt += `\n\n## Project Progress
 - Completed: ${completed.length} of ${stories.length} stories
@@ -1828,9 +2120,50 @@ ${criteria}
     await beforeStatusProc.exited;
     console.log(`${tag} [gitCommit] Status BEFORE git add:`, beforeStatus);
 
+    // Run prettier on changed files BEFORE staging to prevent pre-commit hook
+    // failures from lint-staged/prettier reformatting staged files.
+    try {
+      // Get list of changed files (modified + new) to format only those
+      const changedFiles = beforeStatus
+        .trim()
+        .split('\n')
+        .filter((l) => l.trim())
+        .map((l) => l.trim().slice(3)) // strip git status prefix (e.g. " M ", "?? ")
+        .filter(
+          (f) =>
+            f.endsWith('.ts') ||
+            f.endsWith('.js') ||
+            f.endsWith('.svelte') ||
+            f.endsWith('.json') ||
+            f.endsWith('.css') ||
+            f.endsWith('.html') ||
+            f.endsWith('.md'),
+        );
+
+      if (changedFiles.length > 0) {
+        console.log(
+          `${tag} [gitCommit] Running prettier on ${changedFiles.length} file(s) before staging...`,
+        );
+        const prettierProc = Bun.spawn(['npx', 'prettier', '--write', ...changedFiles], {
+          cwd: commitCwd,
+          stdout: 'pipe',
+          stderr: 'pipe',
+          env: { ...process.env, FORCE_COLOR: '0' },
+        });
+        // Short timeout — prettier should be fast
+        const prettierTimeout = setTimeout(() => prettierProc.kill(), 60_000);
+        await prettierProc.exited;
+        clearTimeout(prettierTimeout);
+        console.log(`${tag} [gitCommit] Prettier formatting complete`);
+      }
+    } catch (prettierErr) {
+      // Non-fatal — continue with commit even if prettier fails
+      console.warn(`${tag} [gitCommit] Prettier failed (non-fatal):`, prettierErr);
+    }
+
     // Stage all changes
     const addProc = Bun.spawn(['git', 'add', '-A'], {
-      cwd: this.workspacePath,
+      cwd: commitCwd,
       stdout: 'pipe',
       stderr: 'pipe',
     });
@@ -1842,7 +2175,7 @@ ${criteria}
 
     // Check status AFTER staging, BEFORE commit
     const afterAddProc = Bun.spawn(['git', 'status', '--porcelain'], {
-      cwd: this.workspacePath,
+      cwd: commitCwd,
       stdout: 'pipe',
       stderr: 'pipe',
     });
@@ -1852,7 +2185,7 @@ ${criteria}
 
     // Check if there are staged changes
     const diffProc = Bun.spawn(['git', 'diff', '--cached', '--quiet'], {
-      cwd: this.workspacePath,
+      cwd: commitCwd,
       stdout: 'pipe',
       stderr: 'pipe',
     });
@@ -1871,7 +2204,7 @@ ${criteria}
       `${tag} [gitCommit] Starting commit (timeout: ${GIT_COMMIT_TIMEOUT_MS / 1000}s)...`,
     );
     const commitProc = Bun.spawn(['git', 'commit', '-m', msg], {
-      cwd: this.workspacePath,
+      cwd: commitCwd,
       stdout: 'pipe',
       stderr: 'pipe',
     });
@@ -1900,7 +2233,7 @@ ${criteria}
 
     // Check status AFTER commit
     const afterCommitProc = Bun.spawn(['git', 'status', '--porcelain'], {
-      cwd: this.workspacePath,
+      cwd: commitCwd,
       stdout: 'pipe',
       stderr: 'pipe',
     });
@@ -1910,7 +2243,7 @@ ${criteria}
 
     // Get commit SHA
     const shaProc = Bun.spawn(['git', 'rev-parse', 'HEAD'], {
-      cwd: this.workspacePath,
+      cwd: commitCwd,
       stdout: 'pipe',
       stderr: 'pipe',
     });

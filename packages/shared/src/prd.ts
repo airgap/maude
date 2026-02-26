@@ -194,7 +194,14 @@ export interface QualityCheckResult {
 
 // --- Loop Orchestrator Types ---
 
-export type LoopStatus = 'idle' | 'running' | 'paused' | 'completed' | 'failed' | 'cancelled';
+export type LoopStatus =
+  | 'idle'
+  | 'running'
+  | 'paused'
+  | 'completed'
+  | 'completed_with_failures'
+  | 'failed'
+  | 'cancelled';
 
 export interface LoopConfig {
   maxIterations: number; // max total iterations across all stories

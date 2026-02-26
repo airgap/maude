@@ -362,7 +362,10 @@ describe('File Routes — Worktree Context', () => {
 
     test('POST /create works without story context', async () => {
       fsState.statError = 'ENOENT';
-      const res = await app.request('/create', jsonReq('POST', { path: '/tmp/c.txt', content: '' }));
+      const res = await app.request(
+        '/create',
+        jsonReq('POST', { path: '/tmp/c.txt', content: '' }),
+      );
       const json = await res.json();
       expect(json.ok).toBe(true);
     });
@@ -585,10 +588,7 @@ describe('File Routes — Worktree Context', () => {
 
     test('write returns 500 on write error', async () => {
       fsState.writeFileError = 'permission denied';
-      const res = await app.request(
-        '/write',
-        jsonReq('PUT', { path: '/tmp/w.txt', content: 'x' }),
-      );
+      const res = await app.request('/write', jsonReq('PUT', { path: '/tmp/w.txt', content: 'x' }));
       expect(res.status).toBe(500);
     });
 
@@ -689,9 +689,7 @@ describe('File Route Helper Functions', () => {
 
     test('maps worktree subpath to workspace subpath', () => {
       const worktreePath = join(ctx.effectivePath, 'src/file.ts');
-      expect(translateToWorkspace(worktreePath, ctx)).toBe(
-        join(ctx.workspacePath, 'src/file.ts'),
-      );
+      expect(translateToWorkspace(worktreePath, ctx)).toBe(join(ctx.workspacePath, 'src/file.ts'));
     });
 
     test('returns non-worktree paths as-is', () => {
