@@ -1276,6 +1276,129 @@ export const api = {
         method: 'POST',
         body: JSON.stringify({ path }),
       }),
+    /**
+     * Smart Commit: one-click analyze → group → stage → commit via SSE stream.
+     * Combines Suggest Groups + Generate Message + Commit All in a single flow.
+     */
+    smartCommit: async (
+      path: string,
+      onProgress: (event: {
+        type:
+          | 'status'
+          | 'groups'
+          | 'committing'
+          | 'committed'
+          | 'group-error'
+          | 'complete'
+          | 'error';
+        message?: string;
+        groups?: Array<{
+          index: number;
+          name: string;
+          message: string;
+          files: string[];
+          reason: string;
+        }>;
+        index?: number;
+        total?: number;
+        name?: string;
+        fileCount?: number;
+        sha?: string;
+        committed?: number;
+        shas?: string[];
+      }) => void,
+    ): Promise<{ ok: boolean; committed?: number; shas?: string[]; error?: string }> => {
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+      };
+      const token = getAuthToken();
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+      if (_csrfToken) headers['X-CSRF-Token'] = _csrfToken;
+
+      let response: Response;
+      try {
+        response = await fetch(`${getBaseUrl()}/git/smart-commit`, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({ path }),
+        });
+      } catch (err) {
+        return { ok: false, error: String(err) };
+      }
+
+      if (!response.ok || !response.body) {
+        const body = await response.json().catch(() => ({ error: response.statusText }));
+        return { ok: false, error: body.error || `HTTP ${response.status}` };
+      }
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+      let gotComplete = false;
+      let lastError = '';
+      let committed = 0;
+      let shas: string[] = [];
+
+      try {
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split('\n');
+          buffer = lines.pop() || '';
+
+          for (const line of lines) {
+            if (line.startsWith('data: ')) {
+              try {
+                const event = JSON.parse(line.slice(6));
+                onProgress(event);
+                if (event.type === 'complete') {
+                  gotComplete = true;
+                  committed = event.committed ?? 0;
+                  shas = event.shas ?? [];
+                }
+                if (event.type === 'error') {
+                  lastError = event.message || 'Smart commit failed';
+                }
+              } catch {
+                // skip malformed SSE
+              }
+            }
+          }
+        }
+
+        // Process remaining buffer
+        if (buffer.trim() && buffer.startsWith('data: ')) {
+          try {
+            const event = JSON.parse(buffer.slice(6));
+            onProgress(event);
+            if (event.type === 'complete') {
+              gotComplete = true;
+              committed = event.committed ?? 0;
+              shas = event.shas ?? [];
+            }
+            if (event.type === 'error') {
+              lastError = event.message || 'Smart commit failed';
+            }
+          } catch {
+            // skip
+          }
+        }
+
+        if (lastError) return { ok: false, error: lastError };
+        if (!gotComplete) {
+          return {
+            ok: false,
+            error:
+              'Smart commit stream ended unexpectedly — the connection may have been interrupted.',
+          };
+        }
+        return { ok: true, committed, shas };
+      } catch (err) {
+        return { ok: false, error: String(err) };
+      }
+    },
   },
 
   // --- Workspace Memory ---

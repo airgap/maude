@@ -8,9 +8,21 @@
   let workspacePath = $derived(settingsStore.workspacePath || '');
   let locked = $derived(gitStore.indexLocked);
 
+  let smartCommitting = $state(false);
+
   async function handleSuggest() {
     if (!workspacePath) return;
     await commitGroupsStore.suggest(workspacePath);
+  }
+
+  async function handleSmartCommit() {
+    if (!workspacePath || smartCommitting) return;
+    smartCommitting = true;
+    try {
+      await commitGroupsStore.smartCommit(workspacePath);
+    } finally {
+      smartCommitting = false;
+    }
   }
 
   async function handleCommitGroup(groupId: string) {
@@ -59,7 +71,7 @@
           d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"
         />
       </svg>
-      <span>Analyzing changes…</span>
+      <span>{commitGroupsStore.statusMessage || 'Analyzing changes…'}</span>
     </div>
 
     <!-- Error state -->
@@ -73,20 +85,47 @@
   {:else if !commitGroupsStore.hasGroups}
     <div class="cg-empty">
       <p>AI groups your changes into logical commits</p>
-      <button class="cg-suggest-btn" onclick={handleSuggest} disabled={!workspacePath || locked}>
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M15 4V2" />
-          <path d="M15 16v-2" />
-          <path d="M8 9h2" />
-          <path d="M20 9h2" />
-          <path d="M17.8 11.8L19 13" />
-          <path d="M15 9h0" />
-          <path d="M17.8 6.2L19 5" />
-          <path d="M3 21l9-9" />
-          <path d="M12.2 6.2L11 5" />
-        </svg>
-        Suggest Groups
-      </button>
+      <div class="cg-empty-actions">
+        <button class="cg-suggest-btn" onclick={handleSuggest} disabled={!workspacePath || locked}>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M15 4V2" />
+            <path d="M15 16v-2" />
+            <path d="M8 9h2" />
+            <path d="M20 9h2" />
+            <path d="M17.8 11.8L19 13" />
+            <path d="M15 9h0" />
+            <path d="M17.8 6.2L19 5" />
+            <path d="M3 21l9-9" />
+            <path d="M12.2 6.2L11 5" />
+          </svg>
+          Suggest Groups
+        </button>
+        <button
+          class="cg-smart-commit-btn"
+          onclick={handleSmartCommit}
+          disabled={!workspacePath || locked || smartCommitting}
+          title="Analyze, group, and commit all changes in one go"
+        >
+          {#if smartCommitting}
+            <svg
+              class="spin"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+            >
+              <path
+                d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"
+              />
+            </svg>
+          {:else}
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" />
+            </svg>
+          {/if}
+          Smart Commit
+        </button>
+      </div>
     </div>
 
     <!-- Groups list -->
@@ -308,6 +347,13 @@
     color: var(--text-muted);
   }
 
+  .cg-empty-actions {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+
   .cg-suggest-btn {
     display: flex;
     align-items: center;
@@ -333,6 +379,35 @@
   }
 
   .cg-suggest-btn svg {
+    width: 14px;
+    height: 14px;
+  }
+
+  .cg-smart-commit-btn {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 5px 12px;
+    border: none;
+    border-radius: 4px;
+    background: var(--accent);
+    color: white;
+    font-size: var(--fs-xs);
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.12s;
+  }
+
+  .cg-smart-commit-btn:hover:not(:disabled) {
+    opacity: 0.9;
+  }
+
+  .cg-smart-commit-btn:disabled {
+    opacity: 0.4;
+    cursor: default;
+  }
+
+  .cg-smart-commit-btn svg {
     width: 14px;
     height: 14px;
   }

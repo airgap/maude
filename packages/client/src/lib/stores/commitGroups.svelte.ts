@@ -73,6 +73,8 @@ function createCommitGroupsStore() {
   let loading = $state(false);
   let error = $state<string | null>(restored?.error ?? null);
   let commitProgress = $state<{ current: number; total: number } | null>(null);
+  /** Status message from streaming operations (Smart Commit). */
+  let statusMessage = $state<string | null>(null);
   /** Workspace path for an in-progress batch — persisted so we can resume after HMR. */
   let batchWorkspacePath: string | null = restored?.batchWorkspacePath ?? null;
 
@@ -115,6 +117,9 @@ function createCommitGroupsStore() {
     },
     get commitProgress() {
       return commitProgress;
+    },
+    get statusMessage() {
+      return statusMessage;
     },
 
     /**
@@ -344,6 +349,104 @@ function createCommitGroupsStore() {
     },
 
     /**
+     * Smart Commit: one-click analyze → group → stage → commit.
+     *
+     * Calls the server's streaming endpoint that does everything in one pass.
+     * Groups appear in the store as they're identified, then flip to 'committed'
+     * as each group is committed server-side. No user review step.
+     */
+    async smartCommit(
+      workspacePath: string,
+    ): Promise<{ ok: boolean; committed?: number; error?: string }> {
+      loading = true;
+      error = null;
+      groups = [];
+      commitProgress = null;
+
+      // Pause git polling — server will be doing reset/add/commit cycles
+      gitStore.stopPolling();
+      batchWorkspacePath = workspacePath;
+      persist();
+
+      try {
+        const result = await api.git.smartCommit(workspacePath, (event) => {
+          switch (event.type) {
+            case 'status':
+              statusMessage = event.message || null;
+              break;
+
+            case 'groups':
+              // Server determined the groups — populate the store
+              if (event.groups) {
+                groups = event.groups.map((g) => ({
+                  id: genId(),
+                  name: g.name,
+                  message: g.message,
+                  files: [...g.files],
+                  reason: g.reason,
+                  status: 'pending' as const,
+                }));
+                loading = false;
+                commitProgress = { current: 0, total: groups.length };
+                persist();
+              }
+              break;
+
+            case 'committing':
+              if (event.index != null && groups[event.index]) {
+                groups[event.index].status = 'committing';
+                commitProgress = {
+                  current: (event.index ?? 0) + 1,
+                  total: event.total ?? groups.length,
+                };
+                persist();
+              }
+              break;
+
+            case 'committed':
+              if (event.index != null && groups[event.index]) {
+                groups[event.index].status = 'committed';
+                persist();
+              }
+              break;
+
+            case 'group-error':
+              if (event.index != null && groups[event.index]) {
+                groups[event.index].status = 'failed';
+                groups[event.index].error = event.message;
+                persist();
+              }
+              break;
+
+            case 'error':
+              error = event.message || 'Smart commit failed';
+              persist();
+              break;
+          }
+        });
+
+        if (!result.ok) {
+          error = result.error || 'Smart commit failed';
+        }
+        return {
+          ok: result.ok,
+          committed: result.committed,
+          error: result.error,
+        };
+      } catch (err) {
+        error = String(err);
+        return { ok: false, error: String(err) };
+      } finally {
+        loading = false;
+        commitProgress = null;
+        statusMessage = null;
+        batchWorkspacePath = null;
+        persist();
+        gitStore.startPolling(workspacePath);
+      }
+    },
+
+    /**
      * Clear all groups and reset state.
      */
     clear() {
@@ -351,6 +454,7 @@ function createCommitGroupsStore() {
       loading = false;
       error = null;
       commitProgress = null;
+      statusMessage = null;
       batchWorkspacePath = null;
       persist();
     },
