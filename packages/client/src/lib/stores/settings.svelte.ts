@@ -344,37 +344,53 @@ function createSettingsStore() {
     const config = findTheme(themeId);
     const visualStyle = getVisualStyle(themeId);
 
-    // Clear all previously applied inline CSS vars
-    for (const key of Array.from(root.style)) {
-      if (key.startsWith('--')) root.style.removeProperty(key);
-    }
-
-    // Set data-theme attribute for CSS color selectors
+    // Set data-theme and data-hypertheme FIRST so CSS [data-theme] selectors
+    // resolve correctly before we touch any inline vars. This prevents a flash
+    // when standard themes have their inline --bg-primary removed (they fall
+    // back to the CSS selector value, which must already be pointing at the
+    // correct theme).
     if (config?.category === 'immersive') {
       root.setAttribute('data-theme', config.type);
     } else if (themeId.startsWith('custom-') && state.customThemes[themeId]) {
-      const ct = state.customThemes[themeId];
-      root.setAttribute('data-theme', ct.type);
-      for (const [varName, value] of Object.entries(ct.cssVars)) {
-        root.style.setProperty(varName, value);
-      }
+      root.setAttribute('data-theme', state.customThemes[themeId].type);
     } else {
       root.setAttribute('data-theme', themeId);
     }
-
-    // Set data-hypertheme attribute for structural CSS selectors
     root.setAttribute('data-hypertheme', visualStyle);
 
-    // Apply structural CSS vars (--ht-*)
+    // Collect the complete set of new inline CSS vars
+    const newVars = new Map<string, string>();
+
+    // Structural CSS vars (--ht-*)
     const effectiveConfig = config || getDefaultTheme();
     for (const [varName, value] of Object.entries(effectiveConfig.cssVars)) {
-      root.style.setProperty(varName, value);
+      newVars.set(varName, value);
     }
 
-    // Apply color overrides for immersive themes
+    // Color overrides for immersive themes
     if (effectiveConfig.colorOverrides) {
       for (const [varName, value] of Object.entries(effectiveConfig.colorOverrides)) {
-        root.style.setProperty(varName, value);
+        newVars.set(varName, value);
+      }
+    }
+
+    // Custom theme vars
+    if (themeId.startsWith('custom-') && state.customThemes[themeId]) {
+      const ct = state.customThemes[themeId];
+      for (const [varName, value] of Object.entries(ct.cssVars)) {
+        newVars.set(varName, value);
+      }
+    }
+
+    // Apply new values (overwrites existing), then remove stale vars.
+    // Since data-theme is already correct, removing a stale inline var
+    // falls back to the right CSS value — no flash.
+    for (const [varName, value] of newVars) {
+      root.style.setProperty(varName, value);
+    }
+    for (const key of Array.from(root.style)) {
+      if (key.startsWith('--') && !newVars.has(key)) {
+        root.style.removeProperty(key);
       }
     }
   }
