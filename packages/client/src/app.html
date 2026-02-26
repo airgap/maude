@@ -15,10 +15,40 @@
     <link rel="icon" href="/icons/icon.svg" type="image/svg+xml" />
     <link rel="apple-touch-icon" href="/icons/icon-maskable.svg" />
     <script>
-      // Set --bg-primary from saved theme BEFORE first paint so splash isn't grey
+      // Set --bg-primary from saved theme BEFORE first paint so splash isn't grey.
+      // This is the static-app equivalent of SSR — must stay synchronous in <head>.
       try {
         var s = JSON.parse(localStorage.getItem('e-settings') || '{}');
         var bg = {
+          // Standard themes
+          dark: '#040810',
+          light: '#e8eef2',
+          'dark-colorblind': '#040810',
+          'light-colorblind': '#e8eef2',
+          'dark-ansi': '#000000',
+          'light-ansi': '#f0f0f0',
+          monokai: '#272822',
+          dracula: '#282a36',
+          nord: '#2e3440',
+          'gruvbox-dark': '#282828',
+          'gruvbox-light': '#fbf1c7',
+          'solarized-dark': '#002b36',
+          'solarized-light': '#fdf6e3',
+          'catppuccin-mocha': '#1e1e2e',
+          'catppuccin-latte': '#eff1f5',
+          'tokyo-night': '#1a1b26',
+          'rose-pine': '#191724',
+          'rose-pine-dawn': '#faf4ed',
+          synthwave: '#262335',
+          'github-dark': '#0d1117',
+          'github-light': '#ffffff',
+          'one-dark': '#282c34',
+          everforest: '#2d353b',
+          sakura: '#1a1017',
+          'sakura-light': '#fdf6f9',
+          'high-contrast': '#000000',
+          'high-contrast-light': '#ffffff',
+          // Immersive themes
           arcane: '#0a0612',
           ethereal: '#08090f',
           astral: '#020817',
@@ -27,7 +57,16 @@
           goth: '#080808',
           'magic-forest': '#070d08',
         }[s.theme];
-        if (bg) document.documentElement.style.setProperty('--bg-primary', bg);
+        if (bg) {
+          document.documentElement.style.setProperty('--bg-primary', bg);
+          // Inject a literal-color rule for #splash at higher specificity (0-1-1
+          // beats the inline <style>'s 0-1-0). This makes the splash immune to
+          // any later JS that clears/resets --bg-primary during hydration.
+          var st = document.createElement('style');
+          st.id = 'splash-theme';
+          st.textContent = 'html #splash{background-color:' + bg + '}';
+          document.head.appendChild(st);
+        }
       } catch (e) {}
 
       // Register service worker for PWA (install prompt + offline support)
@@ -50,6 +89,18 @@
         transition:
           opacity 0.3s ease,
           visibility 0.3s ease;
+      }
+      #splash::after {
+        content: '';
+        position: absolute;
+        inset: 0;
+        background: url('/splash-bg.png') center center / cover no-repeat;
+        image-rendering: pixelated;
+        image-rendering: crisp-edges;
+        opacity: 0.06;
+        mix-blend-mode: screen;
+        filter: invert(1);
+        pointer-events: none;
       }
       #splash.dismissed {
         opacity: 0;
