@@ -1374,19 +1374,29 @@ export class LoopRunner {
     } finally {
       this.stopHeartbeat();
       // Safety net: if the loop somehow exits without setting a terminal status,
-      // mark it as failed so it doesn't appear stuck as "running" forever.
+      // do NOT immediately mark it as failed. During hot reloads, the runner's
+      // finally block fires as the old module is replaced, but the new
+      // orchestrator's startup recovery will detect the orphaned loop and
+      // auto-resume it. Marking it failed here would prevent that recovery.
+      //
+      // Instead, just update the heartbeat to "now" so the zombie checker
+      // knows this loop was recently alive. The zombie checker (30s interval)
+      // and startup recovery will handle the rest — either auto-resuming if
+      // there's pending work, or marking as failed/completed if not.
       try {
         const db = getDb();
         const row = db.query('SELECT status FROM loops WHERE id = ?').get(this.loopId) as any;
         if (row && (row.status === 'running' || row.status === 'paused')) {
           console.warn(
-            `[loop:${this.loopId}] Safety net: loop exited while still "${row.status}", marking failed`,
+            `[loop:${this.loopId}] Runner exiting while still "${row.status}" — leaving for zombie recovery to handle (hot reload safe)`,
           );
-          db.query(
-            'UPDATE loops SET status = ?, completed_at = ?, current_story_id = NULL, current_agent_id = NULL WHERE id = ?',
-          ).run('failed', Date.now(), this.loopId);
-          this.emitEvent('failed', { message: 'Loop runner exited unexpectedly.' });
-          this.events.emit('loop_done', this.loopId);
+          // Stamp a fresh heartbeat so zombie recovery doesn't immediately
+          // mark it as stale. The orchestrator's recoverOrResumeZombieLoops()
+          // will pick it up on the next startup or 30s check cycle.
+          db.query('UPDATE loops SET last_heartbeat = ? WHERE id = ?').run(
+            Date.now(),
+            this.loopId,
+          );
         }
       } catch {
         /* best effort */
