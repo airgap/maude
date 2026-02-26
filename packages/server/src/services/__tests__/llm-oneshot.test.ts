@@ -788,7 +788,7 @@ describe('callLlm — Kiro fallback (Anthropic API)', () => {
     await callLlm(defaultOpts);
     warnSpy.mockRestore();
 
-    expect(capturedBody.model).toBe('claude-sonnet-4-5-20250929');
+    expect(capturedBody.model).toBe('claude-sonnet-4-6');
 
     if (originalKey !== undefined) {
       process.env.ANTHROPIC_API_KEY = originalKey;

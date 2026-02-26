@@ -59,9 +59,12 @@ run_group "worktree merge + db (isolated)" \
   src/services/__tests__/worktree-merge.test.ts \
   src/services/__tests__/worktree-db.test.ts
 
-# Group 6b: worktree route + service tests (different mock patterns)
-run_group "worktree routes + service (isolated)" \
-  src/routes/__tests__/worktrees.test.ts \
+# Group 6b: worktree route tests (mocks worktree-service — must be isolated from service tests)
+run_group "worktree routes (isolated)" \
+  src/routes/__tests__/worktrees.test.ts
+
+# Group 6c: worktree service tests (uses real worktree-service — must be isolated from route mocks)
+run_group "worktree service (isolated)" \
   src/services/__tests__/worktree-service.test.ts
 
 # Group 7: everything else (no contamination issues among these)

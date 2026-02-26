@@ -4,7 +4,7 @@ import { describe, test, expect, vi, beforeEach } from 'vitest';
 vi.mock('$lib/stores/settings.svelte', () => ({
   settingsStore: {
     theme: 'dark',
-    model: 'claude-sonnet-4-5-20250929',
+    model: 'claude-sonnet-4-6',
     permissionMode: 'safe',
     effort: 'high',
     setTheme: vi.fn(),
@@ -54,7 +54,7 @@ vi.mock('$lib/api/client', () => ({
           inputTokens: 300,
           outputTokens: 700,
           estimatedCostUsd: 0.015,
-          model: 'claude-sonnet-4-5-20250929',
+          model: 'claude-sonnet-4-6',
         },
       }),
     },
@@ -174,7 +174,7 @@ describe('executeSlashCommand', () => {
 
   test('/model with sonnet shorthand', () => {
     executeSlashCommand('model', { ...ctx, args: 'sonnet' });
-    expect(settingsStore.setModel).toHaveBeenCalledWith('claude-sonnet-4-5-20250929');
+    expect(settingsStore.setModel).toHaveBeenCalledWith('claude-sonnet-4-6');
   });
 
   test('/model with haiku shorthand', () => {
@@ -328,7 +328,7 @@ describe('executeSlashCommand', () => {
     const call = (conversationStore.addMessage as any).mock.calls[0][0];
     expect(call.content[0].text).toContain('Session: session-1');
     expect(call.content[0].text).toContain('Status: idle');
-    expect(call.content[0].text).toContain('Model: claude-sonnet-4-5-20250929');
+    expect(call.content[0].text).toContain('Model: claude-sonnet-4-6');
   });
 
   test('/permissions with plan mode sets it', () => {

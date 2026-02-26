@@ -265,7 +265,7 @@ describe('Conversation Routes', () => {
       // Verify the record exists in DB
       const row = testDb.query('SELECT * FROM conversations WHERE id = ?').get(json.data.id) as any;
       expect(row.title).toBe('New Conversation');
-      expect(row.model).toBe('claude-sonnet-4-5-20250929');
+      expect(row.model).toBe('claude-sonnet-4-6');
       expect(row.permission_mode).toBe('default');
       expect(row.effort).toBe('high');
     });

@@ -1379,7 +1379,7 @@ describe('initDatabase() — data operations', () => {
       .query('SELECT * FROM conversations WHERE id = ?')
       .get('test-conv-defaults') as any;
     expect(row.title).toBe('New Conversation');
-    expect(row.model).toBe('claude-sonnet-4-5-20250929');
+    expect(row.model).toBe('claude-sonnet-4-6');
     expect(row.plan_mode).toBe(0);
     expect(row.total_tokens).toBe(0);
   });

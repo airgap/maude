@@ -55,6 +55,39 @@ mock.module('../../services/worktree-service', () => ({
 }));
 
 // ---------------------------------------------------------------------------
+// Mock merge service — mutable state per test
+// ---------------------------------------------------------------------------
+
+let mockMergeResult: any = {
+  ok: true,
+  status: 'merged',
+  commitSha: 'abc123',
+  operationLog: [],
+};
+
+let mockRetryResult: any = {
+  ok: true,
+  status: 'merged',
+  commitSha: 'abc123',
+  operationLog: [],
+};
+
+mock.module('../../services/worktree-merge', () => ({
+  merge: async () => mockMergeResult,
+  retry: async () => mockRetryResult,
+}));
+
+// ---------------------------------------------------------------------------
+// Mock LSP instance manager
+// ---------------------------------------------------------------------------
+
+mock.module('../../services/lsp-instance-manager', () => ({
+  lspManager: {
+    shutdownForRoot: () => {},
+  },
+}));
+
+// ---------------------------------------------------------------------------
 // Mock Bun.spawn — for status endpoint git commands
 // ---------------------------------------------------------------------------
 
@@ -116,6 +149,18 @@ function resetMockState() {
     removeRecord: { ok: true },
     prune: { ok: true, data: 0 },
     updateStatus: { ok: true, data: { ...defaultRecord, status: 'merging' } },
+  };
+  mockMergeResult = {
+    ok: true,
+    status: 'merged',
+    commitSha: 'abc123',
+    operationLog: [],
+  };
+  mockRetryResult = {
+    ok: true,
+    status: 'merged',
+    commitSha: 'abc123',
+    operationLog: [],
   };
 }
 
@@ -685,16 +730,6 @@ describe('Worktree Routes', () => {
       expect(json.ok).toBe(false);
     });
 
-    test('returns 409 if already merging', async () => {
-      mockState.getForStory = { ...defaultRecord, status: 'merging' };
-
-      const res = await app.request('/test-story/merge', { method: 'POST' });
-      expect(res.status).toBe(409);
-      const json = await res.json();
-      expect(json.ok).toBe(false);
-      expect(json.error).toContain('already merging');
-    });
-
     test('returns 409 if already merged', async () => {
       mockState.getForStory = { ...defaultRecord, status: 'merged' };
 
@@ -705,24 +740,31 @@ describe('Worktree Routes', () => {
       expect(json.error).toContain('already merged');
     });
 
-    test('returns 202 on successful merge initiation', async () => {
+    test('returns 200 on successful merge', async () => {
       mockState.getForStory = { ...defaultRecord, status: 'active' };
-      mockState.updateStatus = {
+      mockMergeResult = {
         ok: true,
-        data: { ...defaultRecord, status: 'merging' },
+        status: 'merged',
+        commitSha: 'abc123',
+        operationLog: [],
       };
 
       const res = await app.request('/test-story/merge', { method: 'POST' });
-      expect(res.status).toBe(202);
+      expect(res.status).toBe(200);
       const json = await res.json();
       expect(json.ok).toBe(true);
       expect(json.data.storyId).toBe('test-story');
-      expect(json.data.status).toBe('merging');
+      expect(json.data.status).toBe('merged');
     });
 
-    test('returns 400 on updateStatus failure', async () => {
+    test('returns 400 on merge failure', async () => {
       mockState.getForStory = { ...defaultRecord, status: 'active' };
-      mockState.updateStatus = { ok: false, error: 'DB error' };
+      mockMergeResult = {
+        ok: false,
+        error: 'Pre-check failed',
+        status: 'active',
+        operationLog: [],
+      };
 
       const res = await app.request('/test-story/merge', { method: 'POST' });
       expect(res.status).toBe(400);
@@ -730,15 +772,37 @@ describe('Worktree Routes', () => {
       expect(json.ok).toBe(false);
     });
 
-    test('allows merge from conflict state', async () => {
-      mockState.getForStory = { ...defaultRecord, status: 'conflict' };
-      mockState.updateStatus = {
-        ok: true,
-        data: { ...defaultRecord, status: 'merging' },
+    test('returns 409 on merge conflict', async () => {
+      mockState.getForStory = { ...defaultRecord, status: 'active' };
+      mockMergeResult = {
+        ok: false,
+        error: 'Merge conflict',
+        status: 'conflict',
+        conflictingFiles: ['file.ts'],
+        operationLog: [],
       };
 
       const res = await app.request('/test-story/merge', { method: 'POST' });
-      expect(res.status).toBe(202);
+      expect(res.status).toBe(409);
+      const json = await res.json();
+      expect(json.ok).toBe(false);
+      expect(json.conflictingFiles).toEqual(['file.ts']);
+    });
+
+    test('uses retry for conflict state', async () => {
+      mockState.getForStory = { ...defaultRecord, status: 'conflict' };
+      mockRetryResult = {
+        ok: true,
+        status: 'merged',
+        commitSha: 'def456',
+        operationLog: [],
+      };
+
+      const res = await app.request('/test-story/merge', { method: 'POST' });
+      expect(res.status).toBe(200);
+      const json = await res.json();
+      expect(json.ok).toBe(true);
+      expect(json.data.commitSha).toBe('def456');
     });
   });
 
@@ -966,15 +1030,17 @@ describe('Worktree Routes', () => {
       expect(res.status).toBe(409);
     });
 
-    test('POST /:storyId/merge returns 202 on acceptance', async () => {
+    test('POST /:storyId/merge returns 200 on success', async () => {
       mockState.getForStory = { ...defaultRecord, status: 'active' };
+      mockMergeResult = { ok: true, status: 'merged', commitSha: 'abc', operationLog: [] };
 
       const res = await app.request('/test-story/merge', { method: 'POST' });
-      expect(res.status).toBe(202);
+      expect(res.status).toBe(200);
     });
 
-    test('POST /:storyId/merge returns 409 for already-merging', async () => {
-      mockState.getForStory = { ...defaultRecord, status: 'merging' };
+    test('POST /:storyId/merge returns 409 for conflict', async () => {
+      mockState.getForStory = { ...defaultRecord, status: 'active' };
+      mockMergeResult = { ok: false, error: 'conflict', status: 'conflict', operationLog: [] };
 
       const res = await app.request('/test-story/merge', { method: 'POST' });
       expect(res.status).toBe(409);
