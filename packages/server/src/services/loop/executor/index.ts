@@ -19,7 +19,13 @@ export {
   AuthFailedError,
   isCloudError,
   wrapProviderError,
+  AWSProvider,
+  AWSAuthManager,
+  AWSEC2Manager,
+  AWSECSManager,
+  AWSVPCManager,
+  AWSPricingManager,
 } from './cloud';
-export type { CostSummary, RegionSelectionResult } from './cloud';
+export type { CostSummary, RegionSelectionResult, EC2LaunchResult, ResolvedVPCContext } from './cloud';
 export { SSHRemoteExecutor, SSHClient, HostHealthMonitor } from './ssh-remote';
 export type { SSHCommandResult } from './ssh-remote';

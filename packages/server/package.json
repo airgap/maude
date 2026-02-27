@@ -21,7 +21,13 @@
   "dependencies": {
     "@anthropic-ai/sdk": "^0.78.0",
     "@aws-sdk/client-bedrock-runtime": "^3.991.0",
+    "@aws-sdk/client-ec2": "^3.999.0",
+    "@aws-sdk/client-ecs": "^3.999.0",
+    "@aws-sdk/client-pricing": "^3.999.0",
+    "@aws-sdk/client-sts": "^3.999.0",
+    "@aws-sdk/credential-providers": "^3.999.0",
     "@e/shared": "workspace:*",
+    "@smithy/types": "^4.13.0",
     "editorconfig": "^3.0.1",
     "hono": "^4.7.0",
     "nanoid": "^5.0.0",

@@ -515,3 +515,28 @@ export {
   DEFAULT_REMOTE_HOST_CONFIG,
   DEFAULT_SSH_REMOTE_EXECUTOR_CONFIG,
 } from './ssh-remote-executor.js';
+
+export type {
+  AWSBackend,
+  EC2PurchaseModel,
+  AWSEC2Config,
+  AWSECSFargateConfig,
+  AWSVPCConfig,
+  AWSAuthConfig,
+  AWSProviderConfig,
+  AWSInstancePricing,
+  AWSFargatePricing,
+} from './aws-provider.js';
+
+export {
+  DEFAULT_AWS_EC2_CONFIG,
+  DEFAULT_AWS_ECS_FARGATE_CONFIG,
+  DEFAULT_AWS_VPC_CONFIG,
+  DEFAULT_AWS_AUTH_CONFIG,
+  DEFAULT_AWS_PROVIDER_CONFIG,
+  DEFAULT_FARGATE_PRICING,
+  AWS_COMMERCIAL_REGIONS,
+  AWS_GOVCLOUD_REGIONS,
+  AWS_CHINA_REGIONS,
+  AWS_REFERENCE_PRICING,
+} from './aws-provider.js';

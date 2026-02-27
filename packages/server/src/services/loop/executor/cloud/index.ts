@@ -28,3 +28,14 @@ export {
   isCloudError,
   wrapProviderError,
 } from './cloud-errors';
+
+// AWS Provider
+export {
+  AWSProvider,
+  AWSAuthManager,
+  AWSEC2Manager,
+  AWSECSManager,
+  AWSVPCManager,
+  AWSPricingManager,
+} from './aws';
+export type { EC2LaunchResult, ResolvedVPCContext } from './aws';
