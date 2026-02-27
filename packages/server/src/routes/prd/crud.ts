@@ -14,7 +14,9 @@ function emitPrdEvent(event: PrdEvent): void {
   }
 }
 
-// List PRDs (optionally filtered by workspacePath)
+// List PRDs (optionally filtered by workspacePath).
+// Includes stories for each PRD so clients can display counts immediately
+// without a separate per-PRD fetch.
 app.get('/', (c) => {
   const db = getDb();
   const workspacePath = c.req.query('workspacePath');
@@ -30,7 +32,15 @@ app.get('/', (c) => {
 
   return c.json({
     ok: true,
-    data: rows.map(prdFromRow),
+    data: rows.map((row) => {
+      const stories = db
+        .query('SELECT * FROM prd_stories WHERE prd_id = ? ORDER BY sort_order ASC, created_at ASC')
+        .all(row.id) as any[];
+      return {
+        ...prdFromRow(row),
+        stories: stories.map(storyFromRow),
+      };
+    }),
   });
 });
 
