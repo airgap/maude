@@ -386,9 +386,13 @@ export class LoopRunner {
     // fresh start may need up to (1 + maxFixUpAttempts) iterations (the initial
     // attempt plus fix-up passes). Auto-increase if the budget is too low.
     const stories = this.getAllStories();
+    // Only count stories that are actually eligible to be picked up (or currently running).
+    // 'failed', 'archived', 'skipped', 'qa', 'completed' stories won't be selected by
+    // selectNextStory(), so including them inflates the budget unnecessarily.
     const nonTerminalStories = stories.filter(
       (s) =>
-        s.status !== 'completed' && s.status !== 'qa' && s.status !== 'skipped' && !s.researchOnly,
+        (s.status === 'pending' || s.status === 'in_progress' || s.status === 'failed_timeout') &&
+        !s.researchOnly,
     );
     const maxAttempts = this.config.maxAttemptsPerStory || 3;
     const maxFixUps = this.config.maxFixUpAttempts ?? 2;
@@ -637,20 +641,29 @@ export class LoopRunner {
               message: `All ${stories.length} stories completed successfully!`,
               workspaceId: this.workspacePath,
             }).catch((err) => {
-              console.error(`[loop:${this.loopId}] Failed to send golem_completion notification:`, err);
+              console.error(
+                `[loop:${this.loopId}] Failed to send golem_completion notification:`,
+                err,
+              );
             });
           } else {
             const failedCount = stories.filter((s) => s.status === 'failed').length;
             sendNotification({
               event: 'golem_failure',
-              title: endStatus === 'completed_with_failures' ? 'Loop Partially Completed' : 'Loop Failed',
+              title:
+                endStatus === 'completed_with_failures'
+                  ? 'Loop Partially Completed'
+                  : 'Loop Failed',
               message:
                 endStatus === 'completed_with_failures'
                   ? `Loop finished: ${completedCount} completed, ${failedCount} failed.`
                   : `Loop completed with ${failedCount} failed story(ies). No more eligible stories to process.`,
               workspaceId: this.workspacePath,
             }).catch((err) => {
-              console.error(`[loop:${this.loopId}] Failed to send golem_failure notification:`, err);
+              console.error(
+                `[loop:${this.loopId}] Failed to send golem_failure notification:`,
+                err,
+              );
             });
           }
 
@@ -1393,10 +1406,7 @@ export class LoopRunner {
           // Stamp a fresh heartbeat so zombie recovery doesn't immediately
           // mark it as stale. The orchestrator's recoverOrResumeZombieLoops()
           // will pick it up on the next startup or 30s check cycle.
-          db.query('UPDATE loops SET last_heartbeat = ? WHERE id = ?').run(
-            Date.now(),
-            this.loopId,
-          );
+          db.query('UPDATE loops SET last_heartbeat = ? WHERE id = ?').run(Date.now(), this.loopId);
         }
       } catch {
         /* best effort */
@@ -1511,7 +1521,15 @@ export class LoopRunner {
 6. Do NOT ask questions — make reasonable decisions and document them
 7. After implementation, the system will automatically run quality checks
 8. IMPORTANT: Before declaring you are done, run the project's typecheck/build commands yourself to catch errors early
-9. If this is a monorepo, ensure your changes maintain type compatibility across packages (especially shared types)`;
+9. If this is a monorepo, ensure your changes maintain type compatibility across packages (especially shared types)
+10. Do NOT leave placeholder implementations, stubs, TODOs, or empty function bodies. Every function must have a complete, working implementation. The system will detect and fail placeholder code automatically.
+11. When writing or modifying tests, include a brief comment above each test explaining WHY the test exists — what behavior, edge case, or invariant it guards against. Future agents will lose your reasoning context; the test comment is the only record.
+
+## Critical: Story Management Rules
+- You are assigned ONE specific story. Do NOT attempt to implement other stories.
+- Do NOT use story management tools (update_story, list_stories, complete_story, etc.) to change the status of ANY story — the system manages story lifecycle automatically.
+- Stories marked as completed (✅) or in QA review (🔍) in the progress context are ALREADY DONE. Do not re-implement or modify their work unless your assigned story explicitly depends on correcting them.
+- Your job is solely to implement the assigned story and make the code changes required by its acceptance criteria.`;
 
     // Add project memory context
     try {
@@ -1628,7 +1646,9 @@ ${criteria}
 
     // Add progress context
     const stories = this.getAllStories();
-    const completed = stories.filter((s) => s.status === 'completed');
+    // Count both 'completed' and 'qa' as done — qa stories are fully implemented,
+    // just awaiting human approval. The agent should treat them as finished work.
+    const completed = stories.filter((s) => s.status === 'completed' || s.status === 'qa');
     const remaining = stories.filter((s) => s.status === 'pending' || s.status === 'in_progress');
 
     // If the story description mentions specific packages or file paths, hint which
@@ -1647,9 +1667,10 @@ ${criteria}
 - Remaining: ${remaining.length} stories (including this one)`;
 
     if (completed.length > 0) {
-      prompt += '\n\nAlready completed:';
+      prompt += '\n\nAlready completed (do not re-implement these):';
       for (const cs of completed) {
-        prompt += `\n- ✅ ${cs.title}`;
+        const label = cs.status === 'qa' ? '🔍' : '✅';
+        prompt += `\n- ${label} ${cs.title}${cs.status === 'qa' ? ' (in QA review)' : ''}`;
       }
     }
 

@@ -9,6 +9,9 @@ import type {
   ValidateACResponse,
   ACCriterionValidation,
   ACValidationIssue,
+  RefineAllRequest,
+  StoryRecommendation,
+  SuggestedNewStory,
 } from './helpers';
 
 const app = new Hono();
@@ -649,6 +652,297 @@ Analyze each criterion and identify any issues with specificity, measurability, 
   } catch (err) {
     return c.json(
       { ok: false, error: `Criteria validation failed: ${(err as Error).message}` },
+      500,
+    );
+  }
+});
+
+// --- PRD-Wide Story Refinement ---
+
+// Re-evaluate all pending/in-progress stories in a PRD against current codebase state
+app.post('/:prdId/refine-all', async (c) => {
+  const db = getDb();
+  const prdId = c.req.param('prdId');
+  const body = (await c.req.json().catch(() => ({}))) as RefineAllRequest;
+
+  const prdRow = db.query('SELECT * FROM prds WHERE id = ?').get(prdId) as any;
+  if (!prdRow) return c.json({ ok: false, error: 'PRD not found' }, 404);
+
+  const targetStatuses = body.statuses || ['pending', 'in_progress', 'failed'];
+  const includeCodeScan = body.includeCodeScan !== false; // default true
+
+  // Load all stories for the PRD
+  const allStoryRows = db
+    .query('SELECT * FROM prd_stories WHERE prd_id = ? ORDER BY sort_order ASC')
+    .all(prdId) as any[];
+  const allStories = allStoryRows.map(storyFromRow);
+
+  const targetStories = allStories.filter((s) => targetStatuses.includes(s.status));
+  const completedStories = allStories.filter(
+    (s) => s.status === 'completed' || s.status === 'qa',
+  );
+
+  if (targetStories.length === 0) {
+    return c.json({
+      ok: true,
+      data: {
+        prdId,
+        summary: 'No stories match the target statuses for refinement.',
+        storyRecommendations: [],
+        suggestedNewStories: [],
+      },
+    });
+  }
+
+  // Build codebase context
+  let codebaseContext = '';
+  if (includeCodeScan) {
+    try {
+      const { spawnSync } = Bun;
+      const cwd = prdRow.workspace_path;
+
+      // Recent git log
+      const logProc = spawnSync(['git', 'log', '--oneline', '-20'], {
+        cwd,
+        stdout: 'pipe',
+        stderr: 'pipe',
+      });
+      const gitLog = new TextDecoder().decode(logProc.stdout).trim();
+      if (gitLog) {
+        codebaseContext += `\n### Recent Git History\n\`\`\`\n${gitLog}\n\`\`\`\n`;
+      }
+
+      // Git diff stat (what's changed since last commit)
+      const diffProc = spawnSync(['git', 'diff', '--stat', 'HEAD'], {
+        cwd,
+        stdout: 'pipe',
+        stderr: 'pipe',
+      });
+      const diffStat = new TextDecoder().decode(diffProc.stdout).trim();
+      if (diffStat) {
+        codebaseContext += `\n### Uncommitted Changes\n\`\`\`\n${diffStat}\n\`\`\`\n`;
+      }
+
+      // Directory structure (top-level overview)
+      const treeProc = spawnSync(
+        ['find', '.', '-maxdepth', '3', '-type', 'f', '-not', '-path', '*/node_modules/*', '-not', '-path', '*/.git/*'],
+        { cwd, stdout: 'pipe', stderr: 'pipe' },
+      );
+      const treeOutput = new TextDecoder().decode(treeProc.stdout).trim();
+      if (treeOutput) {
+        const treeLines = treeOutput.split('\n').slice(0, 80);
+        codebaseContext += `\n### Project Structure (top files)\n\`\`\`\n${treeLines.join('\n')}\n\`\`\`\n`;
+      }
+    } catch {
+      /* codebase scan is best-effort */
+    }
+  }
+
+  // Build project memory context
+  let memoryContext = '';
+  try {
+    const memRows = db
+      .query(
+        `SELECT * FROM workspace_memories WHERE workspace_path = ? AND confidence >= 0.3 ORDER BY category, times_seen DESC LIMIT 30`,
+      )
+      .all(prdRow.workspace_path) as any[];
+    if (memRows.length > 0) {
+      const grouped: Record<string, string[]> = {};
+      for (const m of memRows) {
+        if (!grouped[m.category]) grouped[m.category] = [];
+        grouped[m.category].push(`- ${m.key}: ${m.content}`);
+      }
+      const labels: Record<string, string> = {
+        convention: 'Coding Conventions',
+        decision: 'Architecture Decisions',
+        preference: 'User Preferences',
+        pattern: 'Common Patterns',
+        context: 'Project Context',
+      };
+      memoryContext = '\n\n## Project Memory\n';
+      for (const [cat, items] of Object.entries(grouped)) {
+        memoryContext += `\n### ${labels[cat] || cat}\n${items.join('\n')}\n`;
+      }
+    }
+  } catch {
+    /* no project memory */
+  }
+
+  // Build the stories context
+  let storiesContext = '\n## Stories to Evaluate\n';
+  for (const s of targetStories) {
+    storiesContext += `\n### [${s.status.toUpperCase()}] ${s.title} (id: ${s.id})\n`;
+    storiesContext += `Priority: ${s.priority} | Attempts: ${s.attempts}\n`;
+    if (s.description) storiesContext += `Description: ${s.description}\n`;
+    storiesContext += `Acceptance Criteria:\n`;
+    for (const ac of s.acceptanceCriteria) {
+      storiesContext += `  - ${ac.description}\n`;
+    }
+    if (s.learnings.length > 0) {
+      storiesContext += `Learnings from previous attempts:\n`;
+      for (const l of s.learnings) {
+        storiesContext += `  - ${l}\n`;
+      }
+    }
+  }
+
+  let completedContext = '';
+  if (completedStories.length > 0) {
+    completedContext = '\n## Already Completed Stories\n';
+    for (const s of completedStories) {
+      completedContext += `- ✅ ${s.title}`;
+      if (s.learnings.length > 0) completedContext += ` (learnings: ${s.learnings.join('; ')})`;
+      completedContext += '\n';
+    }
+  }
+
+  const systemPrompt = `You are an expert technical product manager re-evaluating a PRD's stories against the current state of the codebase.
+
+Your job is to analyze each pending/in-progress story and recommend whether it should be kept as-is, updated, split, merged with another story, removed, or marked as already done.
+
+## Decision Framework
+
+For each story, consider:
+1. **Already implemented?** — Has the work described already been done (by a completed story or manual changes)?
+2. **Still relevant?** — Does the story still make sense given completed work and codebase state?
+3. **Scope correct?** — Is the story appropriately scoped, or should it be split/merged?
+4. **Acceptance criteria current?** — Are the criteria still accurate given what's been built?
+5. **Priority still correct?** — Has the priority changed based on dependencies or completed work?
+6. **Gaps?** — Are there missing stories that should exist based on the current codebase state?
+
+## Actions
+- **keep**: Story is fine as-is, no changes needed
+- **update**: Story needs updated description, criteria, or priority
+- **split**: Story is too large or covers multiple concerns — suggest how to split
+- **merge**: Story overlaps with another story — identify which ones to merge
+- **remove**: Story is no longer needed (duplicate, superseded, or irrelevant)
+- **already_done**: The work described has already been implemented
+
+You MUST respond with ONLY a valid JSON object. No markdown, no explanation, no code fences.
+
+{
+  "summary": "<1-3 sentence overall assessment of the PRD's current state>",
+  "storyRecommendations": [
+    {
+      "storyId": "<id>",
+      "storyTitle": "<current title>",
+      "action": "keep" | "update" | "split" | "merge" | "remove" | "already_done",
+      "reason": "<clear explanation for the recommendation>",
+      "suggestedChanges": {
+        "title": "<new title if updating>",
+        "description": "<new description if updating>",
+        "acceptanceCriteria": ["<updated criteria>"],
+        "priority": "critical" | "high" | "medium" | "low"
+      },
+      "mergeWith": ["<storyId>"]
+    }
+  ],
+  "suggestedNewStories": [
+    {
+      "title": "<title for a gap story>",
+      "description": "<what needs to be done and why>",
+      "acceptanceCriteria": ["<specific, testable criteria>"],
+      "priority": "critical" | "high" | "medium" | "low",
+      "reason": "<why this gap exists>"
+    }
+  ]
+}
+
+IMPORTANT:
+- Every target story MUST appear in storyRecommendations
+- suggestedChanges is optional (only when action is "update")
+- mergeWith is optional (only when action is "merge")
+- suggestedNewStories can be empty if no gaps found
+- Be specific in reasons — reference actual code/stories
+- Keep recommendations actionable and concise${memoryContext}`;
+
+  const userPrompt = `## PRD: ${prdRow.name}
+${prdRow.description || '(No description)'}
+${codebaseContext}${completedContext}${storiesContext}
+
+Re-evaluate these ${targetStories.length} stories against the current codebase state. Identify stories that are stale, redundant, already implemented, need updating, or should be split/merged. Also identify any gaps that need new stories.`;
+
+  try {
+    const rawResponse = await callLlm({ system: systemPrompt, user: userPrompt });
+
+    // Parse the JSON response
+    let rawText = rawResponse.trim();
+    if (rawText.startsWith('```')) {
+      rawText = rawText.replace(/^```(?:json)?\s*\n?/, '').replace(/\n?```\s*$/, '');
+    }
+
+    let parsed: any;
+    try {
+      parsed = JSON.parse(rawText);
+    } catch {
+      return c.json(
+        { ok: false, error: 'Failed to parse AI refinement response as JSON. Try again.' },
+        502,
+      );
+    }
+
+    // Validate and shape the response
+    const validActions = ['keep', 'update', 'split', 'merge', 'remove', 'already_done'];
+    const validPriorities = ['critical', 'high', 'medium', 'low'];
+
+    const storyRecommendations: StoryRecommendation[] = (parsed.storyRecommendations || [])
+      .filter((r: any) => r.storyId && r.action)
+      .map((r: any) => {
+        const rec: StoryRecommendation = {
+          storyId: r.storyId,
+          storyTitle: r.storyTitle || targetStories.find((s) => s.id === r.storyId)?.title || '',
+          action: validActions.includes(r.action) ? r.action : 'keep',
+          reason: (r.reason || 'No reason provided').trim(),
+        };
+        if (r.suggestedChanges && rec.action === 'update') {
+          rec.suggestedChanges = {};
+          if (r.suggestedChanges.title) rec.suggestedChanges.title = r.suggestedChanges.title.trim();
+          if (r.suggestedChanges.description)
+            rec.suggestedChanges.description = r.suggestedChanges.description.trim();
+          if (Array.isArray(r.suggestedChanges.acceptanceCriteria)) {
+            rec.suggestedChanges.acceptanceCriteria = r.suggestedChanges.acceptanceCriteria
+              .filter((ac: any) => typeof ac === 'string' && ac.trim())
+              .map((ac: string) => ac.trim());
+          }
+          if (validPriorities.includes(r.suggestedChanges.priority)) {
+            rec.suggestedChanges.priority = r.suggestedChanges.priority;
+          }
+        }
+        if (Array.isArray(r.mergeWith) && rec.action === 'merge') {
+          rec.mergeWith = r.mergeWith.filter(
+            (id: any) => typeof id === 'string' && id.trim(),
+          );
+        }
+        return rec;
+      });
+
+    const suggestedNewStories: SuggestedNewStory[] = (parsed.suggestedNewStories || [])
+      .filter((s: any) => s.title && typeof s.title === 'string')
+      .slice(0, 10)
+      .map((s: any) => ({
+        title: s.title.trim(),
+        description: (s.description || '').trim(),
+        acceptanceCriteria: Array.isArray(s.acceptanceCriteria)
+          ? s.acceptanceCriteria
+              .filter((ac: any) => typeof ac === 'string' && ac.trim())
+              .map((ac: string) => ac.trim())
+          : [],
+        priority: validPriorities.includes(s.priority) ? s.priority : 'medium',
+        reason: (s.reason || '').trim(),
+      }));
+
+    return c.json({
+      ok: true,
+      data: {
+        prdId,
+        summary: (parsed.summary || 'Analysis complete.').trim(),
+        storyRecommendations,
+        suggestedNewStories,
+      },
+    });
+  } catch (err) {
+    return c.json(
+      { ok: false, error: `PRD-wide refinement failed: ${(err as Error).message}` },
       500,
     );
   }

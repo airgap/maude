@@ -27,6 +27,9 @@ import type {
   MatrixStoryPosition,
   MatrixQuadrant,
   UserStory,
+  RefineAllResponse,
+  StoryRecommendation,
+  SuggestedNewStory,
 } from '@e/shared';
 import { api, getBaseUrl, getAuthToken } from '../api/client';
 import { conversationStore } from './conversation.svelte';
@@ -143,6 +146,11 @@ function createLoopStore() {
   let refinementImprovements = $state<string[]>([]);
   let refinementUpdatedStory = $state<RefineStoryResponse['updatedStory'] | null>(null);
   let refinementRound = $state(0);
+
+  // PRD-wide refinement state
+  let refiningAll = $state(false);
+  let refineAllResults = $state<RefineAllResponse | null>(null);
+  let refineAllError = $state<string | null>(null);
 
   // Dependency state
   let dependencyGraph = $state<DependencyGraph | null>(null);
@@ -300,6 +308,15 @@ function createLoopStore() {
     },
     get refinementRound() {
       return refinementRound;
+    },
+    get refiningAll() {
+      return refiningAll;
+    },
+    get refineAllResults() {
+      return refineAllResults;
+    },
+    get refineAllError() {
+      return refineAllError;
     },
     get dependencyGraph() {
       return dependencyGraph;
@@ -1220,6 +1237,81 @@ function createLoopStore() {
       } finally {
         refining = false;
       }
+    },
+
+    // --- PRD-wide refinement ---
+
+    clearRefineAll() {
+      refiningAll = false;
+      refineAllResults = null;
+      refineAllError = null;
+    },
+
+    async refineAllStories(
+      prdId: string,
+      options?: { statuses?: string[]; includeCodeScan?: boolean },
+    ): Promise<{ ok: boolean; error?: string }> {
+      refiningAll = true;
+      refineAllError = null;
+      refineAllResults = null;
+      try {
+        const res = await api.prds.refineAllStories(prdId, options);
+        if (res.ok) {
+          refineAllResults = res.data;
+          return { ok: true };
+        }
+        refineAllError = (res as any).error || 'PRD-wide refinement failed';
+        return { ok: false, error: refineAllError ?? undefined };
+      } catch (err) {
+        refineAllError = String(err);
+        return { ok: false, error: refineAllError ?? undefined };
+      } finally {
+        refiningAll = false;
+      }
+    },
+
+    async applyRecommendation(
+      prdId: string,
+      rec: StoryRecommendation,
+    ): Promise<{ ok: boolean }> {
+      if (rec.action === 'keep') return { ok: true };
+
+      if (rec.action === 'remove' || rec.action === 'already_done') {
+        // Archive the story
+        const res = await api.prds.updateStory(prdId, rec.storyId, { status: 'archived' });
+        if (res.ok) await this.loadPrd(prdId);
+        return { ok: res.ok };
+      }
+
+      if (rec.action === 'update' && rec.suggestedChanges) {
+        const updates: Record<string, any> = {};
+        if (rec.suggestedChanges.title) updates.title = rec.suggestedChanges.title;
+        if (rec.suggestedChanges.description)
+          updates.description = rec.suggestedChanges.description;
+        if (rec.suggestedChanges.acceptanceCriteria)
+          updates.acceptanceCriteria = rec.suggestedChanges.acceptanceCriteria;
+        if (rec.suggestedChanges.priority) updates.priority = rec.suggestedChanges.priority;
+        const res = await api.prds.updateStory(prdId, rec.storyId, updates);
+        if (res.ok) await this.loadPrd(prdId);
+        return { ok: res.ok };
+      }
+
+      // For split/merge — just mark as acknowledged for now (user handles manually)
+      return { ok: true };
+    },
+
+    async addSuggestedStory(
+      prdId: string,
+      story: SuggestedNewStory,
+    ): Promise<{ ok: boolean }> {
+      const res = await api.prds.addStory(prdId, {
+        title: story.title,
+        description: story.description,
+        acceptanceCriteria: story.acceptanceCriteria,
+        priority: story.priority,
+      });
+      if (res.ok) await this.loadPrd(prdId);
+      return { ok: res.ok };
     },
 
     // --- Sprint planning ---

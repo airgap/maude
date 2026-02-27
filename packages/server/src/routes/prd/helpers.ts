@@ -72,6 +72,11 @@ export type {
   PriorityRecommendationBulkResponse,
   StandaloneStoryCreateInput,
   WorkflowConfig,
+  RefineAllRequest,
+  RefineAllResponse,
+  StoryRecommendation,
+  StoryRecommendationAction,
+  SuggestedNewStory,
 } from '@e/shared';
 
 export { DEFAULT_WORKFLOW_CONFIG } from '@e/shared';

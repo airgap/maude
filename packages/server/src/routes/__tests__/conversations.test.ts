@@ -7,16 +7,14 @@ mock.module('../../db/database', () => ({
   initDatabase: () => {},
 }));
 
-// Mock summarizeWithLLM so the summarize endpoint doesn't make real LLM calls
-mock.module('../../services/chat-compaction', () => ({
-  summarizeWithLLM: async () => ({
-    summaryText: 'Mocked summary of the conversation.',
-    summaryMessage: {
-      role: 'user',
-      content: [{ type: 'text', text: '[Summary] Mocked summary.' }],
-    },
-    usedLLM: false,
-  }),
+// Mock llm-oneshot so the summarize endpoint never makes real LLM calls.
+// We mock at this level (instead of chat-compaction) so that chat-compaction.test.ts
+// still gets the real summarizeWithLLM function and its tests pass unaffected.
+mock.module('../../services/llm-oneshot', () => ({
+  callLlm: async () => {
+    throw new Error('LLM not available in tests');
+  },
+  resetOllamaCache: () => {},
 }));
 
 // Import after mock setup so the module picks up the mock
@@ -1137,14 +1135,15 @@ describe('Conversation Routes', () => {
       expect(res.status).toBe(200);
       const json = await res.json();
       expect(json.ok).toBe(true);
-      expect(json.data.summary).toBe('Mocked summary of the conversation.');
+      // The real summarizeWithLLM runs (callLlm mocked to throw → rule-based fallback)
+      expect(json.data.summary).toBeTruthy();
       expect(json.data.cached).toBe(false);
 
       // Verify it was persisted in DB
       const row = testDb
         .query('SELECT compact_summary FROM conversations WHERE id = ?')
         .get('conv-1') as any;
-      expect(row.compact_summary).toBe('Mocked summary of the conversation.');
+      expect(row.compact_summary).toBeTruthy();
     });
 
     test('skips unparseable messages gracefully', async () => {
@@ -1171,8 +1170,8 @@ describe('Conversation Routes', () => {
       expect(res.status).toBe(200);
       const json = await res.json();
       expect(json.ok).toBe(true);
-      // Should still produce a summary from the valid message
-      expect(json.data.summary).toBe('Mocked summary of the conversation.');
+      // Should still produce a rule-based summary from the valid message
+      expect(json.data.summary).toBeTruthy();
     });
 
     test('returns null summary when all messages are unparseable', async () => {

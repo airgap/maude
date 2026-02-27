@@ -28,6 +28,7 @@ import {
 } from '../chat-compaction';
 import { eventBridge } from '../event-bridge';
 import { sendNotification } from '../notification-channels';
+import { broadcastMessageUpdate } from '../../routes/message-sync';
 import type { CliProcess } from './spawner';
 import { hasScript, signalName, spawnWithScript, spawnWithPipe } from './spawner';
 import { translateCliEvent, extractAndStoreArtifacts } from './event-translator';
@@ -318,7 +319,7 @@ export class ClaudeProcessManager {
     const assistantMsgId = nanoid();
     let assistantMsgPersisted = false;
     let lastFlushTime = 0;
-    const FLUSH_INTERVAL_MS = 2000;
+    const FLUSH_INTERVAL_MS = 500; // Reduced from 2000ms for faster cross-device sync
 
     const flushAssistantContent = () => {
       if (!assistantContent || assistantContent.length === 0) return;
@@ -354,6 +355,16 @@ export class ClaudeProcessManager {
           );
         }
         lastFlushTime = now;
+
+        // Force WAL checkpoint so other connections see the write immediately
+        try {
+          db.exec('PRAGMA wal_checkpoint(PASSIVE)');
+        } catch {
+          // Checkpoint failure is non-critical, just log
+        }
+
+        // Broadcast message update event for cross-device sync
+        broadcastMessageUpdate(session.conversationId, assistantMsgId, 'assistant');
       } catch (dbErr) {
         console.error('[claude] Failed to flush assistant content:', dbErr);
       }

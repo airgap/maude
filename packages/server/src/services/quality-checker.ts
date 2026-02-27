@@ -365,8 +365,170 @@ function extractPackageNames(files: string[]): string[] {
   return Array.from(packages);
 }
 
+// --- Placeholder / Stub Detection ---
+
+/** File extensions to scan for placeholder patterns */
+const PLACEHOLDER_SCAN_EXTENSIONS = new Set([
+  '.ts',
+  '.tsx',
+  '.js',
+  '.jsx',
+  '.svelte',
+  '.py',
+  '.rs',
+  '.go',
+]);
+
+/** Patterns that indicate placeholder / stub code */
+const PLACEHOLDER_PATTERNS: Array<{ pattern: RegExp; label: string }> = [
+  // JavaScript / TypeScript
+  {
+    pattern: /throw\s+new\s+Error\(\s*['"`](not implemented|TODO|FIXME|stub|placeholder)/i,
+    label: 'throw not-implemented error',
+  },
+  {
+    pattern: /\/\/\s*(TODO|FIXME|HACK|XXX)\b/i,
+    label: 'TODO/FIXME comment',
+  },
+  {
+    pattern: /\/\*\s*(TODO|FIXME|HACK|XXX)\b/i,
+    label: 'TODO/FIXME block comment',
+  },
+  {
+    pattern: /console\.(log|warn|error)\(\s*['"`](placeholder|stub|todo|fixme|not implemented)/i,
+    label: 'placeholder console output',
+  },
+  // Python
+  {
+    pattern: /pass\s+#\s*(placeholder|TODO|FIXME|stub)/i,
+    label: 'Python placeholder pass',
+  },
+  {
+    pattern: /raise\s+NotImplementedError/,
+    label: 'Python NotImplementedError',
+  },
+  // Rust
+  { pattern: /\bunimplemented!\s*\(/, label: 'Rust unimplemented!()' },
+  { pattern: /\btodo!\s*\(/, label: 'Rust todo!()' },
+  // Go
+  { pattern: /panic\(\s*["']not implemented/i, label: 'Go panic not-implemented' },
+];
+
+export interface PlaceholderViolation {
+  file: string;
+  line: number;
+  pattern: string;
+  content: string;
+}
+
 /**
- * Run all enabled quality checks sequentially.
+ * Scan files changed by the agent for placeholder / stub patterns.
+ * Returns a QualityCheckResult-compatible result.
+ */
+export async function runPlaceholderCheck(
+  workspacePath: string,
+  options?: QualityCheckOptions,
+): Promise<QualityCheckResult> {
+  const start = Date.now();
+  const storyId = options?.storyId;
+  const cwd = resolveWorkspacePath(workspacePath, storyId);
+  const violations: PlaceholderViolation[] = [];
+
+  try {
+    // Get list of changed/new files via git
+    const diffProc = Bun.spawn(['git', 'diff', '--name-only', 'HEAD'], {
+      cwd,
+      stdout: 'pipe',
+      stderr: 'pipe',
+    });
+    const diffOutput = (await new Response(diffProc.stdout).text()).trim();
+    await diffProc.exited;
+
+    // Also include untracked files
+    const statusProc = Bun.spawn(['git', 'ls-files', '--others', '--exclude-standard'], {
+      cwd,
+      stdout: 'pipe',
+      stderr: 'pipe',
+    });
+    const untrackedOutput = (await new Response(statusProc.stdout).text()).trim();
+    await statusProc.exited;
+
+    const allFiles = new Set<string>();
+    if (diffOutput) diffOutput.split('\n').forEach((f) => allFiles.add(f.trim()));
+    if (untrackedOutput) untrackedOutput.split('\n').forEach((f) => allFiles.add(f.trim()));
+
+    // Scan each file that has a scannable extension
+    for (const relPath of allFiles) {
+      const ext = relPath.slice(relPath.lastIndexOf('.'));
+      if (!PLACEHOLDER_SCAN_EXTENSIONS.has(ext)) continue;
+
+      const fullPath = join(cwd, relPath);
+      try {
+        const file = Bun.file(fullPath);
+        if (!(await file.exists())) continue;
+        const content = await file.text();
+        const lines = content.split('\n');
+
+        for (let i = 0; i < lines.length; i++) {
+          const line = lines[i];
+          for (const { pattern, label } of PLACEHOLDER_PATTERNS) {
+            if (pattern.test(line)) {
+              violations.push({
+                file: relPath,
+                line: i + 1,
+                pattern: label,
+                content: line.trim().slice(0, 120),
+              });
+            }
+          }
+        }
+      } catch {
+        // Skip files we can't read
+      }
+    }
+
+    const passed = violations.length === 0;
+    let output: string;
+    if (passed) {
+      output = 'No placeholder or stub code detected in changed files.';
+    } else {
+      output = `Found ${violations.length} placeholder/stub violation(s):\n\n`;
+      for (const v of violations) {
+        output += `  ${v.file}:${v.line} — ${v.pattern}\n    ${v.content}\n\n`;
+      }
+      output +=
+        'All functions must have complete, working implementations. Remove TODOs, stubs, and placeholder code.';
+    }
+
+    const result: QualityCheckResult = {
+      checkId: '__placeholder__',
+      checkName: 'Placeholder Detection',
+      checkType: 'placeholder',
+      passed,
+      output,
+      duration: Date.now() - start,
+      exitCode: passed ? 0 : 1,
+    };
+    if (storyId) result.storyId = storyId;
+    return result;
+  } catch (err) {
+    const result: QualityCheckResult = {
+      checkId: '__placeholder__',
+      checkName: 'Placeholder Detection',
+      checkType: 'placeholder',
+      passed: true, // Don't block on infrastructure errors
+      output: `Placeholder check error: ${String(err).slice(0, 500)}`,
+      duration: Date.now() - start,
+      exitCode: 0,
+    };
+    if (storyId) result.storyId = storyId;
+    return result;
+  }
+}
+
+/**
+ * Run all enabled quality checks sequentially, plus built-in checks
+ * like placeholder detection.
  *
  * When `options.storyId` is provided, all checks run in the story's
  * worktree directory and results are tagged with the storyId.
@@ -379,7 +541,12 @@ export async function runAllQualityChecks(
   const enabledChecks = checks.filter((c) => c.enabled);
   const results: QualityCheckResult[] = [];
   for (const check of enabledChecks) {
-    results.push(await runQualityCheck(check, workspacePath, options));
+    if (check.type === 'placeholder') {
+      // Built-in placeholder check — no external command needed
+      results.push(await runPlaceholderCheck(workspacePath, options));
+    } else {
+      results.push(await runQualityCheck(check, workspacePath, options));
+    }
   }
   return results;
 }

@@ -5,6 +5,7 @@
   import { workspaceStore } from '$lib/stores/workspace.svelte';
   import { primaryPaneStore } from '$lib/stores/primaryPane.svelte';
   import { uiStore } from '$lib/stores/ui.svelte';
+  import { messageSyncStore } from '$lib/stores/message-sync.svelte';
   import { api } from '$lib/api/client';
   import { getReconnectionPromise, reconnectToConversation } from '$lib/api/sse';
   import { onMount } from 'svelte';
@@ -62,6 +63,8 @@
               const convRes = await api.conversations.get(savedId);
               conversationStore.setActive(convRes.data);
             }
+            // Subscribe to message sync for cross-device updates
+            messageSyncStore.subscribe(savedId);
             streamStore.reset();
             // Check if the server has an active streaming session for this
             // conversation (e.g. a golem loop started between the initial
@@ -95,10 +98,14 @@
       const inflight = conversationStore.getInflight(id);
       if (inflight) {
         conversationStore.setActive({ ...inflight });
+        // Subscribe to message sync even for in-flight conversations
+        messageSyncStore.subscribe(id);
         primaryPaneStore.openConversation(inflight.id, inflight.title ?? 'Conversation');
       } else {
         const res = await api.conversations.get(id);
         conversationStore.setActive(res.data);
+        // Subscribe to message sync for cross-device updates
+        messageSyncStore.subscribe(id);
         // Explicitly open the conversation tab (bypasses the "don't override file/diff" guard
         // in PrimaryPane's reactive effect, which is meant for automatic updates, not user clicks)
         primaryPaneStore.openConversation(res.data.id, res.data.title ?? 'Conversation');

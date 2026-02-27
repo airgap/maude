@@ -59,6 +59,7 @@ import { patternDetectionRoutes } from './routes/pattern-detection';
 import { worktreeRoutes } from './routes/worktrees';
 import { storyCoordinationRoutes } from './routes/story-coordination';
 import { internalRoutes } from './routes/internal';
+import { messageSyncRoutes } from './routes/message-sync';
 import { authMiddleware } from './middleware/auth';
 import { csrfMiddleware, isOriginAllowed } from './middleware/csrf';
 import { websocket } from './ws';
@@ -176,6 +177,7 @@ app.route('/api/device', deviceRoutes);
 app.route('/api/pattern-detection', patternDetectionRoutes);
 app.route('/api/worktrees', worktreeRoutes);
 app.route('/api/story-coordination', storyCoordinationRoutes);
+app.route('/api/message-sync', messageSyncRoutes);
 
 // Inbound webhook endpoint — bypasses auth/CSRF (uses its own token-based auth)
 app.route('/api/webhooks/inbound', webhookInboundApp);

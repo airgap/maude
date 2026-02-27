@@ -1778,6 +1778,19 @@ export const api = {
         body: JSON.stringify({}),
       }),
 
+    // --- PRD-Wide Refinement ---
+    refineAllStories: (
+      prdId: string,
+      options?: { statuses?: string[]; includeCodeScan?: boolean },
+    ) =>
+      request<{
+        ok: boolean;
+        data: import('@e/shared').RefineAllResponse;
+      }>(`/prds/${prdId}/refine-all`, {
+        method: 'POST',
+        body: JSON.stringify(options || {}),
+      }),
+
     // --- Standalone Story Routes (prd_id = NULL) ---
     listStandaloneStories: (workspacePath: string) => {
       const q = `?workspacePath=${encodeURIComponent(workspacePath)}`;

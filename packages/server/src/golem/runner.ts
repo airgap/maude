@@ -1093,7 +1093,9 @@ ${criteria}
 6. Do NOT ask questions for minor ambiguity — make reasonable decisions and document them. Only use ask_human if you are truly blocked and cannot proceed without user input
 7. After implementation, the system will automatically run quality checks
 8. IMPORTANT: Before declaring you are done, run the project's typecheck/build commands yourself to catch errors early
-9. If this is a monorepo, ensure your changes maintain type compatibility across packages (especially shared types)`;
+9. If this is a monorepo, ensure your changes maintain type compatibility across packages (especially shared types)
+10. Do NOT leave placeholder implementations, stubs, TODOs, or empty function bodies. Every function must have a complete, working implementation. The system will detect and fail placeholder code automatically.
+11. When writing or modifying tests, include a brief comment above each test explaining WHY the test exists — what behavior, edge case, or invariant it guards against. Future agents will lose your reasoning context; the test comment is the only record.`;
   }
 
   /**

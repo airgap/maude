@@ -48,6 +48,7 @@ type ModalId =
   | 'effort-value-matrix'
   | 'external-provider-config'
   | 'compaction-history'
+  | 'prd-refine-all'
   | null;
 type FocusedPane = 'chat' | 'editor';
 

@@ -906,6 +906,14 @@ What would you like to tackle first?`;
                   class="menu-item"
                   onclick={() => {
                     closeStoriesMenu();
+                    loopStore.clearRefineAll();
+                    uiStore.openModal('prd-refine-all');
+                  }}>Refine all stories</button
+                >
+                <button
+                  class="menu-item"
+                  onclick={() => {
+                    closeStoriesMenu();
                     openTemplateLibrary();
                   }}>Story templates</button
                 >

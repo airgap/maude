@@ -247,6 +247,11 @@ export type {
   WorkflowConfig,
   GolemPhase,
   GolemMood,
+  StoryRecommendationAction,
+  StoryRecommendation,
+  SuggestedNewStory,
+  RefineAllRequest,
+  RefineAllResponse,
 } from './prd.js';
 
 export { DEFAULT_WORKFLOW_CONFIG } from './prd.js';

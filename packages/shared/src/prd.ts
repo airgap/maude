@@ -177,7 +177,7 @@ export interface PRDCreateInput {
 
 // --- Quality Check Types ---
 
-export type QualityCheckType = 'typecheck' | 'lint' | 'test' | 'build' | 'custom';
+export type QualityCheckType = 'typecheck' | 'lint' | 'test' | 'build' | 'custom' | 'placeholder';
 
 export interface QualityCheckConfig {
   id: string;
@@ -824,3 +824,52 @@ export type GolemMood =
   | 'frustrated'
   | 'worried'
   | 'relieved';
+
+// --- PRD-Wide Refinement Types ---
+
+/** Recommended action for a story during PRD-wide refinement */
+export type StoryRecommendationAction =
+  | 'keep'
+  | 'update'
+  | 'split'
+  | 'merge'
+  | 'remove'
+  | 'already_done';
+
+/** A single story recommendation from PRD-wide refinement */
+export interface StoryRecommendation {
+  storyId: string;
+  storyTitle: string;
+  action: StoryRecommendationAction;
+  reason: string;
+  suggestedChanges?: {
+    title?: string;
+    description?: string;
+    acceptanceCriteria?: string[];
+    priority?: StoryPriority;
+  };
+  mergeWith?: string[]; // story IDs to merge with
+}
+
+/** A suggested new story discovered during PRD-wide refinement */
+export interface SuggestedNewStory {
+  title: string;
+  description: string;
+  acceptanceCriteria: string[];
+  priority: StoryPriority;
+  reason: string; // why this gap exists
+}
+
+/** Request for PRD-wide refinement */
+export interface RefineAllRequest {
+  statuses?: string[]; // which statuses to include, default ['pending', 'in_progress', 'failed']
+  includeCodeScan?: boolean; // whether to scan codebase for context (default true)
+}
+
+/** Response from PRD-wide refinement */
+export interface RefineAllResponse {
+  prdId: string;
+  summary: string; // overall assessment
+  storyRecommendations: StoryRecommendation[];
+  suggestedNewStories: SuggestedNewStory[];
+}

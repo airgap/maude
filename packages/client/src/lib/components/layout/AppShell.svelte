@@ -22,6 +22,7 @@
   import StoryCreateModal from '../settings/StoryCreateModal.svelte';
   import StoryGenerateModal from '../settings/StoryGenerateModal.svelte';
   import StoryRefineModal from '../settings/StoryRefineModal.svelte';
+  import PrdRefineAllModal from '../settings/PrdRefineAllModal.svelte';
   import CriteriaValidationModal from '../settings/CriteriaValidationModal.svelte';
   import StoryEstimateModal from '../settings/StoryEstimateModal.svelte';
   import SprintPlanModal from '../settings/SprintPlanModal.svelte';
@@ -605,6 +606,10 @@
 
   {#if uiStore.activeModal === 'command-palette'}
     <CommandPalette />
+  {/if}
+
+  {#if uiStore.activeModal === 'prd-refine-all'}
+    <PrdRefineAllModal />
   {/if}
 
   {#if uiStore.activeModal === 'compaction-history'}

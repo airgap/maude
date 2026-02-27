@@ -14,6 +14,7 @@ import {
   logLearning,
 } from '../services/pattern-detection';
 import { resolveByToolCallId } from '../services/ask-user-bridge';
+import { broadcastMessageUpdate } from './message-sync';
 const app = new Hono();
 
 const BASE_SYSTEM_PROMPT = `You are E, an expert AI coding assistant embedded directly inside the user's development environment.
@@ -271,6 +272,9 @@ app.post('/:conversationId', async (c) => {
     VALUES (?, ?, 'user', ?, ?)
   `,
   ).run(userMsgId, conversationId, JSON.stringify(userContentBlocks), Date.now());
+
+  // Broadcast user message update for cross-device sync
+  broadcastMessageUpdate(conversationId, userMsgId, 'user');
 
   // Run pattern detection in background after message is sent
   // This happens asynchronously and won't block the response stream
