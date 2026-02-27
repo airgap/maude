@@ -19,6 +19,8 @@
     autoSnapshot: boolean;
     pauseOnFailure: boolean;
     qualityChecks: QualityCheckConfig[];
+    maxParallel?: number;
+    autoMerge?: boolean;
   }
 
   function loadSavedConfig(): SavedLoopConfig | null {
@@ -67,6 +69,8 @@
   let autoCommit = $state(saved?.autoCommit ?? true);
   let autoSnapshot = $state(saved?.autoSnapshot ?? true);
   let pauseOnFailure = $state(saved?.pauseOnFailure ?? false);
+  let maxParallel = $state(saved?.maxParallel ?? 1);
+  let autoMerge = $state(saved?.autoMerge ?? true);
 
   let checks = $state<QualityCheckConfig[]>([]);
   let showAddCheck = $state(false);
@@ -169,6 +173,8 @@
       autoSnapshot,
       pauseOnFailure,
       qualityChecks: checks,
+      maxParallel,
+      autoMerge,
     };
 
     // Persist settings for next time
@@ -182,6 +188,8 @@
       autoSnapshot,
       pauseOnFailure,
       qualityChecks: checks,
+      maxParallel,
+      autoMerge,
     });
 
     try {
@@ -310,6 +318,41 @@
           <input type="checkbox" bind:checked={pauseOnFailure} />
           <span>Pause on story failure</span>
         </label>
+      </div>
+
+      <div class="form-section">
+        <h3>Worktree Dispatch</h3>
+
+        <div class="form-row">
+          <label>Max parallel stories</label>
+          <div class="slider-row">
+            <input
+              type="range"
+              min="1"
+              max="10"
+              step="1"
+              bind:value={maxParallel}
+              class="slider"
+            />
+            <span class="slider-value">{maxParallel}</span>
+          </div>
+        </div>
+        <div class="form-hint">
+          {maxParallel === 1
+            ? 'Serial execution (one story at a time)'
+            : `Up to ${maxParallel} stories in parallel worktrees`}
+        </div>
+
+        <label class="toggle-row">
+          <input type="checkbox" bind:checked={autoMerge} />
+          <span>Auto-merge branches on completion</span>
+        </label>
+
+        {#if maxParallel > 1}
+          <div class="form-hint disk-note">
+            Each parallel worktree creates a full copy of the working directory. Ensure adequate disk space.
+          </div>
+        {/if}
       </div>
 
       <div class="form-section">
@@ -514,6 +557,33 @@
     color: var(--text-tertiary);
     margin: -2px 0 6px;
     text-align: right;
+  }
+  .form-hint.disk-note {
+    text-align: left;
+    margin-top: 4px;
+    padding: 4px 8px;
+    background: rgba(234, 179, 8, 0.08);
+    border-radius: var(--radius-sm);
+    border-left: 2px solid var(--accent-warning, #eab308);
+  }
+
+  .slider-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 160px;
+  }
+  .slider {
+    flex: 1;
+    accent-color: var(--accent-primary);
+    height: 4px;
+  }
+  .slider-value {
+    font-size: var(--fs-sm);
+    font-weight: 600;
+    color: var(--text-primary);
+    min-width: 20px;
+    text-align: center;
   }
 
   .toggle-row {

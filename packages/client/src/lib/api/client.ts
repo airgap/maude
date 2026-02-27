@@ -2902,6 +2902,50 @@ export const api = {
       }>(`/notification-channels/logs${limit ? `?limit=${limit}` : ''}`),
   },
 
+  // --- Worktrees ---
+  worktrees: {
+    list: (workspacePath: string) =>
+      request<{
+        ok: boolean;
+        data: Array<
+          import('@e/shared').WorktreeInfo & { record: import('@e/shared').WorktreeRecord | null }
+        >;
+      }>(`/worktrees?workspacePath=${encodeURIComponent(workspacePath)}`),
+    create: (body: { workspacePath: string; storyId: string; baseBranch?: string }) =>
+      request<{ ok: boolean; data: import('@e/shared').WorktreeRecord }>(
+        '/worktrees',
+        { method: 'POST', body: JSON.stringify(body) },
+      ),
+    prune: (workspacePath: string) =>
+      request<{ ok: boolean; data: { prunedGit: number; prunedDb: number } }>(
+        '/worktrees/prune',
+        { method: 'POST', body: JSON.stringify({ workspacePath }) },
+      ),
+    status: (storyId: string) =>
+      request<{
+        ok: boolean;
+        data: { branch: string; dirtyFiles: string[]; aheadBy: number; behindBy: number };
+      }>(`/worktrees/${storyId}/status`),
+    merge: (storyId: string, opts?: { skipQualityCheck?: boolean; retry?: boolean }) =>
+      request<{
+        ok: boolean;
+        data: {
+          storyId: string;
+          status: string;
+          commitSha?: string;
+          operationLog: import('@e/shared').MergeOperationLogEntry[];
+        };
+      }>(`/worktrees/${storyId}/merge`, {
+        method: 'POST',
+        body: JSON.stringify(opts ?? {}),
+      }),
+    remove: (storyId: string, force?: boolean) =>
+      request<{ ok: boolean; data: { storyId: string } }>(
+        `/worktrees/${storyId}${force ? '?force=true' : ''}`,
+        { method: 'DELETE' },
+      ),
+  },
+
   /**
    * Generic fetch wrapper for direct API calls.
    * Automatically adds auth and CSRF tokens to headers.

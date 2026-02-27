@@ -5,11 +5,16 @@
   import { settingsStore } from '$lib/stores/settings.svelte';
   import { uiStore } from '$lib/stores/ui.svelte';
   import { conversationStore } from '$lib/stores/conversation.svelte';
+  import { worktreeStore } from '$lib/stores/worktree.svelte';
   import { api } from '$lib/api/client';
   import { sendAndStream } from '$lib/api/sse';
   import { onMount } from 'svelte';
   import { goto } from '$app/navigation';
   import LoopPanel from './LoopPanel.svelte';
+  import WorktreeDetailPopup from './WorktreeDetailPopup.svelte';
+
+  let worktreePopupStoryId = $state<string | null>(null);
+  let worktreePopupStoryTitle = $state('');
 
   let resettingStoryId = $state<string | null>(null);
   let resettingAllFailed = $state(false);
@@ -29,8 +34,28 @@
       workStore.loadStandaloneStories(workspacePath);
       loopStore.loadPrds(workspacePath);
       loopStore.loadActiveLoop();
+      worktreeStore.load(workspacePath);
     }
   });
+
+  /** Color for worktree status badge. */
+  function worktreeStatusColor(status: string | undefined): string {
+    switch (status) {
+      case 'active':
+        return 'var(--accent-secondary, #22c55e)';
+      case 'merging':
+        return 'var(--accent-warning, #eab308)';
+      case 'conflict':
+        return 'var(--accent-error, #ef4444)';
+      default:
+        return 'var(--text-tertiary)';
+    }
+  }
+
+  function openWorktreePopup(story: UserStory) {
+    worktreePopupStoryId = story.id;
+    worktreePopupStoryTitle = story.title;
+  }
 
   async function addStandaloneStory() {
     if (!newStoryTitle.trim() || !workspacePath) return;
@@ -458,6 +483,7 @@ What would you like to tackle first?`;
           <div class="section">
             <div class="section-label">In Progress</div>
             {#each workStore.inProgressStories as story (story.id)}
+              {@const wt = worktreeStore.getForStory(story.id)}
               <div class="story-item active">
                 <div class="story-header">
                   <button
@@ -486,6 +512,17 @@ What would you like to tackle first?`;
                   <span class="story-title" class:research-title={story.researchOnly}
                     >{story.title}</span
                   >
+                  {#if wt}
+                    <button
+                      class="worktree-badge"
+                      style="background: {worktreeStatusColor(wt.record?.status)}"
+                      title="Branch: {wt.branch ?? 'unknown'} ({wt.record?.status ?? 'unknown'})"
+                      onclick={() => openWorktreePopup(story)}
+                    >
+                      <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="6" y1="3" x2="6" y2="15" /><circle cx="18" cy="6" r="3" /><circle cx="6" cy="18" r="3" /><path d="M18 9a9 9 0 0 1-9 9" /></svg>
+                      {wt.branch?.replace('story/', '') ?? '?'}
+                    </button>
+                  {/if}
                   {#if story.estimate}
                     <span class="estimate-badge" title="{story.estimate.storyPoints} points">
                       {story.estimate.size?.[0]?.toUpperCase()}{story.estimate.storyPoints}
@@ -532,12 +569,24 @@ What would you like to tackle first?`;
               </button>
             </div>
             {#each workStore.failedStories as story (story.id)}
+              {@const wt = worktreeStore.getForStory(story.id)}
               <div class="story-item failed">
                 <div class="story-header">
                   <span class="story-status status-failed">
                     {statusIcon(story.status)}
                   </span>
                   <span class="story-title">{story.title}</span>
+                  {#if wt}
+                    <button
+                      class="worktree-badge"
+                      style="background: {worktreeStatusColor(wt.record?.status)}"
+                      title="Branch: {wt.branch ?? 'unknown'} ({wt.record?.status ?? 'unknown'})"
+                      onclick={() => openWorktreePopup(story)}
+                    >
+                      <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="6" y1="3" x2="6" y2="15" /><circle cx="18" cy="6" r="3" /><circle cx="6" cy="18" r="3" /><path d="M18 9a9 9 0 0 1-9 9" /></svg>
+                      {wt.branch?.replace('story/', '') ?? '?'}
+                    </button>
+                  {/if}
                   {#if story.attempts > 0}
                     <span class="attempts-badge">{story.attempts}/{story.maxAttempts}</span>
                   {/if}
@@ -660,6 +709,7 @@ What would you like to tackle first?`;
               </div>
             </div>
             {#each workStore.pendingStories as story, idx (story.id)}
+              {@const wt = worktreeStore.getForStory(story.id)}
               <div
                 class="story-item draggable"
                 class:drag-over-above={dragOverStoryId === story.id && dragOverPosition === 'above'}
@@ -710,6 +760,17 @@ What would you like to tackle first?`;
                   <span class="story-title" class:research-title={story.researchOnly}
                     >{story.title}</span
                   >
+                  {#if wt}
+                    <button
+                      class="worktree-badge"
+                      style="background: {worktreeStatusColor(wt.record?.status)}"
+                      title="Branch: {wt.branch ?? 'unknown'} ({wt.record?.status ?? 'unknown'})"
+                      onclick={() => openWorktreePopup(story)}
+                    >
+                      <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="6" y1="3" x2="6" y2="15" /><circle cx="18" cy="6" r="3" /><circle cx="6" cy="18" r="3" /><path d="M18 9a9 9 0 0 1-9 9" /></svg>
+                      {wt.branch?.replace('story/', '') ?? '?'}
+                    </button>
+                  {/if}
                   {#if story.estimate}
                     <span class="estimate-badge" title="{story.estimate.storyPoints} points">
                       {story.estimate.size?.[0]?.toUpperCase()}{story.estimate.storyPoints}
@@ -1001,6 +1062,14 @@ What would you like to tackle first?`;
   {/if}
 </div>
 
+{#if worktreePopupStoryId}
+  <WorktreeDetailPopup
+    storyId={worktreePopupStoryId}
+    storyTitle={worktreePopupStoryTitle}
+    onclose={() => { worktreePopupStoryId = null; }}
+  />
+{/if}
+
 <style>
   .work-panel {
     padding: 8px;
@@ -1278,6 +1347,33 @@ What would you like to tackle first?`;
     font-size: var(--fs-xxs);
     color: var(--accent-warning, #e6a817);
     font-weight: bold;
+  }
+
+  /* Worktree branch badge */
+  .worktree-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    font-size: var(--fs-xxs);
+    padding: 1px 6px;
+    border-radius: 3px;
+    color: white;
+    font-weight: 600;
+    white-space: nowrap;
+    max-width: 80px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    border: none;
+    cursor: pointer;
+    flex-shrink: 0;
+    transition: opacity var(--transition);
+    line-height: 1.4;
+  }
+  .worktree-badge:hover {
+    opacity: 0.85;
+  }
+  .worktree-badge svg {
+    flex-shrink: 0;
   }
 
   .story-actions {

@@ -495,6 +495,18 @@ function createLoopStore() {
       // Forward ALL events to the golems store for the live status panel
       golemsStore.handleEvent(event);
 
+      // Forward worktree events to the worktree store for live UI updates
+      if (
+        event.event === 'worktree_created' ||
+        event.event === 'worktree_merge_started' ||
+        event.event === 'worktree_merge_completed' ||
+        event.event === 'worktree_merge_conflict'
+      ) {
+        import('./worktree.svelte').then(({ worktreeStore }) => {
+          worktreeStore.handleLoopEvent(event);
+        });
+      }
+
       const isStandaloneLoop = !activeLoop.prdId;
 
       switch (event.event) {
