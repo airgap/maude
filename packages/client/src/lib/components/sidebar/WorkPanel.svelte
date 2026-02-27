@@ -367,11 +367,20 @@ What would you like to tackle first?`;
         Standalone{workStore.standaloneCount > 0 ? ` (${workStore.standaloneCount})` : ''}
       </option>
       {#each loopStore.prds as prd}
-        {@const incompleteCount = (prd.stories || []).filter(
+        {@const humanCount = (prd.stories || []).filter(
           (s) => s.status !== 'completed' && s.status !== 'skipped' && s.status !== 'archived',
         ).length}
+        {@const golemCount = (prd.stories || []).filter(
+          (s) =>
+            s.status !== 'completed' &&
+            s.status !== 'skipped' &&
+            s.status !== 'archived' &&
+            s.status !== 'qa',
+        ).length}
         <option value={prd.id}>
-          {prd.name}{incompleteCount > 0 ? ` (${incompleteCount})` : ''}
+          {prd.name}{humanCount > 0
+            ? ` (${humanCount}${golemCount !== humanCount ? ` · ${golemCount}` : ''})`
+            : ''}
         </option>
       {/each}
       {#if workStore.hasExternalStories}
