@@ -64,5 +64,6 @@ export function loopFromRow(row: any): LoopState {
     totalIterations: row.total_iterations,
     iterationLog: JSON.parse(row.iteration_log || '[]'),
     lastHeartbeat: row.last_heartbeat ?? undefined,
+    activeStoryIds: row.active_story_ids ? JSON.parse(row.active_story_ids) : undefined,
   };
 }

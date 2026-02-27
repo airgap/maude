@@ -225,6 +225,10 @@ export interface LoopConfig {
   pauseOnFailure: boolean; // pause the loop when a story fails
   qualityChecks: QualityCheckConfig[];
   systemPromptOverride?: string;
+  /** Max stories to dispatch concurrently via worktrees (default 1 = serial). */
+  maxParallel?: number;
+  /** Auto-merge story branches back to base on completion (default true). */
+  autoMerge?: boolean;
 }
 
 export interface LoopState {
@@ -244,6 +248,8 @@ export interface LoopState {
   totalIterations: number;
   iterationLog: IterationLogEntry[];
   lastHeartbeat?: number;
+  /** Story IDs currently being dispatched in parallel (empty when maxParallel=1). */
+  activeStoryIds?: string[];
 }
 
 export interface IterationLogEntry {
@@ -769,7 +775,11 @@ export interface StreamLoopEvent {
     | 'failed'
     | 'cancelled'
     | 'learning'
-    | 'golem_thought';
+    | 'golem_thought'
+    | 'worktree_created'
+    | 'worktree_merge_started'
+    | 'worktree_merge_completed'
+    | 'worktree_merge_conflict';
   data: {
     storyId?: string;
     storyTitle?: string;
@@ -794,6 +804,18 @@ export interface StreamLoopEvent {
     fixUpAttempt?: number;
     /** Max fix-up sub-attempts */
     maxFixUpAttempts?: number;
+    /** Worktree path (for worktree_* events) */
+    worktreePath?: string;
+    /** Branch name (for worktree_* events) */
+    branchName?: string;
+    /** Merge commit SHA (for worktree_merge_completed) */
+    commitSha?: string;
+    /** Conflicting files (for worktree_merge_conflict) */
+    conflictingFiles?: string[];
+    /** Number of concurrent stories currently running (for parallel dispatch) */
+    activeStories?: number;
+    /** Max parallel stories configured */
+    maxParallel?: number;
   };
 }
 

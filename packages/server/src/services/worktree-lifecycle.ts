@@ -12,6 +12,7 @@ import { resolve } from 'path';
 import { existsSync, statfsSync } from 'fs';
 import { getDb } from '../db/database';
 import * as worktreeService from './worktree-service';
+import { lspManager } from './lsp-instance-manager';
 import { prdEvents, type PrdEvent } from '../routes/prd/events';
 import type { WorktreeRecord } from '@e/shared';
 
@@ -167,6 +168,9 @@ export async function cleanupWorktreeForStory(storyId: string): Promise<boolean>
     return true;
   }
 
+  // Capture worktree path before removal for LSP cleanup
+  const worktreePath = record.worktree_path;
+
   console.log(
     `[worktree-lifecycle] Cleaning up worktree for story ${storyId} (status: ${record.status})`,
   );
@@ -178,6 +182,9 @@ export async function cleanupWorktreeForStory(storyId: string): Promise<boolean>
     );
     return false;
   }
+
+  // Shutdown any LSP instances scoped to this worktree
+  lspManager.shutdownForRoot(worktreePath);
 
   console.log(`[worktree-lifecycle] Successfully cleaned up worktree for story ${storyId}`);
   return true;
@@ -226,11 +233,15 @@ export async function cleanupWorktreesForPrd(prdId: string): Promise<number> {
     );
     const result = await worktreeService.removeRecord(wt.workspace_path, wt.story_id);
     if (result.ok) {
+      // Shutdown any LSP instances scoped to this worktree
+      lspManager.shutdownForRoot(wt.worktree_path);
       cleaned++;
     } else {
       // Force-delete the DB record if git removal failed
       try {
         db.query('DELETE FROM worktrees WHERE id = ?').run(wt.id);
+        // Still shutdown LSP instances even if git removal failed
+        lspManager.shutdownForRoot(wt.worktree_path);
         cleaned++;
         console.log(
           `[worktree-lifecycle] Force-deleted DB record for story ${wt.story_id} after git removal failed`,
@@ -289,6 +300,8 @@ export async function runGC(config?: Partial<LifecycleConfig>): Promise<GCStats>
     for (const record of mergedRecords) {
       try {
         const result = await worktreeService.removeRecord(record.workspace_path, record.story_id);
+        // Shutdown LSP instances scoped to this worktree
+        lspManager.shutdownForRoot(record.worktree_path);
         if (result.ok) {
           stats.merged++;
         } else {
@@ -310,6 +323,8 @@ export async function runGC(config?: Partial<LifecycleConfig>): Promise<GCStats>
     for (const record of abandonedRecords) {
       try {
         const result = await worktreeService.removeRecord(record.workspace_path, record.story_id);
+        // Shutdown LSP instances scoped to this worktree
+        lspManager.shutdownForRoot(record.worktree_path);
         if (result.ok) {
           stats.abandoned++;
         } else {
@@ -334,6 +349,8 @@ export async function runGC(config?: Partial<LifecycleConfig>): Promise<GCStats>
       if (!storyExists) {
         try {
           const result = await worktreeService.removeRecord(wt.workspace_path, wt.story_id);
+          // Shutdown LSP instances scoped to this worktree
+          lspManager.shutdownForRoot(wt.worktree_path);
           if (result.ok) {
             stats.orphaned++;
           } else {

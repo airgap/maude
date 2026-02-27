@@ -22,6 +22,7 @@ import type {
 import { DEFAULT_WORKFLOW_CONFIG } from '@e/shared';
 import { PRIORITY_ORDER, storyFromRow } from './helpers';
 import { GolemDispatcher } from './dispatcher';
+import { ParallelScheduler } from './parallel-scheduler';
 
 /**
  * Drives a single loop execution. Manages the iteration cycle, story selection,
@@ -73,6 +74,9 @@ export class LoopRunner {
   /** Golem dispatcher — selects and delegates to the appropriate executor. */
   private dispatcher: GolemDispatcher;
 
+  /** Parallel scheduler — manages concurrent story dispatch when maxParallel > 1. */
+  private parallelScheduler: ParallelScheduler | null = null;
+
   constructor(
     private loopId: string,
     private prdId: string | null,
@@ -82,6 +86,19 @@ export class LoopRunner {
     dispatcher?: GolemDispatcher,
   ) {
     this.dispatcher = dispatcher ?? new GolemDispatcher();
+
+    // Initialize parallel scheduler when maxParallel > 1
+    const maxParallel = this.config.maxParallel ?? 1;
+    if (maxParallel > 1) {
+      this.parallelScheduler = new ParallelScheduler(
+        loopId,
+        prdId,
+        workspacePath,
+        config,
+        events,
+        this.dispatcher,
+      );
+    }
   }
 
   /**
@@ -405,6 +422,20 @@ export class LoopRunner {
       this.config.maxIterations = minIterationsNeeded;
     }
 
+    // --- Parallel dispatch path ---
+    // When maxParallel > 1, use the parallel scheduler to dispatch multiple
+    // stories concurrently via worktrees. Each story gets its own worktree
+    // and golem. Completion triggers quality checks + auto-merge.
+    if (this.parallelScheduler) {
+      try {
+        await this.runParallel();
+      } finally {
+        this.stopHeartbeat();
+      }
+      return;
+    }
+
+    // --- Serial dispatch path (maxParallel=1, unchanged behavior) ---
     try {
       while (iteration < this.config.maxIterations && !this.cancelled) {
         // Check pause gate
@@ -1415,6 +1446,203 @@ export class LoopRunner {
   }
 
   // --- Config application ---
+
+  // --- Parallel dispatch loop ---
+
+  /**
+   * Run the loop in parallel mode (maxParallel > 1).
+   *
+   * Uses the ParallelScheduler to dispatch up to maxParallel stories
+   * concurrently. Each story gets its own worktree and golem. Completion
+   * triggers quality checks + auto-merge. Conflicts mark stories as failed
+   * without blocking others.
+   */
+  private async runParallel(): Promise<void> {
+    const scheduler = this.parallelScheduler!;
+    const maxParallel = this.config.maxParallel ?? 1;
+    let iteration = 0;
+    let noProgressCount = 0;
+    const maxNoProgress = 5;
+
+    console.log(
+      `[loop:${this.loopId}] Running in PARALLEL mode (maxParallel=${maxParallel}, autoMerge=${this.config.autoMerge !== false})`,
+    );
+
+    this.emitThought(
+      `Parallel mode: dispatching up to ${maxParallel} stories concurrently`,
+      'idle',
+    );
+
+    try {
+      while (iteration < this.config.maxIterations && !this.cancelled) {
+        await this.checkPauseGate();
+        if (this.cancelled) break;
+
+        this.sendHeartbeat();
+
+        iteration++;
+
+        this.updateLoopDb({
+          current_iteration: iteration,
+          total_iterations: iteration,
+        });
+
+        this.emitEvent('iteration_start', {
+          iteration,
+          message: `Parallel iteration ${iteration} — dispatching batch (up to ${maxParallel} concurrent)`,
+        });
+
+        console.log(
+          `[loop:${this.loopId}] Parallel iteration ${iteration}: running batch via scheduler`,
+        );
+
+        // Delegate to the scheduler which handles selection, dispatch, waiting, and results
+        const batchResult = await scheduler.runParallelBatch(
+          iteration,
+          () => this.cancelled,
+        );
+
+        this.emitEvent('iteration_end', { iteration });
+
+        if (batchResult.dispatched === 0 && batchResult.completed === 0 && batchResult.failed === 0) {
+          // Nothing happened — check if we're done or stuck
+          noProgressCount++;
+
+          const stories = this.getAllStories();
+          const allCompleted = stories.every(
+            (s) =>
+              s.status === 'completed' ||
+              s.status === 'qa' ||
+              s.status === 'skipped' ||
+              s.status === 'archived' ||
+              s.researchOnly,
+          );
+
+          if (allCompleted) {
+            this.updateLoopDb({
+              status: 'completed',
+              completed_at: Date.now(),
+              current_story_id: null,
+              current_agent_id: null,
+            });
+            this.emitEvent('completed', { message: 'All stories completed!' });
+            sendNotification({
+              event: 'golem_completion',
+              title: 'Loop Completed',
+              message: `All ${stories.length} stories completed successfully!`,
+              workspaceId: this.workspacePath,
+            }).catch(() => {});
+            this.events.emit('loop_done', this.loopId);
+            return;
+          }
+
+          if (noProgressCount >= maxNoProgress) {
+            const completedCount = stories.filter(
+              (s) =>
+                s.status === 'completed' ||
+                s.status === 'qa' ||
+                s.status === 'skipped' ||
+                s.status === 'archived' ||
+                s.researchOnly,
+            ).length;
+            const failedStoryCount = stories.filter((s) => s.status === 'failed').length;
+            const endStatus =
+              failedStoryCount === 0 && completedCount === stories.length
+                ? 'completed'
+                : completedCount > 0
+                  ? 'completed_with_failures'
+                  : 'failed';
+
+            this.updateLoopDb({
+              status: endStatus,
+              completed_at: Date.now(),
+              current_story_id: null,
+              current_agent_id: null,
+            });
+            this.emitEvent(endStatus === 'failed' ? 'failed' : 'completed', {
+              message:
+                endStatus === 'completed'
+                  ? 'All stories completed!'
+                  : endStatus === 'completed_with_failures'
+                    ? `Finished with partial success: ${completedCount} completed, ${failedStoryCount} failed.`
+                    : 'No more eligible stories. Some stories could not be completed.',
+            });
+            this.events.emit('loop_done', this.loopId);
+            return;
+          }
+
+          // Wait briefly before retrying
+          await new Promise((r) => setTimeout(r, 2000));
+          continue;
+        }
+
+        // Reset no-progress counter since the batch had activity
+        noProgressCount = 0;
+
+        // Small delay between iterations
+        await new Promise((r) => setTimeout(r, 2000));
+      }
+
+      // Loop ended — determine final status
+      if (this.cancelled) {
+        this.updateLoopDb({
+          status: 'cancelled',
+          completed_at: Date.now(),
+          current_story_id: null,
+          current_agent_id: null,
+        });
+        this.events.emit('loop_done', this.loopId);
+        return;
+      }
+
+      const finalStories = this.getAllStories();
+      const allDone =
+        finalStories.length > 0 &&
+        finalStories.every(
+          (s) =>
+            s.status === 'completed' ||
+            s.status === 'qa' ||
+            s.status === 'skipped' ||
+            s.status === 'archived' ||
+            s.researchOnly,
+        );
+
+      if (allDone) {
+        this.updateLoopDb({
+          status: 'completed',
+          completed_at: Date.now(),
+          current_story_id: null,
+          current_agent_id: null,
+        });
+        this.emitEvent('completed', { message: 'All stories completed!' });
+      } else {
+        const doneCount = finalStories.filter(
+          (s) =>
+            s.status === 'completed' ||
+            s.status === 'qa' ||
+            s.status === 'skipped' ||
+            s.status === 'archived' ||
+            s.researchOnly,
+        ).length;
+        const failedCount = finalStories.filter((s) => s.status === 'failed').length;
+        const endStatus = doneCount > 0 ? 'completed_with_failures' : 'failed';
+
+        this.updateLoopDb({
+          status: endStatus,
+          completed_at: Date.now(),
+          current_story_id: null,
+          current_agent_id: null,
+        });
+        this.emitEvent(endStatus === 'failed' ? 'failed' : 'completed', {
+          message: `Parallel loop finished: ${doneCount} completed, ${failedCount} failed.`,
+        });
+      }
+
+      this.events.emit('loop_done', this.loopId);
+    } finally {
+      this.stopHeartbeat();
+    }
+  }
 
   /**
    * Apply the loop config's maxAttemptsPerStory to all stories that will be
