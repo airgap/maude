@@ -876,12 +876,17 @@ function createLoopStore() {
               /* localStorage unavailable */
             }
           }
-          // Always load full PRD data for the selected PRD.
-          // The list endpoint may not include full stories, and loadPrds
-          // can be called multiple times (e.g. from both WorkPanel and LoopPanel
-          // onMount), overwriting previously-loaded full PRD data each time.
+          // Load stories for any PRDs that are missing them.
+          // The list endpoint includes stories, so this is normally a no-op —
+          // but it ensures counts are always available even if the response
+          // doesn't include stories (e.g. older server, race condition).
+          // The selected PRD is always refreshed to keep its data current.
+          const toLoad = new Set<string>(prds.filter((p) => !p.stories).map((p) => p.id));
           if (selectedPrdId && prds.some((p) => p.id === selectedPrdId)) {
-            await this.loadPrd(selectedPrdId);
+            toLoad.add(selectedPrdId);
+          }
+          if (toLoad.size > 0) {
+            await Promise.all([...toLoad].map((id) => this.loadPrd(id)));
           }
         }
       } finally {
