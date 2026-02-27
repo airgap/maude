@@ -1,4 +1,0 @@
-{
-  "name": "@e/server",
-  "implicitDependencies": ["@e/shared"]
-}
