@@ -67,6 +67,10 @@ run_group "worktree routes (isolated)" \
 run_group "worktree service (isolated)" \
   src/services/__tests__/worktree-service.test.ts
 
+# Group 6d: worktree lifecycle tests (mocks worktree-service + db — must be isolated from service tests)
+run_group "worktree lifecycle (isolated)" \
+  src/services/__tests__/worktree-lifecycle.test.ts
+
 # Group 7: everything else (no contamination issues among these)
 run_group "routes + remaining services" \
   src/routes/__tests__/git.test.ts \

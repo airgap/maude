@@ -58,6 +58,7 @@ import { deviceRoutes } from './routes/device';
 import { patternDetectionRoutes } from './routes/pattern-detection';
 import { worktreeRoutes } from './routes/worktrees';
 import { storyCoordinationRoutes } from './routes/story-coordination';
+import * as worktreeLifecycle from './services/worktree-lifecycle';
 import { internalRoutes } from './routes/internal';
 import { messageSyncRoutes } from './routes/message-sync';
 import { authMiddleware } from './middleware/auth';
@@ -188,6 +189,9 @@ app.route('/internal', internalRoutes);
 
 // Initialize database
 initDatabase();
+
+// Start worktree lifecycle manager (GC sweep + event-driven cleanup)
+worktreeLifecycle.start();
 
 // Register the built-in e-work MCP server for PRD/story/loop/canvas management.
 // Uses upsert so we never duplicate — safe across restarts and HMR.
