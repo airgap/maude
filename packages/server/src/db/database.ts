@@ -677,6 +677,13 @@ export function initDatabase(): void {
     }
   }
 
+  // Parallel dispatch — track active story IDs on the loops table
+  try {
+    db.exec(`ALTER TABLE loops ADD COLUMN active_story_ids TEXT`);
+  } catch {
+    /* column already exists */
+  }
+
   // Story leases table — atomic lease tracking for distributed coordination.
   // Used for compare-and-swap (CAS) operations on story claims.
   db.exec(`
