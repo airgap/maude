@@ -193,6 +193,20 @@ describe('PRD Routes', () => {
       expect(json.data[0].id).toBe('prd-a');
     });
 
+    test('includes stories for each PRD so dropdown counts work without a separate fetch', async () => {
+      insertPrd({ id: 'prd-counts' });
+      insertStory({ id: 's-pending', prd_id: 'prd-counts', status: 'pending' });
+      insertStory({ id: 's-qa', prd_id: 'prd-counts', status: 'qa' });
+      insertStory({ id: 's-done', prd_id: 'prd-counts', status: 'completed' });
+
+      const res = await app.request('/');
+      const json = await res.json();
+      const prd = json.data.find((p: any) => p.id === 'prd-counts');
+      expect(prd.stories).toHaveLength(3);
+      const statuses = prd.stories.map((s: any) => s.status).sort();
+      expect(statuses).toEqual(['completed', 'pending', 'qa']);
+    });
+
     test('maps row to camelCase shape', async () => {
       insertPrd({
         id: 'prd-1',
