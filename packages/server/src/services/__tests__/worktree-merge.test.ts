@@ -161,12 +161,14 @@ describe('detectConflictFiles', () => {
   });
   afterEach(() => restoreSpawnMock());
 
+  // Guards: primary conflict detection via `git diff --diff-filter=U` correctly parses file paths
   test('parses from git diff --diff-filter=U', async () => {
     mockSpawnResult('src/main.ts\nsrc/utils.ts\n', '', 0);
     const files = await mergeMod.detectConflictFiles('/workspace');
     expect(files).toEqual(['src/main.ts', 'src/utils.ts']);
   });
 
+  // Guards: fallback detection when diff-filter fails — uses git status porcelain markers (UU/AA)
   test('falls back to git status UU/AA entries', async () => {
     mockSpawnResult('', '', 1);
     mockSpawnResult('UU src/conflict.ts\nAA src/both.ts\n M src/clean.ts\n', '', 0);
@@ -174,17 +176,20 @@ describe('detectConflictFiles', () => {
     expect(files).toEqual(['src/conflict.ts', 'src/both.ts']);
   });
 
+  // Guards: returns empty array (not error) when no conflicts exist — clean state baseline
   test('empty when no conflicts', async () => {
     mockSpawnResult('', '', 0);
     expect(await mergeMod.detectConflictFiles('/w')).toEqual([]);
   });
 
+  // Guards: graceful degradation — returns empty array when both detection methods fail
   test('empty when both fail', async () => {
     mockSpawnResult('', '', 1);
     mockSpawnResult('', '', 1);
     expect(await mergeMod.detectConflictFiles('/w')).toEqual([]);
   });
 
+  // Guards: delete/update and update/delete conflict markers are detected (not just UU/AA)
   test('handles DU/UD markers', async () => {
     mockSpawnResult('', '', 1);
     mockSpawnResult('DU d.ts\nUD u.ts\n', '', 0);
@@ -204,6 +209,7 @@ describe('merge()', () => {
   });
   afterEach(() => restoreSpawnMock());
 
+  // Guards: merge fails gracefully when story has no worktree record — prevents null dereference
   test('error when no record', async () => {
     const r = await mergeMod.merge({ storyId: 'nope' });
     expect(r.ok).toBe(false);
@@ -211,6 +217,7 @@ describe('merge()', () => {
     expect(r.operationLog.length).toBeGreaterThan(0);
   });
 
+  // Guards: idempotency — prevents double-merging an already-merged story
   test('error when already merged', async () => {
     insertWorktreeRecord(createTestRecord({ status: 'merged' }));
     const r = await mergeMod.merge({ storyId: 'test-story-1' });
@@ -218,6 +225,7 @@ describe('merge()', () => {
     expect(r.status).toBe('merged');
   });
 
+  // Guards: status gate — only active/merging/conflict states can trigger merge
   test('error for invalid status', async () => {
     insertWorktreeRecord(createTestRecord({ status: 'abandoned' }));
     const r = await mergeMod.merge({ storyId: 'test-story-1' });
@@ -225,6 +233,7 @@ describe('merge()', () => {
     expect(r.error).toContain('abandoned');
   });
 
+  // AC1: Pre-check rejects dirty worktrees — uncommitted changes must be resolved before merge
   test('AC1: dirty worktree fails pre-check', async () => {
     const tmpDir = mkdtempSync(join(tmpdir(), 'wt-'));
     const wtPath = join(tmpDir, '.e', 'worktrees', 'dirty');
@@ -241,6 +250,7 @@ describe('merge()', () => {
     rmSync(tmpDir, { recursive: true, force: true });
   });
 
+  // AC1: Pre-check rejects failing quality checks — prevents merging broken code
   test('AC1: quality failure fails pre-check', async () => {
     const tmpDir = mkdtempSync(join(tmpdir(), 'wt-'));
     const wtPath = join(tmpDir, '.e', 'worktrees', 'qf');
@@ -256,6 +266,7 @@ describe('merge()', () => {
     rmSync(tmpDir, { recursive: true, force: true });
   });
 
+  // AC1: skipQualityCheck flag bypasses quality step — needed for retry flows and manual overrides
   test('AC1: skipQualityCheck skips quality', async () => {
     const tmpDir = mkdtempSync(join(tmpdir(), 'wt-'));
     const wtPath = join(tmpDir, '.e', 'worktrees', 'sq');
@@ -279,6 +290,7 @@ describe('merge()', () => {
     rmSync(tmpDir, { recursive: true, force: true });
   });
 
+  // AC2: Verifies rebase is invoked against base branch and merge succeeds end-to-end
   test('AC2: successful rebase', async () => {
     const tmpDir = mkdtempSync(join(tmpdir(), 'wt-'));
     const wtPath = join(tmpDir, '.e', 'worktrees', 'rb');
@@ -304,6 +316,7 @@ describe('merge()', () => {
     rmSync(tmpDir, { recursive: true, force: true });
   });
 
+  // AC3: Rebase conflict triggers abort + file detection — ensures clean state after conflict
   test('AC3: conflict triggers abort and file detection', async () => {
     const tmpDir = mkdtempSync(join(tmpdir(), 'wt-'));
     const wtPath = join(tmpDir, '.e', 'worktrees', 'cf');
@@ -326,6 +339,7 @@ describe('merge()', () => {
     rmSync(tmpDir, { recursive: true, force: true });
   });
 
+  // AC4: Conflict sets story=failed with file-list learning — preserves existing learnings and increments attempts
   test('AC4: conflict sets story=failed with learning', async () => {
     const tmpDir = mkdtempSync(join(tmpdir(), 'wt-'));
     const wtPath = join(tmpDir, '.e', 'worktrees', 'lr');
@@ -352,6 +366,7 @@ describe('merge()', () => {
     rmSync(tmpDir, { recursive: true, force: true });
   });
 
+  // AC5: Verifies the preferred merge path: rebase then --ff-only into base
   test('AC5: rebase + ff-only merge', async () => {
     const tmpDir = mkdtempSync(join(tmpdir(), 'wt-'));
     const wtPath = join(tmpDir, '.e', 'worktrees', 'ff');
@@ -376,6 +391,7 @@ describe('merge()', () => {
     rmSync(tmpDir, { recursive: true, force: true });
   });
 
+  // AC6: Post-merge cleanup: status=merged, worktree removed, branch deleted — prevents stale resources
   test('AC6: cleanup removes worktree and branch', async () => {
     const tmpDir = mkdtempSync(join(tmpdir(), 'wt-'));
     const wtPath = join(tmpDir, '.e', 'worktrees', 'cl');
@@ -402,6 +418,7 @@ describe('merge()', () => {
     rmSync(tmpDir, { recursive: true, force: true });
   });
 
+  // AC7: Story's commitSha updated to merge commit — enables traceability from story to merged code
   test('AC7: commitSha updated in story', async () => {
     const tmpDir = mkdtempSync(join(tmpdir(), 'wt-'));
     const wtPath = join(tmpDir, '.e', 'worktrees', 'sha');
@@ -426,6 +443,7 @@ describe('merge()', () => {
     rmSync(tmpDir, { recursive: true, force: true });
   });
 
+  // AC9: Safety invariant — no git command should contain --force, push, or -D (force delete)
   test('AC9: never force-push/merge', async () => {
     const tmpDir = mkdtempSync(join(tmpdir(), 'wt-'));
     const wtPath = join(tmpDir, '.e', 'worktrees', 'nf');
@@ -457,6 +475,7 @@ describe('merge()', () => {
     rmSync(tmpDir, { recursive: true, force: true });
   });
 
+  // AC10: When --ff-only fails post-rebase, falls back to --no-ff merge commit
   test('AC10: ff-only fallback to merge commit', async () => {
     const tmpDir = mkdtempSync(join(tmpdir(), 'wt-'));
     const wtPath = join(tmpDir, '.e', 'worktrees', 'fb');
@@ -483,6 +502,7 @@ describe('merge()', () => {
     rmSync(tmpDir, { recursive: true, force: true });
   });
 
+  // AC10 edge case: when both ff-only and --no-ff fail, status reverts to active safely
   test('AC10: both merge methods fail', async () => {
     const tmpDir = mkdtempSync(join(tmpdir(), 'wt-'));
     const wtPath = join(tmpDir, '.e', 'worktrees', 'bf');
@@ -505,6 +525,7 @@ describe('merge()', () => {
     rmSync(tmpDir, { recursive: true, force: true });
   });
 
+  // AC11: Every operation step has a valid ISO 8601 timestamp and covers the full merge pipeline
   test('AC11: all operations logged with timestamps', async () => {
     const tmpDir = mkdtempSync(join(tmpdir(), 'wt-'));
     const wtPath = join(tmpDir, '.e', 'worktrees', 'lg');
@@ -541,6 +562,7 @@ describe('merge()', () => {
     rmSync(tmpDir, { recursive: true, force: true });
   });
 
+  // Guards: worktree directory deletion between record creation and merge doesn't crash
   test('missing directory fails pre-check', async () => {
     insertWorktreeRecord(createTestRecord({ story_id: 'nd', worktree_path: '/gone' }));
     const r = await mergeMod.merge({ storyId: 'nd' });
@@ -548,6 +570,7 @@ describe('merge()', () => {
     expect(r.error).toContain('not found');
   });
 
+  // Guards: unexpected exceptions (e.g. spawn crash) are caught and returned as MergeResult errors
   test('handles exceptions gracefully', async () => {
     const tmpDir = mkdtempSync(join(tmpdir(), 'wt-'));
     const wtPath = join(tmpDir, '.e', 'worktrees', 'ex');
@@ -564,6 +587,7 @@ describe('merge()', () => {
     rmSync(tmpDir, { recursive: true, force: true });
   });
 
+  // Guards: worktrees in 'conflict' status can be merged directly — enables retry without explicit retry()
   test('conflict status allowed for merge', async () => {
     const tmpDir = mkdtempSync(join(tmpdir(), 'wt-'));
     const wtPath = join(tmpDir, '.e', 'worktrees', 'cm');
@@ -593,6 +617,7 @@ describe('merge()', () => {
     rmSync(tmpDir, { recursive: true, force: true });
   });
 
+  // Guards: non-default base branch (e.g. 'develop') is correctly passed to rebase and checkout
   test('custom base_branch used', async () => {
     const tmpDir = mkdtempSync(join(tmpdir(), 'wt-'));
     const wtPath = join(tmpDir, '.e', 'worktrees', 'cb');
@@ -635,6 +660,7 @@ describe('retry()', () => {
   });
   afterEach(() => restoreSpawnMock());
 
+  // AC8: retry() resets conflict→active and re-runs merge — verifies full retry flow after resolution
   test('AC8: retry after conflict resolution', async () => {
     const tmpDir = mkdtempSync(join(tmpdir(), 'wt-'));
     const wtPath = join(tmpDir, '.e', 'worktrees', 'rt');
@@ -665,18 +691,21 @@ describe('retry()', () => {
     rmSync(tmpDir, { recursive: true, force: true });
   });
 
+  // Guards: retry rejects already-merged stories — prevents double-merge via retry path
   test('retry fails for merged status', async () => {
     insertWorktreeRecord(createTestRecord({ story_id: 'br', status: 'merged' }));
     const r = await mergeMod.retry({ storyId: 'br' });
     expect(r.ok).toBe(false);
   });
 
+  // Guards: retry with nonexistent story ID returns structured error, not crash
   test('retry missing record', async () => {
     const r = await mergeMod.retry({ storyId: 'x' });
     expect(r.ok).toBe(false);
     expect(r.error).toContain('No worktree');
   });
 
+  // Guards: retry defaults to skipQualityCheck=true since user has already resolved conflicts manually
   test('retry skips quality by default', async () => {
     const tmpDir = mkdtempSync(join(tmpdir(), 'wt-'));
     const wtPath = join(tmpDir, '.e', 'worktrees', 'rq');
@@ -719,6 +748,7 @@ describe('operation log', () => {
   });
   afterEach(() => restoreSpawnMock());
 
+  // AC11: Conflict path includes all expected operation names in the log for debuggability
   test('conflict path logs expected operations', async () => {
     const tmpDir = mkdtempSync(join(tmpdir(), 'wt-'));
     const wtPath = join(tmpDir, '.e', 'worktrees', 'ol');
@@ -742,6 +772,7 @@ describe('operation log', () => {
     rmSync(tmpDir, { recursive: true, force: true });
   });
 
+  // AC11: Failed operations are correctly marked with success=false in the log
   test('failure entries have success=false', async () => {
     insertWorktreeRecord(createTestRecord({ story_id: 'fl', worktree_path: '/no' }));
     const r = await mergeMod.merge({ storyId: 'fl' });
@@ -761,6 +792,7 @@ describe('merge mutex', () => {
   });
   afterEach(() => restoreSpawnMock());
 
+  // Guards: per-workspace mutex is released after merge completes — prevents deadlock on subsequent merges
   test('cleaned up after operation', async () => {
     insertWorktreeRecord(createTestRecord({ story_id: 'mx' }));
     await mergeMod.merge({ storyId: 'mx' });
@@ -813,6 +845,7 @@ describe('integration: real git repos', () => {
     if (repoDir && existsSync(repoDir)) rmSync(repoDir, { recursive: true, force: true });
   });
 
+  // AC13: End-to-end with real git: creates worktree, commits, merges, verifies DB + git state
   test('AC13: successful non-conflicting merge', async () => {
     const sid = 'ic';
     const wtr = await svc.create({ workspacePath: repoDir, storyId: sid, baseBranch: 'main' });
@@ -840,6 +873,7 @@ describe('integration: real git repos', () => {
     expect(getStory(sid).commit_sha).toBe(r.commitSha);
   });
 
+  // AC13: Real conflict scenario — divergent edits to same file trigger conflict path with clean abort
   test('AC13: conflict with real divergent branches', async () => {
     const sid = 'ix';
     const wtr = await svc.create({ workspacePath: repoDir, storyId: sid, baseBranch: 'main' });
@@ -872,6 +906,7 @@ describe('integration: real git repos', () => {
     expect((await execGit(['status', '--porcelain'], wtp)).trim()).toBe('');
   });
 
+  // AC8+13: Full retry cycle with real git — conflict, manual resolution, retry succeeds
   test('AC8+13: retry after resolution', async () => {
     const sid = 'ir';
     const wtr = await svc.create({ workspacePath: repoDir, storyId: sid, baseBranch: 'main' });
@@ -904,6 +939,7 @@ describe('integration: real git repos', () => {
     expect(r.status).toBe('merged');
   });
 
+  // Guards: rebase handles non-conflicting parallel changes — story adds file while main edits another
   test('non-conflicting parallel development', async () => {
     const sid = 'ip';
     const wtr = await svc.create({ workspacePath: repoDir, storyId: sid, baseBranch: 'main' });
