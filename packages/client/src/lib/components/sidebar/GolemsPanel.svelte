@@ -306,6 +306,8 @@
     switch (g.phase) {
       case 'selecting_story':
         return 'Scanning backlog for next story...';
+      case 'backlog_empty':
+        return g.thought || 'No eligible stories in backlog';
       case 'preparing':
         return 'Setting up workspace...';
       case 'snapshot':

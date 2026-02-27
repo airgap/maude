@@ -57,6 +57,24 @@
     worktreePopupStoryTitle = story.title;
   }
 
+  /**
+   * A story is golem-eligible if it's pending, within attempt limits,
+   * not research-only, and (for PRD stories) all dependencies are met.
+   */
+  function isGolemEligible(story: UserStory, allStories: UserStory[]): boolean {
+    if (story.status !== 'pending') return false;
+    if (story.attempts >= story.maxAttempts) return false;
+    if (story.researchOnly) return false;
+    const deps = story.dependsOn || [];
+    if (deps.length === 0) return true;
+    // Check all deps are completed/qa/skipped/archived
+    const doneStatuses = new Set(['completed', 'qa', 'skipped', 'archived']);
+    return deps.every((depId) => {
+      const dep = allStories.find((s) => s.id === depId);
+      return dep && doneStatuses.has(dep.status);
+    });
+  }
+
   async function addStandaloneStory() {
     if (!newStoryTitle.trim() || !workspacePath) return;
     await workStore.createStandaloneStory(workspacePath, newStoryTitle.trim());
@@ -710,8 +728,11 @@ What would you like to tackle first?`;
             </div>
             {#each workStore.pendingStories as story, idx (story.id)}
               {@const wt = worktreeStore.getForStory(story.id)}
+              {@const eligible = isGolemEligible(story, workStore.filteredStories)}
               <div
                 class="story-item draggable"
+                class:golem-eligible={eligible && loopStore.isActive}
+                class:golem-ineligible={!eligible && loopStore.isActive && story.status === 'pending'}
                 class:drag-over-above={dragOverStoryId === story.id && dragOverPosition === 'above'}
                 class:drag-over-below={dragOverStoryId === story.id && dragOverPosition === 'below'}
                 class:dragging={draggedStoryId === story.id}
@@ -738,6 +759,11 @@ What would you like to tackle first?`;
                   >
                     {statusIcon(story.status)}
                   </button>
+                  {#if loopStore.isActive && eligible}
+                    <span class="eligible-indicator" title="Eligible for golem">▸</span>
+                  {:else if loopStore.isActive && !eligible && story.attempts >= story.maxAttempts}
+                    <span class="exhausted-indicator" title="Max attempts reached ({story.attempts}/{story.maxAttempts})">⊘</span>
+                  {/if}
                   {#if story.researchOnly}
                     <span
                       class="research-badge"
@@ -1374,6 +1400,30 @@ What would you like to tackle first?`;
   }
   .worktree-badge svg {
     flex-shrink: 0;
+  }
+
+  /* Golem eligibility indicators */
+  .golem-eligible {
+    border-left: 2px solid var(--accent-primary, #7c5cfc);
+  }
+  .golem-ineligible {
+    opacity: 0.55;
+  }
+  .eligible-indicator {
+    font-size: 10px;
+    color: var(--accent-primary, #7c5cfc);
+    flex-shrink: 0;
+    line-height: 1;
+    margin-right: -2px;
+    title: 'Eligible for golem';
+  }
+  .exhausted-indicator {
+    font-size: 10px;
+    color: var(--accent-error, #ef4444);
+    flex-shrink: 0;
+    line-height: 1;
+    margin-right: -2px;
+    opacity: 0.7;
   }
 
   .story-actions {

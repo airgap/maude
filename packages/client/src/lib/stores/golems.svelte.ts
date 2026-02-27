@@ -435,10 +435,18 @@ function createGolemsStore() {
       // Set mood/phase based on status
       if (status === 'running') {
         g.mood = storiesFailed > storiesCompleted ? 'determined' : 'focused';
-        g.phase = currentStoryId ? 'implementing' : 'selecting_story';
-        g.thought = currentStoryTitle
-          ? `Working on "${currentStoryTitle}"...`
-          : 'Scanning backlog...';
+        if (currentStoryId) {
+          g.phase = 'implementing';
+          g.thought = `Working on "${currentStoryTitle}"...`;
+        } else {
+          // No current story — check if we already know the backlog is empty
+          // (the golem_thought event may have set backlog_empty before sync)
+          if (g.phase !== 'backlog_empty') {
+            g.phase = 'selecting_story';
+            g.thought = 'Scanning backlog...';
+          }
+          // else keep existing backlog_empty phase/thought
+        }
       } else if (status === 'paused') {
         g.mood = 'neutral';
         g.phase = 'idle';

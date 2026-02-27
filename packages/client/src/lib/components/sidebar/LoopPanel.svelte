@@ -83,6 +83,23 @@
     return p === 'critical' ? '!!!' : p === 'high' ? '!!' : p === 'medium' ? '!' : '';
   }
 
+  /**
+   * A story is golem-eligible if it's pending, within attempt limits,
+   * not research-only, and all dependencies are met (completed/qa/skipped/archived).
+   */
+  function isGolemEligible(story: UserStory, allStories: UserStory[]): boolean {
+    if (story.status !== 'pending') return false;
+    if (story.attempts >= story.maxAttempts) return false;
+    if (story.researchOnly) return false;
+    const deps = story.dependsOn || [];
+    if (deps.length === 0) return true;
+    const doneStatuses = new Set(['completed', 'qa', 'skipped', 'archived']);
+    return deps.every((depId) => {
+      const dep = allStories.find((s) => s.id === depId);
+      return dep && doneStatuses.has(dep.status);
+    });
+  }
+
   async function handleCreate() {
     if (!newPrdName.trim() || !workspacePath) return;
     try {
@@ -985,14 +1002,24 @@ What would you like to tackle first?`;
           </div>
         {:else}
           {#each loopStore.selectedPrd.stories || [] as story (story.id)}
+            {@const eligible = isGolemEligible(story, loopStore.selectedPrd.stories || [])}
             <div
               class="story-item"
               class:active={loopStore.activeLoop?.currentStoryId === story.id}
+              class:golem-eligible={eligible && loopStore.isActive}
+              class:golem-ineligible={!eligible && loopStore.isActive && story.status === 'pending'}
             >
               <div class="story-header">
                 <span class="story-status" style:color={statusColor(story.status)}>
                   {statusIcon(story.status)}
                 </span>
+                {#if loopStore.isActive && eligible}
+                  <span class="eligible-indicator" title="Eligible for golem">▸</span>
+                {:else if loopStore.isActive && story.status === 'pending' && story.attempts >= story.maxAttempts}
+                  <span class="exhausted-indicator" title="Max attempts reached ({story.attempts}/{story.maxAttempts})">⊘</span>
+                {:else if loopStore.isActive && story.status === 'pending' && !eligible && (story.dependsOn || []).length > 0}
+                  <span class="blocked-indicator" title="Blocked by dependencies">⏳</span>
+                {/if}
                 <!-- svelte-ignore a11y_no_static_element_interactions a11y_click_events_have_key_events -->
                 <span
                   class="story-title"
@@ -1569,6 +1596,35 @@ What would you like to tackle first?`;
   .story-item.active {
     background: var(--bg-active);
     border-left: 2px solid var(--accent-primary);
+  }
+  .story-item.golem-eligible {
+    border-left: 2px solid var(--accent-primary, #7c5cfc);
+  }
+  .story-item.golem-ineligible {
+    opacity: 0.55;
+  }
+  .eligible-indicator {
+    font-size: 10px;
+    color: var(--accent-primary, #7c5cfc);
+    flex-shrink: 0;
+    line-height: 1;
+    margin-right: -2px;
+  }
+  .exhausted-indicator {
+    font-size: 10px;
+    color: var(--accent-error, #ef4444);
+    flex-shrink: 0;
+    line-height: 1;
+    margin-right: -2px;
+    opacity: 0.7;
+  }
+  .blocked-indicator {
+    font-size: 10px;
+    color: var(--accent-warning, #eab308);
+    flex-shrink: 0;
+    line-height: 1;
+    margin-right: -2px;
+    opacity: 0.7;
   }
   .story-header {
     display: flex;
