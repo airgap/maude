@@ -1,1 +1,1 @@
-export const v = 1;
+export const v = "s";
