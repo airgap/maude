@@ -823,6 +823,7 @@ export interface StreamLoopEvent {
 export type GolemPhase =
   | 'idle'
   | 'selecting_story'
+  | 'backlog_empty'
   | 'preparing'
   | 'snapshot'
   | 'pre_check'

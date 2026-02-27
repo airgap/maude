@@ -632,6 +632,29 @@ export class LoopRunner {
           }
 
           // No eligible stories left (all failed/maxed out or blocked by deps).
+          // Tell the UI that the backlog is empty before we wind down.
+          const exhaustedStories = stories.filter(
+            (s) =>
+              s.status === 'pending' &&
+              s.attempts >= s.maxAttempts &&
+              !s.researchOnly,
+          );
+          const blockedStories = stories.filter(
+            (s) =>
+              s.status === 'pending' &&
+              s.attempts < s.maxAttempts &&
+              !s.researchOnly &&
+              (s.dependsOn || []).length > 0 &&
+              !(s.dependsOn || []).every((depId) => doneIds.has(depId)),
+          );
+          const reason =
+            exhaustedStories.length > 0
+              ? `${exhaustedStories.length} story(ies) exhausted max attempts`
+              : blockedStories.length > 0
+                ? `${blockedStories.length} story(ies) blocked by unmet dependencies`
+                : 'All stories processed';
+          this.emitThought(`No eligible stories — ${reason}`, 'backlog_empty');
+
           // Distinguish full success / partial success / total failure.
           const completedCount = stories.filter(
             (s) =>
